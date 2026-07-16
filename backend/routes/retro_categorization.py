@@ -376,6 +376,33 @@ async def categorize_delivery_item(payload: DeliveryItemCategorize,
         **_audit_fields(current_user),
     }
 
+    # If the delivery has NOT been delivered yet, its stock deduction is still
+    # pending and will target this line's classification — so the matching
+    # Generic on-hand must move into the branded bucket NOW, otherwise the
+    # deduction later misses the (non-existent) branded row.
+    stock_moved, entry_no = 0, None
+    delivered_statuses = ("delivered", "complete", "completed")
+    if (delivery.get("status") or "") not in delivered_statuses:
+        loc_id = delivery.get("distributor_location_id")
+        if not loc_id:
+            raise HTTPException(400, "Delivery has no source warehouse — cannot move stock.")
+        loc = await _load_location(tenant_id, loc_id)
+        coll, base = _stock_coll_and_base(loc, tenant_id)
+        avail_q = {**base, "sku_id": item["sku_id"], "child_sku_id": {"$in": [None]}, "quantity": {"$gt": 0}}
+        if item.get("batch_id"):
+            avail_q["batch_id"] = item["batch_id"]
+        avail_rows = await coll.find(avail_q, {"_id": 0, "quantity": 1}).to_list(500)
+        available = sum(int(r.get("quantity") or 0) for r in avail_rows)
+        if available < qty:
+            raise HTTPException(400, (
+                f"Only {available} Generic units on-hand at the source warehouse"
+                f"{' for this batch' if item.get('batch_id') else ''} — cannot categorize "
+                f"{qty} units before the delivery is completed."))
+        stock_moved, entry_no = await _move_generic_to_child(
+            tenant_id, current_user, loc_id, item["sku_id"], child, qty,
+            item.get("batch_id"),
+            f"Retro categorization (pre-delivery) for {delivery.get('delivery_number')}")
+
     if split:
         rest = line_units - qty
         ratio = qty / line_units
@@ -400,13 +427,14 @@ async def categorize_delivery_item(payload: DeliveryItemCategorize,
             {"id": item["id"], "tenant_id": tenant_id},
             {"$set": {**child_fields, "updated_at": now}})
 
-    # Relabel only — delivered stock already left the network (user decision).
+    # Delivered → relabel only (stock already left the network).
+    # Undelivered → the matching Generic on-hand was moved to the branded bucket above.
     return {
         "message": "Line categorized.",
         "split": split,
         "categorized_units": qty,
-        "stock_moved_units": 0,
-        "branding_entry_number": None,
+        "stock_moved_units": stock_moved,
+        "branding_entry_number": entry_no,
         "child_sku_name": child.get("child_sku_name"),
     }
 

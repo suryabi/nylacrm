@@ -5914,6 +5914,45 @@ async def download_delivery_invoice_pdf(
     )
 
 
+async def _deduct_stock_with_spill(coll, stock_key: dict, qty: int, now: str):
+    """Deduct `qty` starting with the row(s) matching `stock_key`; any overflow
+    spills into sibling classification rows of the same warehouse/SKU/batch
+    (quantity > 0) instead of driving a single row negative. This keeps per-row
+    truth after retro-categorization splits a batch across Generic + branded
+    rows. When nothing is left to spill into, the legacy behaviour (negative
+    $inc on the primary row) applies so the NET on-hand stays correct.
+    Returns (matched_primary: bool, leftover_units: int)."""
+    remaining = int(qty or 0)
+    primary = await coll.find(stock_key, {"quantity": 1}).to_list(50)
+    matched_primary = len(primary) > 0
+    for r in primary:
+        if remaining <= 0:
+            break
+        take = min(remaining, max(int(r.get("quantity") or 0), 0))
+        if take > 0:
+            await coll.update_one({"_id": r["_id"]}, {"$inc": {"quantity": -take}, "$set": {"updated_at": now}})
+            remaining -= take
+    if remaining > 0:
+        sibling_key = {k: v for k, v in stock_key.items() if k != "child_sku_id"}
+        primary_ids = {r["_id"] for r in primary}
+        siblings = await coll.find(
+            {**sibling_key, "quantity": {"$gt": 0}}, {"quantity": 1}
+        ).sort("created_at", 1).to_list(50)
+        for r in siblings:
+            if remaining <= 0:
+                break
+            if r["_id"] in primary_ids:
+                continue
+            take = min(remaining, int(r.get("quantity") or 0))
+            if take > 0:
+                await coll.update_one({"_id": r["_id"]}, {"$inc": {"quantity": -take}, "$set": {"updated_at": now}})
+                remaining -= take
+    if remaining > 0 and matched_primary:
+        await coll.update_one({"_id": primary[0]["_id"]}, {"$inc": {"quantity": -remaining}, "$set": {"updated_at": now}})
+        remaining = 0
+    return matched_primary, remaining
+
+
 @router.post("/{distributor_id}/deliveries/{delivery_id}/complete")
 async def complete_delivery(
     distributor_id: str,
@@ -5985,6 +6024,7 @@ async def complete_delivery(
         child_key = item_child_id if item_child_id else {"$in": [None]}
 
         if src_is_factory:
+            stock_coll = db.factory_warehouse_stock
             stock_key = {
                 "tenant_id": tenant_id,
                 "warehouse_location_id": delivery.get('distributor_location_id'),
@@ -5993,11 +6033,8 @@ async def complete_delivery(
             }
             if src_tracks_batches and batch_id:
                 stock_key["batch_id"] = batch_id
-            res = await db.factory_warehouse_stock.update_one(
-                stock_key,
-                {"$inc": {"quantity": -qty}, "$set": {"updated_at": now}},
-            )
         else:
+            stock_coll = db.distributor_stock
             stock_key = {
                 "tenant_id": tenant_id,
                 "distributor_id": distributor_id,
@@ -6008,12 +6045,14 @@ async def complete_delivery(
             # Tracked batches deduct from the specific batch row; legacy aggregate
             # rows (no batch_id stored) match `{"$in": [None]}`.
             stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
-            res = await db.distributor_stock.update_one(
-                stock_key,
-                {
-                    "$inc": {"quantity": -qty},
-                    "$set": {"updated_at": now}
-                }
+
+        matched_primary, leftover = await _deduct_stock_with_spill(stock_coll, stock_key, qty, now)
+        if not matched_primary or leftover:
+            logger.error(
+                "Delivery %s: stock deduction anomaly — sku=%s child=%s batch=%s "
+                "loc=%s matched_primary=%s undeducted_units=%s",
+                delivery.get('delivery_number'), item.get('sku_id'), item_child_id,
+                batch_id, delivery.get('distributor_location_id'), matched_primary, leftover,
             )
 
         # Phase 3 hardening (Feb 2026): if the deduction targeted a specific
@@ -6024,7 +6063,9 @@ async def complete_delivery(
         # the classification-less row (generic) OR, if that also misses, log
         # loudly and refuse to keep the delivery marked complete for that
         # line.
-        if item_child_id and getattr(res, "modified_count", 0) == 0:
+        # branded row entirely missing AND nothing could be deducted (no sibling
+        # rows to spill into) → genuine integrity error, refuse completion.
+        if item_child_id and not matched_primary and leftover == qty:
             logger.error(
                 "Delivery %s: branded deduction MISS — sku=%s child=%s batch=%s "
                 "loc=%s (no stock row matched). Reverting delivery status to "
@@ -9217,7 +9258,23 @@ async def get_stock_dashboard(
                 if bpc:
                     bpc_by_sku.setdefault(ms["id"], bpc)
 
+        # Net rows per (warehouse, sku, batch) BEFORE the >0 filter. A batch can
+        # be split across classification rows (Generic + branded children). If a
+        # deduction overdrew one row negative while a sibling stayed positive,
+        # filtering per-row hid the negative and showed phantom batch stock.
+        merged_rows = {}
         for fws in fws_docs:
+            mkey = (fws.get("warehouse_location_id", ""), fws.get("sku_id", ""), fws.get("batch_id"))
+            m = merged_rows.get(mkey)
+            if m is None:
+                merged_rows[mkey] = {**fws}
+            else:
+                m["quantity"] = (m.get("quantity") or 0) + (fws.get("quantity") or 0)
+                if not m.get("bottles_per_crate") and fws.get("bottles_per_crate"):
+                    m["bottles_per_crate"] = fws["bottles_per_crate"]
+                if (fws.get("created_at") or "9999") < (m.get("created_at") or "9999"):
+                    m["created_at"] = fws.get("created_at")
+        for fws in merged_rows.values():
             sid = fws.get("sku_id", "")
             bottles_qty = fws.get("quantity", 0)
             if bottles_qty <= 0:

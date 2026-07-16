@@ -23,6 +23,15 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-07-15 — 🚨 Batch stock integrity fix (phantom 2,250 bottles) ✅ DONE (tested)
+- **Bug**: batch B750-050726-101 showed 2,250 in factory stock despite 9,000/9,000 delivered. Root cause chain: (1) retro categorization splits a batch across Generic + branded stock rows; (2) the delivered-deduction targets only the item's classification row and can drive it NEGATIVE (generic misses were silently swallowed — guard only covered branded); (3) the stock dashboard dropped rows with quantity ≤ 0 (`continue`), hiding the negative row and displaying the positive sibling as phantom stock.
+- **Fixes**:
+  - `distributors.py` stock dashboard: rows netted per (warehouse, sku, batch) BEFORE the >0 filter — phantom batches disappear.
+  - `distributors.py` `_deduct_stock_with_spill`: delivery-complete deduction now spills overflow into sibling classification rows (same wh/sku/batch) instead of going negative; legacy negative fallback only when nothing left; anomalies logged; branded revert-guard only fires when nothing could be deducted.
+  - `retro_categorization.py` `categorize_delivery_item`: for NOT-yet-delivered deliveries it now moves Generic on-hand → branded bucket (validated availability first) so the later deduction finds the branded row; delivered stays relabel-only.
+  - `admin_batch_genealogy.py`: `GET /api/admin/batches/stock-rows?batch_code=` (shows raw rows incl. negatives) and `POST /api/admin/batches/rebalance-negative-stock?apply=true|false&batch_code=` (repairs negative/positive sibling splits, net unchanged, dry-run default). **User must run this in production after redeploy to repair B750-050726-101.**
+- **Verified**: python tests (spill, over-deduct fallback, branded-miss guard, repair dry-run+apply) all pass; stock dashboard + endpoints HTTP smoke 200.
+
 ### 2026-07-15 — 🧾 Bottle count on Zoho invoice sustainability credit ✅ DONE (tested)
 - **User request**: customers want to see how many bottles the return credit covers on the Zoho invoice.
 - **Backend** (`services/zoho_service.py`): new `_bottles_for_applied_credit_notes` — resolves each applied CN → its customer return → `total_quantity`, pro-rated by amount on partial applications. Invoice `adjustment_description` now reads "Sustainability Incentive — 10 Bottles Returned (CN-2026-0001)" (falls back to old wording when count can't be resolved).

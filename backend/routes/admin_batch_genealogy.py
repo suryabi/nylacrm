@@ -30,6 +30,7 @@ Useful for FSSAI traceability and product recall scenarios.
 """
 from typing import Optional, List
 import re
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Depends
 
 from database import db
@@ -48,6 +49,81 @@ def _ensure_admin(current_user: dict) -> None:
             status_code=403,
             detail="Only CEO / Director / Admin / System Admin can view batch genealogy.",
         )
+
+
+@router.get("/stock-rows")
+async def batch_stock_rows(batch_code: str, current_user: dict = Depends(get_current_user)):
+    """Admin diagnostic: every raw stock row (including NEGATIVE rows the
+    dashboards hide) for a batch, across factory + distributor stock."""
+    _ensure_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    out = {}
+    for name, coll in (("factory_warehouse_stock", db.factory_warehouse_stock),
+                       ("distributor_stock", db.distributor_stock)):
+        rows = await coll.find(
+            {"tenant_id": tenant_id, "batch_code": batch_code}, {"_id": 0}
+        ).to_list(500)
+        out[name] = rows
+        out[f"{name}_net_quantity"] = sum(int(r.get("quantity") or 0) for r in rows)
+    return out
+
+
+@router.post("/rebalance-negative-stock")
+async def rebalance_negative_stock(
+    apply: bool = False,
+    batch_code: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Repair tool: finds (warehouse, sku, batch) groups where one
+    classification row went negative while sibling rows stayed positive
+    (retro-categorization overdraw) and zeroes the negatives against the
+    positives. Net quantity is untouched. Dry-run by default; ?apply=true writes."""
+    _ensure_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    moves = []
+    for coll_name, coll, loc_field in (
+        ("factory_warehouse_stock", db.factory_warehouse_stock, "warehouse_location_id"),
+        ("distributor_stock", db.distributor_stock, "distributor_location_id"),
+    ):
+        q = {"tenant_id": tenant_id}
+        if batch_code:
+            q["batch_code"] = batch_code
+        rows = await coll.find(q).to_list(20000)
+        groups = {}
+        for r in rows:
+            groups.setdefault((r.get(loc_field), r.get("sku_id"), r.get("batch_id")), []).append(r)
+        for grp in groups.values():
+            negs = [r for r in grp if (r.get("quantity") or 0) < 0]
+            poss = [r for r in grp if (r.get("quantity") or 0) > 0]
+            if not negs or not poss:
+                continue
+            for neg in negs:
+                need = -int(neg.get("quantity") or 0)
+                for pos in poss:
+                    if need <= 0:
+                        break
+                    avail = int(pos.get("quantity") or 0)
+                    take = min(need, avail)
+                    if take <= 0:
+                        continue
+                    moves.append({
+                        "collection": coll_name,
+                        "location_id": pos.get(loc_field),
+                        "sku_name": neg.get("sku_name") or pos.get("sku_name"),
+                        "batch_code": neg.get("batch_code") or pos.get("batch_code"),
+                        "from_classification": pos.get("child_sku_name") or "Generic",
+                        "to_classification": neg.get("child_sku_name") or "Generic",
+                        "units": take,
+                        "negative_row_before": int(neg.get("quantity") or 0),
+                        "positive_row_before": avail,
+                    })
+                    pos["quantity"] = avail - take
+                    need -= take
+                    if apply:
+                        await coll.update_one({"_id": pos["_id"]}, {"$inc": {"quantity": -take}, "$set": {"updated_at": now}})
+                        await coll.update_one({"_id": neg["_id"]}, {"$inc": {"quantity": take}, "$set": {"updated_at": now}})
+    return {"applied": apply, "total_moves": len(moves), "moves": moves}
 
 
 @router.get("/search")
