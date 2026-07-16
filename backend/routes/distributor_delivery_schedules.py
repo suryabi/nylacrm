@@ -1630,7 +1630,7 @@ async def build_schedule_bundle_pdf(tenant_id: str, distributor_id: str, schedul
     ) or {}
 
     # 1) Driver schedule sheet (always page 1).
-    schedule_pdf = _build_schedule_pdf(s, dist)
+    schedule_pdf = _build_schedule_pdf(s, dist, await _collect_sku_bottle_designs(s, tenant_id))
 
     # 2) Per-delivery Zoho documents. Regular stock-outs attach a tax INVOICE
     #    (zoho_invoice_id); promotional stock-outs (is_promo) attach a Zoho
