@@ -107,6 +107,28 @@ export default function PromoDispatchSection({
   const [showReasonsMgr, setShowReasonsMgr] = useState(false);
   const [newReasonName, setNewReasonName] = useState('');
 
+  // Detail popup — shows the full request before it's confirmed / downloaded.
+  const [showDetail, setShowDetail] = useState(false);
+  const [detail, setDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const openDetail = async (d) => {
+    setShowDetail(true);
+    setDetail(null);
+    setDetailLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${d.id}`, { headers: authHeaders, credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setDetail({ ...d, ...data });
+    } catch (e) {
+      toast.error('Failed to load stock-out details');
+      setDetail(d); // fall back to the list row data (no items)
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
   const fetchDispatches = useCallback(async () => {
@@ -647,7 +669,7 @@ export default function PromoDispatchSection({
                           </td>
                         </tr>
                         {isOpen && group.items.map((d) => (
-                      <tr key={d.id} className={`border-b border-slate-100 transition-colors ${d.status === 'reversed' ? 'opacity-60 bg-slate-50' : 'hover:bg-fuchsia-50/40'}`} data-testid={`promo-dispatch-row-${d.id}`}>
+                      <tr key={d.id} onClick={() => openDetail(d)} className={`border-b border-slate-100 transition-colors cursor-pointer ${d.status === 'reversed' ? 'opacity-60 bg-slate-50' : 'hover:bg-fuchsia-50/40'}`} data-testid={`promo-dispatch-row-${d.id}`}>
                         <td className="p-3">
                           <span className="font-semibold text-fuchsia-700">{d.challan_number}</span>
                           <p className="text-xs text-slate-500 mt-0.5">{d.delivery_date ? new Date(d.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}</p>
@@ -691,7 +713,7 @@ export default function PromoDispatchSection({
                             <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200">Confirmed</Badge>
                           )}
                         </td>
-                        <td className="p-3 text-center">
+                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                           {d.status === 'draft' ? (
                             <span className="text-[11px] text-slate-400">—</span>
                           ) : d.status === 'reversed' ? (
@@ -736,7 +758,7 @@ export default function PromoDispatchSection({
                             <span className="text-[11px] text-slate-400">—</span>
                           )}
                         </td>
-                        <td className="p-3 text-center">
+                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                           {d.status === 'draft' ? (
                             <span className="text-[11px] text-slate-400">—</span>
                           ) : (
@@ -752,7 +774,7 @@ export default function PromoDispatchSection({
                             </Button>
                           )}
                         </td>
-                        <td className="p-3">
+                        <td className="p-3" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1.5">
                             {d.status === 'draft' && (
                               <>
@@ -866,6 +888,129 @@ export default function PromoDispatchSection({
           </CardContent>
         </CollapsibleContent>
       </Card>
+
+      {/* Detail popup — full request info before confirming */}
+      <Dialog open={showDetail} onOpenChange={(o) => { setShowDetail(o); if (!o) setDetail(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="promo-detail-dialog">
+          {detailLoading || !detail ? (
+            <div className="flex justify-center py-14"><RefreshCw className="h-6 w-6 animate-spin text-fuchsia-600" /></div>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 flex-wrap">
+                  <Gift className="h-5 w-5 text-fuchsia-600" /> {detail.challan_number || detail.delivery_number}
+                  {detail.status === 'draft' ? (
+                    <Badge className="bg-amber-100 text-amber-700 border border-amber-200">Draft</Badge>
+                  ) : detail.status === 'reversed' ? (
+                    <Badge className="bg-slate-200 text-slate-600 border border-slate-300">Reversed</Badge>
+                  ) : ['complete', 'completed', 'delivered'].includes(detail.status) ? (
+                    <Badge className="bg-green-100 text-green-700 border border-green-200">Delivered</Badge>
+                  ) : (
+                    <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200">{detail.status === 'confirmed' ? 'Confirmed' : detail.status}</Badge>
+                  )}
+                  {detail.promo_reason && <Badge className="bg-fuchsia-100 text-fuchsia-700 border border-fuchsia-200">{detail.promo_reason}</Badge>}
+                </DialogTitle>
+                <DialogDescription>Promotional stock-out · no invoice, indicative value only.</DialogDescription>
+              </DialogHeader>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Recipient</p>
+                  <p className="font-medium text-slate-800" data-testid="promo-detail-recipient">{detail.contact_name || '—'}</p>
+                  {detail.contact_company && <p className="text-xs text-slate-500">{detail.contact_company}</p>}
+                  {detail.contact_phone && <p className="text-xs text-slate-500">{detail.contact_phone}</p>}
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">From</p>
+                  <p className="font-medium text-slate-800">{detail.location_name || detail.distributor_location_name || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Delivery date</p>
+                  <p className="font-medium text-slate-800">{detail.delivery_date ? new Date(detail.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Created by</p>
+                  <p className="font-medium text-slate-800">{detail.created_by_name || '—'}</p>
+                </div>
+                {detail.delivery_address && (
+                  <div className="col-span-2">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-400">Delivery address</p>
+                    <p className="text-slate-700">{typeof detail.delivery_address === 'string' ? detail.delivery_address : [detail.delivery_address.address_line1, detail.delivery_address.city, detail.delivery_address.state, detail.delivery_address.pincode].filter(Boolean).join(', ')}</p>
+                  </div>
+                )}
+                {detail.remarks && (
+                  <div className="col-span-2">
+                    <p className="text-[11px] uppercase tracking-wide text-slate-400">Remarks</p>
+                    <p className="text-slate-700">{detail.remarks}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-slate-200 overflow-hidden">
+                <table className="w-full text-xs" data-testid="promo-detail-items">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                      <th className="px-3 py-2 text-left">SKU</th>
+                      <th className="px-3 py-2 text-left">Batch</th>
+                      <th className="px-3 py-2 text-left">Packaging</th>
+                      <th className="px-3 py-2 text-right">Qty</th>
+                      <th className="px-3 py-2 text-right">₹/bottle</th>
+                      <th className="px-3 py-2 text-right">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(detail.items || []).length === 0 ? (
+                      <tr><td colSpan={6} className="px-3 py-4 text-center text-slate-400">No line items found.</td></tr>
+                    ) : (detail.items || []).map((it, i) => {
+                      const pkgs = it.packages != null ? Number(it.packages) : null;
+                      const upp = Number(it.units_per_package || it.packaging_units) || 0;
+                      const bottles = pkgs != null && upp > 1 ? pkgs * upp : Number(it.quantity) || 0;
+                      return (
+                        <tr key={it.id || i} className="border-b border-slate-100 last:border-0">
+                          <td className="px-3 py-2 text-slate-700 font-medium">{it.sku_name || '—'}</td>
+                          <td className="px-3 py-2 text-slate-500">{it.batch_code || '—'}</td>
+                          <td className="px-3 py-2 text-slate-500">{it.packaging_type_name || '—'}</td>
+                          <td className="px-3 py-2 text-right">
+                            {pkgs != null && upp > 1 ? (
+                              <span><b>{pkgs}</b> × {upp} = {bottles} <span className="text-slate-400">bottles</span></span>
+                            ) : (
+                              <span><b>{bottles}</b> <span className="text-slate-400">{it.packaging_type_name ? '' : 'bottles'}</span></span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right">₹{fmtINR(it.unit_price)}</td>
+                          <td className="px-3 py-2 text-right font-medium">₹{fmtINR(it.line_value != null ? it.line_value : bottles * (it.unit_price || 0))}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center justify-end gap-4 text-sm">
+                <span className="text-slate-500">Total</span>
+                <span className="font-bold text-slate-800">{detail.total_quantity} bottles</span>
+                <span className="font-bold text-fuchsia-700">₹{fmtINR(detail.total_indicative_value)}</span>
+              </div>
+
+              <DialogFooter className="flex-wrap gap-2">
+                {detail.status !== 'draft' && (
+                  <Button variant="outline" onClick={() => downloadChallan(detail)} disabled={downloadingId === detail.id} data-testid="promo-detail-pdf-btn">
+                    {downloadingId === detail.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <><Download className="h-3.5 w-3.5 mr-1" /> Challan PDF</>}
+                  </Button>
+                )}
+                {detail.status === 'draft' && canManage && (
+                  <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={actingId === detail.id}
+                    onClick={async () => { await confirmDispatch(detail); setShowDetail(false); }}
+                    data-testid="promo-detail-confirm-btn">
+                    {actingId === detail.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <><CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Confirm</>}
+                  </Button>
+                )}
+                <Button variant="secondary" onClick={() => setShowDetail(false)}>Close</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Create Promo Dispatch Dialog */}
       <Dialog open={showDialog} onOpenChange={(o) => { setShowDialog(o); if (!o) resetForm(); }}>

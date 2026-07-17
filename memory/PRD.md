@@ -1745,3 +1745,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Fix: bundled the 2 bottle template images locally (`/app/frontend/public/bottles/*.jpeg`), BOTTLE_TEMPLATES now use same-origin paths (no proxy, no external dependency, no canvas taint). `fetchImageAsBlob` fetches same-origin directly, proxies only external URLs.
 - Error toasts now surface the underlying error message (HTTP status / backend detail) for diagnosability.
 - E2E verified in preview: local image loads (naturalWidth 1600), lead select → logo → circle → download ✓ → Approve & Save to lead ✓ (test design cleaned up). Needs redeploy.
+
+### 2026-07-17 — Promo stock-out detail popup - ✅ DONE
+- Clicking a row in the Promotional Stock-Out challan list (`PromoDispatchSection.jsx`) now opens a read-only detail dialog (data-testid `promo-detail-dialog`) via `GET /distributors/{id}/promo-deliveries/{dispatch_id}`.
+- Shows: challan #, status/reason badges, recipient (name/company/phone), from-location, delivery date, created by, address, remarks, full items table (SKU, batch, packaging, packages × upp = bottles, ₹/bottle, line value) and totals.
+- Footer: Confirm button on drafts (reuses confirmDispatch), Challan PDF button otherwise. Action cells stopPropagation so buttons don't trigger the popup.
+- Verified via screenshots: confirmed row detail + draft row detail with Confirm button. Needs redeploy for production.
