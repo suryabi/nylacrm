@@ -441,7 +441,7 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
                         </Select>
                       </div>
                       <div className="col-span-3 sm:col-span-2">
-                        <Input type="number" min="1" value={it.quantity} onChange={(e) => updateItem(i, { quantity: e.target.value })} placeholder="Qty" data-testid={`do-item-qty-${i}`} />
+                        <Input type="number" min="1" value={it.quantity} onChange={(e) => updateItem(i, { quantity: e.target.value })} placeholder="Qty (bottles)" title="Quantity in bottles (base units)" data-testid={`do-item-qty-${i}`} />
                       </div>
                       <div className="col-span-3 sm:col-span-2">
                         <Input type="number" min="0" value={it.unit_price} onChange={(e) => updateItem(i, { unit_price: e.target.value })} placeholder="Unit ₹" data-testid={`do-item-price-${i}`} />
@@ -451,6 +451,19 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
                       </div>
                     </div>
                     {it.sku_id && <div className="mt-1 text-right text-xs text-slate-500">Line total: <span className="font-semibold text-slate-700">{fmtINR(lineTotal)}</span></div>}
+                    {(() => {
+                      const p = pkgs.find((x) => x.packaging_type_id === it.packaging_type_id);
+                      const upp = p?.units_per_package || 0;
+                      const q = Number(it.quantity) || 0;
+                      if (!upp || upp <= 1 || !q) return null;
+                      return (
+                        <div className="mt-0.5 text-right text-xs" data-testid={`do-item-pack-hint-${i}`}>
+                          {q % upp === 0
+                            ? <span className="text-slate-400">= {q / upp} × {p.packaging_type_name} ({upp}/pack)</span>
+                            : <span className="text-amber-600">{q} bottles is not a multiple of {upp} — will be dispatched as loose bottles</span>}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}

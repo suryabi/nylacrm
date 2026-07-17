@@ -602,6 +602,10 @@ class PromoDeliveryItemCreate(BaseModel):
     sku_id: str
     sku_name: Optional[str] = None
     quantity: int
+    # Unit contract: 'packages' (default — legacy promo dialog sends crates) or
+    # 'bottles' (base units — used by the Delivery Order bridge). Prevents the
+    # bottles-interpreted-as-crates inflation bug.
+    quantity_unit: Optional[str] = "packages"
     unit_price: float = 0  # indicative value per unit (not a sale price)
     batch_id: Optional[str] = None
     batch_code: Optional[str] = None

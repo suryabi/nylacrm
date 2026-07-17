@@ -1,0 +1,31 @@
+{
+  "summary": "Verified the DO -> auto Promo Stock-Out BOTTLES unit contract fix end-to-end. Backend: 5/5 pytest passed on new test file. Bug reproduction confirms the fix: creating a DO with 24 bottles + Crate-12 packaging, then place_order, produces a linked promo dispatch with quantity=24 (NOT 288), packages=2, packaging_units=12, unit_price=10, line_value=240 — exactly matching the acceptance criteria. Regression legacy path (direct promo with no quantity_unit) still interprets qty as packages (2 crates -> 24 bottles). Amber not-a-multiple safety net verified (25 bottles + Crate-12 -> loose bottles). Repair-tool endpoints smoke-tested. Frontend: DO create dialog qty input placeholder, pack hint '= 2 × Crate - 12 (12/pack)', and amber warning 'not a multiple of 12' all rendering correctly. Promo stock-out list on distributor detail loads without errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_do_promo_bottles_unit_contract.py",
+    "/app/test_reports/pytest/iteration_332_bottles_unit.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/promo_dispatch.py::create_promo_dispatch — good defensive design: quantity_unit defaults to 'packages' preserving legacy caller behavior, and the DO bridge explicitly passes 'bottles'; the safety net that falls back to loose bottles when bottles % upp != 0 protects against silent inflation.",
+    "routes/promo_dispatch.py L527-530: total_qty computation correctly branches on quantity_unit; per-bottle unit_price division for legacy path (line 641) rounds to 4 decimals which is adequate."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_do_promo_bottles_unit_contract.py (new)"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100%"},
+  "test_credentials": "admin: surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water)",
+  "seed_data_creation": "Created ~2 test Delivery Orders + 2 auto-generated promo draft dispatches during E2E; drafts were deleted post-assertion. No production data mutated.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bug fix for bottles-vs-crates interpretation in Delivery Order -> auto Promo Stock-Out bridge is verified in production preview env. New backend regression test file: /app/backend/tests/test_do_promo_bottles_unit_contract.py — set REACT_APP_BACKEND_URL then `pytest`. Frontend acceptance criteria (Qty placeholder 'Qty (bottles)', pack hint, amber warning) all pass. Account 'Empire Restaurant' (d4e2187a-5e7d-4847-902b-b6699ae910fc, Bengaluru) resolves to distributor 'Test' via account assignment.",
+  "rca_of_the_issue": "Root cause was that PromoDeliveryItemCreate had no unit-of-measure discriminator, so the direct-dialog convention (quantity=crates) collided with the DO bridge (which sends quantity=bottles). Fix introduces quantity_unit ('packages' default | 'bottles') and the DO bridge sets 'bottles'. The promo create route branches on that flag: bottles->packages=qty/upp with per-bottle unit_price kept as-is; packages->bottles=qty*upp with per-bottle unit_price = unit_price/upp. Safety net dispatches loose bottles when qty%upp != 0. Verified: 24 bottles + Crate-12 => quantity=24, packages=2, packaging_units=12, unit_price=10, line_value=240."
+}

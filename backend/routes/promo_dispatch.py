@@ -524,7 +524,10 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
         "maps_link": maps_link,
     }
 
-    total_qty = sum(it.quantity * (int(it.units_per_package or 1) or 1) for it in data.items)
+    total_qty = sum(
+        it.quantity if (getattr(it, "quantity_unit", None) or "packages") == "bottles"
+        else it.quantity * (int(it.units_per_package or 1) or 1)
+        for it in data.items)
     total_value = sum(it.quantity * float(it.unit_price or 0) for it in data.items)
 
     # Promo stock-out persisted as an is_promo DELIVERY so it shares the
@@ -621,9 +624,21 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
     inserted_items: list[dict] = []
     for it in data.items:
         upp, pkg_name, pkg_id = _resolve_units(it)
-        crates = int(it.quantity)
-        bottles = crates * upp
-        per_bottle = round(float(it.unit_price or 0) / upp, 4) if upp else float(it.unit_price or 0)
+        if (getattr(it, "quantity_unit", None) or "packages") == "bottles":
+            # Base-unit contract (Delivery Order bridge): quantity IS bottles,
+            # unit_price IS per bottle.
+            bottles = int(it.quantity)
+            if upp > 1 and bottles % upp == 0:
+                crates = bottles // upp
+            else:
+                # Not a clean multiple of the pack size → dispatch loose bottles.
+                upp, pkg_name, pkg_id = 1, pkg_name or "Bottle", pkg_id
+                crates = bottles
+            per_bottle = float(it.unit_price or 0)
+        else:
+            crates = int(it.quantity)
+            bottles = crates * upp
+            per_bottle = round(float(it.unit_price or 0) / upp, 4) if upp else float(it.unit_price or 0)
         line_value = bottles * per_bottle
         line_doc = {
             "id": str(uuid.uuid4()),

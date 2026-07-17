@@ -276,6 +276,7 @@ async def _auto_create_draft_promo(tenant_id: str, order: dict, current_user: di
 
     items = [PromoDeliveryItemCreate(
         sku_id=i["sku_id"], sku_name=i.get("sku_name"), quantity=i["quantity"],
+        quantity_unit="bottles",  # Delivery Order quantities are BASE UNITS (bottles)
         unit_price=i.get("unit_price", 0), packaging_type_id=i.get("packaging_type_id"),
         packaging_type_name=i.get("packaging_type_name"), units_per_package=i.get("units_per_package"),
     ) for i in order.get("items", [])]

@@ -126,6 +126,91 @@ async def rebalance_negative_stock(
     return {"applied": apply, "total_moves": len(moves), "moves": moves}
 
 
+@router.get("/repair-promo-units")
+async def repair_promo_units(apply: bool = False, current_user: dict = Depends(get_current_user)):
+    """Repair tool for the bottles-interpreted-as-crates bug: promo stock-outs
+    auto-created from Delivery Orders inflated quantities by units-per-package
+    (order asked N bottles → promo dispatched N crates = N×upp bottles).
+    Detects linked promo items where quantity == order_qty × upp and corrects
+    them back to bottles (+ per-bottle price + dispatch totals). Dry-run by
+    default; ?apply=true writes. Stock rows are NOT touched — run
+    reconcile-batch-stock for the reported batch codes afterwards."""
+    _ensure_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    findings = []
+    affected_batches = set()
+    orders = await db.delivery_orders.find(
+        {"tenant_id": tenant_id, "promo_dispatch_id": {"$nin": [None, ""]}},
+        {"_id": 0, "id": 1, "order_number": 1, "items": 1, "promo_dispatch_id": 1}).to_list(2000)
+    for order in orders:
+        promo_id = order["promo_dispatch_id"]
+        promo_items = await db.distributor_delivery_items.find(
+            {"tenant_id": tenant_id, "delivery_id": promo_id}).to_list(100)
+        dispatch = await db.distributor_deliveries.find_one(
+            {"tenant_id": tenant_id, "id": promo_id},
+            {"_id": 0, "id": 1, "challan_number": 1, "delivery_number": 1, "status": 1})
+        if not promo_items or not dispatch:
+            continue
+        order_by_sku = {}
+        for oi in order.get("items") or []:
+            order_by_sku.setdefault(oi.get("sku_id"), []).append(oi)
+        changed = False
+        for pi in promo_items:
+            candidates = order_by_sku.get(pi.get("sku_id")) or []
+            upp = int(pi.get("packaging_units") or pi.get("units_per_package") or 1)
+            oi = next((o for o in candidates
+                       if upp > 1
+                       and int(pi.get("packages") or 0) == int(o.get("quantity") or 0)
+                       and int(pi.get("quantity") or 0) == int(o.get("quantity") or 0) * upp), None)
+            if not oi:
+                continue
+            correct_bottles = int(oi.get("quantity") or 0)
+            per_bottle = float(oi.get("unit_price") or 0)
+            if correct_bottles >= upp and correct_bottles % upp == 0:
+                new_packages, new_upp = correct_bottles // upp, upp
+            else:
+                new_packages, new_upp = correct_bottles, 1
+            findings.append({
+                "order_number": order.get("order_number"),
+                "challan": dispatch.get("challan_number") or dispatch.get("delivery_number"),
+                "dispatch_status": dispatch.get("status"),
+                "sku_name": pi.get("sku_name"),
+                "batch_code": pi.get("batch_code"),
+                "was_bottles": int(pi.get("quantity") or 0),
+                "corrected_bottles": correct_bottles,
+                "excess_bottles": int(pi.get("quantity") or 0) - correct_bottles,
+            })
+            if pi.get("batch_code"):
+                affected_batches.add(pi["batch_code"])
+            if apply:
+                await db.distributor_delivery_items.update_one(
+                    {"_id": pi["_id"]},
+                    {"$set": {"quantity": correct_bottles, "packages": new_packages,
+                              "packaging_units": new_upp, "units_per_package": new_upp,
+                              "unit_price": per_bottle,
+                              "line_value": round(correct_bottles * per_bottle, 2),
+                              "updated_at": now,
+                              "unit_repair_note": f"Corrected bottles-as-crates inflation on {now}"}})
+                changed = True
+        if apply and changed:
+            fresh = await db.distributor_delivery_items.find(
+                {"tenant_id": tenant_id, "delivery_id": promo_id},
+                {"_id": 0, "quantity": 1, "line_value": 1}).to_list(100)
+            await db.distributor_deliveries.update_one(
+                {"tenant_id": tenant_id, "id": promo_id},
+                {"$set": {"total_quantity": sum(int(f.get("quantity") or 0) for f in fresh),
+                          "total_value": round(sum(float(f.get("line_value") or 0) for f in fresh), 2),
+                          "updated_at": now}})
+    return {
+        "applied": apply,
+        "total_inflated_lines": len(findings),
+        "findings": findings,
+        "affected_batch_codes_for_stock_reconcile": sorted(affected_batches),
+        "note": "After applying, run reconcile-batch-stock?batch_code=<code>&apply=true for each affected batch to correct warehouse stock.",
+    }
+
+
 @router.get("/reconcile-batch-stock")
 async def reconcile_batch_stock(
     batch_code: str,
