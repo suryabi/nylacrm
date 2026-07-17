@@ -247,7 +247,11 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
     updateItem(i, { packaging_type_id: pkgId, packaging_type_name: pkg?.packaging_type_name || '', units_per_package: pkg?.units_per_package || null });
   };
 
-  const total = useMemo(() => items.reduce((s, i) => s + (i.quantity || 0) * (i.unit_price || 0), 0), [items]);
+  const total = useMemo(() => items.reduce((s, i) => {
+    const upp = Number(i.units_per_package) || 0;
+    const bottles = upp > 1 ? (Number(i.quantity) || 0) * upp : (Number(i.quantity) || 0);
+    return s + bottles * (Number(i.unit_price) || 0);
+  }, 0), [items]);
   const minDeliveryDate = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + 2); return d; }, []);
 
   const recipientId = () => {
@@ -269,11 +273,17 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
         delivery_address: addr, contact_name: contactName || null, contact_phone: contactPhone || null,
         delivery_instructions: deliveryInstructions || null,
         notes: notes || null,
-        items: items.map((i) => ({
-          sku_id: i.sku_id, sku_name: i.sku_name, quantity: Number(i.quantity), unit_price: Number(i.unit_price || 0),
-          packaging_type_id: i.packaging_type_id || null, packaging_type_name: i.packaging_type_name || null,
-          units_per_package: i.units_per_package || null,
-        })),
+        items: items.map((i) => {
+          const upp = Number(i.units_per_package) || 0;
+          // Qty is entered in packages when a multi-unit packaging is chosen —
+          // convert to bottles (base units) before sending to the backend.
+          const bottles = upp > 1 ? Number(i.quantity) * upp : Number(i.quantity);
+          return {
+            sku_id: i.sku_id, sku_name: i.sku_name, quantity: bottles, unit_price: Number(i.unit_price || 0),
+            packaging_type_id: i.packaging_type_id || null, packaging_type_name: i.packaging_type_name || null,
+            units_per_package: i.units_per_package || null,
+          };
+        }),
       };
       const { data } = await axios.post(`${API_URL}/delivery-orders`, payload, auth());
       if (alsoSubmit) {
@@ -420,7 +430,12 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
               {items.map((it, i) => {
                 const sku = skus.find((s) => s.id === it.sku_id);
                 const pkgs = pkgsFor(sku);
-                const lineTotal = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
+                const upp = Number(it.units_per_package) || 0;
+                const isPacked = upp > 1;
+                const qty = Number(it.quantity) || 0;
+                const bottles = isPacked ? qty * upp : qty;
+                const lineTotal = bottles * (Number(it.unit_price) || 0);
+                const pkgShort = (it.packaging_type_name || 'pack').toLowerCase().includes('crate') ? 'crates' : 'packs';
                 return (
                   <div key={i} className="rounded-lg border border-emerald-100 bg-white p-2.5 shadow-sm" data-testid={`do-item-row-${i}`}>
                     <div className="grid grid-cols-12 items-center gap-2">
@@ -441,29 +456,24 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
                         </Select>
                       </div>
                       <div className="col-span-3 sm:col-span-2">
-                        <Input type="number" min="1" value={it.quantity} onChange={(e) => updateItem(i, { quantity: e.target.value })} placeholder="Qty (bottles)" title="Quantity in bottles (base units)" data-testid={`do-item-qty-${i}`} />
+                        <Input type="number" min="1" step="1" value={it.quantity} onChange={(e) => updateItem(i, { quantity: e.target.value })}
+                          placeholder={isPacked ? `Qty (${pkgShort})` : 'Qty (bottles)'}
+                          title={isPacked ? `Number of ${it.packaging_type_name} packages (${upp} bottles each)` : 'Quantity in bottles (base units)'}
+                          data-testid={`do-item-qty-${i}`} />
                       </div>
                       <div className="col-span-3 sm:col-span-2">
-                        <Input type="number" min="0" value={it.unit_price} onChange={(e) => updateItem(i, { unit_price: e.target.value })} placeholder="Unit ₹" data-testid={`do-item-price-${i}`} />
+                        <Input type="number" min="0" value={it.unit_price} onChange={(e) => updateItem(i, { unit_price: e.target.value })} placeholder="₹/bottle" title="Indicative value per bottle" data-testid={`do-item-price-${i}`} />
                       </div>
                       <div className="col-span-1 flex justify-end">
                         <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(i)}><Trash2 className="h-4 w-4 text-rose-500" /></Button>
                       </div>
                     </div>
                     {it.sku_id && <div className="mt-1 text-right text-xs text-slate-500">Line total: <span className="font-semibold text-slate-700">{fmtINR(lineTotal)}</span></div>}
-                    {(() => {
-                      const p = pkgs.find((x) => x.packaging_type_id === it.packaging_type_id);
-                      const upp = p?.units_per_package || 0;
-                      const q = Number(it.quantity) || 0;
-                      if (!upp || upp <= 1 || !q) return null;
-                      return (
-                        <div className="mt-0.5 text-right text-xs" data-testid={`do-item-pack-hint-${i}`}>
-                          {q % upp === 0
-                            ? <span className="text-slate-400">= {q / upp} × {p.packaging_type_name} ({upp}/pack)</span>
-                            : <span className="text-amber-600">{q} bottles is not a multiple of {upp} — will be dispatched as loose bottles</span>}
-                        </div>
-                      );
-                    })()}
+                    {isPacked && qty > 0 && (
+                      <div className="mt-0.5 text-right text-xs" data-testid={`do-item-pack-hint-${i}`}>
+                        <span className="font-medium text-emerald-700">{qty} × {it.packaging_type_name} ({upp}/pack) = {bottles} bottles</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -677,14 +687,19 @@ function DetailDialog({ orderId, open, onClose, onChanged, role }) {
                 <table className="w-full text-xs">
                   <thead><tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
                     <th className="px-3 py-2 text-left">SKU</th><th className="px-3 py-2 text-left">Packaging</th>
-                    <th className="px-3 py-2 text-right">Qty</th><th className="px-3 py-2 text-right">Unit ₹</th><th className="px-3 py-2 text-right">Total</th>
+                    <th className="px-3 py-2 text-right">Qty (bottles)</th><th className="px-3 py-2 text-right">Unit ₹</th><th className="px-3 py-2 text-right">Total</th>
                   </tr></thead>
                   <tbody>
                     {(order.items || []).map((it, i) => (
                       <tr key={i} className="border-b border-slate-100 last:border-0">
                         <td className="px-3 py-2 text-slate-700">{it.sku_name}</td>
                         <td className="px-3 py-2 text-slate-500">{it.packaging_type_name || '—'}</td>
-                        <td className="px-3 py-2 text-right">{it.quantity}</td>
+                        <td className="px-3 py-2 text-right">
+                          {it.quantity}
+                          {Number(it.units_per_package) > 1 && it.quantity % it.units_per_package === 0 && (
+                            <span className="text-slate-400"> ({it.quantity / it.units_per_package} × {it.packaging_type_name})</span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-right">{fmtINR(it.unit_price)}</td>
                         <td className="px-3 py-2 text-right font-medium">{fmtINR((it.quantity || 0) * (it.unit_price || 0))}</td>
                       </tr>

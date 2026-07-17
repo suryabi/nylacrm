@@ -1721,3 +1721,8 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - `DELETE /api/delivery-orders/{id}` — now also permanently deletes CANCELLED requests (admin roles only); draft-delete behavior unchanged.
 - Frontend `DeliveryOrders.js`: cancelled rows shown strike-off in list; detail dialog shows a "Request cancelled" banner, admin "Cancel Request" button (with optional reason), and "Delete Permanently" button. `EntityDeliveryOrders.js` also strikes off cancelled entries.
 - Tested via curl (all state paths + promo cleanup + 400 guards) and screenshots (list strike-off, cancelled detail, Cancel Request on placed order).
+
+### 2026-07-17 — Stock Delivery Request qty entered in packages (UOM fix) - ✅ DONE
+- Create dialog (`DeliveryOrders.js`): when a multi-unit packaging (e.g. 12 Bottle Crate) is selected, the Qty field now accepts the NUMBER OF PACKAGES (placeholder "Qty (crates)"), with a live hint "9 × Crate - 12 (12/pack) = 108 bottles". Converted to bottles (base units) on submit — backend canonical unit unchanged.
+- Line total & grand total computed on bottles × ₹/bottle. Detail dialog Qty column shows "108 (9 × Crate - 12)".
+- E2E verified: entered 9 crates → stored quantity=108 bottles, total ₹1,080. User reported from PRODUCTION — needs redeploy to go live.
