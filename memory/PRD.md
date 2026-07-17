@@ -1756,3 +1756,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - User's personal GEMINI_API_KEY ran out of prepaid credits (429 RESOURCE_EXHAUSTED on GST upload).
 - Rewrote `/app/backend/utils/gemini_helpers.py` to route through `emergentintegrations.LlmChat` with EMERGENT_LLM_KEY, model unchanged (gemini-2.5-flash). Public API identical, so all callers (GST cert OCR in accounts.py, business-card parse in contacts.py, daily_status summaries, knowledge_base) work unchanged. File attachments handled via temp files + FileContentWithMimeType. Retry/backoff kept.
 - E2E verified: gemini_text returns OK; GST certificate upload parsed a synthetic cert correctly (GSTIN, PAN, names, address). Test data cleaned from account. GEMINI_API_KEY left in .env but unused. Needs redeploy for production.
+
+### 2026-07-17 — GST Trade Name shown in account pickers - ✅ DONE
+- Requirement: disambiguate same-named outlets using the GST trade name (Tax & Billing section).
+- Backend: `assigned-accounts` (distributors.py) now projects + returns `gst_trade_name`; `GET /api/accounts` (server.py) search now also matches gst_trade_name / gst_legal_name.
+- Frontend pickers updated (option rows + selected tiles + search filters + "no results" filters): Record Account Delivery (DeliveriesTab.jsx), Customer Returns (ReturnsTab.jsx), Sample Delivery Request recipient picker (DeliveryOrders.js RecipientPicker — also shows trade name for any recipient carrying it).
+- Verified via screenshots: trade name renders in list + selected tile; searching by trade name ("Empire Foods") finds the account. Test trade name set on preview account "Empire Restaurant". Needs redeploy for production.

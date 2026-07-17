@@ -912,6 +912,11 @@ export default function DeliveriesTab({
                             Selected
                           </span>
                         </div>
+                        {selectedDeliveryAccount.gst_trade_name && (
+                          <p className="text-xs text-indigo-700 font-medium" data-testid="delivery-selected-trade-name">
+                            Trade name: {selectedDeliveryAccount.gst_trade_name}
+                          </p>
+                        )}
                         <p className="text-sm text-slate-600">
                           {selectedDeliveryAccount.city}{selectedDeliveryAccount.state ? `, ${selectedDeliveryAccount.state}` : ''}
                           {selectedDeliveryAccount.is_primary && (
@@ -960,6 +965,7 @@ export default function DeliveriesTab({
                               const search = deliveryAccountSearch.toLowerCase();
                               return (
                                 account.account_name?.toLowerCase().includes(search) ||
+                                account.gst_trade_name?.toLowerCase().includes(search) ||
                                 account.city?.toLowerCase().includes(search) ||
                                 account.contact_name?.toLowerCase().includes(search) ||
                                 account.territory?.toLowerCase().includes(search)
@@ -986,6 +992,11 @@ export default function DeliveriesTab({
                                       {account.account_name}
                                       {account.is_primary && <span className="ml-2 text-yellow-600">★ Primary</span>}
                                     </p>
+                                    {account.gst_trade_name && (
+                                      <p className="text-xs text-indigo-700 font-medium mt-0.5" data-testid={`delivery-account-trade-name-${account.id}`}>
+                                        Trade name: {account.gst_trade_name}
+                                      </p>
+                                    )}
                                     <p className="text-xs text-muted-foreground mt-0.5">
                                       {account.city}{account.state ? `, ${account.state}` : ''}
                                       {account.territory && ` • ${account.territory}`}
@@ -1009,8 +1020,10 @@ export default function DeliveriesTab({
                          assignedAccounts.filter(a => {
                            const search = deliveryAccountSearch.toLowerCase();
                            return a.account_name?.toLowerCase().includes(search) || 
+                                  a.gst_trade_name?.toLowerCase().includes(search) ||
                                   a.city?.toLowerCase().includes(search) ||
-                                  a.contact_name?.toLowerCase().includes(search);
+                                  a.contact_name?.toLowerCase().includes(search) ||
+                                  a.territory?.toLowerCase().includes(search);
                          }).length === 0 && (
                           <div className="p-4 text-sm text-muted-foreground text-center">
                             No accounts found matching "{deliveryAccountSearch}"

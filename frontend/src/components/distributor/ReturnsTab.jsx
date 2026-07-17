@@ -807,6 +807,9 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                           Selected
                         </span>
                       </div>
+                      {selectedReturnAccount.gst_trade_name && (
+                        <p className="text-xs text-indigo-700 font-medium mt-0.5" data-testid="return-selected-trade-name">Trade name: {selectedReturnAccount.gst_trade_name}</p>
+                      )}
                       {(selectedReturnAccount.city || selectedReturnAccount.state) && (
                         <p className="text-xs text-slate-600 mt-0.5">
                           {selectedReturnAccount.city}{selectedReturnAccount.state ? `, ${selectedReturnAccount.state}` : ''}
@@ -853,6 +856,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                             const s = returnAccountSearch.toLowerCase();
                             return (
                               (account.account_name || account.name || '').toLowerCase().includes(s) ||
+                              (account.gst_trade_name || '').toLowerCase().includes(s) ||
                               (account.city || '').toLowerCase().includes(s) ||
                               (account.contact_name || '').toLowerCase().includes(s) ||
                               (account.territory || '').toLowerCase().includes(s)
@@ -874,6 +878,9 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                                     {account.account_name || account.name}
                                     {account.is_primary && <span className="ml-2 text-amber-600">★ Primary</span>}
                                   </p>
+                                  {account.gst_trade_name && (
+                                    <p className="text-xs text-indigo-700 font-medium mt-0.5" data-testid={`return-account-trade-name-${account.id}`}>Trade name: {account.gst_trade_name}</p>
+                                  )}
                                   {(account.city || account.state) && (
                                     <p className="text-xs text-muted-foreground mt-0.5">
                                       {account.city}{account.state ? `, ${account.state}` : ''}
@@ -892,6 +899,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         const s = returnAccountSearch.toLowerCase();
                         return (
                           (a.account_name || a.name || '').toLowerCase().includes(s) ||
+                          (a.gst_trade_name || '').toLowerCase().includes(s) ||
                           (a.city || '').toLowerCase().includes(s) ||
                           (a.contact_name || '').toLowerCase().includes(s) ||
                           (a.territory || '').toLowerCase().includes(s)

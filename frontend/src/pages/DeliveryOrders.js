@@ -148,6 +148,7 @@ function RecipientPicker({ recipientType, setRecipientType, selected, onSelect }
         <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2" data-testid="do-recipient-selected">
           <div>
             <p className="text-sm font-medium text-slate-800">{nameOf(selected)}</p>
+            {selected.gst_trade_name && <p className="text-xs font-medium text-indigo-700" data-testid="do-recipient-trade-name">Trade name: {selected.gst_trade_name}</p>}
             <p className="text-xs text-slate-500">{selected.company || selected.email || selected.city || ''}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={() => onSelect(null)}><X className="h-4 w-4" /></Button>
@@ -167,8 +168,11 @@ function RecipientPicker({ recipientType, setRecipientType, selected, onSelect }
                 <button key={r.id} type="button" onClick={() => { onSelect(r); setResults([]); }}
                   className="flex w-full items-center justify-between border-b border-slate-100 px-3 py-2 text-left text-sm last:border-0 hover:bg-slate-50"
                   data-testid={`do-recipient-option-${r.id}`}>
-                  <span className="font-medium text-slate-700">{nameOf(r)}</span>
-                  <span className="text-xs text-slate-400">{r.company || r.city || ''}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-slate-700">{nameOf(r)}</span>
+                    {r.gst_trade_name && <span className="block truncate text-xs font-medium text-indigo-700">Trade name: {r.gst_trade_name}</span>}
+                  </span>
+                  <span className="ml-2 shrink-0 text-xs text-slate-400">{r.company || r.city || ''}</span>
                 </button>
               ))}
             </div>

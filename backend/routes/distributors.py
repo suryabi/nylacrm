@@ -4895,7 +4895,7 @@ async def get_assigned_accounts_for_delivery(
     for assignment in assignments:
         account = await db.accounts.find_one(
             {"id": assignment.get('account_id')},
-            {"_id": 0, "id": 1, "account_name": 1, "contact_name": 1, "city": 1, "state": 1, "delivery_address": 1, "territory": 1, "contact_number": 1, "sku_pricing": 1}
+            {"_id": 0, "id": 1, "account_name": 1, "gst_trade_name": 1, "contact_name": 1, "city": 1, "state": 1, "delivery_address": 1, "territory": 1, "contact_number": 1, "sku_pricing": 1}
         )
         if account:
             # ── SKU pricing — pick the row that is ACTIVE today for each SKU.
@@ -4963,6 +4963,7 @@ async def get_assigned_accounts_for_delivery(
             accounts.append({
                 "id": account.get('id'),
                 "account_name": account.get('account_name', 'Unknown Account'),
+                "gst_trade_name": account.get('gst_trade_name'),
                 "contact_name": account.get('contact_name', ''),
                 "contact_number": account.get('contact_number', ''),
                 "city": account.get('city', ''),

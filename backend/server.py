@@ -6492,7 +6492,9 @@ async def get_accounts(
         query['$or'] = [
             {'account_name': {'$regex': search, '$options': 'i'}},
             {'contact_name': {'$regex': search, '$options': 'i'}},
-            {'account_id': {'$regex': search, '$options': 'i'}}
+            {'account_id': {'$regex': search, '$options': 'i'}},
+            {'gst_trade_name': {'$regex': search, '$options': 'i'}},
+            {'gst_legal_name': {'$regex': search, '$options': 'i'}}
         ]
     # Combine lead_type clause via $and to coexist with search $or
     if lead_type_clause is not None:
