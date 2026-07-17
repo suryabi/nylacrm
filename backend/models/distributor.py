@@ -2,7 +2,7 @@
 Distributor Management Models
 Pydantic models for the Distribution module
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -361,6 +361,22 @@ class ShipmentStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+def _check_unit_consistency(m, qty_attr: str = "quantity"):
+    """Global UOM tripwire: when a line carries BOTH a package count and a
+    units-per-package factor, the base-unit quantity MUST equal their product.
+    Catches bottles/crates drift at the API boundary instead of corrupting stock."""
+    qty = getattr(m, qty_attr, None)
+    pkgs = getattr(m, "packages", None)
+    upp = getattr(m, "packaging_units", None) or getattr(m, "units_per_package", None)
+    if qty is not None and pkgs and upp and int(pkgs) > 0 and int(upp) > 0:
+        if int(qty) != int(pkgs) * int(upp):
+            raise ValueError(
+                f"Unit mismatch: quantity {qty} (base units/bottles) ≠ "
+                f"{pkgs} packages × {upp} units/package = {int(pkgs) * int(upp)}. "
+                f"Send quantity in base units (bottles) consistent with the packaging breakdown.")
+    return m
+
+
 class ShipmentItemCreate(BaseModel):
     sku_id: str
     sku_name: Optional[str] = None
@@ -387,6 +403,10 @@ class ShipmentItemCreate(BaseModel):
     packaging_type_name: Optional[str] = None
     packaging_units: Optional[int] = None
     packages: Optional[int] = None
+
+    @model_validator(mode="after")
+    def _units_consistent(self):
+        return _check_unit_consistency(self)
 
 
 class ShipmentItemUpdate(BaseModel):
@@ -524,6 +544,10 @@ class DeliveryItemCreate(BaseModel):
     packaging_type_name: Optional[str] = None
     packaging_units: Optional[int] = None
     packages: Optional[int] = None
+
+    @model_validator(mode="after")
+    def _units_consistent(self):
+        return _check_unit_consistency(self)
 
 
 class DeliveryItemUpdate(BaseModel):

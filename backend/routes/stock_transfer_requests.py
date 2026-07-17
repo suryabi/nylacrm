@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from database import db
 from core.tenant import get_current_tenant_id
@@ -102,6 +102,11 @@ class RequestItem(BaseModel):
     units_per_package: Optional[int] = None
     packages: Optional[int] = None
     note: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _units_consistent(self):
+        from models.distributor import _check_unit_consistency
+        return _check_unit_consistency(self, qty_attr="quantity_units")
 
 
 class RequestCreate(BaseModel):
