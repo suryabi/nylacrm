@@ -107,7 +107,6 @@ const salesNavigationGroups = [
     title: 'Organization',
     items: [
       { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
-      { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Contacts', href: '/contacts', icon: Contact, moduleKey: 'contacts', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Business Development Executive', 'Sales Representative', 'Admin', 'System Admin'] },
     ]
   },
@@ -275,6 +274,12 @@ const accountingNavigationGroups = [
 ];
 
 const adminNavigationGroups = [
+  {
+    title: 'Organization',
+    items: [
+      { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ADMIN_ONLY_ROLES },
+    ],
+  },
   {
     title: 'Fleet',
     items: [
