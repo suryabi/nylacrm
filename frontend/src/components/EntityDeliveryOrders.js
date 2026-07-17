@@ -67,11 +67,13 @@ export default function EntityDeliveryOrders({ entityType, entityId, entityName,
         </p>
       ) : (
         <div className="space-y-2" data-testid="entity-do-list">
-          {orders.map((o) => (
-            <div key={o.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-3" data-testid={`entity-do-${o.order_number}`}>
+          {orders.map((o) => {
+            const cancelled = o.current_state_key === 'cancelled';
+            return (
+            <div key={o.id} className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 p-3${cancelled ? ' bg-slate-50/60 opacity-70' : ''}`} data-testid={`entity-do-${o.order_number}`}>
               <div>
-                <p className="font-mono text-sm font-semibold text-emerald-700">{o.order_number}</p>
-                <p className="text-xs text-slate-500">
+                <p className={`font-mono text-sm font-semibold text-emerald-700${cancelled ? ' line-through' : ''}`}>{o.order_number}</p>
+                <p className={`text-xs text-slate-500${cancelled ? ' line-through' : ''}`}>
                   {o.requested_date || '—'} · {(o.items || []).length} item(s) · {fmtINR(o.total_value)}
                 </p>
               </div>
@@ -80,7 +82,8 @@ export default function EntityDeliveryOrders({ entityType, entityId, entityName,
                 <StateBadge order={o} />
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

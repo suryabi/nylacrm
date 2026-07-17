@@ -86,6 +86,19 @@ class TransitionRequest(BaseModel):
     field_data: Optional[dict] = None
 
 
+class AdminCancelRequest(BaseModel):
+    comment: Optional[str] = None
+
+
+_ADMIN_CANCEL_ROLES = {"CEO", "Director", "Admin", "System Admin"}
+_TERMINAL_STATES = {"cancelled", "rejected", "fulfilled"}
+# Fulfillment stages at/after delivery scheduling — cancellation is blocked.
+_SCHEDULED_OR_LATER = {
+    "delivery_assigned", "delivery_scheduled", "scheduled", "on_the_way",
+    "in_transit", "delivered", "complete", "partially_delivered",
+}
+
+
 # ───────────────────────── helpers ─────────────────────────
 async def _next_order_number(tenant_id: str) -> str:
     year = datetime.now(timezone.utc).year
@@ -492,12 +505,83 @@ async def delete_delivery_order(order_id: str, current_user: dict = Depends(get_
     order = await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Delivery order not found")
-    if order.get("current_state_key") != "draft":
-        raise HTTPException(400, "Only a draft delivery order can be deleted.")
+    state = order.get("current_state_key")
+    if state == "cancelled":
+        # Cancelled requests can be permanently deleted, but only by CEO/Admin.
+        if current_user.get("role") not in _ADMIN_CANCEL_ROLES:
+            raise HTTPException(403, "Only a CEO or Admin can permanently delete a cancelled request.")
+        await db.delivery_orders.delete_one({"id": order_id, "tenant_id": tenant_id})
+        return {"ok": True, "deleted": order_id}
+    if state != "draft":
+        raise HTTPException(400, "Only a draft or cancelled delivery order can be deleted.")
     if order.get("created_by") != current_user.get("id") and not is_distributor_admin(current_user):
         raise HTTPException(403, "Only the requester or an admin can delete this order.")
     await db.delivery_orders.delete_one({"id": order_id, "tenant_id": tenant_id})
     return {"ok": True}
+
+
+@router.post("/delivery-orders/{order_id}/admin-cancel")
+async def admin_cancel_delivery_order(order_id: str, payload: AdminCancelRequest, current_user: dict = Depends(get_current_user)):
+    """CEO/Admin override — cancel a stock delivery request from any state
+    before the delivery has been scheduled. Cleans up a linked DRAFT
+    promotional stock-out (a draft never touched stock)."""
+    tenant_id = get_current_tenant_id()
+    if current_user.get("role") not in _ADMIN_CANCEL_ROLES:
+        raise HTTPException(403, "Only a CEO or Admin can cancel this request.")
+    order = await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Delivery order not found")
+    state = order.get("current_state_key")
+    if state == "cancelled":
+        raise HTTPException(400, "This request is already cancelled.")
+    if state in _TERMINAL_STATES:
+        raise HTTPException(400, f"A {state} request cannot be cancelled.")
+    if (order.get("fulfillment_status") or "") in _SCHEDULED_OR_LATER:
+        raise HTTPException(400, "The delivery has already been scheduled — this request can no longer be cancelled.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    promo_note = None
+    promo_id = order.get("promo_dispatch_id")
+    if promo_id:
+        for coll in (db.distributor_deliveries, db.promo_dispatches):
+            p = await coll.find_one({"id": promo_id, "tenant_id": tenant_id}, {"_id": 0, "status": 1, "challan_number": 1})
+            if not p:
+                continue
+            pstatus = p.get("status")
+            if pstatus == "draft":
+                await coll.update_one(
+                    {"id": promo_id, "tenant_id": tenant_id},
+                    {"$set": {"status": "cancelled", "cancelled_at": now, "updated_at": now,
+                              "cancelled_reason": f"Stock delivery request {order.get('order_number')} cancelled by {current_user.get('name')}"}})
+                promo_note = f"Linked draft stock-out {p.get('challan_number') or ''} was cancelled."
+            elif pstatus not in ("cancelled", "reversed"):
+                raise HTTPException(
+                    400,
+                    f"The linked stock-out {p.get('challan_number') or promo_id} has already reserved stock "
+                    f"(status: {pstatus}). Reverse it from the distributor's stock-out page before cancelling.")
+            break
+
+    set_doc = {
+        "current_state_key": "cancelled",
+        "current_state_label": "Cancelled",
+        "current_state_color": "#6b7280",
+        "cancelled_by": current_user.get("id"),
+        "cancelled_by_name": current_user.get("name"),
+        "cancelled_at": now,
+        "updated_at": now,
+    }
+    if promo_note:
+        set_doc["fulfillment_status"] = "cancelled"
+    history = {
+        "state_key": "cancelled", "state_label": "Cancelled", "state_color": "#6b7280",
+        "entered_at": now, "by_user_id": current_user.get("id"), "by_user_name": current_user.get("name"),
+        "comment": (payload.comment or "Cancelled by admin override.") + (f" {promo_note}" if promo_note else ""),
+    }
+    await db.delivery_orders.update_one(
+        {"id": order_id, "tenant_id": tenant_id},
+        {"$set": set_doc, "$push": {"status_history": history}})
+    updated = await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
+    return {"ok": True, "order": updated, "promo_note": promo_note}
 
 
 @router.get("/delivery-orders/{order_id}/available-transitions")

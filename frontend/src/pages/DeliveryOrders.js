@@ -497,7 +497,10 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
 }
 
 // ───────────────────── Detail dialog ─────────────────────
-function DetailDialog({ orderId, open, onClose, onChanged }) {
+const ADMIN_CANCEL_ROLES = ['CEO', 'Director', 'Admin', 'System Admin'];
+const SCHEDULED_OR_LATER = ['delivery_assigned', 'delivery_scheduled', 'scheduled', 'on_the_way', 'in_transit', 'delivered', 'complete', 'partially_delivered'];
+
+function DetailDialog({ orderId, open, onClose, onChanged, role }) {
   const [order, setOrder] = useState(null);
   const [transitions, setTransitions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -545,6 +548,41 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
 
   const actionIcon = (k) => ({ approve: CheckCircle2, reject: XCircle, cancel: XCircle, submit: ChevronRight, place_order: Truck, mark_fulfilled: Truck, reopen: RotateCcw }[k] || ChevronRight);
 
+  const isAdmin = ADMIN_CANCEL_ROLES.includes(role);
+  const isCancelled = order?.current_state_key === 'cancelled';
+  // Admin override cancel — shown when the workflow itself offers no cancel action
+  // and the delivery has not yet been scheduled.
+  const canAdminCancel = isAdmin && order
+    && !['cancelled', 'rejected', 'fulfilled'].includes(order.current_state_key)
+    && !SCHEDULED_OR_LATER.includes(order.fulfillment_status)
+    && !transitions.some((t) => t.action_key === 'cancel');
+
+  const adminCancel = async () => {
+    if (commentFor !== '__admin_cancel__') { setCommentFor('__admin_cancel__'); return; }
+    if (!window.confirm(`Cancel ${order.order_number}? The request will be marked as cancelled and can then be permanently deleted.`)) return;
+    setActing(true);
+    try {
+      const { data } = await axios.post(`${API_URL}/delivery-orders/${orderId}/admin-cancel`, { comment: comment || null }, auth());
+      toast.success(`${order.order_number} cancelled${data.promo_note ? ` · ${data.promo_note}` : ''}`);
+      setCommentFor(null); setComment('');
+      await load(); onChanged();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to cancel the request');
+    } finally { setActing(false); }
+  };
+
+  const permanentDelete = async () => {
+    if (!window.confirm(`Permanently delete ${order.order_number}? This cannot be undone.`)) return;
+    setActing(true);
+    try {
+      await axios.delete(`${API_URL}/delivery-orders/${orderId}`, auth());
+      toast.success(`${order.order_number} permanently deleted`);
+      onChanged(); onClose();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to delete the request');
+    } finally { setActing(false); }
+  };
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto" data-testid="do-detail-dialog">
@@ -554,11 +592,25 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5 text-emerald-600" /> {order.order_number}
+                <Package className="h-5 w-5 text-emerald-600" />
+                <span className={isCancelled ? 'text-slate-400 line-through' : ''}>{order.order_number}</span>
                 <StateBadge order={order} />
               </DialogTitle>
               <DialogDescription>{order.recipient_type?.toUpperCase()} · {order.recipient_name || '—'}</DialogDescription>
             </DialogHeader>
+
+            {isCancelled && (
+              <div className="flex items-start gap-3 rounded-lg border border-slate-300 bg-slate-50 px-4 py-3" data-testid="do-cancelled-banner">
+                <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
+                <div className="text-sm">
+                  <p className="font-semibold text-slate-700">Request cancelled</p>
+                  <p className="text-slate-500">
+                    {order.cancelled_by_name ? <>Cancelled by <span className="font-medium">{order.cancelled_by_name}</span>.</> : 'This request has been cancelled.'}
+                    {isAdmin && ' You can permanently delete it below.'}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {order.current_state_key === 'pending_approval' && (
               <div
@@ -662,14 +714,14 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
 
               {commentFor && (
                 <div>
-                  <Label>Comment (required)</Label>
+                  <Label>{commentFor === '__admin_cancel__' ? 'Cancellation reason (optional)' : 'Comment (required)'}</Label>
                   <Textarea value={comment} onChange={(e) => setComment(e.target.value)} data-testid="do-transition-comment" />
                 </div>
               )}
             </div>
 
             <DialogFooter className="flex-wrap gap-2">
-              {transitions.length === 0 && <span className="text-xs text-slate-400">No actions available for your role at this state.</span>}
+              {transitions.length === 0 && !canAdminCancel && !isCancelled && <span className="text-xs text-slate-400">No actions available for your role at this state.</span>}
               {transitions.map((t) => {
                 const Icon = actionIcon(t.action_key);
                 const variant = t.kind === 'negative' ? 'destructive' : t.kind === 'positive' ? 'default' : 'secondary';
@@ -681,6 +733,16 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
                   </Button>
                 );
               })}
+              {canAdminCancel && (
+                <Button variant="destructive" disabled={acting} onClick={adminCancel} data-testid="do-admin-cancel-btn">
+                  {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><XCircle className="mr-1.5 h-4 w-4" />{commentFor === '__admin_cancel__' ? 'Confirm Cancel' : 'Cancel Request'}</>}
+                </Button>
+              )}
+              {isCancelled && isAdmin && (
+                <Button variant="destructive" disabled={acting} onClick={permanentDelete} data-testid="do-permanent-delete-btn">
+                  {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Trash2 className="mr-1.5 h-4 w-4" />Delete Permanently</>}
+                </Button>
+              )}
             </DialogFooter>
           </>
         )}
@@ -839,26 +901,29 @@ export default function DeliveryOrders() {
                 <tr><td colSpan={9} className="py-16 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-emerald-600" /></td></tr>
               ) : orders.length === 0 ? (
                 <tr><td colSpan={9} className="py-16 text-center text-sm text-slate-500" data-testid="do-empty">No delivery orders yet. Create your first one.</td></tr>
-              ) : orders.map((o) => (
-                <tr key={o.id} onClick={() => setDetailId(o.id)} className="cursor-pointer border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50" data-testid={`do-row-${o.order_number}`}>
-                  <td className="px-4 py-3 font-mono font-medium text-emerald-700">{o.order_number}</td>
-                  <td className="px-4 py-3 font-medium text-slate-800">{o.recipient_name || '—'}</td>
-                  <td className="px-4 py-3"><Badge variant="outline" className="capitalize">{o.recipient_type}</Badge></td>
-                  <td className="px-4 py-3 text-slate-600">{o.delivery_city || '—'}</td>
-                  <td className="px-4 py-3 text-right font-mono font-semibold text-slate-900">{fmtINR(o.total_value)}</td>
-                  <td className="px-4 py-3 text-slate-600">{o.requested_date || '—'}</td>
+              ) : orders.map((o) => {
+                const strike = o.current_state_key === 'cancelled' ? ' line-through opacity-60' : '';
+                return (
+                <tr key={o.id} onClick={() => setDetailId(o.id)} className={`cursor-pointer border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50${o.current_state_key === 'cancelled' ? ' bg-slate-50/60' : ''}`} data-testid={`do-row-${o.order_number}`}>
+                  <td className={`px-4 py-3 font-mono font-medium text-emerald-700${strike}`}>{o.order_number}</td>
+                  <td className={`px-4 py-3 font-medium text-slate-800${strike}`}>{o.recipient_name || '—'}</td>
+                  <td className={`px-4 py-3${o.current_state_key === 'cancelled' ? ' opacity-60' : ''}`}><Badge variant="outline" className="capitalize">{o.recipient_type}</Badge></td>
+                  <td className={`px-4 py-3 text-slate-600${strike}`}>{o.delivery_city || '—'}</td>
+                  <td className={`px-4 py-3 text-right font-mono font-semibold text-slate-900${strike}`}>{fmtINR(o.total_value)}</td>
+                  <td className={`px-4 py-3 text-slate-600${strike}`}>{o.requested_date || '—'}</td>
                   <td className="px-4 py-3"><StateBadge order={o} /></td>
                   <td className="px-4 py-3">{o.fulfillment_status ? <FulfillmentBadge status={o.fulfillment_status} /> : <span className="text-slate-300">—</span>}</td>
-                  <td className="px-4 py-3 text-slate-500">{o.created_by_name || '—'}</td>
+                  <td className={`px-4 py-3 text-slate-500${strike}`}>{o.created_by_name || '—'}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
       <CreateOrderDialog open={showCreate} onClose={() => setShowCreate(false)} skus={skus} reasons={reasons} cities={cities} onCreated={fetchOrders} />
-      <DetailDialog orderId={detailId} open={!!detailId} onClose={() => setDetailId(null)} onChanged={fetchOrders} />
+      <DetailDialog orderId={detailId} open={!!detailId} onClose={() => setDetailId(null)} onChanged={fetchOrders} role={role} />
     </div>
   );
 }

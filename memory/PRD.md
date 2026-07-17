@@ -1715,3 +1715,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Zoho Books (OAuth + invoices + credit notes + refunds + contact mapping)
 - Emergent Object Storage (Marketing Request files)
 - Emergent LLM Key (Knowledge Base, AI features)
+
+### 2026-07-17 — Admin cancel + permanent delete for Stock Delivery Requests - ✅ DONE
+- `POST /api/delivery-orders/{id}/admin-cancel` — CEO/Director/Admin/System Admin can cancel from ANY state before delivery is scheduled (blocked if fulfillment_status is delivery_assigned/scheduled/on_the_way/in_transit/delivered etc.). Cancels a linked DRAFT promo stock-out; blocks with a clear message if the stock-out already reserved stock (must reverse first).
+- `DELETE /api/delivery-orders/{id}` — now also permanently deletes CANCELLED requests (admin roles only); draft-delete behavior unchanged.
+- Frontend `DeliveryOrders.js`: cancelled rows shown strike-off in list; detail dialog shows a "Request cancelled" banner, admin "Cancel Request" button (with optional reason), and "Delete Permanently" button. `EntityDeliveryOrders.js` also strikes off cancelled entries.
+- Tested via curl (all state paths + promo cleanup + 400 guards) and screenshots (list strike-off, cancelled detail, Cancel Request on placed order).
