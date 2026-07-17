@@ -1751,3 +1751,8 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Shows: challan #, status/reason badges, recipient (name/company/phone), from-location, delivery date, created by, address, remarks, full items table (SKU, batch, packaging, packages × upp = bottles, ₹/bottle, line value) and totals.
 - Footer: Confirm button on drafts (reuses confirmDispatch), Challan PDF button otherwise. Action cells stopPropagation so buttons don't trigger the popup.
 - Verified via screenshots: confirmed row detail + draft row detail with Confirm button. Needs redeploy for production.
+
+### 2026-07-17 — Gemini features switched to Emergent Universal Key - ✅ DONE
+- User's personal GEMINI_API_KEY ran out of prepaid credits (429 RESOURCE_EXHAUSTED on GST upload).
+- Rewrote `/app/backend/utils/gemini_helpers.py` to route through `emergentintegrations.LlmChat` with EMERGENT_LLM_KEY, model unchanged (gemini-2.5-flash). Public API identical, so all callers (GST cert OCR in accounts.py, business-card parse in contacts.py, daily_status summaries, knowledge_base) work unchanged. File attachments handled via temp files + FileContentWithMimeType. Retry/backoff kept.
+- E2E verified: gemini_text returns OK; GST certificate upload parsed a synthetic cert correctly (GSTIN, PAN, names, address). Test data cleaned from account. GEMINI_API_KEY left in .env but unused. Needs redeploy for production.
