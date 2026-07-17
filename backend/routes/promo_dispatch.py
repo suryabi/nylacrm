@@ -737,7 +737,7 @@ def _promo_unit_label(items: list) -> Optional[str]:
         if not name:
             continue
         base = re.sub(r"\(.*\)$", "", name).strip()  # drop "(12)" size suffix
-        parts = base.split()
+        parts = [p for p in base.replace("-", " ").split() if p.isalpha()]  # skip "- 12" style counts
         if parts:
             words.add(parts[-1].lower())
     return next(iter(words)) if len(words) == 1 else None
@@ -752,18 +752,25 @@ async def list_promo_dispatches(distributor_id: str, current_user: dict = Depend
         {"tenant_id": tenant_id, "distributor_id": distributor_id, "is_promo": True}, {"_id": 0}).to_list(2000)
     rows = [_promo_delivery_response(r) for r in new_rows]
 
-    # Attach the per-dispatch unit label (crate / bottle / carton …) so the UI
-    # shows the right unit per row instead of a fixed "Crates" header.
+    # Attach the per-dispatch unit label (crate / bottle / carton …) and the
+    # package count so the UI can show "48 bottles (= 4 crates)" instead of
+    # mislabelling bottles as crates.
     new_ids = [r["id"] for r in rows if r.get("id")]
     items_by_did: dict = {}
     if new_ids:
         for it in await db.distributor_delivery_items.find(
             {"tenant_id": tenant_id, "delivery_id": {"$in": new_ids}},
-            {"_id": 0, "delivery_id": 1, "packaging_type_name": 1},
+            {"_id": 0, "delivery_id": 1, "packaging_type_name": 1, "packages": 1},
         ).to_list(20000):
             items_by_did.setdefault(it.get("delivery_id"), []).append(it)
     for r in rows:
-        r["unit_label"] = _promo_unit_label(items_by_did.get(r.get("id"), []))
+        its = items_by_did.get(r.get("id"), [])
+        r["unit_label"] = _promo_unit_label(its)
+        # total_packages only when every line carries a package count.
+        if its and all(it.get("packages") is not None for it in its):
+            r["total_packages"] = sum(int(it.get("packages") or 0) for it in its)
+        else:
+            r["total_packages"] = None
 
     legacy = await db.promo_dispatches.find(
         {"tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0}).to_list(2000)

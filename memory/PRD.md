@@ -1726,3 +1726,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Create dialog (`DeliveryOrders.js`): when a multi-unit packaging (e.g. 12 Bottle Crate) is selected, the Qty field now accepts the NUMBER OF PACKAGES (placeholder "Qty (crates)"), with a live hint "9 × Crate - 12 (12/pack) = 108 bottles". Converted to bottles (base units) on submit — backend canonical unit unchanged.
 - Line total & grand total computed on bottles × ₹/bottle. Detail dialog Qty column shows "108 (9 × Crate - 12)".
 - E2E verified: entered 9 crates → stored quantity=108 bottles, total ₹1,080. User reported from PRODUCTION — needs redeploy to go live.
+
+### 2026-07-17 — Promo stock-out list mislabelled bottles as crates - ✅ DONE
+- Root cause: `PromoDispatchSection.jsx` showed `total_quantity` (BOTTLES, canonical) with a packaging-derived `unit_label` ("crate") → "48 crates" for a 4-crate (48-bottle) dispatch.
+- Backend `list_promo_dispatches` (promo_dispatch.py): now returns `total_packages` (sum of item `packages`) per dispatch; `_promo_unit_label` fixed to pick the last ALPHABETIC word ("Crate - 12" → crate, not "12").
+- Frontend: rows with `total_packages` show "{qty} bottles" + "= {packages} crates" hint; date subtotals likewise. Legacy rows (no packages data) keep old rendering.
+- E2E verified: 4-crate DO → auto promo → list shows "48 bottles / = 4 crates". User reported from PRODUCTION — needs redeploy.

@@ -664,10 +664,17 @@ export default function PromoDispatchSection({
                           <span className={`inline-flex flex-col items-center ${d.status === 'reversed' ? 'line-through decoration-rose-400 decoration-2' : ''}`}>
                             <span className="inline-flex items-center justify-center bg-slate-100 text-slate-700 text-sm font-medium px-2 py-0.5 rounded-full">{d.total_quantity}</span>
                             <span className="mt-0.5 text-[10px] text-slate-500 lowercase" data-testid={`promo-unit-${d.id}`}>
-                              {d.unit_label
-                                ? `${d.unit_label}${(d.total_quantity === 1) ? '' : 's'}`
-                                : ((d.total_quantity === 1) ? 'item' : 'items')}
+                              {d.total_packages != null
+                                ? `bottle${(d.total_quantity === 1) ? '' : 's'}`
+                                : d.unit_label
+                                  ? `${d.unit_label}${(d.total_quantity === 1) ? '' : 's'}`
+                                  : ((d.total_quantity === 1) ? 'item' : 'items')}
                             </span>
+                            {d.total_packages != null && d.unit_label && d.unit_label !== 'bottle' && d.total_packages !== d.total_quantity && (
+                              <span className="text-[10px] text-slate-400 lowercase" data-testid={`promo-packages-${d.id}`}>
+                                = {d.total_packages} {d.unit_label}{d.total_packages === 1 ? '' : 's'}
+                              </span>
+                            )}
                           </span>
                         </td>
                         <td className={`p-3 text-right text-slate-700 tabular-nums ${d.status === 'reversed' ? 'line-through decoration-rose-400 decoration-2' : ''}`}>₹{fmtINR(d.total_indicative_value)}</td>
@@ -824,11 +831,22 @@ export default function PromoDispatchSection({
                           const totalV = live.reduce((s, d) => s + (d.total_indicative_value || 0), 0);
                           const grpUnits = [...new Set(live.map((d) => d.unit_label).filter(Boolean))];
                           const grpUnit = grpUnits.length === 1 ? grpUnits[0] : null;
+                          const allNew = live.length > 0 && live.every((d) => d.total_packages != null);
+                          const totalP = allNew ? live.reduce((s, d) => s + (d.total_packages || 0), 0) : null;
                           return (
                             <tr className="border-b-2 border-fuchsia-200 bg-fuchsia-50/50 text-sm" data-testid={`promo-date-subtotal-${group.key}`}>
                               <td className="px-3 py-2 font-semibold text-fuchsia-800" colSpan="4">Subtotal · {group.label}</td>
                               <td className="px-3 py-2 text-center font-bold text-slate-800">
-                                {totalQ} <span className="font-normal text-[10px] text-slate-500 lowercase">{grpUnit ? `${grpUnit}${totalQ === 1 ? '' : 's'}` : (totalQ === 1 ? 'item' : 'items')}</span>
+                                {allNew ? (
+                                  <>
+                                    {totalQ} <span className="font-normal text-[10px] text-slate-500 lowercase">bottle{totalQ === 1 ? '' : 's'}</span>
+                                    {grpUnit && grpUnit !== 'bottle' && totalP !== totalQ && (
+                                      <span className="block font-normal text-[10px] text-slate-400 lowercase">= {totalP} {grpUnit}{totalP === 1 ? '' : 's'}</span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <>{totalQ} <span className="font-normal text-[10px] text-slate-500 lowercase">{grpUnit ? `${grpUnit}${totalQ === 1 ? '' : 's'}` : (totalQ === 1 ? 'item' : 'items')}</span></>
+                                )}
                               </td>
                               <td className="px-3 py-2 text-right font-bold text-slate-800 tabular-nums">₹{fmtINR(totalV)}</td>
                               <td className="px-3 py-2 text-center text-[11px] text-slate-500">{live.length} {live.length === 1 ? 'challan' : 'challans'}{group.items.length > live.length ? ` · ${group.items.length - live.length} reversed` : ''}</td>
