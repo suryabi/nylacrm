@@ -359,7 +359,8 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
         async for it in db.distributor_delivery_items.find(
             {"delivery_id": {"$in": ids}, "tenant_id": tenant_id},
             {"_id": 0, "delivery_id": 1, "sku_id": 1, "sku_name": 1, "sku_code": 1, "quantity": 1, "unit_price": 1,
-             "packaging_type_name": 1, "units_per_package": 1, "delivered_quantity": 1}
+             "packaging_type_name": 1, "units_per_package": 1, "delivered_quantity": 1,
+             "packages": 1, "packaging_units": 1, "batch_id": 1, "batch_code": 1}
         ):
             items_by_delivery.setdefault(it["delivery_id"], []).append(it)
             if it.get("sku_id"):
@@ -538,9 +539,24 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
             for line in raw_items:
                 qty = int(line.get("quantity") or line.get("delivered_quantity") or 0)
                 line_label = line.get("packaging_type_name")
-                line_upp = line.get("units_per_package")
-                if line_label:
-                    # Line already expressed in its chosen packaging — trust it.
+                line_upp = line.get("units_per_package") or line.get("packaging_units")
+                try:
+                    line_pkgs = int(line.get("packages")) if line.get("packages") not in (None, "") else None
+                except (TypeError, ValueError):
+                    line_pkgs = None
+                if line_pkgs is not None and line_pkgs > 0:
+                    # Normalized convention (regular + new promo/DO lines):
+                    # `packages` is the package count; `packages × upp` is the
+                    # authoritative bottle total (immune to historical `quantity`
+                    # storage inconsistencies — see distributors._item_crates).
+                    pkg_count = line_pkgs
+                    upp = int(line_upp or 0)
+                    pkg_label = line_label or (sku_packaging.get(line.get("sku_id")) or {}).get("packaging_type_name") or "Crate"
+                    qty_units = pkg_count * upp if upp > 1 else qty
+                    upp = upp or 1
+                elif line_label:
+                    # Legacy promo/DO lines: `quantity` is already the number of
+                    # those packages (e.g. "Bottle (1)", qty 1 → 1 Bottle).
                     pkg_count = qty
                     pkg_label = line_label
                     upp = line_upp or 1
@@ -701,7 +717,8 @@ async def list_schedules(
         sku_ids: set[str] = set()
         async for it in db.distributor_delivery_items.find(
             {"delivery_id": {"$in": all_delivery_ids}, "tenant_id": tenant_id},
-            {"_id": 0, "delivery_id": 1, "sku_id": 1, "quantity": 1, "packaging_type_name": 1}
+            {"_id": 0, "delivery_id": 1, "sku_id": 1, "quantity": 1, "packaging_type_name": 1,
+             "packages": 1, "packaging_units": 1, "units_per_package": 1}
         ):
             items_by_delivery.setdefault(it["delivery_id"], []).append(it)
             if it.get("sku_id"):
@@ -724,12 +741,20 @@ async def list_schedules(
             total = 0
             for ln in lines:
                 qty = int(ln.get("quantity") or 0)
-                # Promo/DO lines carry their own packaging — quantity is already
-                # in those package units; count it as-is. Regular lines store raw
-                # bottle counts → convert to the SKU's default crate.
-                if ln.get("packaging_type_name"):
+                try:
+                    pkgs = int(ln.get("packages")) if ln.get("packages") not in (None, "") else None
+                except (TypeError, ValueError):
+                    pkgs = None
+                if pkgs is not None and pkgs > 0:
+                    # Normalized lines: `packages` IS the package count.
+                    total += pkgs
+                elif ln.get("packaging_type_name"):
+                    # Legacy promo/DO lines — quantity is already in those
+                    # package units; count it as-is.
                     total += qty
                 else:
+                    # Regular legacy lines store raw bottle counts → convert to
+                    # the SKU's default crate.
                     upp = sku_upp.get(ln.get("sku_id"))
                     total += (-(-qty // upp)) if upp and upp > 0 else qty
             crate_total_by_delivery[did] = total
@@ -834,12 +859,13 @@ async def list_eligible_deliveries(current_user: dict = Depends(get_current_user
         async for it in db.distributor_delivery_items.find(
             {"delivery_id": {"$in": elig_ids}, "tenant_id": tenant_id},
             {"_id": 0, "delivery_id": 1, "quantity": 1, "sku_id": 1,
-             "packaging_type_name": 1, "units_per_package": 1}
+             "packaging_type_name": 1, "units_per_package": 1, "packages": 1}
         ):
             line_skus.setdefault(it["delivery_id"], []).append({
                 "sku_id": it.get("sku_id"),
                 "quantity": int(it.get("quantity") or 0),
                 "packaging_type_name": it.get("packaging_type_name"),
+                "packages": it.get("packages"),
             })
             s = item_stats.setdefault(it["delivery_id"], {"count": 0, "qty_units": 0})
             s["count"] += 1
@@ -879,8 +905,14 @@ async def list_eligible_deliveries(current_user: dict = Depends(get_current_user
         total_packages = 0
         for sku_line in line_skus.get(d["id"], []):
             qty = sku_line["quantity"]
-            if sku_line.get("packaging_type_name"):
-                total_packages += qty  # already in chosen package units
+            try:
+                pkgs = int(sku_line.get("packages")) if sku_line.get("packages") not in (None, "") else None
+            except (TypeError, ValueError):
+                pkgs = None
+            if pkgs is not None and pkgs > 0:
+                total_packages += pkgs  # normalized lines: packages IS the count
+            elif sku_line.get("packaging_type_name"):
+                total_packages += qty  # legacy: already in chosen package units
             else:
                 upp = sku_packaging.get(sku_line.get("sku_id"))
                 total_packages += (-(-qty // upp)) if (upp and upp > 0) else qty
@@ -1868,9 +1900,16 @@ def _build_schedule_pdf(schedule: dict, dist: dict, sku_designs: dict = None, em
         items_lines = []
         for it in (delv.get("items") or []):
             pkg = it.get("packaging_label") or "Crate"
+            pkg_count = it.get("quantity") or 0
+            upp = it.get("units_per_package") or 0
+            units = it.get("quantity_units") or (pkg_count * upp if upp else pkg_count)
+            if upp and upp > 1:
+                qty_str = (f"<b>{pkg} × {pkg_count}</b> "
+                           f"<font color='grey' size='8'>= {units} bottles</font>")
+            else:
+                qty_str = f"<b>{pkg_count}</b> <font color='grey' size='8'>bottle{'s' if pkg_count != 1 else ''}</font>"
             items_lines.append(Paragraph(
-                f"{(it.get('sku_name') or '—')} — <b>{it.get('quantity') or 0}</b> "
-                f"<font color='grey' size='8'>{pkg}</font>", body
+                f"{(it.get('sku_name') or '—')} — {qty_str}", body
             ))
             # Approved bottle design (full colour) from the account's SKU Details —
             # helps the driver pick the correct branded bottle from the warehouse.

@@ -1732,3 +1732,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Backend `list_promo_dispatches` (promo_dispatch.py): now returns `total_packages` (sum of item `packages`) per dispatch; `_promo_unit_label` fixed to pick the last ALPHABETIC word ("Crate - 12" → crate, not "12").
 - Frontend: rows with `total_packages` show "{qty} bottles" + "= {packages} crates" hint; date subtotals likewise. Legacy rows (no packages data) keep old rendering.
 - E2E verified: 4-crate DO → auto promo → list shows "48 bottles / = 4 crates". User reported from PRODUCTION — needs redeploy.
+
+### 2026-07-17 — Delivery bundle PDF & schedules: package × bottles clarity (UOM fix) - ✅ DONE
+- Bug: schedule builder assumed promo/DO lines' `quantity` = package count, but normalized lines store `quantity` in BOTTLES with a separate `packages` field → PDF showed "48 12 Bottle Crate" (48 bottles mislabelled as 48 crates).
+- Fixed 3 spots in `distributor_delivery_schedules.py` (all now prefer `packages` when present, per the authoritative `packages × packaging_units` rule from distributors._item_crates): schedule detail item breakdown, schedule-list crate totals, eligible-deliveries totals.
+- Bundle PDF line format now: "SKU — Crate - 12 × 4 = 48 bottles" (packaging × packages = bottles). Legacy lines (no `packages`) keep old behavior.
+- E2E verified via seeded schedule: detail (pkgs 4 / units 48), list total_crates 4, PDF text "Crate - 12 × 4 = 48 bottles". Needs redeploy for production.
