@@ -24,13 +24,13 @@ const BOTTLE_TEMPLATES = [
     id: 'bottle1',
     name: 'Air Water Duo',
     description: 'Front & Back View',
-    image: 'https://customer-assets.emergentagent.com/job_ca75408a-cd0b-4269-9030-efa58b12f03d/artifacts/c9fvt4g7_WhatsApp%20Image%202026-02-21%20at%203.39.21%20PM.jpeg'
+    image: '/bottles/air-water-duo.jpeg'
   },
   {
     id: 'bottle2',
     name: 'Air Water Single',
     description: 'Premium View',
-    image: 'https://customer-assets.emergentagent.com/job_ca75408a-cd0b-4269-9030-efa58b12f03d/artifacts/5thitm9j_WhatsApp%20Image%202026-02-21%20at%203.52.35%20PM.jpeg'
+    image: '/bottles/air-water-single.jpeg'
   }
 ];
 
@@ -127,27 +127,24 @@ const createImage = (url) =>
     image.src = url;
   });
 
-// Helper to fetch image as blob via backend proxy (bypasses CORS)
+// Helper to fetch image as blob. Same-origin (bundled) images are fetched
+// directly; external URLs go through the backend proxy (bypasses CORS).
 const fetchImageAsBlob = async (url) => {
   try {
-    // Use backend proxy to fetch the image
-    const proxyUrl = `${API_URL}/bottle-preview/proxy-image?url=${encodeURIComponent(url)}`;
-    const token = localStorage.getItem('token');
-    
-    const response = await fetch(proxyUrl, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.status}`);
+    let fetchUrl = url;
+    let opts = {};
+    if (/^https?:\/\//i.test(url) && !url.startsWith(window.location.origin)) {
+      fetchUrl = `${API_URL}/bottle-preview/proxy-image?url=${encodeURIComponent(url)}`;
+      opts = { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } };
     }
-    
+    const response = await fetch(fetchUrl, opts);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch bottle image (HTTP ${response.status})`);
+    }
     const blob = await response.blob();
     return URL.createObjectURL(blob);
   } catch (error) {
-    console.error('Failed to fetch image via proxy:', error);
+    console.error('Failed to fetch bottle image:', error);
     throw error;
   }
 };
@@ -890,7 +887,7 @@ export default function BottlePreview() {
       toast.success(`${currentBottle.name} preview downloaded!`);
     } catch (error) {
       console.error('Download error:', error);
-      toast.error('Failed to download preview');
+      toast.error(`Failed to download preview${error?.message ? `: ${error.message}` : ''}`);
     } finally {
       setProcessing(false);
     }
@@ -991,7 +988,8 @@ export default function BottlePreview() {
       setShowApproveDialog(false);
       await fetchLeadDesigns(selectedLead.id);
     } catch (error) {
-      toast.error(error?.response?.data?.detail || 'Failed to save design');
+      console.error('Approve/save error:', error);
+      toast.error(error?.response?.data?.detail || (error?.message ? `Failed to save design: ${error.message}` : 'Failed to save design'));
     } finally {
       setApproving(false);
     }

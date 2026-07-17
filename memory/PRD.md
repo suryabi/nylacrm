@@ -1738,3 +1738,10 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Fixed 3 spots in `distributor_delivery_schedules.py` (all now prefer `packages` when present, per the authoritative `packages × packaging_units` rule from distributors._item_crates): schedule detail item breakdown, schedule-list crate totals, eligible-deliveries totals.
 - Bundle PDF line format now: "SKU — Crate - 12 × 4 = 48 bottles" (packaging × packages = bottles). Legacy lines (no `packages`) keep old behavior.
 - E2E verified via seeded schedule: detail (pkgs 4 / units 48), list total_crates 4, PDF text "Crate - 12 × 4 = 48 bottles". Needs redeploy for production.
+
+### 2026-07-17 — Bottle Preview "Failed to save / download" fix - ✅ DONE
+- Report was from PRODUCTION; preview reproduced fine for all flows (PNG/SVG logo, circle shape, download, approve-save).
+- Root-cause hardening: both save & download share `buildCompositeDataUrl` whose only network step was fetching the bottle template from customer-assets.emergentagent.com via the backend `/bottle-preview/proxy-image` — a production egress/proxy failure breaks BOTH actions.
+- Fix: bundled the 2 bottle template images locally (`/app/frontend/public/bottles/*.jpeg`), BOTTLE_TEMPLATES now use same-origin paths (no proxy, no external dependency, no canvas taint). `fetchImageAsBlob` fetches same-origin directly, proxies only external URLs.
+- Error toasts now surface the underlying error message (HTTP status / backend detail) for diagnosability.
+- E2E verified in preview: local image loads (naturalWidth 1600), lead select → logo → circle → download ✓ → Approve & Save to lead ✓ (test design cleaned up). Needs redeploy.
