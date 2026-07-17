@@ -132,10 +132,12 @@ async def repair_promo_units(apply: bool = False, current_user: dict = Depends(g
     auto-created from Delivery Orders inflated quantities by units-per-package
     (order asked N bottles → promo dispatched N crates = N×upp bottles).
     Detects linked promo items where quantity == order_qty × upp and corrects
-    them back to bottles (+ per-bottle price + dispatch totals). Dry-run by
-    default; ?apply=true writes. Stock rows are NOT touched — run
-    reconcile-batch-stock for the reported batch codes afterwards."""
+    them back to bottles (+ per-bottle price + dispatch totals). For COMPLETED
+    dispatches the over-deducted stock is restored to the source warehouse row;
+    draft/confirmed dispatches only RESERVE stock, so fixing the item rows fixes
+    the reservation. Dry-run by default; ?apply=true writes."""
     _ensure_admin(current_user)
+    from routes.promo_dispatch import _adjust_stock_for_dispatch
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
     findings = []
@@ -149,7 +151,8 @@ async def repair_promo_units(apply: bool = False, current_user: dict = Depends(g
             {"tenant_id": tenant_id, "delivery_id": promo_id}).to_list(100)
         dispatch = await db.distributor_deliveries.find_one(
             {"tenant_id": tenant_id, "id": promo_id},
-            {"_id": 0, "id": 1, "challan_number": 1, "delivery_number": 1, "status": 1})
+            {"_id": 0, "id": 1, "challan_number": 1, "delivery_number": 1, "status": 1,
+             "is_factory": 1, "distributor_id": 1, "distributor_location_id": 1})
         if not promo_items or not dispatch:
             continue
         order_by_sku = {}
@@ -171,6 +174,8 @@ async def repair_promo_units(apply: bool = False, current_user: dict = Depends(g
                 new_packages, new_upp = correct_bottles // upp, upp
             else:
                 new_packages, new_upp = correct_bottles, 1
+            excess = int(pi.get("quantity") or 0) - correct_bottles
+            stock_deducted = (dispatch.get("status") or "") in ("complete", "completed", "delivered")
             findings.append({
                 "order_number": order.get("order_number"),
                 "challan": dispatch.get("challan_number") or dispatch.get("delivery_number"),
@@ -179,7 +184,10 @@ async def repair_promo_units(apply: bool = False, current_user: dict = Depends(g
                 "batch_code": pi.get("batch_code"),
                 "was_bottles": int(pi.get("quantity") or 0),
                 "corrected_bottles": correct_bottles,
-                "excess_bottles": int(pi.get("quantity") or 0) - correct_bottles,
+                "excess_bottles": excess,
+                "stock_restoration": "restored" if (stock_deducted and excess > 0) else
+                                     ("not needed — stock only reserved, reservation shrinks with the fix"
+                                      if excess > 0 else "none"),
             })
             if pi.get("batch_code"):
                 affected_batches.add(pi["batch_code"])
@@ -192,6 +200,11 @@ async def repair_promo_units(apply: bool = False, current_user: dict = Depends(g
                               "line_value": round(correct_bottles * per_bottle, 2),
                               "updated_at": now,
                               "unit_repair_note": f"Corrected bottles-as-crates inflation on {now}"}})
+                if stock_deducted and excess > 0:
+                    # Restore the over-deducted units to the exact stock row the
+                    # completion deducted from (same key convention).
+                    await _adjust_stock_for_dispatch(
+                        tenant_id, dispatch, [{**pi, "quantity": excess}], sign=+1)
                 changed = True
         if apply and changed:
             fresh = await db.distributor_delivery_items.find(
@@ -206,8 +219,9 @@ async def repair_promo_units(apply: bool = False, current_user: dict = Depends(g
         "applied": apply,
         "total_inflated_lines": len(findings),
         "findings": findings,
-        "affected_batch_codes_for_stock_reconcile": sorted(affected_batches),
-        "note": "After applying, run reconcile-batch-stock?batch_code=<code>&apply=true for each affected batch to correct warehouse stock.",
+        "affected_batch_codes": sorted(affected_batches),
+        "note": ("Stock for COMPLETED dispatches is restored automatically on apply. "
+                 "Optionally verify each affected batch with reconcile-batch-stock?batch_code=<code> (dry-run)."),
     }
 
 
