@@ -23,6 +23,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-07-17 — 🤖 Consolidated "Ask Nyla" assistant (single button) ✅ DONE (tested)
+- **User request**: two buttons (Ask Nyla KB widget + AI floating icon) consolidated into one; icon replaced with a labeled control.
+- **Frontend**: single pill launcher bottom-right — MessageCircleQuestion icon + "Ask Nyla" text; panel header renamed "Ask Nyla"; empty-state "CRM data or company knowledge base" + KB suggestion chip. `AskNyla.jsx` widget deleted; DashboardLayout renders only `<AIAssistant />`.
+- **Backend** (`routes/ai_assistant.py`): new `_ctx_kb` — keyword-overlap retrieval over `kb_documents` (top 3 docs, ~8K char budget) appended to chat context; system prompt renamed to "Nyla", instructs KB citations by title.
+- **Verified**: screenshot (labeled launcher, old edge tab gone, panel opens/hides launcher) + streamed KB answer quoting the real "Pricing FAQ" doc.
+- Note: old AskNyla widget's module/role gating + feedback buttons were dropped with it; the consolidated assistant is available to all logged-in users.
+
 ### 2026-07-15 — 🌐 Global unit contract fix (bottles vs crates) ✅ DONE (tested 100%)
 - **User report (production)**: Sample delivery requests (Delivery Orders) are entered in BOTTLES but the auto-created promo stock-out interpreted quantity as CRATES → ×upp inflation (30 bottles → 30 crates = 450 bottles).
 - **UOM tripwire (global)**: `_check_unit_consistency` model validator on `ShipmentItemCreate`, `DeliveryItemCreate` (models/distributor.py) and `RequestItem` (stock_transfer_requests.py) — any line carrying both `packages` and a units-per-package factor is rejected (422) unless `quantity == packages × upp`. Legacy payloads without packaging info pass. Verified: unit tests + API 422 + full regression (11/11 pytest).

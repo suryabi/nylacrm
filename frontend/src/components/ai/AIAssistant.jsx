@@ -8,7 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Sparkles, X, SendHorizonal, Plus, Loader2, Trash2, Bot } from 'lucide-react';
+import { Sparkles, X, SendHorizonal, Plus, Loader2, Trash2, Bot, MessageCircleQuestion } from 'lucide-react';
 import { streamAI } from './aiStream';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -17,6 +17,7 @@ const SUGGESTIONS = [
   'What stock is currently at each warehouse?',
   'Summarize recent deliveries',
   'Which leads need follow-up?',
+  'Search the knowledge base for our pricing policy',
 ];
 
 export default function AIAssistant() {
@@ -115,7 +116,7 @@ export default function AIAssistant() {
           {/* Header */}
           <div className="flex items-center gap-2 px-3 py-2.5 border-b bg-gradient-to-r from-violet-600 to-indigo-600 text-white">
             <Bot className="h-4 w-4 flex-shrink-0" />
-            <span className="text-sm font-semibold flex-1">AI Assistant</span>
+            <span className="text-sm font-semibold flex-1">Ask Nyla</span>
             {sessions.length > 0 && (
               <Select value={sessionId || ''} onValueChange={loadSession}>
                 <SelectTrigger className="h-7 w-[130px] bg-white/15 border-white/20 text-white text-[11px]" data-testid="ai-session-select">
@@ -148,7 +149,7 @@ export default function AIAssistant() {
             {messages.length === 0 && (
               <div className="pt-6 text-center space-y-3" data-testid="ai-empty-state">
                 <Sparkles className="h-8 w-8 text-violet-400 mx-auto" />
-                <p className="text-sm text-slate-600 dark:text-slate-300 font-medium">Ask me anything about your CRM</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300 font-medium">Ask me anything — CRM data or company knowledge base</p>
                 <div className="space-y-1.5">
                   {SUGGESTIONS.map((s, i) => (
                     <button

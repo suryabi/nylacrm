@@ -7,7 +7,6 @@ import { useNavigation } from '../context/NavigationContext';
 import { useTenantConfig } from '../context/TenantConfigContext';
 import { Button } from '../components/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
-import AskNyla from '../components/widgets/AskNyla';
 import AIAssistant from '../components/ai/AIAssistant';
 import NotificationBell from '../components/NotificationBell';
 import FacilitySwitcher from '../components/distributor/FacilitySwitcher';
@@ -761,9 +760,7 @@ export default function DashboardLayout({ children }) {
         </main>
       </div>
       
-      {/* Ask Nyla - Knowledge Base floating chat assistant */}
-      <AskNyla />
-      {/* AI Assistant (ChatGPT) — global floating chat grounded in CRM data */}
+      {/* Ask Nyla — consolidated AI assistant (CRM data + knowledge base) */}
       <AIAssistant />
     </div>
   );

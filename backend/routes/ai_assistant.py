@@ -11,6 +11,7 @@ Endpoints (all SSE-streaming, tenant-scoped, any authenticated user):
 """
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -175,6 +176,35 @@ _DATASETS = {
 }
 
 
+async def _ctx_kb(t: str, message: str) -> str:
+    """Top knowledge-base documents relevant to the question (keyword overlap).
+    Lets the consolidated assistant answer product/pricing/policy questions
+    that used to go to the separate Ask Nyla widget."""
+    words = {w for w in re.findall(r"[a-z0-9]{3,}", message.lower())}
+    if not words:
+        return ""
+    docs = await db.kb_documents.find(
+        {"tenant_id": t}, {"_id": 0, "title": 1, "content": 1}).to_list(200)
+    scored = []
+    for d in docs:
+        text = ((d.get("title") or "") + " " + (d.get("content") or "")[:6000]).lower()
+        score = sum(1 for w in words if w in text)
+        if score:
+            scored.append((score, d))
+    scored.sort(key=lambda x: -x[0])
+    if not scored:
+        return ""
+    parts = ["KNOWLEDGE BASE DOCUMENTS (company docs — cite the title when used):"]
+    budget = 8000
+    for _, d in scored[:3]:
+        block = f"--- {d.get('title', 'Untitled')} ---\n{(d.get('content') or '')[:2800]}"
+        if budget - len(block) < 0:
+            break
+        parts.append(block)
+        budget -= len(block)
+    return "\n".join(parts)
+
+
 async def _build_context(t: str, message: str) -> str:
     msg = message.lower()
     parts = [await _ctx_snapshot(t)]
@@ -184,15 +214,22 @@ async def _build_context(t: str, message: str) -> str:
                 parts.append(await fn(t))
             except Exception:
                 pass
+    try:
+        kb = await _ctx_kb(t, message)
+        if kb:
+            parts.append(kb)
+    except Exception:
+        pass
     return "\n\n".join(parts)
 
 
-BASE_SYSTEM = """You are the AI assistant inside a multi-tenant CRM for beverage/FMCG operations \
+BASE_SYSTEM = """You are Nyla, the AI assistant inside a multi-tenant CRM for beverage/FMCG operations \
 (leads, accounts, distributors, factory & distributor inventory with parent/child customer-branded SKUs, \
 Stock In / Stock Transfer / Stock Out flows, issues, accounting sync).
 Rules:
-- Answer using ONLY the CRM DATA provided below. If the data doesn't cover the question, say so and \
-suggest where in the app the user can look (e.g. Stock Dashboard, Distributors, Leads).
+- Answer using ONLY the CRM DATA and KNOWLEDGE BASE DOCUMENTS provided below. If the data doesn't cover \
+the question, say so and suggest where in the app the user can look (e.g. Stock Dashboard, Distributors, Leads).
+- When answering from a knowledge base document, cite its title (e.g. "(source: Pricing Playbook)").
 - Currency is INR (₹). Quantities are bottle/base units unless stated.
 - Be concise. Use short bullet lists and bold key figures. Never invent numbers.
 """
