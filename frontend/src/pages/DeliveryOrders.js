@@ -316,7 +316,7 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
         {step === 1 ? (
           <>
             <div className="space-y-6 py-4">
-              <div className="rounded-2xl border-2 border-amber-300 bg-gradient-to-b from-amber-50 to-orange-50 px-6 py-8 text-center shadow-sm" data-testid="do-sampling-notice">
+              <div className="alerting-border rounded-2xl border-2 border-amber-300 bg-gradient-to-b from-amber-50 to-orange-50 px-6 py-8 text-center shadow-sm" data-testid="do-sampling-notice">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 border border-amber-300">
                   <Gift className="h-6 w-6 text-amber-700" />
                 </div>
