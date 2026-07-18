@@ -1762,3 +1762,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Backend: `assigned-accounts` (distributors.py) now projects + returns `gst_trade_name`; `GET /api/accounts` (server.py) search now also matches gst_trade_name / gst_legal_name.
 - Frontend pickers updated (option rows + selected tiles + search filters + "no results" filters): Record Account Delivery (DeliveriesTab.jsx), Customer Returns (ReturnsTab.jsx), Sample Delivery Request recipient picker (DeliveryOrders.js RecipientPicker — also shows trade name for any recipient carrying it).
 - Verified via screenshots: trade name renders in list + selected tile; searching by trade name ("Empire Foods") finds the account. Test trade name set on preview account "Empire Restaurant". Needs redeploy for production.
+
+### 2026-07-18 — 2-step Stock Delivery Request dialog (sampling acknowledgement) - ✅ DONE
+- CreateOrderDialog (DeliveryOrders.js) is now a 2-page journey: Step 1 shows a bold centered amber notice "This request is for Sampling / Free Trial only — NON-BILLING" + mandatory checkbox "Yes, I understand. We are not going to bill the individual / lead / account for these samples." Continue disabled until checked.
+- Step 2 = original form, with a Back button. State resets each time the dialog opens.
+- Verified via screenshots (checkbox gating + step transition + back button).
+- NOTE: production deploy on 2026-07-17 20:00 FAILED (deployment timeout waiting to become ready). requirements.txt has emergentintegrations pinned, backend starts clean in preview. If user raises it, run deployment_agent.

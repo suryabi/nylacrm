@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popove
 import { Calendar } from '../components/ui/calendar';
 import {
   Package, Plus, Trash2, Loader2, MapPin, Search, X, ClipboardList,
-  CheckCircle2, XCircle, RotateCcw, Truck, Clock, ChevronRight, Phone, Calendar as CalendarIcon,
+  CheckCircle2, XCircle, RotateCcw, Truck, Clock, ChevronRight, Phone, Calendar as CalendarIcon, Gift,
 } from 'lucide-react';
 import { isValidMapsLink } from '../utils/mapsLink';
 import { MapsLinkInput } from '../components/MapsLinkInput';
@@ -196,9 +196,13 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
   const [deliveryInstructions, setDeliveryInstructions] = useState('');
   const [items, setItems] = useState([]);
   const [saving, setSaving] = useState(false);
+  // 2-step journey: step 1 = sampling-only acknowledgement, step 2 = the form.
+  const [step, setStep] = useState(1);
+  const [ackNoBilling, setAckNoBilling] = useState(false);
 
   useEffect(() => {
     if (open) {
+      setStep(1); setAckNoBilling(false);
       setRecipientType(presetRecipient?.type || 'account');
       setSelected(presetRecipient?.entity || null);
       setRequestedDate(''); setReason('');
@@ -306,9 +310,52 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
       <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto" data-testid="do-create-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Package className="h-5 w-5 text-emerald-600" /> New Stock Delivery Request</DialogTitle>
-          <DialogDescription>Raise a promotional stock-out request for approval.</DialogDescription>
+          <DialogDescription>{step === 1 ? 'Step 1 of 2 — please read and confirm before proceeding.' : 'Step 2 of 2 — raise a promotional stock-out request for approval.'}</DialogDescription>
         </DialogHeader>
 
+        {step === 1 ? (
+          <>
+            <div className="space-y-6 py-4">
+              <div className="rounded-2xl border-2 border-amber-300 bg-gradient-to-b from-amber-50 to-orange-50 px-6 py-8 text-center shadow-sm" data-testid="do-sampling-notice">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 border border-amber-300">
+                  <Gift className="h-6 w-6 text-amber-700" />
+                </div>
+                <p className="text-lg font-bold text-amber-900 sm:text-xl">
+                  This request is for Sampling / Free Trial only
+                </p>
+                <p className="mt-2 text-sm font-semibold text-amber-800">
+                  NON-BILLING — no invoice will be raised for this stock.
+                </p>
+                <p className="mt-3 text-xs text-amber-700">
+                  Use this only for promotional samples, free trials and non-billable giveaways.
+                  For billable deliveries, record an Account Delivery from the distributor's Stock Out tab instead.
+                </p>
+              </div>
+
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition-colors hover:border-emerald-300 hover:bg-emerald-50/40" data-testid="do-ack-label">
+                <input
+                  type="checkbox"
+                  checked={ackNoBilling}
+                  onChange={(e) => setAckNoBilling(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-emerald-600"
+                  data-testid="do-ack-checkbox"
+                />
+                <span className="text-sm text-slate-700">
+                  <span className="font-semibold text-slate-900">Yes, I understand.</span>{' '}
+                  We are not going to bill the individual / lead / account for these samples.
+                </span>
+              </label>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button onClick={() => setStep(2)} disabled={!ackNoBilling} className="bg-emerald-600 hover:bg-emerald-700" data-testid="do-ack-continue">
+                Continue <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+        <>
         <div className="space-y-5">
           {presetRecipient ? (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3" data-testid="do-preset-recipient">
@@ -497,6 +544,7 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
         </div>
 
         <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={() => setStep(1)} disabled={saving} data-testid="do-back-step1">Back</Button>
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button variant="secondary" onClick={() => submit(false)} disabled={saving} data-testid="do-save-draft">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save as Draft'}
@@ -505,6 +553,8 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create & Submit'}
           </Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );
