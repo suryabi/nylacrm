@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronRight, Loader2, ReceiptText, ArrowLeft, PieChart as PieIcon,
@@ -76,7 +77,7 @@ export const CategoryDrilldown = ({ dateStart, dateEnd }) => {
         params: { tag, parent_id: parentId || undefined, date_start: dateStart, date_end: dateEnd },
       });
       setItems(data.items || []);
-    } catch { setItems([]); }
+    } catch (e) { setItems([]); toast.error('Could not load category breakdown'); }
     setLoading(false);
   }, [tag, dateStart, dateEnd]);
 
@@ -88,7 +89,7 @@ export const CategoryDrilldown = ({ dateStart, dateEnd }) => {
         params: { tag, category_id: node.id, date_start: dateStart, date_end: dateEnd },
       });
       setTxns(data);
-    } catch { setTxns({ items: [], total: 0 }); }
+    } catch (e) { setTxns({ items: [], total: 0 }); toast.error('Could not load transactions'); }
     setLoading(false);
   };
 

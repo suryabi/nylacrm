@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight, Loader2, Banknote } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { DashKpis } from '../components/accounting/DashKpis';
@@ -66,7 +67,7 @@ export default function AccountingDashboard() {
         ...auth(), params: { date_start: range.start, date_end: range.end },
       });
       setData(d);
-    } catch { setData(null); }
+    } catch (e) { setData(null); toast.error('Could not load dashboard data'); }
     setLoading(false);
   }, [range.start, range.end]);
 

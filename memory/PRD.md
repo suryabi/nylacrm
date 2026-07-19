@@ -11,6 +11,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## Test credentials (see /app/memory/test_credentials.md)
 
+### 2026-07-19 — 📊 Accounting Dashboard (drill-down) + P0 Team-menu fix ✅ DONE (tested 100%, iteration_333)
+- **P0 fix — "Team" menu missing in Admin sidebar**: nav code was correct; root cause = CEO role's permissions in `db.roles` were MASS-REVOKED (61/107 modules view=false, likely a prior partial PUT from a test). Repaired: CEO role restored to full access on all 107 modules; Director granted `team`. Verified: Admin sidebar shows Team + Fleet + Product & SKU + Master Data + Settings groups. ⚠️ If this recurs, check `db.roles` CEO permissions — do NOT PUT partial permission objects.
+- **New Accounting Dashboard** (`/accounting/dashboard`, nav item at top of Accounting module, moduleKey `accounting_transactions`):
+  - Backend (`routes/accounting_transactions.py`): `GET /dashboard` (KPIs w/ prev-period deltas, monthly in/out trend, root expense+income category breakdowns, top vendors/payees, per-bank summary), `GET /dashboard/category-breakdown?tag=&parent_id=` (drill level: immediate children incl. "Directly tagged" bucket, has_children flags), `GET /dashboard/category-transactions?category_id=&tag=` (descendant-inclusive txn list w/ category_name enrichment).
+  - Frontend: `pages/AccountingDashboard.js` + `components/accounting/{DashKpis,DashTrendChart,CategoryDrilldown,DashSidePanels}.jsx`, `dashUtils.js`. 5 KPI cards (Money In/Out, Net, Bills Pending, Untagged w/ pulsing `.alert-ring`), recharts trend bars w/ glass tooltip, 3-level drill-down (root → sub → transactions) with breadcrumbs/back + Expenses|Income tabs + donut, top vendors/payees/banks panels. Period switcher: FY (Indian, default) / Qtr / Month / Custom with prev-next arrows.
+  - Demo data: `backend/scripts/seed_accounting_demo.py` (idempotent, `demo_seed: true` marker, 534 txns 2025-04 → 2026-07, real master-category tags, 2 demo banks, demo vendors). Production shows real Zoho-synced rows. Purge: `db.accounting_transactions.delete_many({demo_seed: true})`.
+  - New CSS utility `.alert-ring` in index.css (pulsing amber ring; the rotating `.alerting-border` overflows small cards — don't reuse it there).
+  - Verified: testing_agent iteration_333 — backend 11/11 pytest, frontend 100% (all flows + regressions). ⚠️ Redeploy to see on production.
+
+
 ### 2026-02-08 — Child SKU form: account-first + auto-populated name ✅ DONE
 - `ChildSkuManager.js`: reordered the create form so **Type + Customer Account are the first row**, followed by the auto-populated Name + auto-generated Code.
 - Selecting an account (or switching to Generic) now auto-fills `Child SKU Name` as `{Parent SKU Name} – {Account Name}` (or `… – Generic`). The value stays editable; manual overrides are preserved and never clobbered.
