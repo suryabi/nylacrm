@@ -340,25 +340,32 @@ export default function AccountingTransactions() {
     load();
   };
 
-  const exportData = async (format) => {
+  const exportData = async (format, onlySelected = false) => {
     try {
       const params = new URLSearchParams();
-      if (tab !== 'all') params.set('status', tab);
-      if (direction !== 'all') params.set('direction', direction);
-      if (search) params.set('search', search);
-      if (categoryRoot !== 'all') params.set('category_root', categoryRoot);
-      const range = presetRange(timeFilter);
-      if (range) { params.set('date_start', range.start); params.set('date_end', range.end); }
+      if (onlySelected) {
+        const ids = Array.from(selectedIds);
+        if (!ids.length) { toast.error('No rows selected'); return; }
+        params.set('ids', ids.join(','));
+      } else {
+        if (tab !== 'all') params.set('status', tab);
+        if (direction !== 'all') params.set('direction', direction);
+        if (search) params.set('search', search);
+        if (categoryRoot !== 'all') params.set('category_root', categoryRoot);
+        if (billsFilter !== 'all') params.set('bills_pending', billsFilter);
+        const range = presetRange(timeFilter);
+        if (range) { params.set('date_start', range.start); params.set('date_end', range.end); }
+      }
       params.set('format', format);
       const res = await axios.get(`${API}/api/accounting/transactions/export?${params}`, { ...auth(), responseType: 'blob' });
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
       a.href = url;
       const ext = format === 'xlsx' ? 'xlsx' : format;
-      a.download = `transactions.${ext}`;
+      a.download = `${onlySelected ? 'transactions_selected' : 'transactions'}.${ext}`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success(`Exported ${format.toUpperCase()}`);
+      toast.success(`Exported ${format.toUpperCase()}${onlySelected ? ` (${selectedIds.size} selected)` : ''}`);
     } catch (e) { toast.error('Export failed'); }
   };
 
@@ -558,6 +565,25 @@ export default function AccountingTransactions() {
             className="h-7 text-white hover:bg-indigo-500" data-testid="bulk-clear-override">
             Clear override (auto)
           </Button>
+          <span className="opacity-30">|</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="secondary" className="h-7 bg-white text-indigo-700 hover:bg-indigo-50" data-testid="bulk-download-menu">
+                <Download className="mr-1 h-3 w-3" /> Download selected
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={() => exportData('xlsx', true)} data-testid="bulk-download-xlsx">
+                <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" /> Excel (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportData('csv', true)} data-testid="bulk-download-csv">
+                <FileDown className="mr-2 h-4 w-4 text-slate-600" /> CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportData('pdf', true)} data-testid="bulk-download-pdf">
+                <FileText className="mr-2 h-4 w-4 text-rose-600" /> PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button size="sm" variant="ghost" disabled={bulking} onClick={clearSelection}
             className="ml-auto h-7 text-white hover:bg-indigo-500" data-testid="bulk-cancel">
             <X className="h-3 w-3" />

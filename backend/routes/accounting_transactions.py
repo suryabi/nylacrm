@@ -1109,35 +1109,49 @@ async def export_transactions(
     date_end: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     category_root: Optional[str] = Query(None),
+    bills_pending: Optional[str] = Query(None),
+    ids: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user),
 ):
     """Export the filtered transactions to CSV / XLSX / PDF. No upload/proof
-    information is included in the exported files."""
+    information is included in the exported files.
+
+    Pass `ids=<uuid1>,<uuid2>,…` to export ONLY the checked rows (used by the
+    "Download selected" bulk action). When `ids` is provided all other filters
+    are ignored so the user gets exactly what they picked."""
     tenant_id = get_current_tenant_id()
     await _ensure_txn_codes(tenant_id)
 
-    q = {"tenant_id": tenant_id}
-    if status:
-        q["status"] = status
-    if direction:
-        q["direction"] = direction
-    if bank_account_id:
-        q["zoho_account_id"] = bank_account_id
-    if date_start or date_end:
-        q["date"] = {}
-        if date_start:
-            q["date"]["$gte"] = date_start
-        if date_end:
-            q["date"]["$lte"] = date_end
-    if search:
-        q["$or"] = [
-            {"payee": {"$regex": search, "$options": "i"}},
-            {"description": {"$regex": search, "$options": "i"}},
-            {"reference_number": {"$regex": search, "$options": "i"}},
-        ]
-    if category_root:
-        ids = await _expense_category_descendants(tenant_id, category_root)
-        q["tags.expense_category"] = {"$in": list(ids)}
+    id_list = [x.strip() for x in (ids or "").split(",") if x.strip()]
+    if id_list:
+        q = {"tenant_id": tenant_id, "id": {"$in": id_list}}
+    else:
+        q = {"tenant_id": tenant_id}
+        if status:
+            q["status"] = status
+        if direction:
+            q["direction"] = direction
+        if bank_account_id:
+            q["zoho_account_id"] = bank_account_id
+        if date_start or date_end:
+            q["date"] = {}
+            if date_start:
+                q["date"]["$gte"] = date_start
+            if date_end:
+                q["date"]["$lte"] = date_end
+        if search:
+            q["$or"] = [
+                {"payee": {"$regex": search, "$options": "i"}},
+                {"description": {"$regex": search, "$options": "i"}},
+                {"reference_number": {"$regex": search, "$options": "i"}},
+            ]
+        if category_root:
+            cids = await _expense_category_descendants(tenant_id, category_root)
+            q["tags.expense_category"] = {"$in": list(cids)}
+        if bills_pending == "pending":
+            q["bills_pending"] = True
+        elif bills_pending == "received":
+            q["bills_pending"] = {"$ne": True}
     rows = await db[COLL].find(q, {"_id": 0, "raw": 0, "proofs": 0}).sort("date", -1).to_list(20000)
 
     # id -> name maps for master tags + vendors
