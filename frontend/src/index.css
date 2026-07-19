@@ -270,3 +270,12 @@
     .alerting-border,
     .alerting-border::before { animation: none; }
 }
+
+/* Static pulsing amber ring (for small cards where the rotating ring overflows) */
+.alert-ring {
+    border-color: #fbbf24 !important;
+    animation: alerting-pulse 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .alert-ring { animation: none; }
+}

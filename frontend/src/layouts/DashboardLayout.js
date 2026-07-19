@@ -264,6 +264,7 @@ const accountingNavigationGroups = [
   {
     title: 'Accounting',
     items: [
+      { name: 'Dashboard', href: '/accounting/dashboard', icon: LayoutDashboard, moduleKey: 'accounting_transactions', roles: ACCOUNTING_ROLES },
       { name: 'Transactions', href: '/accounting/transactions', icon: Banknote, moduleKey: 'accounting_transactions', roles: ACCOUNTING_ROLES },
       { name: 'Accounting Masters', href: '/accounting/masters', icon: Calculator, moduleKey: 'accounting_masters', roles: ACCOUNTING_ROLES },
       { name: 'Income Masters', href: '/accounting/income-masters', icon: TrendingUp, moduleKey: 'accounting_income_masters', roles: ACCOUNTING_ROLES },

@@ -1099,6 +1099,269 @@ async def category_summary(
     return {"items": items}
 
 
+# ----------------------- Dashboard -----------------------
+
+def _dash_filter(tenant_id: str, date_start: Optional[str], date_end: Optional[str],
+                 bank_account_id: Optional[str] = None) -> dict:
+    q = {"tenant_id": tenant_id}
+    if bank_account_id:
+        q["zoho_account_id"] = bank_account_id
+    if date_start or date_end:
+        q["date"] = {}
+        if date_start:
+            q["date"]["$gte"] = date_start
+        if date_end:
+            q["date"]["$lte"] = date_end
+    return q
+
+
+async def _masters_maps(tenant_id: str, master_type: str):
+    """Return (parent_map, name_map, has_children_set) for a master tree."""
+    parent_map, name_map, has_children = {}, {}, set()
+    async for m in db["accounting_masters"].find(
+        {"tenant_id": tenant_id, "master_type": master_type},
+        {"_id": 0, "id": 1, "name": 1, "parent_id": 1},
+    ):
+        name_map[m["id"]] = m["name"]
+        if m.get("parent_id"):
+            parent_map[m["id"]] = m["parent_id"]
+            has_children.add(m["parent_id"])
+    return parent_map, name_map, has_children
+
+
+def _bucket_node(leaf: str, parent_id: Optional[str], parent_map: dict) -> Optional[str]:
+    """Ancestor of `leaf` that is a direct child of `parent_id` (None = root level).
+    Returns `parent_id` itself when the txn is tagged directly at that level,
+    or None when the leaf is not under `parent_id`."""
+    path, cur, seen = [leaf], leaf, set()
+    while cur in parent_map and cur not in seen:
+        seen.add(cur)
+        cur = parent_map[cur]
+        path.append(cur)
+    if parent_id is None:
+        return path[-1]
+    try:
+        i = path.index(parent_id)
+    except ValueError:
+        return None
+    return parent_id if i == 0 else path[i - 1]
+
+
+async def _category_level_summary(q: dict, tag_field: str, direction: str, parent_id: Optional[str],
+                                  parent_map: dict, name_map: dict, has_children: set) -> list:
+    match = dict(q)
+    match[f"tags.{tag_field}"] = {"$ne": None}
+    match["direction"] = direction
+    buckets: dict = {}
+    async for t in db[COLL].find(match, {"_id": 0, f"tags.{tag_field}": 1, "amount": 1}):
+        leaf = (t.get("tags") or {}).get(tag_field)
+        if not leaf:
+            continue
+        node = _bucket_node(leaf, parent_id, parent_map)
+        if not node:
+            continue
+        is_direct = node == parent_id
+        b = buckets.setdefault(node, {
+            "id": node,
+            "name": "Directly tagged" if is_direct else name_map.get(node, "(unknown)"),
+            "count": 0, "total": 0.0,
+            "has_children": (not is_direct) and node in has_children,
+        })
+        b["count"] += 1
+        b["total"] += float(t.get("amount") or 0)
+    items = sorted(buckets.values(), key=lambda x: -x["total"])
+    grand = sum(i["total"] for i in items)
+    for i in items:
+        i["pct"] = round(i["total"] / grand * 100, 1) if grand else 0.0
+    return items
+
+
+@router.get("/dashboard")
+async def accounting_dashboard(
+    date_start: Optional[str] = Query(None),
+    date_end: Optional[str] = Query(None),
+    bank_account_id: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """One-shot aggregate powering the Accounting Dashboard: KPIs (+prev-period
+    deltas), monthly in/out trend, root expense & income category breakdowns,
+    top vendors/payees and per-bank-account summary."""
+    tenant_id = get_current_tenant_id()
+    q = _dash_filter(tenant_id, date_start, date_end, bank_account_id)
+
+    async def _dir_totals(match):
+        out = {"credit": {"total": 0.0, "count": 0}, "debit": {"total": 0.0, "count": 0}}
+        async for r in db[COLL].aggregate([
+            {"$match": match},
+            {"$group": {"_id": "$direction", "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        ]):
+            key = "credit" if r["_id"] == "credit" else "debit"
+            out[key] = {"total": float(r.get("total") or 0), "count": int(r.get("count") or 0)}
+        return out
+
+    totals = await _dir_totals(q)
+
+    # Previous period of the same length (for KPI deltas).
+    prev = None
+    if date_start and date_end:
+        try:
+            ds = datetime.fromisoformat(date_start[:10])
+            de = datetime.fromisoformat(date_end[:10])
+            span = (de - ds).days + 1
+            p_end = ds - timedelta(days=1)
+            p_start = p_end - timedelta(days=span - 1)
+            prev_q = _dash_filter(tenant_id, p_start.strftime("%Y-%m-%d"), p_end.strftime("%Y-%m-%d"), bank_account_id)
+            prev = await _dir_totals(prev_q)
+        except (ValueError, TypeError):
+            prev = None
+
+    # Monthly trend (credit vs debit per YYYY-MM).
+    monthly_map: dict = {}
+    async for r in db[COLL].aggregate([
+        {"$match": q},
+        {"$group": {
+            "_id": {"m": {"$substrCP": ["$date", 0, 7]}, "d": "$direction"},
+            "total": {"$sum": "$amount"},
+        }},
+    ]):
+        m = r["_id"]["m"]
+        row = monthly_map.setdefault(m, {"month": m, "credit": 0.0, "debit": 0.0})
+        row["credit" if r["_id"]["d"] == "credit" else "debit"] = float(r.get("total") or 0)
+    monthly = sorted(monthly_map.values(), key=lambda x: x["month"])
+
+    async def _count_total(extra):
+        match = {**q, **extra}
+        agg = await db[COLL].aggregate([
+            {"$match": match},
+            {"$group": {"_id": None, "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        ]).to_list(1)
+        if agg:
+            return {"count": int(agg[0]["count"]), "total": float(agg[0]["total"] or 0)}
+        return {"count": 0, "total": 0.0}
+
+    untagged = await _count_total({"status": "untagged"})
+    bills_pending = await _count_total({"bills_pending": True})
+
+    # Top vendors (money out, tagged with a vendor).
+    top_vendors = []
+    async for r in db[COLL].aggregate([
+        {"$match": {**q, "direction": "debit", "vendor_id": {"$ne": None}}},
+        {"$group": {"_id": "$vendor_id", "name": {"$first": "$vendor_name"},
+                    "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        {"$sort": {"total": -1}}, {"$limit": 8},
+    ]):
+        top_vendors.append({"id": r["_id"], "name": r.get("name") or r["_id"],
+                            "total": float(r["total"] or 0), "count": int(r["count"])})
+
+    # Top payees (money out).
+    top_payees = []
+    async for r in db[COLL].aggregate([
+        {"$match": {**q, "direction": "debit", "payee": {"$nin": [None, ""]}}},
+        {"$group": {"_id": "$payee", "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        {"$sort": {"total": -1}}, {"$limit": 8},
+    ]):
+        top_payees.append({"name": r["_id"], "total": float(r["total"] or 0), "count": int(r["count"])})
+
+    # Per-bank-account summary.
+    banks = []
+    async for r in db[COLL].aggregate([
+        {"$match": {**{k: v for k, v in q.items() if k != "zoho_account_id"}}},
+        {"$group": {
+            "_id": "$zoho_account_id",
+            "name": {"$first": "$bank_account_name"},
+            "credit": {"$sum": {"$cond": [{"$eq": ["$direction", "credit"]}, "$amount", 0]}},
+            "debit": {"$sum": {"$cond": [{"$eq": ["$direction", "debit"]}, "$amount", 0]}},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"count": -1}},
+    ]):
+        banks.append({
+            "id": r["_id"], "name": r.get("name") or r["_id"] or "Unlinked",
+            "credit": float(r["credit"] or 0), "debit": float(r["debit"] or 0),
+            "net": float(r["credit"] or 0) - float(r["debit"] or 0), "count": int(r["count"]),
+        })
+
+    exp_maps = await _masters_maps(tenant_id, "expense_category")
+    inc_maps = await _masters_maps(tenant_id, "income_category")
+    expense_categories = await _category_level_summary(q, "expense_category", "debit", None, *exp_maps)
+    income_categories = await _category_level_summary(q, "income_category", "credit", None, *inc_maps)
+
+    # Tagged coverage of money-out (how much of the spend is categorised).
+    tagged_debit = sum(i["total"] for i in expense_categories)
+
+    return {
+        "kpis": {
+            "money_in": totals["credit"], "money_out": totals["debit"],
+            "net": totals["credit"]["total"] - totals["debit"]["total"],
+            "prev": prev,
+            "untagged": untagged, "bills_pending": bills_pending,
+            "tagged_debit_total": tagged_debit,
+        },
+        "monthly": monthly,
+        "expense_categories": expense_categories,
+        "income_categories": income_categories,
+        "top_vendors": top_vendors,
+        "top_payees": top_payees,
+        "bank_accounts": banks,
+    }
+
+
+@router.get("/dashboard/category-breakdown")
+async def dashboard_category_breakdown(
+    tag: str = Query("expense_category"),
+    parent_id: Optional[str] = Query(None),
+    date_start: Optional[str] = Query(None),
+    date_end: Optional[str] = Query(None),
+    bank_account_id: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Drill-down level: totals per immediate child of `parent_id` (roots when omitted)."""
+    if tag not in ("expense_category", "income_category"):
+        raise HTTPException(400, "tag must be expense_category or income_category")
+    tenant_id = get_current_tenant_id()
+    direction = "credit" if tag == "income_category" else "debit"
+    q = _dash_filter(tenant_id, date_start, date_end, bank_account_id)
+    parent_map, name_map, has_children = await _masters_maps(tenant_id, tag)
+    items = await _category_level_summary(q, tag, direction, parent_id, parent_map, name_map, has_children)
+    return {"items": items, "parent": {"id": parent_id, "name": name_map.get(parent_id)} if parent_id else None}
+
+
+@router.get("/dashboard/category-transactions")
+async def dashboard_category_transactions(
+    category_id: str = Query(...),
+    tag: str = Query("expense_category"),
+    date_start: Optional[str] = Query(None),
+    date_end: Optional[str] = Query(None),
+    bank_account_id: Optional[str] = Query(None),
+    limit: int = Query(200),
+    current_user: dict = Depends(get_current_user),
+):
+    """Final drill-down level: the actual transactions tagged under a category (incl. descendants)."""
+    if tag not in ("expense_category", "income_category"):
+        raise HTTPException(400, "tag must be expense_category or income_category")
+    tenant_id = get_current_tenant_id()
+    direction = "credit" if tag == "income_category" else "debit"
+    parent_map, name_map, _ = await _masters_maps(tenant_id, tag)
+    desc = {category_id}
+    for mid in name_map:
+        cur, seen = mid, set()
+        while cur in parent_map and cur not in seen:
+            seen.add(cur)
+            cur = parent_map[cur]
+            if cur == category_id:
+                desc.add(mid)
+                break
+    q = _dash_filter(tenant_id, date_start, date_end, bank_account_id)
+    q[f"tags.{tag}"] = {"$in": list(desc)}
+    q["direction"] = direction
+    total = await db[COLL].count_documents(q)
+    rows = await db[COLL].find(q, {"_id": 0, "raw": 0}).sort("date", -1).limit(min(limit, 500)).to_list(min(limit, 500))
+    for r in rows:
+        leaf = (r.get("tags") or {}).get(tag)
+        r["category_name"] = name_map.get(leaf, "")
+    return {"items": rows, "total": total, "category_name": name_map.get(category_id, "")}
+
+
 @router.get("/export")
 async def export_transactions(
     format: str = Query("csv"),

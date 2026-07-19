@@ -85,6 +85,7 @@ const VendorTypes = lazy(() => import('./pages/VendorTypes'));
 const VendorsAccounting = lazy(() => import('./pages/VendorsAccounting'));
 const EmployeesAccounting = lazy(() => import('./pages/EmployeesAccounting'));
 const AccountingTransactions = lazy(() => import('./pages/AccountingTransactions'));
+const AccountingDashboard = lazy(() => import('./pages/AccountingDashboard'));
 const InvoicesList = lazy(() => import('./pages/InvoicesList'));
 const CustomerReturnsList = lazy(() => import('./pages/CustomerReturnsList'));
 const TransportationCostCalculator = lazy(() => import('./pages/TransportationCostCalculator'));
@@ -434,6 +435,7 @@ function AppRouter() {
           <Route path="/distributor/stock-transfers" element={<ProtectedRoute moduleKey="stock_transfers" appModule="distribution"><StockTransfers /></ProtectedRoute>} />
           <Route path="/accounting/masters" element={<ProtectedRoute moduleKey="accounting_masters"><AccountingMasters group="expense" /></ProtectedRoute>} />
           <Route path="/accounting/income-masters" element={<ProtectedRoute moduleKey="accounting_income_masters"><AccountingMasters group="income" /></ProtectedRoute>} />
+          <Route path="/accounting/dashboard" element={<ProtectedRoute moduleKey="accounting_transactions"><AccountingDashboard /></ProtectedRoute>} />
           <Route path="/accounting/transactions" element={<ProtectedRoute moduleKey="accounting_transactions"><AccountingTransactions /></ProtectedRoute>} />
           <Route path="/accounting/vendors" element={<ProtectedRoute moduleKey="accounting_vendors"><VendorsAccounting /></ProtectedRoute>} />
           <Route path="/accounting/employees" element={<ProtectedRoute moduleKey="accounting_employees"><EmployeesAccounting /></ProtectedRoute>} />
