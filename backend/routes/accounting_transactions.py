@@ -198,6 +198,29 @@ def _norm_filter(txns: list, tenant_id: str, org_id: str,
     return docs
 
 
+def _natural_key(d: dict):
+    """Return a natural-key tuple that identifies the underlying bank statement
+    line independent of Zoho's `bank_transaction_id` (which CHANGES between the
+    uncategorized inbox and the register once the user categorises the line).
+
+    Zoho bug repro: the same NEFT credit shows up first with id `A` via the
+    uncategorized endpoint; after categorisation Zoho re-emits it with a new
+    id `B` via the register endpoint. Dedup by (bank account, date, direction,
+    amount, reference_number) collapses both into one CRM row.
+
+    Returns None when the fingerprint is incomplete — never guess. Callers
+    treat None as "not natural-key eligible" and rely on the zoho_transaction_id
+    unique index alone."""
+    ref = (d.get("reference_number") or "").strip()
+    aid = d.get("zoho_account_id")
+    date = d.get("date")
+    amt = d.get("amount")
+    direction = d.get("direction")
+    if not (ref and aid and date and amt and direction):
+        return None
+    return (aid, date, round(float(amt), 2), direction, ref)
+
+
 async def _persist_page(tenant_id: str, org_id: str, page_docs: list):
     """Upsert one batch of normalised Zoho docs. New rows get a txn_code and land
     as 'untagged'; existing rows refresh Zoho-side fields only (user tags/proofs/
@@ -215,11 +238,59 @@ async def _persist_page(tenant_id: str, org_id: str, page_docs: list):
     ):
         existing[ex["zoho_transaction_id"]] = ex
 
+    # First pass: rows whose zoho_transaction_id already exists — simple refresh.
     new_docs = [d for d in page_docs if d["zoho_transaction_id"] not in existing]
-    codes = await _allocate_txn_codes(tenant_id, len(new_docs))
+
+    # Second pass (natural-key dedup): among the would-be new rows, check whether
+    # a row with a DIFFERENT zoho_transaction_id but the SAME underlying statement
+    # line (bank account + date + direction + amount + reference_number) already
+    # exists. This is the fix for the "duplicate after categorisation in Zoho"
+    # bug — see _natural_key() docstring.
+    nat_lookup = {}
+    or_clauses = []
+    for d in new_docs:
+        nk = _natural_key(d)
+        if not nk:
+            continue
+        nat_lookup[nk] = d
+        or_clauses.append({
+            "zoho_account_id": nk[0], "date": nk[1],
+            "amount": nk[2], "direction": nk[3],
+            "reference_number": nk[4],
+        })
+    nat_matches = {}  # natural_key -> existing row (minimal projection)
+    if or_clauses:
+        async for ex in db[COLL].find(
+            {"tenant_id": tenant_id, "zoho_org_id": org_id, "$or": or_clauses},
+            {"_id": 0, "zoho_transaction_id": 1, "direction_override": 1,
+             "zoho_account_id": 1, "date": 1, "amount": 1,
+             "direction": 1, "reference_number": 1},
+        ):
+            k = (ex.get("zoho_account_id"), ex.get("date"),
+                 round(float(ex.get("amount") or 0), 2),
+                 ex.get("direction"), (ex.get("reference_number") or "").strip())
+            # Prefer the FIRST match (older row); if the incoming Zoho id equals
+            # the existing one we'd have caught it in the primary pass already.
+            nat_matches.setdefault(k, ex)
+
+    # Split "new" docs into (a) truly new (insert) and (b) natural-key merges
+    # (update existing row and upgrade its zoho_transaction_id to the new one).
+    truly_new = []
+    merged_upgrade = []  # list of (incoming_doc, existing_row)
+    for d in new_docs:
+        nk = _natural_key(d)
+        if nk and nk in nat_matches:
+            merged_upgrade.append((d, nat_matches[nk]))
+        else:
+            truly_new.append(d)
+
+    codes = await _allocate_txn_codes(tenant_id, len(truly_new))
 
     ops = []
     now = _now()
+    refresh_keys = ("amount", "currency", "date", "zoho_status",
+                    "zoho_transaction_type", "payee", "reference_number",
+                    "description", "bank_account_name", "zoho_account_id", "raw")
     for d in page_docs:
         if d["zoho_transaction_id"] not in existing:
             continue
@@ -227,15 +298,22 @@ async def _persist_page(tenant_id: str, org_id: str, page_docs: list):
         # manual direction override.
         key = {"tenant_id": tenant_id, "zoho_org_id": org_id, "zoho_transaction_id": d["zoho_transaction_id"]}
         ex = existing[d["zoho_transaction_id"]]
-        refresh_keys = ("amount", "currency", "date", "zoho_status",
-                        "zoho_transaction_type", "payee", "reference_number",
-                        "description", "bank_account_name", "zoho_account_id", "raw")
         update_set = {k: d[k] for k in refresh_keys}
         if not ex.get("direction_override"):
             update_set["direction"] = d["direction"]
         update_set["updated_at"] = now
         ops.append(UpdateOne(key, {"$set": update_set}))
-    for d, code in zip(new_docs, codes):
+    for d, ex in merged_upgrade:
+        # Same statement line, new Zoho id — update in place and upgrade the id.
+        key = {"tenant_id": tenant_id, "zoho_org_id": org_id,
+               "zoho_transaction_id": ex["zoho_transaction_id"]}
+        update_set = {k: d[k] for k in refresh_keys}
+        update_set["zoho_transaction_id"] = d["zoho_transaction_id"]
+        if not ex.get("direction_override"):
+            update_set["direction"] = d["direction"]
+        update_set["updated_at"] = now
+        ops.append(UpdateOne(key, {"$set": update_set}))
+    for d, code in zip(truly_new, codes):
         d.update({
             "id": str(uuid.uuid4()), "status": "untagged", "txn_code": code,
             "tags": {}, "vendor_id": None, "vendor_name": None,
@@ -248,7 +326,78 @@ async def _persist_page(tenant_id: str, org_id: str, page_docs: list):
 
     if ops:
         await db[COLL].bulk_write(ops, ordered=False)
-    return len(new_docs), len(page_docs) - len(new_docs)
+    updated = len(page_docs) - len(new_docs) + len(merged_upgrade)
+    return len(truly_new), updated
+
+
+async def _dedupe_existing_by_natural_key(tenant_id: str, org_id: str) -> tuple:
+    """One-shot merger for rows already in the DB that share the same
+    (bank account, date, direction, amount, reference_number) but have DIFFERENT
+    zoho_transaction_ids. This is the historical dup left behind BEFORE the
+    natural-key logic in `_persist_page` was in place (Zoho re-emits a
+    statement line with a new bank_transaction_id after the user categorises
+    it — before this fix landed we'd insert both).
+
+    Rules for choosing the keeper (the row we keep) within each group:
+      1. Any row with user data (status != 'untagged', or tags/proofs/notes/
+         vendor/account/direction_override set) beats an empty row.
+      2. Tie-break on OLDER created_at (preserves the earliest txn_code).
+
+    Losers are hard-deleted. Returns (groups_merged, docs_deleted)."""
+    pipeline = [
+        {"$match": {
+            "tenant_id": tenant_id, "zoho_org_id": org_id,
+            "reference_number": {"$type": "string", "$ne": ""},
+            "zoho_account_id": {"$nin": [None, ""]},
+            "date": {"$nin": [None, ""]},
+            "amount": {"$gt": 0},
+        }},
+        {"$group": {
+            "_id": {"acct": "$zoho_account_id", "date": "$date",
+                    "amt": "$amount", "dir": "$direction",
+                    "ref": "$reference_number"},
+            "docs": {"$push": {
+                "id": "$id", "status": "$status", "tags": "$tags",
+                "proofs": "$proofs", "notes": "$notes",
+                "vendor_id": "$vendor_id", "account_id": "$account_id",
+                "direction_override": "$direction_override",
+                "created_at": "$created_at",
+                "zoho_transaction_id": "$zoho_transaction_id",
+            }},
+            "count": {"$sum": 1},
+        }},
+        {"$match": {"count": {"$gt": 1}}},
+    ]
+
+    def _has_user_data(x):
+        tags = x.get("tags") or {}
+        return bool(
+            (x.get("status") and x["status"] != "untagged")
+            or (isinstance(tags, dict) and any(bool(v) for v in tags.values()))
+            or x.get("proofs")
+            or x.get("notes")
+            or x.get("vendor_id")
+            or x.get("account_id")
+            or x.get("direction_override")
+        )
+
+    groups = 0
+    deleted = 0
+    async for grp in db[COLL].aggregate(pipeline, allowDiskUse=True):
+        docs = grp.get("docs") or []
+        if len(docs) < 2:
+            continue
+        docs.sort(key=lambda x: (
+            0 if _has_user_data(x) else 1,
+            x.get("created_at") or "",
+        ))
+        loser_ids = [d["id"] for d in docs[1:] if d.get("id")]
+        if not loser_ids:
+            continue
+        r = await db[COLL].delete_many({"tenant_id": tenant_id, "id": {"$in": loser_ids}})
+        deleted += r.deleted_count
+        groups += 1
+    return groups, deleted
 
 
 async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str,
@@ -343,6 +492,17 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
                           "last_synced_at": _now(), "last_synced_by": user_id}},
                 upsert=True,
             )
+
+        # Final pass: collapse any historical dups (same statement line stored
+        # under two different Zoho ids because it was pulled once as
+        # 'uncategorized' and again as a categorised register entry). Prevents
+        # the duplicate row from lingering after the user tags the line in Zoho.
+        try:
+            grps, dels = await _dedupe_existing_by_natural_key(tenant_id, org_id)
+            if dels:
+                warnings.append(f"Merged {dels} duplicate transaction(s) across {grps} statement line(s).")
+        except Exception as de:
+            warnings.append(f"Duplicate cleanup skipped: {str(de)[:160]}")
 
         await db[SYNC_JOB_COLL].update_one(
             {"id": job_id},
