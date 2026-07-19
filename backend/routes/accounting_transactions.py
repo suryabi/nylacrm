@@ -914,6 +914,7 @@ async def list_transactions(
     date_end: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     category_root: Optional[str] = Query(None),
+    bills_pending: Optional[str] = Query(None),  # 'pending' | 'received' | None (all)
     page: int = Query(1),
     limit: int = Query(50),
     current_user: dict = Depends(get_current_user),
@@ -942,6 +943,11 @@ async def list_transactions(
     if category_root:
         ids = await _expense_category_descendants(tenant_id, category_root)
         q["tags.expense_category"] = {"$in": list(ids)}
+    if bills_pending == "pending":
+        q["bills_pending"] = True
+    elif bills_pending == "received":
+        # Treat "not-pending" as received — both explicit False and missing field.
+        q["bills_pending"] = {"$ne": True}
     total = await db[COLL].count_documents(q)
     rows = await db[COLL].find(q, {"_id": 0, "raw": 0}).sort("date", -1).skip((page - 1) * limit).limit(limit).to_list(limit)
     # summary counts for the tabs
@@ -949,6 +955,10 @@ async def list_transactions(
     async for r in db[COLL].aggregate([{"$match": {"tenant_id": tenant_id}}, {"$group": {"_id": "$status", "n": {"$sum": 1}}}]):
         summary[r["_id"]] = r["n"]
         summary["all"] += r["n"]
+    # bills-pending count (tenant-wide, independent of active filters so the chip
+    # always reflects the true follow-up workload).
+    bills_pending_total = await db[COLL].count_documents({"tenant_id": tenant_id, "bills_pending": True})
+    summary["bills_pending"] = bills_pending_total
     return {"items": rows, "total": total, "page": page, "limit": limit, "summary": summary}
 
 
@@ -1278,6 +1288,47 @@ async def tag_transaction(txn_id: str, payload: TagPayload, current_user: dict =
         "status": "tagged" if has_selection else "untagged",
         "tagged_by": current_user.get("id"), "tagged_at": _now(), "updated_at": _now(),
     }
+    await db[COLL].update_one({"id": txn_id, "tenant_id": tenant_id}, {"$set": updates})
+    return await db[COLL].find_one({"id": txn_id, "tenant_id": tenant_id}, {"_id": 0, "raw": 0})
+
+
+# ----------------------- Bills pending flag -----------------------
+
+class BillsPendingPayload(BaseModel):
+    pending: bool
+
+
+@router.patch("/{txn_id}/bills-pending")
+async def set_bills_pending(txn_id: str, payload: BillsPendingPayload, current_user: dict = Depends(get_current_user)):
+    """Toggle the 'Bills not received yet' follow-up flag on a transaction.
+
+    Set `pending=true` when the accountant is still chasing the vendor bill /
+    invoice for this payment. Set `pending=false` once the bill is uploaded /
+    on file so it drops off the follow-up list. The flag is independent of
+    tagging and proof uploads — some bills are received via email/paper and
+    not (yet) attached in CRM."""
+    _require_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    txn = await db[COLL].find_one({"id": txn_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    now = _now()
+    if payload.pending:
+        updates = {
+            "bills_pending": True,
+            "bills_pending_marked_by": current_user.get("id"),
+            "bills_pending_marked_at": now,
+            "bills_received_at": None,
+            "bills_received_by": None,
+            "updated_at": now,
+        }
+    else:
+        updates = {
+            "bills_pending": False,
+            "bills_received_at": now,
+            "bills_received_by": current_user.get("id"),
+            "updated_at": now,
+        }
     await db[COLL].update_one({"id": txn_id, "tenant_id": tenant_id}, {"$set": updates})
     return await db[COLL].find_one({"id": txn_id, "tenant_id": tenant_id}, {"_id": 0, "raw": 0})
 

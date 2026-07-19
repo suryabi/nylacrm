@@ -6,6 +6,7 @@ import {
   RefreshCw, Search, Loader2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Paperclip, Upload, X,
   Trash2, FileText, Link2, Banknote, CheckCircle2, ChevronRight, Tag, Building2,
   Copy, ChevronLeft, CalendarRange, Download, FileSpreadsheet, FileDown, Hash, Stethoscope, AlertTriangle,
+  Receipt,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -73,13 +74,14 @@ export default function AccountingTransactions() {
   const navigate = useNavigate();
   const [tab, setTab] = useState('all');
   const [items, setItems] = useState([]);
-  const [summary, setSummary] = useState({ untagged: 0, tagged: 0, all: 0 });
+  const [summary, setSummary] = useState({ untagged: 0, tagged: 0, all: 0, bills_pending: 0 });
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState('');
   const [direction, setDirection] = useState('all');
   const [timeFilter, setTimeFilter] = useState('lifetime');
   const [categoryRoot, setCategoryRoot] = useState('all');
+  const [billsFilter, setBillsFilter] = useState('all'); // 'all' | 'pending' | 'received'
   const [categorySummary, setCategorySummary] = useState([]);
   const [flow, setFlow] = useState({ credit: { total: 0, count: 0 }, debit: { total: 0, count: 0 }, net: 0 });
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -115,6 +117,7 @@ export default function AccountingTransactions() {
       if (direction !== 'all') params.set('direction', direction);
       if (search) params.set('search', search);
       if (categoryRoot !== 'all') params.set('category_root', categoryRoot);
+      if (billsFilter !== 'all') params.set('bills_pending', billsFilter);
       const range = presetRange(timeFilter);
       if (range) { params.set('date_start', range.start); params.set('date_end', range.end); }
       params.set('page', page);
@@ -122,9 +125,9 @@ export default function AccountingTransactions() {
       const { data } = await axios.get(`${API}/api/accounting/transactions?${params}`, auth());
       setItems(data.items || []);
       setTotal(data.total || 0);
-      setSummary(data.summary || { untagged: 0, tagged: 0, all: 0 });
+      setSummary(data.summary || { untagged: 0, tagged: 0, all: 0, bills_pending: 0 });
     } catch (e) { toast.error('Failed to load transactions'); } finally { setLoading(false); }
-  }, [tab, direction, search, timeFilter, categoryRoot, page, perPage]);
+  }, [tab, direction, search, timeFilter, categoryRoot, billsFilter, page, perPage]);
 
   const loadCategorySummary = useCallback(async () => {
     try {
@@ -434,6 +437,18 @@ export default function AccountingTransactions() {
             {(masters.expense_category || []).filter((x) => !x.parent_id).map((r) => (
               <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select value={billsFilter} onValueChange={(v) => { setBillsFilter(v); setExpandedId(null); setPage(1); }}>
+          <SelectTrigger className={`h-9 w-52 ${billsFilter === 'pending' ? 'border-rose-300 bg-rose-50 text-rose-700' : ''}`} data-testid="filter-bills-pending">
+            <Receipt className="mr-1 h-4 w-4 text-slate-400" /><SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All bills</SelectItem>
+            <SelectItem value="pending" data-testid="filter-bills-pending-opt">
+              Bills pending{summary.bills_pending ? ` (${summary.bills_pending})` : ''}
+            </SelectItem>
+            <SelectItem value="received">Bills received</SelectItem>
           </SelectContent>
         </Select>
         <div className="relative">
@@ -858,7 +873,14 @@ function Row({ it, masters, vendors, expanded, selected, onSelectToggle, onToggl
           </span>
         </td>
         <td className="p-3 text-center">
-          <Badge variant="outline" className={it.status === 'tagged' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-600'}>{it.status}</Badge>
+          <div className="flex flex-col items-center gap-1">
+            <Badge variant="outline" className={it.status === 'tagged' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-600'}>{it.status}</Badge>
+            {it.bills_pending && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-rose-700" data-testid={`bills-pending-badge-${it.id}`}>
+                <Receipt className="h-2.5 w-2.5" /> Bill pending
+              </span>
+            )}
+          </div>
         </td>
         <td className="p-3 text-center text-slate-500">{proofs.length ? <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" />{proofs.length}</span> : '—'}</td>
       </tr>
@@ -1002,6 +1024,20 @@ function ExpandedEditor({ it, credit, masters, vendors, onChange }) {
     } catch (e) { toast.error(e.response?.data?.detail || 'Clear failed'); }
   };
 
+  const [billsSaving, setBillsSaving] = useState(false);
+  const toggleBillsPending = async (nextPending) => {
+    setBillsSaving(true);
+    try {
+      const { data } = await axios.patch(
+        `${API}/api/accounting/transactions/${it.id}/bills-pending`,
+        { pending: nextPending }, auth(),
+      );
+      onChange(data);
+      toast.success(nextPending ? 'Marked — bills not received yet' : 'Bills marked as received');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to update bills status'); }
+    finally { setBillsSaving(false); }
+  };
+
   return (
     <div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-2">
       <div className="lg:col-span-2 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs" data-testid="direction-controls">
@@ -1019,6 +1055,32 @@ function ExpandedEditor({ it, credit, masters, vendors, onChange }) {
           <Button type="button" size="sm" variant="ghost" onClick={clearOverride} className="h-7 text-xs text-slate-500" data-testid="clear-direction-override">
             Clear override
           </Button>
+        )}
+      </div>
+      <div className={`lg:col-span-2 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs ${it.bills_pending ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-slate-50'}`} data-testid="bills-pending-strip">
+        <label className="flex cursor-pointer items-center gap-2 select-none">
+          <input
+            type="checkbox"
+            className="h-4 w-4 cursor-pointer accent-rose-600"
+            checked={!!it.bills_pending}
+            disabled={billsSaving}
+            onChange={(e) => toggleBillsPending(e.target.checked)}
+            data-testid="bills-pending-checkbox"
+          />
+          <span className={`font-medium ${it.bills_pending ? 'text-rose-700' : 'text-slate-600'}`}>
+            <Receipt className="mr-1 inline h-3.5 w-3.5" />
+            Bills not received yet
+          </span>
+        </label>
+        {it.bills_pending ? (
+          <>
+            <span className="text-[11px] text-rose-600">Flagged for follow-up — this transaction shows up in the &quot;Bills pending&quot; filter.</span>
+            <Button type="button" size="sm" variant="outline" disabled={billsSaving} onClick={() => toggleBillsPending(false)} className="ml-auto h-7 border-emerald-300 text-xs text-emerald-700 hover:bg-emerald-50" data-testid="mark-bills-received-btn">
+              {billsSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <CheckCircle2 className="mr-1 h-3 w-3" />} Bills received
+            </Button>
+          </>
+        ) : (
+          <span className="text-[11px] text-slate-500">Tick the box if the vendor bill / invoice is still awaited so it can be tracked from the top filter.</span>
         )}
       </div>
       {/* Categorisation */}
