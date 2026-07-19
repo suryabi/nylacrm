@@ -205,8 +205,15 @@ def _natural_key(d: dict):
 
     Zoho bug repro: the same NEFT credit shows up first with id `A` via the
     uncategorized endpoint; after categorisation Zoho re-emits it with a new
-    id `B` via the register endpoint. Dedup by (bank account, date, direction,
-    amount, reference_number) collapses both into one CRM row.
+    id `B` via the register endpoint. Dedup by (bank account, date, amount,
+    reference_number) collapses both into one CRM row.
+
+    IMPORTANT: `direction` is intentionally NOT part of the key. When a CRM
+    user applies a `direction_override` (money-in ↔ money-out flip) on the
+    uncategorized row, the stored direction diverges from what Zoho re-emits;
+    including it here would make the merge miss and re-insert a duplicate.
+    Amount+account+date+reference_number already uniquely identifies a bank
+    statement line (UTR/ref is unique per line at a bank).
 
     Returns None when the fingerprint is incomplete — never guess. Callers
     treat None as "not natural-key eligible" and rely on the zoho_transaction_id
@@ -215,10 +222,9 @@ def _natural_key(d: dict):
     aid = d.get("zoho_account_id")
     date = d.get("date")
     amt = d.get("amount")
-    direction = d.get("direction")
-    if not (ref and aid and date and amt and direction):
+    if not (ref and aid and date and amt):
         return None
-    return (aid, date, round(float(amt), 2), direction, ref)
+    return (aid, date, round(float(amt), 2), ref)
 
 
 async def _persist_page(tenant_id: str, org_id: str, page_docs: list):
@@ -255,8 +261,7 @@ async def _persist_page(tenant_id: str, org_id: str, page_docs: list):
         nat_lookup[nk] = d
         or_clauses.append({
             "zoho_account_id": nk[0], "date": nk[1],
-            "amount": nk[2], "direction": nk[3],
-            "reference_number": nk[4],
+            "amount": nk[2], "reference_number": nk[3],
         })
     nat_matches = {}  # natural_key -> existing row (minimal projection)
     if or_clauses:
@@ -264,11 +269,11 @@ async def _persist_page(tenant_id: str, org_id: str, page_docs: list):
             {"tenant_id": tenant_id, "zoho_org_id": org_id, "$or": or_clauses},
             {"_id": 0, "zoho_transaction_id": 1, "direction_override": 1,
              "zoho_account_id": 1, "date": 1, "amount": 1,
-             "direction": 1, "reference_number": 1},
+             "reference_number": 1},
         ):
             k = (ex.get("zoho_account_id"), ex.get("date"),
                  round(float(ex.get("amount") or 0), 2),
-                 ex.get("direction"), (ex.get("reference_number") or "").strip())
+                 (ex.get("reference_number") or "").strip())
             # Prefer the FIRST match (older row); if the incoming Zoho id equals
             # the existing one we'd have caught it in the primary pass already.
             nat_matches.setdefault(k, ex)
@@ -354,8 +359,7 @@ async def _dedupe_existing_by_natural_key(tenant_id: str, org_id: str) -> tuple:
         }},
         {"$group": {
             "_id": {"acct": "$zoho_account_id", "date": "$date",
-                    "amt": "$amount", "dir": "$direction",
-                    "ref": "$reference_number"},
+                    "amt": "$amount", "ref": "$reference_number"},
             "docs": {"$push": {
                 "id": "$id", "status": "$status", "tags": "$tags",
                 "proofs": "$proofs", "notes": "$notes",
