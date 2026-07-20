@@ -11,6 +11,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## Test credentials (see /app/memory/test_credentials.md)
 
+### 2026-07-20 — 🔁 Promo stock-out failure visibility + Retry (Delivery Orders) ✅ DONE (self-tested)
+- **User request**: when placing an order, if the promotional stock-out can't be created, show the error and let the user retry.
+- **Backend** (`routes/delivery_orders.py`): place_order transition now PERSISTS failures (`fulfillment_status: "failed"`, `promo_failure_reason`); new `POST /delivery-orders/{id}/retry-promo` (creator or CEO/Director/Admin/System Admin; state must be `placed`; blocked if an active stock-out is already linked) — re-runs `_auto_create_draft_promo`, on success links promo + clears reason, on failure updates the reason. Reverse-placement also clears `promo_failure_reason`.
+- **Frontend** (`DeliveryOrders.js`): red banner in detail dialog (`do-promo-failed-block` + `do-promo-failed-reason`) with **Retry** button (`do-retry-promo-btn`); `failed` added to FULFILLMENT_COLORS (red badge in list); reverse-placement button now also allowed when fulfillment=`failed`.
+- **Verified (curl + screenshot)**: place with uncovered city → failed + "No distributor covers 'Nowhereville'." persisted; retry while broken → ok:false w/ error; after fixing city → retry succeeds (challan linked, reason cleared); UI banner + Retry render; list shows red `failed` badge. Fixed a stray duplicated JSX tail in DeliveryOrders.js that briefly broke the build (compile-error screen) — resolved.
+
 ### 2026-07-20 — 👩 Nyla avatar + welcome message ✅ DONE (screenshot-verified)
 - Generated female avatar (`/app/frontend/public/nyla-avatar.png`, flat-vector Indian woman, teal/emerald) — used on the floating launcher button (h-14 ring), panel header, and empty-state; welcome message: "Hi, I am Nyla. How can I help you ?" (`ai-welcome-message`, `ai-launcher-avatar`, `ai-header-avatar` testids in AIAssistant.jsx).
 

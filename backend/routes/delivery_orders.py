@@ -642,6 +642,7 @@ async def reverse_order_placement(order_id: str, payload: ReversePlacementReques
         "promo_distributor_id": None,
         "promo_distributor_name": None,
         "fulfillment_status": None,
+        "promo_failure_reason": None,
         "placement_reversed_by": current_user.get("id"),
         "placement_reversed_by_name": current_user.get("name"),
         "placement_reversed_at": now,
@@ -812,12 +813,64 @@ async def trigger_transition(order_id: str, payload: TransitionRequest, current_
                     "promo_distributor_id": promo_result.get("distributor_id"),
                     "promo_distributor_name": promo_result.get("distributor_name"),
                     "fulfillment_status": promo_result.get("promo_status") or "draft",
+                    "promo_failure_reason": None,
+                    "updated_at": now,
+                }})
+        else:
+            # Persist the failure so the UI can show the reason and offer a retry.
+            await db.delivery_orders.update_one(
+                {"id": order_id, "tenant_id": tenant_id},
+                {"$set": {
+                    "fulfillment_status": "failed",
+                    "promo_failure_reason": promo_result.get("error") or "Stock-out creation failed.",
                     "updated_at": now,
                 }})
 
     updated = await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
     return {"ok": True, "order": updated, "promo": promo_result}
 
+
+
+@router.post("/delivery-orders/{order_id}/retry-promo")
+async def retry_promo_creation(order_id: str, current_user: dict = Depends(get_current_user)):
+    """Retry creating the draft promotional stock-out for an order that is in
+    'Order Placed' but whose auto-created stock-out failed (or was never created).
+    Allowed for the order's creator or an admin."""
+    tenant_id = get_current_tenant_id()
+    order = await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Delivery order not found")
+    if order.get("created_by") != current_user.get("id") and current_user.get("role") not in _ADMIN_CANCEL_ROLES:
+        raise HTTPException(403, "Only the requester or an admin can retry the stock-out creation.")
+    if order.get("current_state_key") != "placed":
+        raise HTTPException(400, "Only a request in 'Order Placed' status can retry the stock-out creation.")
+    if order.get("promo_dispatch_id") and (order.get("fulfillment_status") or "") not in ("failed", "cancelled"):
+        raise HTTPException(400, "A stock-out is already linked to this request.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    promo_result = await _auto_create_draft_promo(tenant_id, order, current_user)
+    if promo_result.get("status") == "created":
+        await db.delivery_orders.update_one(
+            {"id": order_id, "tenant_id": tenant_id},
+            {"$set": {
+                "promo_dispatch_id": promo_result.get("promo_id"),
+                "promo_challan_number": promo_result.get("challan_number"),
+                "promo_distributor_id": promo_result.get("distributor_id"),
+                "promo_distributor_name": promo_result.get("distributor_name"),
+                "fulfillment_status": promo_result.get("promo_status") or "draft",
+                "promo_failure_reason": None,
+                "updated_at": now,
+            }})
+    else:
+        await db.delivery_orders.update_one(
+            {"id": order_id, "tenant_id": tenant_id},
+            {"$set": {
+                "fulfillment_status": "failed",
+                "promo_failure_reason": promo_result.get("error") or "Stock-out creation failed.",
+                "updated_at": now,
+            }})
+    updated = await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
+    return {"ok": promo_result.get("status") == "created", "order": updated, "promo": promo_result}
 
 
 # ───────────────────── Migration: Free Trial expenses → Delivery Orders ─────────────────────

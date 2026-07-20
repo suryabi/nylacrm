@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popove
 import { Calendar } from '../components/ui/calendar';
 import {
   Package, Plus, Trash2, Loader2, MapPin, Search, X, ClipboardList,
-  CheckCircle2, XCircle, RotateCcw, Truck, Clock, ChevronRight, Phone, Calendar as CalendarIcon, Gift, Copy,
+  CheckCircle2, XCircle, RotateCcw, Truck, Clock, ChevronRight, Phone, Calendar as CalendarIcon, Gift, Copy, AlertCircle,
 } from 'lucide-react';
 import { isValidMapsLink } from '../utils/mapsLink';
 import { MapsLinkInput } from '../components/MapsLinkInput';
@@ -639,7 +639,7 @@ function DetailDialog({ orderId, open, onClose, onChanged, role }) {
   // Reverse order placement — Admin/CEO only, while placed + stock-out still draft.
   const canReversePlacement = REVERSE_PLACEMENT_ROLES.includes(role) && order
     && order.current_state_key === 'placed'
-    && (!order.fulfillment_status || ['draft', 'cancelled'].includes(order.fulfillment_status));
+    && (!order.fulfillment_status || ['draft', 'cancelled', 'failed'].includes(order.fulfillment_status));
 
   const reversePlacement = async () => {
     if (commentFor !== '__reverse_placement__') { setCommentFor('__reverse_placement__'); return; }
@@ -652,6 +652,21 @@ function DetailDialog({ orderId, open, onClose, onChanged, role }) {
       await load(); onChanged();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to reverse the placement');
+    } finally { setActing(false); }
+  };
+
+  const retryPromo = async () => {
+    setActing(true);
+    try {
+      const { data } = await axios.post(`${API_URL}/delivery-orders/${orderId}/retry-promo`, {}, auth());
+      if (data.ok) {
+        toast.success(`Draft stock-out ${data.promo?.challan_number || ''} created at ${data.promo?.distributor_name || 'distributor'}`);
+      } else {
+        toast.error(`Stock-out creation failed again: ${data.promo?.error || 'unknown reason'}`);
+      }
+      await load(); onChanged();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Retry failed');
     } finally { setActing(false); }
   };
 
@@ -743,6 +758,24 @@ function DetailDialog({ orderId, open, onClose, onChanged, role }) {
                   {order.requested_date ? new Date(order.requested_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                 </p>
               </div>
+
+              {/* Stock-out creation failed — show reason + retry */}
+              {order.current_state_key === 'placed' && order.fulfillment_status === 'failed' && !order.promo_dispatch_id && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3" data-testid="do-promo-failed-block">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] uppercase tracking-wide text-red-500 font-semibold">Stock-out could not be created</p>
+                      <p className="mt-0.5 text-sm text-red-700" data-testid="do-promo-failed-reason">{order.promo_failure_reason || 'Unknown reason.'}</p>
+                      <p className="mt-1 text-xs text-red-500/80">Fix the issue above, then retry to place the promotional stock-out again.</p>
+                    </div>
+                    <Button size="sm" variant="outline" disabled={acting} onClick={retryPromo}
+                      className="shrink-0 border-red-300 text-red-700 hover:bg-red-100" data-testid="do-retry-promo-btn">
+                      {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Retry</>}
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Linked promotional stock-out + live fulfillment status */}
               {order.promo_dispatch_id && (
