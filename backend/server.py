@@ -986,6 +986,7 @@ class Activity(BaseModel):
     created_by: str
     created_by_name: Optional[str] = None  # User's display name at time of creation
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    reactions: Optional[dict] = None
 
 class ActivityCreate(BaseModel):
     lead_id: str
@@ -1025,6 +1026,9 @@ class Comment(BaseModel):
     comment: str
     created_by: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    edited_at: Optional[str] = None
+    edited_by_name: Optional[str] = None
+    reactions: Optional[dict] = None
 
 class CommentCreate(BaseModel):
     lead_id: str
@@ -7974,6 +7978,48 @@ async def delete_lead_comment(comment_id: str, current_user: dict = Depends(get_
         raise HTTPException(status_code=403, detail='You can only delete your own comments.')
     await get_tdb().comments.delete_one({'id': comment_id})
     return {'ok': True}
+
+
+# ── Emoji reactions (comments, account/meeting comments, activity log) ──
+_REACTION_EMOJIS = {"👍", "👎", "❤️"}
+_REACTION_COLLECTIONS = {
+    "comment": "comments",
+    "activity": "activities",
+    "account_comment": "account_comments",
+    "meeting_comment": "meeting_comments",
+}
+
+
+class ReactionToggle(BaseModel):
+    entity_type: str
+    entity_id: str
+    emoji: str
+
+
+@api_router.post("/reactions/toggle")
+async def toggle_reaction(payload: ReactionToggle, current_user: dict = Depends(get_current_user)):
+    """Toggle the current user's emoji reaction on a comment or activity entry."""
+    coll_name = _REACTION_COLLECTIONS.get(payload.entity_type)
+    if not coll_name:
+        raise HTTPException(status_code=400, detail='Unsupported entity type')
+    if payload.emoji not in _REACTION_EMOJIS:
+        raise HTTPException(status_code=400, detail='Unsupported emoji')
+    coll = getattr(get_tdb(), coll_name)
+    doc = await coll.find_one({'id': payload.entity_id}, {'_id': 0, 'reactions': 1})
+    if doc is None:
+        raise HTTPException(status_code=404, detail='Item not found')
+    reactions = doc.get('reactions') or {}
+    users = reactions.get(payload.emoji) or []
+    if any(u.get('user_id') == current_user['id'] for u in users):
+        users = [u for u in users if u.get('user_id') != current_user['id']]
+    else:
+        users = users + [{'user_id': current_user['id'], 'user_name': current_user.get('name') or current_user.get('email')}]
+    if users:
+        reactions[payload.emoji] = users
+    else:
+        reactions.pop(payload.emoji, None)
+    await coll.update_one({'id': payload.entity_id}, {'$set': {'reactions': reactions}})
+    return {'reactions': reactions}
 
 # ============= USERS/TEAM ROUTES =============
 

@@ -10,6 +10,7 @@ import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
 import MentionTextarea, { renderMentionedText } from '../components/MentionTextarea';
+import ReactionBar from '../components/ReactionBar';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
@@ -1987,7 +1988,10 @@ ${userEmail}`;
                         </div>
                       </div>
                     ) : (
-                      <p className="text-sm whitespace-pre-wrap">{renderMentionedText(comment.comment)}</p>
+                      <>
+                        <p className="text-sm whitespace-pre-wrap">{renderMentionedText(comment.comment)}</p>
+                        <ReactionBar entityType="comment" entityId={comment.id} reactions={comment.reactions} className="mt-1.5" />
+                      </>
                     )}
                   </div>
                 );

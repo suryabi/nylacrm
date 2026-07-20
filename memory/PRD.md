@@ -11,6 +11,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## Test credentials (see /app/memory/test_credentials.md)
 
+### 2026-07-20 — 👍 Emoji reactions on comments & activity log ✅ DONE (self-tested)
+- **Scope**: professional set only (👍 👎 ❤️) on: lead comments, account comments, meeting comments (shared thread), and lead Activity Timeline entries.
+- **Backend** (`server.py`): `POST /api/reactions/toggle` {entity_type: comment|activity|account_comment|meeting_comment, entity_id, emoji} — toggles current user's reaction, stores `reactions: {emoji: [{user_id, user_name}]}`; emoji whitelist (400 otherwise). Added `reactions` to `Activity` + `Comment` Pydantic models (and `edited_at/edited_by_name` to `Comment` — they were being DROPPED by response_model on reload; bug from earlier edit feature now fixed).
+- **Frontend**: new `components/ReactionBar.jsx` (pills w/ counts, emerald highlight for own reaction, grayscale ghost buttons otherwise, tooltip with reactor names; testids `reaction-bar-{id}`, `reaction-up/down/love-{id}`). Wired into `LeadDetail.js` comments, `ActivityTimeline.js` entries, `EntityCommentThread.jsx` (accounts + meetings, entity type derived from basePath).
+- **Verified (curl + screenshot)**: toggle/untoggle, persistence in GET responses, invalid emoji 400, all 3 entity paths; UI shows 👍1/❤️1 pills on timeline and click-toggles live.
+
 ### 2026-07-20 — 🔁 Promo stock-out failure visibility + Retry (Delivery Orders) ✅ DONE (self-tested)
 - **User request**: when placing an order, if the promotional stock-out can't be created, show the error and let the user retry.
 - **Backend** (`routes/delivery_orders.py`): place_order transition now PERSISTS failures (`fulfillment_status: "failed"`, `promo_failure_reason`); new `POST /delivery-orders/{id}/retry-promo` (creator or CEO/Director/Admin/System Admin; state must be `placed`; blocked if an active stock-out is already linked) — re-runs `_auto_create_draft_promo`, on success links promo + clears reason, on failure updates the reason. Reverse-placement also clears `promo_failure_reason`.

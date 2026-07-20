@@ -16,6 +16,7 @@ import { Button } from './ui/button';
 import { Send, Loader2, MessageSquare, Pencil, Trash2, Check, X } from 'lucide-react';
 import { SectionHeader } from './detail/SectionHeader';
 import MentionTextarea, { renderMentionedText } from './MentionTextarea';
+import ReactionBar from './ReactionBar';
 import { useAuth } from '../context/AuthContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -149,7 +150,15 @@ export default function EntityCommentThread({ basePath, title = 'Discussion', te
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap break-words">{renderMentionedText(c.text)}</p>
+                  <>
+                    <p className="text-sm text-slate-700 mt-0.5 whitespace-pre-wrap break-words">{renderMentionedText(c.text)}</p>
+                    <ReactionBar
+                      entityType={basePath.includes('/meeting-minutes/') ? 'meeting_comment' : 'account_comment'}
+                      entityId={c.id}
+                      reactions={c.reactions}
+                      className="mt-1"
+                    />
+                  </>
                 )}
               </div>
             </div>

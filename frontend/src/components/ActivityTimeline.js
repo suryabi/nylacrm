@@ -4,6 +4,7 @@ import { Calendar, Trash2 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
+import ReactionBar from './ReactionBar';
 
 const API_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -170,11 +171,14 @@ export default function ActivityTimeline({ activities }) {
               
               <p className="text-sm leading-relaxed whitespace-pre-wrap">{renderDescriptionWithStatus(activity.description)}</p>
 
-              {activity.created_by_name && (
-                <p className="text-[11px] text-muted-foreground/70 mt-1.5" data-testid={`activity-creator-${activity.id}`}>
-                  — {activity.created_by_name}
-                </p>
-              )}
+              <div className="mt-1.5 flex items-center justify-between gap-2">
+                {activity.created_by_name ? (
+                  <p className="text-[11px] text-muted-foreground/70" data-testid={`activity-creator-${activity.id}`}>
+                    — {activity.created_by_name}
+                  </p>
+                ) : <span />}
+                <ReactionBar entityType="activity" entityId={activity.id} reactions={activity.reactions} />
+              </div>
             </div>
           </div>
         ))}
