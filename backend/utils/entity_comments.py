@@ -29,6 +29,13 @@ def build_comment(entity_field: str, entity_id: str, text: str, current_user: di
     }
 
 
+def can_modify_comment(comment: dict, current_user: dict) -> bool:
+    """Author can edit/delete their own comment; CEO/Admin can moderate any."""
+    if comment.get("created_by") == current_user.get("id"):
+        return True
+    return (current_user.get("role") or "") in {"CEO", "Admin", "System Admin"}
+
+
 async def notify_comment_mentions(
     *,
     tenant_id: str,

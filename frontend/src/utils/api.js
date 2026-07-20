@@ -57,6 +57,8 @@ export const followUpsAPI = {
 export const commentsAPI = {
   getByLeadId: (leadId) => axios.get(`${API_URL}/comments/${leadId}`, { headers: getAuthHeaders() }),
   create: (data) => axios.post(`${API_URL}/comments`, data, { headers: getAuthHeaders() }),
+  update: (commentId, data) => axios.put(`${API_URL}/comments/${commentId}`, data, { headers: getAuthHeaders() }),
+  delete: (commentId) => axios.delete(`${API_URL}/comments/${commentId}`, { headers: getAuthHeaders() }),
 };
 
 // Users API

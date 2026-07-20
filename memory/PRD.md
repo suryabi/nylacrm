@@ -11,6 +11,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## Test credentials (see /app/memory/test_credentials.md)
 
+### 2026-07-20 — ✏️ Edit/Delete comments in Notes sections (Leads, Accounts, +Meetings) ✅ DONE (self-tested)
+- **Permission model**: comment author can edit/delete their own; CEO/Admin/System Admin can moderate any (`can_modify_comment` in `utils/entity_comments.py`). Edits stamp `edited_at/edited_by(_name)` and show an "(edited)" marker.
+- **Backend**: `PUT/DELETE /api/comments/{comment_id}` (leads, server.py); `PUT/DELETE /api/accounts/{account_id}/comments/{comment_id}` (accounts.py); `PUT/DELETE /api/meeting-minutes/{meeting_id}/comments/{comment_id}` (meeting_minutes.py — added so the shared thread component stays uniform).
+- **Frontend**: `EntityCommentThread.jsx` (Accounts + Meetings) — hover Pencil/Trash icons per comment, inline MentionTextarea edit w/ Save/Cancel, confirm-delete. `LeadDetail.js` Comments card — same pattern (testids `edit-comment-{id}`, `delete-comment-{id}`, `edit-comment-input/save/cancel`). `commentsAPI.update/delete` added in utils/api.js.
+- **Verified (curl + screenshots)**: lead comment edit (edited_at set) + delete; non-author 403 on both; account comment edit/delete + 403; UI hover icons, inline edit save w/ toast + "(edited)" marker on lead; account thread add + icons render. Test comments cleaned.
+
 ### 2026-07-20 — 📄 Duplicate Request (Delivery Orders, Admin/CEO only) ✅ DONE (self-tested)
 - **Backend**: `POST /delivery-orders/{id}/duplicate` — roles {CEO, Admin, System Admin}; clones recipient/items/address/reason/instructions into a fresh DRAFT (new order number, reset workflow/promo/approval fields, `duplicated_from_id/_number` audit, history comment "Duplicated from DO-XXXX"); past delivery dates bumped to today+2.
 - **Frontend** (`DeliveryOrders.js` DetailDialog): "Duplicate" button (`do-duplicate-btn`, Copy icon) visible for CEO/Admin/System Admin in any state; confirm → toast with new number → list refresh.

@@ -7939,6 +7939,42 @@ async def get_comments(
     
     return comments
 
+
+class CommentUpdate(BaseModel):
+    comment: str
+
+
+@api_router.put("/comments/{comment_id}")
+async def update_lead_comment(comment_id: str, payload: CommentUpdate, current_user: dict = Depends(get_current_user)):
+    """Edit a lead comment — author or CEO/Admin only."""
+    from utils.entity_comments import can_modify_comment
+    doc = await get_tdb().comments.find_one({'id': comment_id}, {'_id': 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail='Comment not found')
+    if not can_modify_comment(doc, current_user):
+        raise HTTPException(status_code=403, detail='You can only edit your own comments.')
+    if not (payload.comment and payload.comment.strip()):
+        raise HTTPException(status_code=400, detail='Comment text is required')
+    now = datetime.now(timezone.utc).isoformat()
+    await get_tdb().comments.update_one(
+        {'id': comment_id},
+        {'$set': {'comment': payload.comment.strip(), 'edited_at': now,
+                  'edited_by': current_user['id'], 'edited_by_name': current_user.get('name')}})
+    return await get_tdb().comments.find_one({'id': comment_id}, {'_id': 0})
+
+
+@api_router.delete("/comments/{comment_id}")
+async def delete_lead_comment(comment_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a lead comment — author or CEO/Admin only."""
+    from utils.entity_comments import can_modify_comment
+    doc = await get_tdb().comments.find_one({'id': comment_id}, {'_id': 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail='Comment not found')
+    if not can_modify_comment(doc, current_user):
+        raise HTTPException(status_code=403, detail='You can only delete your own comments.')
+    await get_tdb().comments.delete_one({'id': comment_id})
+    return {'ok': True}
+
 # ============= USERS/TEAM ROUTES =============
 
 @api_router.get("/users")

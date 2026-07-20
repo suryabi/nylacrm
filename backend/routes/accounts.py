@@ -13,7 +13,7 @@ import base64
 from database import get_tenant_db
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
-from utils.entity_comments import build_comment, notify_comment_mentions
+from utils.entity_comments import build_comment, notify_comment_mentions, can_modify_comment
 from services.external_invoices_service import (
     is_external_payload,
     create_external_invoice,
@@ -620,6 +620,44 @@ async def add_account_comment(account_id: str, payload: AccountCommentCreate, cu
         entity_id=account['id'],
     )
     return comment
+
+
+@router.put("/{account_id}/comments/{comment_id}")
+async def update_account_comment(account_id: str, comment_id: str, payload: AccountCommentCreate, current_user: dict = Depends(get_current_user)):
+    """Edit an account comment — author or CEO/Admin only."""
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0, 'id': 1})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+    doc = await tdb.account_comments.find_one({'id': comment_id, 'account_id': account['id']}, {'_id': 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail='Comment not found')
+    if not can_modify_comment(doc, current_user):
+        raise HTTPException(status_code=403, detail='You can only edit your own comments.')
+    if not (payload.text and payload.text.strip()):
+        raise HTTPException(status_code=400, detail='Comment text is required')
+    now = datetime.now(timezone.utc).isoformat()
+    await tdb.account_comments.update_one(
+        {'id': comment_id},
+        {'$set': {'text': payload.text.strip(), 'edited_at': now,
+                  'edited_by': current_user['id'], 'edited_by_name': current_user.get('name')}})
+    return await tdb.account_comments.find_one({'id': comment_id}, {'_id': 0})
+
+
+@router.delete("/{account_id}/comments/{comment_id}")
+async def delete_account_comment(account_id: str, comment_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete an account comment — author or CEO/Admin only."""
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0, 'id': 1})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+    doc = await tdb.account_comments.find_one({'id': comment_id, 'account_id': account['id']}, {'_id': 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail='Comment not found')
+    if not can_modify_comment(doc, current_user):
+        raise HTTPException(status_code=403, detail='You can only delete your own comments.')
+    await tdb.account_comments.delete_one({'id': comment_id})
+    return {'ok': True}
 
 
 

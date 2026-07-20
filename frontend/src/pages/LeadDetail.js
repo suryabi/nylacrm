@@ -13,7 +13,7 @@ import MentionTextarea, { renderMentionedText } from '../components/MentionTexta
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { ArrowLeft, Mail, Phone, Building2, User, MessageSquare, Send, Loader2, ArrowRightCircle, Plus, Trash2, Save, Package, Upload, Download, FileText, CheckCircle, XCircle, Clock, AlertCircle, ImageIcon, Share2, Maximize2, Minimize2, X, Eye, FileIcon, Camera, Flame, Snowflake, ThermometerSun } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Building2, User, MessageSquare, Send, Loader2, ArrowRightCircle, Plus, Trash2, Save, Package, Upload, Download, FileText, CheckCircle, XCircle, Clock, AlertCircle, ImageIcon, Share2, Maximize2, Minimize2, X, Eye, FileIcon, Camera, Flame, Snowflake, ThermometerSun, Pencil, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Select,
@@ -107,6 +107,8 @@ export default function LeadDetail() {
   const [savingSocial, setSavingSocial] = useState(false);
   const [activities, setActivities] = useState([]);
   const [comments, setComments] = useState([]);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAIDraft, setShowAIDraft] = useState(false);
@@ -647,6 +649,31 @@ ${userEmail}`;
       });
     } finally {
       setSubmittingComment(false);
+    }
+  };
+
+  const canModifyComment = (c) => c.created_by === user?.id || ['CEO', 'Admin', 'System Admin'].includes(user?.role);
+
+  const saveEditedComment = async () => {
+    if (!editingCommentText.trim()) return;
+    try {
+      const { data } = await commentsAPI.update(editingCommentId, { comment: editingCommentText.trim() });
+      setComments((prev) => prev.map((c) => (c.id === editingCommentId ? { ...c, ...data } : c)));
+      setEditingCommentId(null); setEditingCommentText('');
+      toast.success('Comment updated');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to update comment');
+    }
+  };
+
+  const handleDeleteComment = async (c) => {
+    if (!window.confirm('Delete this comment? This cannot be undone.')) return;
+    try {
+      await commentsAPI.delete(c.id);
+      setComments((prev) => prev.filter((x) => x.id !== c.id));
+      toast.success('Comment deleted');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete comment');
     }
   };
 
@@ -1923,14 +1950,45 @@ ${userEmail}`;
                 const commenter = users.find(u => u.id === comment.created_by);
                 const commenterName = commenter ? commenter.name : 'Unknown';
                 return (
-                  <div key={comment.id} className="bg-muted/50 p-4 rounded-lg" data-testid={`comment-${comment.id}`}>
+                  <div key={comment.id} className="bg-muted/50 p-4 rounded-lg group" data-testid={`comment-${comment.id}`}>
                     <div className="flex justify-between items-start mb-2">
                       <p className="font-medium text-sm">{commenterName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
+                          {comment.edited_at && <span className="italic"> (edited)</span>}
+                        </p>
+                        {canModifyComment(comment) && editingCommentId !== comment.id && (
+                          <span className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button type="button" onClick={() => { setEditingCommentId(comment.id); setEditingCommentText(comment.comment); }}
+                              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                              data-testid={`edit-comment-${comment.id}`} aria-label="Edit comment">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button type="button" onClick={() => handleDeleteComment(comment)}
+                              className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+                              data-testid={`delete-comment-${comment.id}`} aria-label="Delete comment">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-sm whitespace-pre-wrap">{renderMentionedText(comment.comment)}</p>
+                    {editingCommentId === comment.id ? (
+                      <div className="space-y-2">
+                        <MentionTextarea value={editingCommentText} onChange={setEditingCommentText} rows={2} testid="edit-comment-input" />
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={saveEditedComment} disabled={!editingCommentText.trim()} className="h-7 px-2.5" data-testid="edit-comment-save">
+                            <Check className="h-3.5 w-3.5 mr-1" />Save
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => { setEditingCommentId(null); setEditingCommentText(''); }} className="h-7 px-2.5" data-testid="edit-comment-cancel">
+                            <X className="h-3.5 w-3.5 mr-1" />Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">{renderMentionedText(comment.comment)}</p>
+                    )}
                   </div>
                 );
               })}

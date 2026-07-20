@@ -184,6 +184,45 @@ async def add_meeting_comment(meeting_id: str, data: dict, current_user: dict = 
     return comment
 
 
+@router.put("/{meeting_id}/comments/{comment_id}")
+async def update_meeting_comment(meeting_id: str, comment_id: str, data: dict, current_user: dict = Depends(get_current_user)):
+    """Edit a meeting comment — author or CEO/Admin only."""
+    from utils.entity_comments import can_modify_comment
+    tenant_id = get_current_tenant_id()
+    text = ((data or {}).get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Comment text is required")
+    doc = await db.meeting_comments.find_one(
+        {"id": comment_id, "meeting_id": meeting_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if not can_modify_comment(doc, current_user):
+        raise HTTPException(status_code=403, detail="You can only edit your own comments.")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.meeting_comments.update_one(
+        {"id": comment_id, "tenant_id": tenant_id},
+        {"$set": {"text": text, "edited_at": now,
+                  "edited_by": current_user["id"], "edited_by_name": current_user.get("name")}})
+    out = await db.meeting_comments.find_one({"id": comment_id, "tenant_id": tenant_id}, {"_id": 0})
+    out.pop("tenant_id", None)
+    return out
+
+
+@router.delete("/{meeting_id}/comments/{comment_id}")
+async def delete_meeting_comment(meeting_id: str, comment_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a meeting comment — author or CEO/Admin only."""
+    from utils.entity_comments import can_modify_comment
+    tenant_id = get_current_tenant_id()
+    doc = await db.meeting_comments.find_one(
+        {"id": comment_id, "meeting_id": meeting_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if not can_modify_comment(doc, current_user):
+        raise HTTPException(status_code=403, detail="You can only delete your own comments.")
+    await db.meeting_comments.delete_one({"id": comment_id, "tenant_id": tenant_id})
+    return {"ok": True}
+
+
 
 @router.post("")
 async def create_meeting(data: dict, current_user: dict = Depends(get_current_user)):
