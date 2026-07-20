@@ -11,6 +11,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## Test credentials (see /app/memory/test_credentials.md)
 
+### 2026-07-20 — 🤖 AI Assistant: full-database answering (dynamic Mongo query engine) ✅ DONE (self-tested)
+- **Problem**: Ask Nyla only knew keyword-routed subsets (stock/leads/issues…); couldn't answer on the rest of the DB.
+- **Solution** (`routes/ai_query_engine.py`, wired into `routes/ai_assistant.py` chat stream):
+  1. **Catalog**: every collection with tenant docs + field summary (nested objects expanded 1 level, `list[{keys}]`), cached 10 min per tenant.
+  2. **Planner**: LLM (gpt-5.4 via Emergent key) converts the question (+conversation) into ≤4 read-only queries (strict JSON DSL: find w/ filter/projection/sort/limit≤50, or aggregate w/ whitelisted stages $match/$group/$sort/$limit/$project/$unwind/$count/$addFields). Rule: also fetch id→name master mappings so answers show names.
+  3. **Executor**: tenant_id forced into every query, blocked collections (users, sessions, tokens, roles, zoho/slack config…), sensitive-field regex stripping (password/token/secret/hash…), 14KB result budget, per-query error capture.
+  4. Results injected as "LIVE DATABASE RESULTS" (authoritative; silently prefer over snapshot). SSE `{status}` event → "Querying your data…" shown in chat bubble (AIAssistant.jsx).
+- **Verified (curl, answers cross-checked against Mongo)**: delivery orders placed count+value exact (15 / ₹2,630); June-2026 debit total exact (₹13.37L); top expense categories WITH names; design request status histogram; password/session-token probe correctly refused (collections not exposed). UI chat answers live ("16 open issues").
+- ⚠️ Notes: first question after 10-min cache expiry pays catalog build (~2-4s). Planner adds one extra LLM round-trip per message (~3-6s) — status indicator covers it.
+
 ### 2026-07-20 — ✏️ Edit/Delete comments in Notes sections (Leads, Accounts, +Meetings) ✅ DONE (self-tested)
 - **Permission model**: comment author can edit/delete their own; CEO/Admin/System Admin can moderate any (`can_modify_comment` in `utils/entity_comments.py`). Edits stamp `edited_at/edited_by(_name)` and show an "(edited)" marker.
 - **Backend**: `PUT/DELETE /api/comments/{comment_id}` (leads, server.py); `PUT/DELETE /api/accounts/{account_id}/comments/{comment_id}` (accounts.py); `PUT/DELETE /api/meeting-minutes/{meeting_id}/comments/{comment_id}` (meeting_minutes.py — added so the shared thread component stays uniform).

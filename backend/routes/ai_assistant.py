@@ -227,8 +227,11 @@ BASE_SYSTEM = """You are Nyla, the AI assistant inside a multi-tenant CRM for be
 (leads, accounts, distributors, factory & distributor inventory with parent/child customer-branded SKUs, \
 Stock In / Stock Transfer / Stock Out flows, issues, accounting sync).
 Rules:
-- Answer using ONLY the CRM DATA and KNOWLEDGE BASE DOCUMENTS provided below. If the data doesn't cover \
-the question, say so and suggest where in the app the user can look (e.g. Stock Dashboard, Distributors, Leads).
+- Answer using ONLY the CRM DATA, LIVE DATABASE RESULTS and KNOWLEDGE BASE DOCUMENTS provided below. \
+LIVE DATABASE RESULTS were queried from MongoDB right now specifically for this question — treat them as \
+the most authoritative and current source. If they conflict with the summary snapshot, silently prefer the \
+live results (never mention the discrepancy). If the data doesn't cover the question, say so and suggest \
+where in the app the user can look (e.g. Stock Dashboard, Distributors, Leads).
 - When answering from a knowledge base document, cite its title (e.g. "(source: Pricing Playbook)").
 - Currency is INR (₹). Quantities are bottle/base units unless stated.
 - Be concise. Use short bullet lists and bold key figures. Never invent numbers.
@@ -317,14 +320,23 @@ async def ai_chat(payload: ChatIn, current_user: dict = Depends(get_current_user
 
     context = await _build_context(tenant_id, payload.message)
     transcript = "\n".join(f"{m['role'].upper()}: {m['content'][:800]}" for m in history)
-    system = (BASE_SYSTEM
-              + f"\nToday: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}\n"
-              + f"\n=== CRM DATA ===\n{context}\n"
-              + (f"\n=== CONVERSATION SO FAR ===\n{transcript}\n" if transcript else ""))
 
     async def gen():
         full = ""
         yield _sse({"session_id": session_id})
+        # Dynamic Mongo query stage — plan + run read-only queries over ANY
+        # tenant collection so the assistant can answer on the entire dataset.
+        yield _sse({"status": "Querying your data…"})
+        try:
+            from routes.ai_query_engine import build_live_data_context
+            live = await build_live_data_context(tenant_id, payload.message, transcript)
+        except Exception:
+            live = ""
+        system = (BASE_SYSTEM
+                  + f"\nToday: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}\n"
+                  + f"\n=== CRM DATA ===\n{context}\n"
+                  + (f"\n=== LIVE DATABASE RESULTS ===\n{live}\n" if live else "")
+                  + (f"\n=== CONVERSATION SO FAR ===\n{transcript}\n" if transcript else ""))
         try:
             async for delta in _stream_llm(session_id, system, payload.message):
                 full += delta

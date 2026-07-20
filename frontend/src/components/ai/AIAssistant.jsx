@@ -74,10 +74,17 @@ export default function AIAssistant() {
     try {
       await streamAI('/api/ai/chat', { session_id: sessionId, message }, (ev) => {
         if (ev.session_id && !sessionId) setSessionId(ev.session_id);
+        if (ev.status) {
+          setMessages(m => {
+            const copy = [...m];
+            copy[copy.length - 1] = { ...copy[copy.length - 1], status: ev.status };
+            return copy;
+          });
+        }
         if (ev.delta) {
           setMessages(m => {
             const copy = [...m];
-            copy[copy.length - 1] = { ...copy[copy.length - 1], content: copy[copy.length - 1].content + ev.delta };
+            copy[copy.length - 1] = { ...copy[copy.length - 1], content: copy[copy.length - 1].content + ev.delta, status: null };
             return copy;
           });
         }
@@ -175,7 +182,12 @@ export default function AIAssistant() {
                   {m.role === 'user' ? m.content : (
                     m.content
                       ? <ReactMarkdown>{m.content}</ReactMarkdown>
-                      : <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
+                      : (
+                        <span className="flex items-center gap-2 text-slate-500">
+                          <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
+                          {m.status && <span className="text-xs italic" data-testid="ai-status-text">{m.status}</span>}
+                        </span>
+                      )
                   )}
                 </div>
               </div>
