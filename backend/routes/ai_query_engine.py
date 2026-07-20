@@ -119,6 +119,8 @@ Rules:
 - When results will contain reference IDs (fields like *_id, category/master ids), ADD one more query \
 fetching the id→name mapping from the corresponding master collection (e.g. accounting_masters, \
 master_skus, expense categories) so the final answer can show human-readable names.
+- When filtering by a time period, ALSO add a second all-time variant of the same query (totals without \
+the date filter) so the answer can mention data outside the period if the period itself is empty.
 - Pick the MOST relevant collections from the catalog; up to %d queries.
 - If the question needs no database data (greeting/general knowledge), return {"queries": []}.""" % (MAX_QUERIES, MAX_ROWS, MAX_QUERIES)
 
@@ -192,13 +194,18 @@ async def execute_plan(tenant_id: str, queries: list) -> str:
     parts = ["LIVE DATABASE RESULTS (fetched from MongoDB right now for this question — authoritative):"]
     budget = RESULT_CHAR_BUDGET
     for i, q in enumerate(queries, 1):
-        desc = f"[query {i}] {q.get('collection')} · {q.get('op') or 'find'}"
+        spec = q.get("pipeline") if (q.get("op") == "aggregate") else (q.get("filter") or {})
+        spec_str = json.dumps(spec, default=str, ensure_ascii=False)[:400]
+        desc = f"[query {i}] collection={q.get('collection')} op={q.get('op') or 'find'} spec={spec_str}"
         try:
             rows = await _run_query(tenant_id, q)
-            body = json.dumps(rows, default=str, ensure_ascii=False)
-            if len(body) > budget:
-                body = body[:budget] + "…(truncated)"
-            block = f"{desc} → {len(rows)} rows\n{body}"
+            if not rows:
+                block = f"{desc} → 0 rows (NO data matches these exact filters)"
+            else:
+                body = json.dumps(rows, default=str, ensure_ascii=False)
+                if len(body) > budget:
+                    body = body[:budget] + "…(truncated)"
+                block = f"{desc} → {len(rows)} rows\n{body}"
         except Exception as e:
             block = f"{desc} → ERROR: {str(e)[:200]}"
         parts.append(block)
