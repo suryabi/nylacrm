@@ -660,6 +660,69 @@ async def reverse_order_placement(order_id: str, payload: ReversePlacementReques
     return {"ok": True, "order": updated, "promo_note": promo_note}
 
 
+@router.post("/delivery-orders/{order_id}/duplicate")
+async def duplicate_delivery_order(order_id: str, current_user: dict = Depends(get_current_user)):
+    """CEO/Admin — clone an existing request into a fresh DRAFT delivery order.
+    Copies recipient, items, address, reason and instructions; resets workflow,
+    promo linkage and approval fields. Past delivery dates are bumped to the
+    minimum allowed (today + 2 days)."""
+    tenant_id = get_current_tenant_id()
+    if current_user.get("role") not in _REVERSE_PLACEMENT_ROLES:
+        raise HTTPException(403, "Only a CEO or Admin can duplicate a request.")
+    src = await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not src:
+        raise HTTPException(404, "Delivery order not found")
+
+    sm = await ensure_default_delivery_order_sm(tenant_id)
+    initial = get_initial_state(sm)
+    now = datetime.now(timezone.utc).isoformat()
+    min_d = datetime.now(timezone.utc).date() + timedelta(days=2)
+    requested_date = src.get("requested_date")
+    try:
+        if not requested_date or date.fromisoformat(str(requested_date)[:10]) < min_d:
+            requested_date = min_d.isoformat()
+    except ValueError:
+        requested_date = min_d.isoformat()
+
+    clone = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "order_number": await _next_order_number(tenant_id),
+        "recipient_type": src.get("recipient_type"),
+        "lead_id": src.get("lead_id"), "account_id": src.get("account_id"),
+        "contact_id": src.get("contact_id"), "employee_id": src.get("employee_id"),
+        "recipient_name": src.get("recipient_name"), "recipient_company": src.get("recipient_company"),
+        "recipient_phone": src.get("recipient_phone"), "recipient_email": src.get("recipient_email"),
+        "requested_date": requested_date,
+        "reason": src.get("reason"),
+        "delivery_address": src.get("delivery_address") or {},
+        "delivery_city": src.get("delivery_city"),
+        "contact_name": src.get("contact_name"),
+        "contact_phone": src.get("contact_phone"),
+        "delivery_instructions": src.get("delivery_instructions"),
+        "notes": src.get("notes"),
+        "items": [dict(i) for i in (src.get("items") or [])],
+        "total_value": src.get("total_value"),
+        "current_state_key": initial["key"],
+        "current_state_label": initial.get("label") or initial["key"],
+        "current_state_color": initial.get("color") or "#94a3b8",
+        "fulfillment_status": None,
+        "duplicated_from_id": src.get("id"),
+        "duplicated_from_number": src.get("order_number"),
+        "status_history": [{
+            "state_key": initial["key"], "state_label": initial.get("label") or initial["key"],
+            "state_color": initial.get("color"), "entered_at": now,
+            "by_user_id": current_user.get("id"), "by_user_name": current_user.get("name"),
+            "comment": f"Duplicated from {src.get('order_number')}.",
+        }],
+        "created_by": current_user.get("id"),
+        "created_by_name": current_user.get("name") or current_user.get("email"),
+        "created_at": now, "updated_at": now,
+    }
+    await db.delivery_orders.insert_one(clone)
+    return {"ok": True, "order": _public(clone)}
+
+
 @router.get("/delivery-orders/{order_id}/available-transitions")
 async def available_transitions(order_id: str, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()

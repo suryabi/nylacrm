@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popove
 import { Calendar } from '../components/ui/calendar';
 import {
   Package, Plus, Trash2, Loader2, MapPin, Search, X, ClipboardList,
-  CheckCircle2, XCircle, RotateCcw, Truck, Clock, ChevronRight, Phone, Calendar as CalendarIcon, Gift,
+  CheckCircle2, XCircle, RotateCcw, Truck, Clock, ChevronRight, Phone, Calendar as CalendarIcon, Gift, Copy,
 } from 'lucide-react';
 import { isValidMapsLink } from '../utils/mapsLink';
 import { MapsLinkInput } from '../components/MapsLinkInput';
@@ -655,6 +655,18 @@ function DetailDialog({ orderId, open, onClose, onChanged, role }) {
     } finally { setActing(false); }
   };
 
+  const duplicateRequest = async () => {
+    if (!window.confirm(`Duplicate ${order.order_number}? A fresh draft request with the same details will be created.`)) return;
+    setActing(true);
+    try {
+      const { data } = await axios.post(`${API_URL}/delivery-orders/${orderId}/duplicate`, {}, auth());
+      toast.success(`Duplicated as ${data.order?.order_number} (draft)`);
+      onChanged(); onClose();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to duplicate the request');
+    } finally { setActing(false); }
+  };
+
   const permanentDelete = async () => {
     if (!window.confirm(`Permanently delete ${order.order_number}? This cannot be undone.`)) return;
     setActing(true);
@@ -822,6 +834,11 @@ function DetailDialog({ orderId, open, onClose, onChanged, role }) {
                   </Button>
                 );
               })}
+              {REVERSE_PLACEMENT_ROLES.includes(role) && (
+                <Button variant="secondary" disabled={acting} onClick={duplicateRequest} data-testid="do-duplicate-btn">
+                  {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Copy className="mr-1.5 h-4 w-4" />Duplicate</>}
+                </Button>
+              )}
               {canReversePlacement && (
                 <Button variant="outline" disabled={acting} onClick={reversePlacement}
                   className="border-amber-400 text-amber-700 hover:bg-amber-50"

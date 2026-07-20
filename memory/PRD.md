@@ -11,6 +11,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## Test credentials (see /app/memory/test_credentials.md)
 
+### 2026-07-20 — 📄 Duplicate Request (Delivery Orders, Admin/CEO only) ✅ DONE (self-tested)
+- **Backend**: `POST /delivery-orders/{id}/duplicate` — roles {CEO, Admin, System Admin}; clones recipient/items/address/reason/instructions into a fresh DRAFT (new order number, reset workflow/promo/approval fields, `duplicated_from_id/_number` audit, history comment "Duplicated from DO-XXXX"); past delivery dates bumped to today+2.
+- **Frontend** (`DeliveryOrders.js` DetailDialog): "Duplicate" button (`do-duplicate-btn`, Copy icon) visible for CEO/Admin/System Admin in any state; confirm → toast with new number → list refresh.
+- **Verified (curl + screenshot)**: CEO clone → DO-2026-0025 draft w/ bumped date & clean linkage (test row deleted after); non-admin 403; UI button renders alongside Reverse Order Placement.
+
 ### 2026-07-20 — ↩️ Reverse Order Placement (Delivery Orders, Admin/CEO only) ✅ DONE (self-tested)
 - **User request**: admin option to reverse an order placement (only while status = Order Placed AND linked delivery still draft) → request returns to Approved; reversal cancels the linked promotional stock-out. Only Admins & CEO (Director excluded).
 - **Backend** (`routes/delivery_orders.py`): `POST /delivery-orders/{id}/reverse-placement` — roles {CEO, Admin, System Admin}; requires state `placed`; blocks if fulfillment scheduled-or-later or linked promo has progressed past draft (400 with pointer to reverse the stock-out first); cancels a DRAFT promo (audit `cancelled_reason`), clears promo linkage fields + `fulfillment_status`, sets state back to `approved` (SM lookup), stamps `placement_reversed_by/_at`, pushes status_history. Stale/missing promo links handled gracefully.
