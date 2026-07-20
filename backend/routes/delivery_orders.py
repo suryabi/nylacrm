@@ -584,6 +584,82 @@ async def admin_cancel_delivery_order(order_id: str, payload: AdminCancelRequest
     return {"ok": True, "order": updated, "promo_note": promo_note}
 
 
+# Reversal of order placement — stricter than admin-cancel: Admins/CEO only.
+_REVERSE_PLACEMENT_ROLES = {"CEO", "Admin", "System Admin"}
+
+
+class ReversePlacementRequest(BaseModel):
+    comment: Optional[str] = None
+
+
+@router.post("/delivery-orders/{order_id}/reverse-placement")
+async def reverse_order_placement(order_id: str, payload: ReversePlacementRequest, current_user: dict = Depends(get_current_user)):
+    """Admin/CEO override — reverse an order placement. Allowed only while the
+    request is in 'Order Placed' state and its linked promotional stock-out is
+    still a DRAFT (never touched stock). Cancels the draft stock-out and moves
+    the request back to 'Approved'."""
+    tenant_id = get_current_tenant_id()
+    if current_user.get("role") not in _REVERSE_PLACEMENT_ROLES:
+        raise HTTPException(403, "Only a CEO or Admin can reverse an order placement.")
+    order = await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Delivery order not found")
+    if order.get("current_state_key") != "placed":
+        raise HTTPException(400, "Only a request in 'Order Placed' status can be reversed.")
+    if (order.get("fulfillment_status") or "") in _SCHEDULED_OR_LATER:
+        raise HTTPException(400, "The delivery has already been scheduled — the placement can no longer be reversed.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    promo_note = None
+    promo_id = order.get("promo_dispatch_id")
+    if promo_id:
+        for coll in (db.distributor_deliveries, db.promo_dispatches):
+            p = await coll.find_one({"id": promo_id, "tenant_id": tenant_id}, {"_id": 0, "status": 1, "challan_number": 1})
+            if not p:
+                continue
+            pstatus = p.get("status")
+            if pstatus == "draft":
+                await coll.update_one(
+                    {"id": promo_id, "tenant_id": tenant_id},
+                    {"$set": {"status": "cancelled", "cancelled_at": now, "updated_at": now,
+                              "cancelled_reason": f"Order placement of {order.get('order_number')} reversed by {current_user.get('name')}"}})
+                promo_note = f"Linked draft stock-out {p.get('challan_number') or ''} was cancelled.".replace("  ", " ")
+            elif pstatus not in ("cancelled", "reversed"):
+                raise HTTPException(
+                    400,
+                    f"The linked stock-out {p.get('challan_number') or promo_id} has already progressed "
+                    f"(status: {pstatus}). Reverse it from the distributor's stock-out page first.")
+            break
+
+    sm = await ensure_default_delivery_order_sm(tenant_id)
+    target = find_state(sm, "approved") or {"key": "approved", "label": "Approved", "color": "#10b981"}
+    set_doc = {
+        "current_state_key": target["key"],
+        "current_state_label": target.get("label") or "Approved",
+        "current_state_color": target.get("color"),
+        "promo_dispatch_id": None,
+        "promo_challan_number": None,
+        "promo_distributor_id": None,
+        "promo_distributor_name": None,
+        "fulfillment_status": None,
+        "placement_reversed_by": current_user.get("id"),
+        "placement_reversed_by_name": current_user.get("name"),
+        "placement_reversed_at": now,
+        "updated_at": now,
+    }
+    history = {
+        "state_key": target["key"], "state_label": target.get("label") or "Approved",
+        "state_color": target.get("color"), "entered_at": now,
+        "by_user_id": current_user.get("id"), "by_user_name": current_user.get("name"),
+        "comment": (payload.comment or "Order placement reversed by admin.") + (f" {promo_note}" if promo_note else ""),
+    }
+    await db.delivery_orders.update_one(
+        {"id": order_id, "tenant_id": tenant_id},
+        {"$set": set_doc, "$push": {"status_history": history}})
+    updated = await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
+    return {"ok": True, "order": updated, "promo_note": promo_note}
+
+
 @router.get("/delivery-orders/{order_id}/available-transitions")
 async def available_transitions(order_id: str, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()

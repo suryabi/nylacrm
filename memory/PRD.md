@@ -11,6 +11,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## Test credentials (see /app/memory/test_credentials.md)
 
+### 2026-07-20 — ↩️ Reverse Order Placement (Delivery Orders, Admin/CEO only) ✅ DONE (self-tested)
+- **User request**: admin option to reverse an order placement (only while status = Order Placed AND linked delivery still draft) → request returns to Approved; reversal cancels the linked promotional stock-out. Only Admins & CEO (Director excluded).
+- **Backend** (`routes/delivery_orders.py`): `POST /delivery-orders/{id}/reverse-placement` — roles {CEO, Admin, System Admin}; requires state `placed`; blocks if fulfillment scheduled-or-later or linked promo has progressed past draft (400 with pointer to reverse the stock-out first); cancels a DRAFT promo (audit `cancelled_reason`), clears promo linkage fields + `fulfillment_status`, sets state back to `approved` (SM lookup), stamps `placement_reversed_by/_at`, pushes status_history. Stale/missing promo links handled gracefully.
+- **Frontend** (`pages/DeliveryOrders.js` DetailDialog): amber "Reverse Order Placement" button (`do-reverse-placement-btn`) shown only for CEO/Admin/System Admin when state=placed and fulfillment ∈ {none, draft, cancelled}; two-step (optional reason textarea → Confirm Reversal + window.confirm).
+- **Verified (curl + screenshot)**: draft-promo reversal cancels DC + returns to Approved w/ note; confirmed-promo 400; re-reverse 400; non-admin (Head of Business) 403; UI button + reason flow render. Note: DO-2026-0006 & DO-2026-0024 were reversed to Approved during testing (preview data). ⚠️ Redeploy for production.
+
 ### 2026-07-19 — 📊 Accounting Dashboard (drill-down) + P0 Team-menu fix ✅ DONE (tested 100%, iteration_333)
 - **P0 fix — "Team" menu missing in Admin sidebar**: nav code was correct; root cause = CEO role's permissions in `db.roles` were MASS-REVOKED (61/107 modules view=false, likely a prior partial PUT from a test). Repaired: CEO role restored to full access on all 107 modules; Director granted `team`. Verified: Admin sidebar shows Team + Fleet + Product & SKU + Master Data + Settings groups. ⚠️ If this recurs, check `db.roles` CEO permissions — do NOT PUT partial permission objects.
 - **New Accounting Dashboard** (`/accounting/dashboard`, nav item at top of Accounting module, moduleKey `accounting_transactions`):

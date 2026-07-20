@@ -562,6 +562,7 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
 
 // ───────────────────── Detail dialog ─────────────────────
 const ADMIN_CANCEL_ROLES = ['CEO', 'Director', 'Admin', 'System Admin'];
+const REVERSE_PLACEMENT_ROLES = ['CEO', 'Admin', 'System Admin'];
 const SCHEDULED_OR_LATER = ['delivery_assigned', 'delivery_scheduled', 'scheduled', 'on_the_way', 'in_transit', 'delivered', 'complete', 'partially_delivered'];
 
 function DetailDialog({ orderId, open, onClose, onChanged, role }) {
@@ -632,6 +633,25 @@ function DetailDialog({ orderId, open, onClose, onChanged, role }) {
       await load(); onChanged();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to cancel the request');
+    } finally { setActing(false); }
+  };
+
+  // Reverse order placement — Admin/CEO only, while placed + stock-out still draft.
+  const canReversePlacement = REVERSE_PLACEMENT_ROLES.includes(role) && order
+    && order.current_state_key === 'placed'
+    && (!order.fulfillment_status || ['draft', 'cancelled'].includes(order.fulfillment_status));
+
+  const reversePlacement = async () => {
+    if (commentFor !== '__reverse_placement__') { setCommentFor('__reverse_placement__'); return; }
+    if (!window.confirm(`Reverse the placement of ${order.order_number}? The linked draft stock-out will be cancelled and the request will go back to Approved.`)) return;
+    setActing(true);
+    try {
+      const { data } = await axios.post(`${API_URL}/delivery-orders/${orderId}/reverse-placement`, { comment: comment || null }, auth());
+      toast.success(`${order.order_number} moved back to Approved${data.promo_note ? ` · ${data.promo_note}` : ''}`);
+      setCommentFor(null); setComment('');
+      await load(); onChanged();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to reverse the placement');
     } finally { setActing(false); }
   };
 
@@ -783,7 +803,7 @@ function DetailDialog({ orderId, open, onClose, onChanged, role }) {
 
               {commentFor && (
                 <div>
-                  <Label>{commentFor === '__admin_cancel__' ? 'Cancellation reason (optional)' : 'Comment (required)'}</Label>
+                  <Label>{commentFor === '__admin_cancel__' ? 'Cancellation reason (optional)' : commentFor === '__reverse_placement__' ? 'Reversal reason (optional)' : 'Comment (required)'}</Label>
                   <Textarea value={comment} onChange={(e) => setComment(e.target.value)} data-testid="do-transition-comment" />
                 </div>
               )}
@@ -802,6 +822,13 @@ function DetailDialog({ orderId, open, onClose, onChanged, role }) {
                   </Button>
                 );
               })}
+              {canReversePlacement && (
+                <Button variant="outline" disabled={acting} onClick={reversePlacement}
+                  className="border-amber-400 text-amber-700 hover:bg-amber-50"
+                  data-testid="do-reverse-placement-btn">
+                  {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><RotateCcw className="mr-1.5 h-4 w-4" />{commentFor === '__reverse_placement__' ? 'Confirm Reversal' : 'Reverse Order Placement'}</>}
+                </Button>
+              )}
               {canAdminCancel && (
                 <Button variant="destructive" disabled={acting} onClick={adminCancel} data-testid="do-admin-cancel-btn">
                   {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><XCircle className="mr-1.5 h-4 w-4" />{commentFor === '__admin_cancel__' ? 'Confirm Cancel' : 'Cancel Request'}</>}
