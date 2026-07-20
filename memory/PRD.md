@@ -11,6 +11,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## Test credentials (see /app/memory/test_credentials.md)
 
+### 2026-07-20 — 👩 Nyla avatar + welcome message ✅ DONE (screenshot-verified)
+- Generated female avatar (`/app/frontend/public/nyla-avatar.png`, flat-vector Indian woman, teal/emerald) — used on the floating launcher button (h-14 ring), panel header, and empty-state; welcome message: "Hi, I am Nyla. How can I help you ?" (`ai-welcome-message`, `ai-launcher-avatar`, `ai-header-avatar` testids in AIAssistant.jsx).
+
 ### 2026-07-20 — 🤖 AI Assistant: full-database answering (dynamic Mongo query engine) ✅ DONE (self-tested)
 - **Problem**: Ask Nyla only knew keyword-routed subsets (stock/leads/issues…); couldn't answer on the rest of the DB.
 - **Solution** (`routes/ai_query_engine.py`, wired into `routes/ai_assistant.py` chat stream):

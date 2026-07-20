@@ -107,11 +107,11 @@ export default function AIAssistant() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-[70] h-12 w-12 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-300/40 hover:scale-105 transition-transform flex items-center justify-center"
-          title="AI Assistant"
+          className="fixed bottom-6 right-6 z-[70] h-14 w-14 rounded-full shadow-lg shadow-emerald-300/50 hover:scale-105 transition-transform overflow-hidden ring-2 ring-white dark:ring-slate-700"
+          title="Ask Nyla"
           data-testid="ai-assistant-launcher"
         >
-          <Sparkles className="h-5 w-5" />
+          <img src="/nyla-avatar.png" alt="Nyla — AI assistant" className="h-full w-full object-cover" data-testid="ai-launcher-avatar" />
         </button>
       )}
 
@@ -122,7 +122,7 @@ export default function AIAssistant() {
         >
           {/* Header */}
           <div className="flex items-center gap-2 px-3 py-2.5 border-b bg-gradient-to-r from-violet-600 to-indigo-600 text-white">
-            <Bot className="h-4 w-4 flex-shrink-0" />
+            <img src="/nyla-avatar.png" alt="Nyla" className="h-6 w-6 rounded-full object-cover ring-1 ring-white/50 flex-shrink-0" data-testid="ai-header-avatar" />
             <span className="text-sm font-semibold flex-1">Ask Nyla</span>
             {sessions.length > 0 && (
               <Select value={sessionId || ''} onValueChange={loadSession}>
@@ -155,8 +155,9 @@ export default function AIAssistant() {
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 bg-slate-50/60 dark:bg-slate-950/40">
             {messages.length === 0 && (
               <div className="pt-6 text-center space-y-3" data-testid="ai-empty-state">
-                <Sparkles className="h-8 w-8 text-violet-400 mx-auto" />
-                <p className="text-sm text-slate-600 dark:text-slate-300 font-medium">Ask me anything — CRM data or company knowledge base</p>
+                <img src="/nyla-avatar.png" alt="Nyla" className="h-16 w-16 rounded-full object-cover mx-auto shadow-md ring-2 ring-emerald-200 dark:ring-emerald-800" data-testid="ai-welcome-avatar" />
+                <p className="text-sm text-slate-700 dark:text-slate-200 font-semibold" data-testid="ai-welcome-message">Hi, I am Nyla. How can I help you ?</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Ask me anything — CRM data or company knowledge base</p>
                 <div className="space-y-1.5">
                   {SUGGESTIONS.map((s, i) => (
                     <button
