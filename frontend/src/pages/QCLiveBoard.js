@@ -112,7 +112,7 @@ const DrillModal = ({ session, onClose, wall }) => {
                           <p className={`text-[11px] ${wall ? 'text-slate-400' : 'text-slate-400'}`}>{new Date(insp.inspected_at).toLocaleDateString()} {fmtTime(insp.inspected_at)}</p>
                         </div>
                         <p className={`text-xs mt-0.5 ${wall ? 'text-slate-400' : 'text-slate-500'}`}>
-                          {insp.qty_inspected} crates inspected · <span className="text-red-500 font-medium">{insp.qty_rejected} rejected</span>
+                          {insp.qty_inspected} crates inspected · <span className="text-red-500 font-medium">{insp.qty_rejected} bottles rejected</span>
                         </p>
                         {(insp.entries || []).flatMap(e => e.rejections || []).length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1.5">
@@ -331,7 +331,7 @@ export default function QCLiveBoard() {
         {/* Today's floor summary strip */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5" data-testid="qc-today-summary">
           <StatCard icon={Package} label="Crates inspected today" value={today.crates_inspected ?? 0} accent="bg-blue-600" />
-          <StatCard icon={XCircle} label="Rejected today" value={today.rejected ?? 0} accent="bg-red-600" />
+          <StatCard icon={XCircle} label="Bottles rejected today" value={today.rejected ?? 0} accent="bg-red-600" />
           <StatCard icon={ClipboardCheck} label="Inspections submitted" value={today.inspections_submitted ?? 0} accent="bg-emerald-600" />
           <StatCard icon={Radio} label="Live sessions" value={today.live_sessions ?? 0} accent="bg-violet-600" />
         </div>
@@ -415,7 +415,7 @@ export default function QCLiveBoard() {
                       <p className={`text-xl font-extrabold ${wall ? 'text-white' : 'text-slate-800'}`}>{s.crates_inspected}</p>
                     </div>
                     <div>
-                      <p className={`text-[10px] uppercase tracking-wider ${t.metricLabel}`}>Rejected</p>
+                      <p className={`text-[10px] uppercase tracking-wider ${t.metricLabel}`}>Rejected (btl)</p>
                       <p className="text-xl font-extrabold text-red-500" data-testid={`qc-live-rejected-${s.id}`}>{s.total_rejected}</p>
                     </div>
                     <div>

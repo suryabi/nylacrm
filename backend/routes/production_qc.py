@@ -2098,7 +2098,7 @@ async def qc_shift_report(date: Optional[str] = None, current_user: dict = Depen
     total_crates = sum(v["crates"] for v in per_batch.values())
     total_rejected = sum(v["rejected"] for v in per_batch.values())
 
-    rows = [["Batch", "SKU", "Stages", "Inspectors", "Crates", "Rejected", "Reject %", "Top Reasons"]]
+    rows = [["Batch", "SKU", "Stages", "Inspectors", "Crates", "Rejected (btl)", "Reject %", "Top Reasons"]]
     flagged = []
     for bid, v in sorted(per_batch.items(), key=lambda kv: kv[1]["rejected"], reverse=True):
         batch = bmap.get(bid, {})

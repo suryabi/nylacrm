@@ -1884,3 +1884,7 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Batch Drilldown: clicking a live card opens modal with stage-by-stage inspection history (reuses GET /batches/{id}/history), reason chips + timestamps + remarks
 - Trend Sparkers: GET /production/qc-reason-trends -> per-reason 24h hourly buckets (submitted inspections by hour + open sessions at current hour); sparkline SVG panel "Today's defect trends"
 - Tested: iteration_336 — 9/9 new + 9/9 regression backend tests pass, all frontend flows verified; new test file /app/backend/tests/test_qc_live_board_enhancements.py
+
+## 2026-06 (fork): UOM clarity confirmation + labels
+- CONFIRMED to user: rejections tracked in BOTTLES (qty_rejected), inspections in CRATES (qty_inspected); validation rejected <= crates x bottles_per_crate; stage flow converts bottles -> crate equivalents; total_rejected/balances stored in bottles; QC Station is an extension of core record_inspection (same inspections collection, balances, reports)
+- Label tweaks for clarity: QC Station "Rejected bottles" + "each tap = 1 rejected bottle" hint; Live Board "Bottles rejected today", "Rejected (btl)", drilldown "bottles rejected"; shift report PDF column "Rejected (btl)"

@@ -229,7 +229,7 @@ export default function QCStation() {
       <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-5 flex items-center justify-between" data-testid="qc-crates-panel">
         <div>
           <p className="text-sm font-semibold text-slate-700">Crates inspected</p>
-          <p className="text-xs text-slate-400">This session</p>
+          <p className="text-xs text-slate-400">This session · each tile tap below = 1 rejected bottle</p>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => saveCrates(crates - 1)} className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center active:scale-95" data-testid="qc-crates-minus">
@@ -300,7 +300,7 @@ export default function QCStation() {
       <div className="sticky bottom-0 -mx-3 sm:-mx-6 mt-6 bg-white/95 backdrop-blur border-t border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between gap-4 z-40" data-testid="qc-submit-bar">
         <div className="flex items-center gap-4">
           <div>
-            <p className="text-[11px] text-slate-400 uppercase tracking-wider">Total rejected</p>
+            <p className="text-[11px] text-slate-400 uppercase tracking-wider">Rejected bottles</p>
             <p className="text-2xl font-extrabold text-red-600" data-testid="qc-total-rejected">{totalRejected}</p>
           </div>
           <div>
