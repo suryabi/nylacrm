@@ -63,6 +63,15 @@ function skuCode(b) {
   return (name.replace(/[^A-Za-z0-9]/g, '').slice(0, 4) || 'SKU').toUpperCase();
 }
 
+// Crates awaiting QC action for a batch: pending at any stage + (unallocated
+// still to enter, for freshly created batches). Used to float busy batches up.
+function waitingCrates(b) {
+  const bal = b.stage_balances || {};
+  const pending = Object.values(bal).reduce((a, s) => a + ((s && s.pending) || 0), 0);
+  const unalloc = b.status === 'created' ? (b.unallocated_crates || 0) : 0;
+  return pending + unalloc;
+}
+
 export default function QCStation() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [step, setStep] = useState('batch');    // batch | stage | capture
@@ -262,11 +271,17 @@ export default function QCStation() {
       const key = groupBy === 'sku' ? (b.sku_id || b.sku_name || 'Other') : (b.status || 'other');
       (groups[key] = groups[key] || []).push(b);
     });
+    // Float batches with crates waiting for QC to the top of each group
+    Object.values(groups).forEach(list => list.sort((a, x) => waitingCrates(x) - waitingCrates(a)));
     const groupKeys = Object.keys(groups).sort((a, x) => groups[x].length - groups[a].length);
+
+    // SKU legend (distinct SKUs currently shown)
+    const legend = Array.from(new Map(filtered.map(b => [b.sku_id || b.sku_name, b])).values());
 
     const BatchCard = (b) => {
       const c = skuColor(b.sku_id || b.sku_name);
       const code = skuCode(b);
+      const waiting = waitingCrates(b);
       const sm = STATUS_META[b.status] || { label: (b.status || '').replace(/_/g, ' '), cls: 'bg-slate-100 text-slate-600' };
       return (
         <button key={b.id} onClick={() => openBatch(b)}
@@ -285,7 +300,14 @@ export default function QCStation() {
               <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${sm.cls}`}>{sm.label}</span>
             </div>
             <p className="text-xs text-slate-500 truncate mt-0.5">{b.sku_name}</p>
-            <p className="text-[11px] text-slate-400 mt-1">{(b.qc_stages || []).length} stages · {b.total_crates || b.total_produced || 0} crates{b.production_date ? ` · ${b.production_date}` : ''}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-[11px] text-slate-400">{(b.qc_stages || []).length} stages · {b.total_crates || b.total_produced || 0} crates{b.production_date ? ` · ${b.production_date}` : ''}</p>
+              {waiting > 0 && (
+                <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full flex-shrink-0" data-testid={`qc-waiting-${b.id}`}>
+                  {waiting} waiting
+                </span>
+              )}
+            </div>
           </div>
         </button>
       );
@@ -328,6 +350,23 @@ export default function QCStation() {
             </button>
           </div>
         </div>
+
+        {/* SKU colour legend */}
+        {legend.length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-5 px-1" data-testid="qc-sku-legend">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">SKU colours:</span>
+            {legend.map(b => {
+              const c = skuColor(b.sku_id || b.sku_name);
+              return (
+                <span key={b.sku_id || b.sku_name} className="flex items-center gap-1.5" data-testid={`qc-legend-${skuCode(b)}`}>
+                  <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: c.bg }} />
+                  <span className="text-[11px] font-bold" style={{ color: c.text }}>{skuCode(b)}</span>
+                  <span className="text-[11px] text-slate-500">{b.sku_name}</span>
+                </span>
+              );
+            })}
+          </div>
+        )}
 
         {batches.length === 0 ? (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-10 text-center">

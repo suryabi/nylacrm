@@ -1908,3 +1908,8 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Grouping headers with count; SKU color-coding (deterministic 10-color palette) via left border + soft tile
 - Each card prefixed with a SKU-code tile (from batch_code prefix e.g. 600S/20L/B660, else derived volume+variant from sku_name)
 - Frontend-only (QCStation.js step 1); openBatch flow unchanged; self-tested via screenshots (both group modes, search, color tiles)
+
+## 2026-06 (fork): QC Station picker — SKU legend + pending-first sort
+- SKU colour legend row under toolbar (code + swatch + name for each distinct SKU shown)
+- waitingCrates(b) = sum(stage pending) + (unallocated if created); batches sorted desc within each group so waiting batches float up
+- Amber "N waiting" badge on cards with crates awaiting QC; frontend-only (QCStation.js step 1), self-tested via screenshot
