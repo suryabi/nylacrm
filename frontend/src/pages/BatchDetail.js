@@ -52,7 +52,7 @@ function InspectionRecordsTable({ stageInspections, stageId, startEditInspection
                 <th className="text-left px-3 py-1.5 font-medium">Date</th>
                 <th className="text-left px-3 py-1.5 font-medium">Resource</th>
                 <th className="text-center px-3 py-1.5 font-medium">Crates</th>
-                <th className="text-center px-3 py-1.5 font-medium">Rejected</th>
+                <th className="text-center px-3 py-1.5 font-medium">Rejected (btl)</th>
                 <th className="text-left px-3 py-1.5 font-medium">Reason</th>
                 <th className="text-left px-3 py-1.5 font-medium">By</th>
                 <th className="text-right px-3 py-1.5 font-medium"></th>

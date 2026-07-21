@@ -1,0 +1,31 @@
+{
+  "summary": "Iteration 337 — verified INTEGRATION between QC Station (tablet) and Batch Detail per-batch QC flow. Deep-link, inline receive (POST /batches/{id}/move), crates-clamp, submit-through-record_inspection engine, and Inspection Records sync (Resource/Crates/Rejected(btl)/Reason/By) all work end-to-end. Wrote 4 new backend integration tests (all pass) and re-ran 18 existing QC-Station + Live-Board regression tests (all pass). UI verified: QC Station header button on Batch Detail, deep link opens the batch's stage step, crates input clamps to stage.pending, standalone QC Station and QC Live Board still function.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_qc_station_batch_integration.py",
+    "/app/backend/tests/test_qc_station.py",
+    "/app/backend/tests/test_qc_live_board_enhancements.py",
+    "/app/test_reports/pytest/iteration_337_integration.xml",
+    "/app/test_reports/pytest/iteration_337_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "QCStation.saveCrates() clamps to pendingFor(batch, stage) client-side and shows a warning toast — good. However, if a user opens two capture sessions in different tabs, both could set crates_inspected = pending and submit sequentially; the server-side guard 'Only N crates pending' correctly rejects the second submit (verified via 400) so integrity is preserved.",
+    "receiveCrates() and Batch Detail's handleMove() both hit POST /batches/{id}/move so behaviour is consistent — same endpoint, same balances (verified: unallocated decreased, received+pending increased by qty).",
+    "InspectionRecordsTable renders both new (entries[]) and legacy (flat) inspection shapes — good backwards compatibility.",
+    "Minor UX: after 'Received via QC Station', the Rejections rejected-cost panel on Batch Detail may still show 'Some rejections have no cost mapping configured' if the mapping for reason x stage is missing. Not new — same behaviour as manual inspect. Not a blocker.",
+    "QCStation.js is 432 lines with a single default export handling batch/stage/capture in one component using local step state — acceptable for the current UX. If a 4th step is added, extract into three subcomponents to keep it under 500 lines.",
+    "Session-submit uses record_inspection under the hood which respects total_rej_bottles <= qty_inspected * bottles_per_crate. On the tablet, if operator taps way more bottles than can fit given crates chosen, submit will 400. Consider surfacing this preemptively in the capture screen (disable submit or show hint) — polish only."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_qc_station_batch_integration.py (new — 4 tests: deep-link shape, inline-receive, full E2E submit→balances+inspection-records sync, manual-inspect regression)"
+  ],
+  "success_rate": {"backend": "100% (4/4 new integration + 18/18 QC regression = 22/22)", "frontend": "100% (deep link, crates clamp, standalone QC, Live Board all verified)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water) — session_token as Bearer",
+  "seed_data_creation": "The E2E integration test mutated batch 790149fb (20L-APR-004): +5 crates received on QC Stage 1, +2 crates received via manual regression, +2 inspections recorded (1 crate/2 btl and 1 crate/3 btl of Black Particles). Batch is a designated test batch — mutations are acceptable per review request. No open qc-sessions left behind (all submitted or DELETE-cleaned).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Integration suite lives at /app/backend/tests/test_qc_station_batch_integration.py. Prefer test batch 790149fb (20L-APR-004); it started at 80 unallocated crates and now has ~68 unallocated / 3 pending / 2 passed at QC Stage 1 with 5 rejected bottles from testing. QC Station stage-step uses receiveSource() → for first stage source is Unallocated, subsequent stages use previous.passed. Balances key 'rejected' is stored in BOTTLES; 'received/pending/passed' in CRATES — confirmed. record_inspection() enforces total_rej_bottles <= qty_inspected*bpc and pending guard at server side.",
+  "rca of the issue": "N/A — no bugs found. Integration wiring is correct: (a) header link → /qc-station?batch=<id> deep-link handled by useSearchParams effect that auto-openBatch and clears the param; (b) inline Receive calls the same POST /batches/{id}/move as Batch Detail; (c) qc-session submit routes through record_inspection (in production_qc.py ~line 1073) which updates stage_balances.rejected (btl) + passed (crates) and batch.total_rejected atomically; (d) Batch Detail /history endpoint returns the session-created inspection with resource_name=QC person, entries[*].qty_inspected in crates, and entries[*].rejections[*].reason=resolved-name."
+}
