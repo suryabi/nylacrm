@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { Loader2, ScanFace, Users, KeyRound, X, ArrowLeft, ShieldCheck } from 'lucide-react';
-import { loadModels, getDescriptor, matchDescriptor } from '../../lib/faceRecognition';
+import { loadModels, getDescriptor, matchDescriptor, CONFIRM_FRAMES } from '../../lib/faceRecognition';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -18,6 +18,7 @@ export default function QCKioskLogin({ onLogin }) {
   const scanRef = useRef(null);
   const indexRef = useRef([]);
   const busyRef = useRef(false);
+  const streakRef = useRef({ id: null, count: 0 });
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [scanning, setScanning] = useState(true);
@@ -64,10 +65,16 @@ export default function QCKioskLogin({ onLogin }) {
             const d = await getDescriptor(videoRef.current);
             if (d && indexRef.current.length) {
               const { member } = matchDescriptor(d, indexRef.current);
-              if (member) doLogin(member);
+              if (member) {
+                const s = streakRef.current;
+                streakRef.current = { id: member.id, count: s.id === member.id ? s.count + 1 : 1 };
+                if (streakRef.current.count >= CONFIRM_FRAMES) doLogin(member);
+              } else {
+                streakRef.current = { id: null, count: 0 };
+              }
             }
           } catch { /* ignore frame errors */ } finally { busyRef.current = false; }
-        }, 1200);
+        }, 600);
       } catch (e) {
         setError(
           e.name === 'NotAllowedError' ? 'Camera permission denied — use manual login below'

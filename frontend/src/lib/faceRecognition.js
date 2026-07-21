@@ -4,7 +4,9 @@ import * as faceapi from '@vladmandic/face-api';
 
 const MODEL_URL = '/face-models';
 // Euclidean-distance threshold for a confident match (lower = stricter).
-export const MATCH_THRESHOLD = 0.5;
+export const MATCH_THRESHOLD = 0.45;
+// Consecutive matching frames required before a face login is accepted.
+export const CONFIRM_FRAMES = 3;
 
 let loadPromise = null;
 

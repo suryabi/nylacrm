@@ -1418,3 +1418,7 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Operator session is now in-memory only (removed qc_operator localStorage persistence in QCStation.js + QCKioskLogin.jsx)
 - Leaving /qc-station and returning always re-triggers the face/PIN kiosk gate
 - Verified E2E: entry gate → login (Suresh) → navigate to /leads → return → gate re-shown
+
+## 2026-06 (fork): Face recognition hardening (minimal core)
+- MATCH_THRESHOLD 0.5 → 0.45 (stricter); new CONFIRM_FRAMES=3 in faceRecognition.js
+- QCKioskLogin: login now requires 3 consecutive frames matching the same member (streakRef); different-member match resets streak, no-face frames keep it; scan interval 1200ms → 600ms (login still ~1.8s)
