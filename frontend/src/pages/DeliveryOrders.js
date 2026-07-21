@@ -88,6 +88,7 @@ const STATE_FILTERS = [
   { value: 'draft', label: 'Draft' },
   { value: 'pending_approval', label: 'Pending Approval' },
   { value: 'approved', label: 'Approved' },
+  { value: 'placed', label: 'Order Placed' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'fulfilled', label: 'Fulfilled' },
   { value: 'cancelled', label: 'Cancelled' },
@@ -933,6 +934,9 @@ export default function DeliveryOrders() {
   const [cities, setCities] = useState([]);
   const [stateFilter, setStateFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [groupBy, setGroupBy] = useState('month');
+  const [cityFilter, setCityFilter] = useState('all');
+  const [monthFilter, setMonthFilter] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
   const [detailId, setDetailId] = useState(null);
   const [role, setRole] = useState(null);
@@ -968,6 +972,39 @@ export default function DeliveryOrders() {
   }, [stateFilter, search]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  // ── Grouping (month default / city) + completed-value summaries ──
+  const monthKeyOf = (o) => (o.requested_date || o.created_at || '').slice(0, 7);
+  const monthLabelOf = (k) => {
+    if (!k) return 'No date';
+    const [y, m] = k.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+  };
+  const cityOf = (o) => o.delivery_city || 'No city';
+  const availMonths = [...new Set(orders.map(monthKeyOf).filter(Boolean))].sort().reverse();
+  const availCities = [...new Set(orders.map(cityOf))].sort();
+  const visibleOrders = orders.filter((o) =>
+    (cityFilter === 'all' || cityOf(o) === cityFilter) &&
+    (monthFilter === 'all' || monthKeyOf(o) === monthFilter));
+  const completedOf = (list) => list.filter((o) => o.current_state_key === 'fulfilled');
+  const sumValue = (list) => list.reduce((a, o) => a + (Number(o.total_value) || 0), 0);
+  const groups = (() => {
+    const map = new Map();
+    for (const o of visibleOrders) {
+      const key = groupBy === 'city' ? cityOf(o) : monthKeyOf(o) || 'No date';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(o);
+    }
+    const keys = [...map.keys()].sort();
+    if (groupBy === 'month') keys.reverse();
+    return keys.map((k) => ({
+      key: k,
+      label: groupBy === 'city' ? k : monthLabelOf(k === 'No date' ? '' : k),
+      items: map.get(k),
+    }));
+  })();
+  const grandCompleted = completedOf(visibleOrders);
+
   useEffect(() => {
     (async () => {
       try {
@@ -1017,12 +1054,37 @@ export default function DeliveryOrders() {
 
       <div className="flex flex-wrap items-center gap-2">
         <Select value={stateFilter} onValueChange={setStateFilter}>
-          <SelectTrigger className="w-48" data-testid="do-state-filter"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-44" data-testid="do-state-filter"><SelectValue /></SelectTrigger>
           <SelectContent>{STATE_FILTERS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+        </Select>
+        <Select value={monthFilter} onValueChange={setMonthFilter}>
+          <SelectTrigger className="w-40" data-testid="do-month-filter"><SelectValue placeholder="Month" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All months</SelectItem>
+            {availMonths.map((m) => <SelectItem key={m} value={m}>{monthLabelOf(m)}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={cityFilter} onValueChange={setCityFilter}>
+          <SelectTrigger className="w-40" data-testid="do-city-filter"><SelectValue placeholder="City" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All cities</SelectItem>
+            {availCities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+          </SelectContent>
         </Select>
         <div className="relative max-w-xs flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input className="pl-9" placeholder="Search order #, recipient, city…" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="do-search" />
+        </div>
+        <div className="ml-auto flex items-center gap-1.5 text-xs text-slate-500">
+          Group by
+          <div className="rounded-full bg-slate-100 p-0.5 flex">
+            {[['month', 'Month'], ['city', 'City']].map(([k, label]) => (
+              <button key={k} onClick={() => setGroupBy(k)} data-testid={`do-groupby-${k}`}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${groupBy === k ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -1045,9 +1107,22 @@ export default function DeliveryOrders() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={9} className="py-16 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-emerald-600" /></td></tr>
-              ) : orders.length === 0 ? (
-                <tr><td colSpan={9} className="py-16 text-center text-sm text-slate-500" data-testid="do-empty">No delivery orders yet. Create your first one.</td></tr>
-              ) : orders.map((o) => {
+              ) : visibleOrders.length === 0 ? (
+                <tr><td colSpan={9} className="py-16 text-center text-sm text-slate-500" data-testid="do-empty">No delivery orders match the current filters.</td></tr>
+              ) : groups.map((g) => {
+                const done = completedOf(g.items);
+                return (
+                <React.Fragment key={g.key}>
+                  <tr className="border-y border-slate-200 bg-emerald-50/60" data-testid={`do-group-${g.key}`}>
+                    <td colSpan={4} className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-emerald-800">
+                      {g.label} <span className="ml-1 font-medium normal-case text-emerald-600/80">· {g.items.length} request{g.items.length === 1 ? '' : 's'}</span>
+                    </td>
+                    <td colSpan={5} className="px-4 py-2 text-right text-xs font-semibold text-emerald-800" data-testid={`do-group-summary-${g.key}`}>
+                      Completed: <span className="font-mono">{fmtINR(sumValue(done))}</span>
+                      <span className="ml-1 font-medium text-emerald-600/80">({done.length} fulfilled)</span>
+                    </td>
+                  </tr>
+                  {g.items.map((o) => {
                 const strike = o.current_state_key === 'cancelled' ? ' line-through opacity-60' : '';
                 return (
                 <tr key={o.id} onClick={() => setDetailId(o.id)} className={`cursor-pointer border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50${o.current_state_key === 'cancelled' ? ' bg-slate-50/60' : ''}`} data-testid={`do-row-${o.order_number}`}>
@@ -1063,7 +1138,23 @@ export default function DeliveryOrders() {
                 </tr>
                 );
               })}
+                </React.Fragment>
+                );
+              })}
             </tbody>
+            {!loading && visibleOrders.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-slate-300 bg-slate-100" data-testid="do-grand-summary">
+                  <td colSpan={4} className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Total — completed sample requests
+                  </td>
+                  <td colSpan={5} className="px-4 py-3 text-right text-sm font-bold text-slate-900">
+                    <span className="font-mono" data-testid="do-grand-summary-value">{fmtINR(sumValue(grandCompleted))}</span>
+                    <span className="ml-2 text-xs font-medium text-slate-500">({grandCompleted.length} of {visibleOrders.length} requests fulfilled)</span>
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
