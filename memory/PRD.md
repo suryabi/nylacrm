@@ -1902,3 +1902,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Submissions route through record_inspection -> update same stage_balances + total_rejected; appear in Batch Detail Inspection Records by QC person + reason
 - Units confirmed: rejected=bottles, received/pending/passed=crates; Batch Detail column now "Rejected (btl)"; crates-inspected clamped to stage pending
 - New tests: /app/backend/tests/test_qc_station_batch_integration.py; test batch 790149fb reset to clean state after testing
+
+## 2026-06 (fork): QC Station batch picker — organized (filters/grouping/color/SKU code)
+- Toolbar: search (batch code/SKU), status filter, SKU filter, group-by toggle (By SKU default / By Stage)
+- Grouping headers with count; SKU color-coding (deterministic 10-color palette) via left border + soft tile
+- Each card prefixed with a SKU-code tile (from batch_code prefix e.g. 600S/20L/B660, else derived volume+variant from sku_name)
+- Frontend-only (QCStation.js step 1); openBatch flow unchanged; self-tested via screenshots (both group modes, search, color tiles)

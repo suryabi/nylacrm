@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import axios from 'axios';
 import * as Icons from 'lucide-react';
-import { Loader2, ChevronLeft, Minus, Check, Factory, ArrowRight, MoveRight, RotateCcw, X } from 'lucide-react';
+import { Loader2, ChevronLeft, Minus, Check, Factory, ArrowRight, MoveRight, RotateCcw, X, Search, LayoutGrid, Layers } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -22,6 +22,47 @@ function iconComponent(name) {
 // Statuses where a batch still has QC work happening.
 const ACTIVE_STATUSES = ['in_qc', 'in_labeling', 'in_final_qc', 'created'];
 
+const STATUS_META = {
+  created:     { label: 'Created',    cls: 'bg-slate-100 text-slate-600' },
+  in_qc:       { label: 'In QC',      cls: 'bg-blue-50 text-blue-600' },
+  in_labeling: { label: 'Labeling',   cls: 'bg-violet-50 text-violet-600' },
+  in_final_qc: { label: 'Final QC',   cls: 'bg-amber-50 text-amber-700' },
+};
+
+// Distinct, high-contrast palette assigned deterministically per SKU.
+const SKU_PALETTE = [
+  { bg: '#0ea5e9', soft: '#e0f2fe', text: '#0369a1' },
+  { bg: '#8b5cf6', soft: '#ede9fe', text: '#6d28d9' },
+  { bg: '#10b981', soft: '#d1fae5', text: '#047857' },
+  { bg: '#f59e0b', soft: '#fef3c7', text: '#b45309' },
+  { bg: '#ef4444', soft: '#fee2e2', text: '#b91c1c' },
+  { bg: '#ec4899', soft: '#fce7f3', text: '#be185d' },
+  { bg: '#14b8a6', soft: '#ccfbf1', text: '#0f766e' },
+  { bg: '#6366f1', soft: '#e0e7ff', text: '#4338ca' },
+  { bg: '#84cc16', soft: '#ecfccb', text: '#4d7c0f' },
+  { bg: '#f97316', soft: '#ffedd5', text: '#c2410c' },
+];
+
+function skuColor(key) {
+  const s = String(key || '');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return SKU_PALETTE[h % SKU_PALETTE.length];
+}
+
+// Short SKU code: prefer the batch_code prefix (e.g. "600S-APR-002" → "600S",
+// "B660-180726-201" → "B660"); else derive volume+variant from the SKU name.
+function skuCode(b) {
+  const bc = b.batch_code || b.batch_number || '';
+  const m = bc.match(/^([A-Za-z0-9]+)-/);
+  if (m) return m[1].toUpperCase();
+  const name = (b.sku_name || '').toString();
+  const vol = name.match(/(\d+\s?(?:ml|l|L|ltr))/i);
+  const variant = (name.match(/silver|gold|premium|platinum|classic|blue/i) || [''])[0];
+  if (vol) return (vol[1].replace(/\s/g, '') + (variant ? variant[0].toUpperCase() : '')).toUpperCase();
+  return (name.replace(/[^A-Za-z0-9]/g, '').slice(0, 4) || 'SKU').toUpperCase();
+}
+
 export default function QCStation() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [step, setStep] = useState('batch');    // batch | stage | capture
@@ -35,6 +76,10 @@ export default function QCStation() {
   const [submitting, setSubmitting] = useState(false);
   const [receiveQty, setReceiveQty] = useState({});   // stageId -> qty input
   const [receiving, setReceiving] = useState(null);   // stageId being moved
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [skuFilter, setSkuFilter] = useState('all');
+  const [groupBy, setGroupBy] = useState('sku');       // 'sku' | 'status'
   const deepLinked = useRef(false);
 
   const fetchInit = useCallback(async () => {
@@ -200,34 +245,127 @@ export default function QCStation() {
 
   if (loading) return <div className="flex items-center justify-center h-[70vh]"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>;
 
-  // ── STEP 1: Batch selection ──
+  // ── STEP 1: Batch selection (filters · grouping · SKU colour-coding) ──
   if (step === 'batch') {
+    const skuOptions = Array.from(new Map(batches.map(b => [b.sku_id || b.sku_name, b.sku_name])).entries());
+    const q = search.trim().toLowerCase();
+    const filtered = batches.filter(b => {
+      if (statusFilter !== 'all' && b.status !== statusFilter) return false;
+      if (skuFilter !== 'all' && (b.sku_id || b.sku_name) !== skuFilter) return false;
+      if (q && !(`${b.batch_code || b.batch_number || ''} ${b.sku_name || ''}`.toLowerCase().includes(q))) return false;
+      return true;
+    });
+
+    // Build groups
+    const groups = {};
+    filtered.forEach(b => {
+      const key = groupBy === 'sku' ? (b.sku_id || b.sku_name || 'Other') : (b.status || 'other');
+      (groups[key] = groups[key] || []).push(b);
+    });
+    const groupKeys = Object.keys(groups).sort((a, x) => groups[x].length - groups[a].length);
+
+    const BatchCard = (b) => {
+      const c = skuColor(b.sku_id || b.sku_name);
+      const code = skuCode(b);
+      const sm = STATUS_META[b.status] || { label: (b.status || '').replace(/_/g, ' '), cls: 'bg-slate-100 text-slate-600' };
+      return (
+        <button key={b.id} onClick={() => openBatch(b)}
+          className="group bg-white border border-slate-200 rounded-2xl p-3 text-left hover:shadow-md hover:border-slate-300 transition-all active:scale-[0.98] flex items-stretch gap-3 overflow-hidden"
+          style={{ borderLeft: `5px solid ${c.bg}` }}
+          data-testid={`qc-batch-${b.id}`}>
+          {/* SKU code tile */}
+          <div className="flex flex-col items-center justify-center rounded-xl px-2.5 py-2 min-w-[3.5rem] flex-shrink-0"
+            style={{ backgroundColor: c.soft }} data-testid={`qc-sku-tile-${b.id}`}>
+            <span className="text-sm font-extrabold leading-none" style={{ color: c.text }}>{code}</span>
+            <span className="text-[8px] uppercase tracking-wider mt-1 opacity-70" style={{ color: c.text }}>SKU</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-base font-bold text-slate-800 truncate">{b.batch_code || b.batch_number || 'Batch'}</span>
+              <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${sm.cls}`}>{sm.label}</span>
+            </div>
+            <p className="text-xs text-slate-500 truncate mt-0.5">{b.sku_name}</p>
+            <p className="text-[11px] text-slate-400 mt-1">{(b.qc_stages || []).length} stages · {b.total_crates || b.total_produced || 0} crates{b.production_date ? ` · ${b.production_date}` : ''}</p>
+          </div>
+        </button>
+      );
+    };
+
     return (
-      <div className="p-4 sm:p-8 max-w-[1200px] mx-auto" data-testid="qc-station-batch-step">
-        <div className="mb-6">
+      <div className="p-4 sm:p-8 max-w-[1300px] mx-auto" data-testid="qc-station-batch-step">
+        <div className="mb-5">
           <h1 className="text-3xl font-bold tracking-tight text-slate-800">QC Station</h1>
           <p className="text-slate-500 mt-1">Select a batch to start capturing rejections</p>
         </div>
+
+        {/* Filters + grouping toolbar */}
+        <div className="flex flex-wrap items-center gap-2 mb-5" data-testid="qc-batch-filters">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search batch code or SKU…"
+              className="w-full border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-sm" data-testid="qc-batch-search" />
+          </div>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+            className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white" data-testid="qc-status-filter">
+            <option value="all">All statuses</option>
+            {ACTIVE_STATUSES.map(s => <option key={s} value={s}>{(STATUS_META[s] || {}).label || s}</option>)}
+          </select>
+          <select value={skuFilter} onChange={e => setSkuFilter(e.target.value)}
+            className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white max-w-[200px]" data-testid="qc-sku-filter">
+            <option value="all">All SKUs</option>
+            {skuOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select>
+          <div className="flex items-center bg-slate-100 rounded-xl p-1" data-testid="qc-groupby-toggle">
+            <button onClick={() => setGroupBy('sku')}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${groupBy === 'sku' ? 'bg-white shadow text-slate-800' : 'text-slate-500'}`}
+              data-testid="qc-groupby-sku">
+              <LayoutGrid size={13} /> By SKU
+            </button>
+            <button onClick={() => setGroupBy('status')}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${groupBy === 'status' ? 'bg-white shadow text-slate-800' : 'text-slate-500'}`}
+              data-testid="qc-groupby-status">
+              <Layers size={13} /> By Stage
+            </button>
+          </div>
+        </div>
+
         {batches.length === 0 ? (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-10 text-center">
             <Factory className="w-10 h-10 text-amber-400 mx-auto mb-3" />
             <p className="text-slate-700 font-medium">No active batches in QC</p>
             <p className="text-sm text-slate-500 mt-1">Batches appear here once they enter a QC stage</p>
           </div>
+        ) : filtered.length === 0 ? (
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-10 text-center" data-testid="qc-no-match">
+            <Search className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <p className="text-slate-600 font-medium">No batches match your filters</p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {batches.map(b => (
-              <button key={b.id} onClick={() => openBatch(b)}
-                className="bg-white border border-slate-200 rounded-2xl p-5 text-left hover:border-slate-800 hover:shadow-md transition-all active:scale-[0.98]"
-                data-testid={`qc-batch-${b.id}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-lg font-bold text-slate-800">{b.batch_code || b.batch_number || 'Batch'}</span>
-                  <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">{(b.status || '').replace(/_/g, ' ')}</span>
+          <div className="space-y-6">
+            {groupKeys.map(key => {
+              const list = groups[key];
+              const first = list[0];
+              const isSku = groupBy === 'sku';
+              const c = isSku ? skuColor(key) : null;
+              const headLabel = isSku ? (first.sku_name || 'Other') : ((STATUS_META[key] || {}).label || key.replace(/_/g, ' '));
+              return (
+                <div key={key} data-testid={`qc-group-${key}`}>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    {isSku ? (
+                      <span className="text-[11px] font-extrabold px-2 py-1 rounded-lg" style={{ backgroundColor: c.soft, color: c.text }}>{skuCode(first)}</span>
+                    ) : (
+                      <Layers size={15} className="text-slate-400" />
+                    )}
+                    <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wide">{headLabel}</h2>
+                    <span className="text-xs text-slate-400 font-medium">({list.length})</span>
+                    <div className="flex-1 h-px bg-slate-100 ml-2" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {list.map(BatchCard)}
+                  </div>
                 </div>
-                <p className="text-sm text-slate-600 truncate">{b.sku_name}</p>
-                <p className="text-xs text-slate-400 mt-2">{(b.qc_stages || []).length} stages · {b.total_crates || b.total_produced || 0} crates</p>
-              </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
