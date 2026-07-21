@@ -1830,3 +1830,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Billing Address prefixed with GST Trade Name + Legal Name (deduped)
 - Delivery Address prefixed with Outlet (account) name (deduped)
 - Applied in both frontend composer (AccountDetail.js buildShareBodyHtml) and backend system template renderer (email_templates.py); seeded system templates now auto-sync body updates
+
+## 2026-06 (fork): Security Audit + Fixes (all verified, 16/16 backend tests pass)
+- Audit verdict was FAIL; three findings fixed:
+- SEC-001 (CRITICAL): tenant is now bound to the authenticated user (deps.py _bind_tenant + server.py duplicate auth fn); mismatched X-Tenant-ID header -> 403; platform admins (PLATFORM_ADMIN_EMAILS) may still override for cross-tenant management
+- SEC-002 (HIGH): CORS narrowed to exact allowlist (preview, prod warehouse-qc-engine.emergent.host, crm.nylaairwater.earth, localhost) + regex only for *.nylaairwater.earth / *.briefingiq.com; removed *.emergent.host / *.emergentagent.com wildcards; all session cookies SameSite=Lax; CORS_ORIGINS env parsing now strips quotes/* (note: backend/.env still has stale CORS_ORIGINS="*" which is now safely ignored)
+- SEC-003 (MEDIUM): email template render HTML-escapes substituted values (routes/email_templates.py _substitute escape=True for body_html)
+- Remaining hardening backlog (not done): login rate limiting, stronger password policy (currently 6 chars min)
+- Regression suite added: /app/backend/tests/test_security_audit_regression.py
+- IMPORTANT: production still runs the vulnerable code until user redeploys
