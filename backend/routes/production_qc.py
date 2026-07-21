@@ -1676,10 +1676,16 @@ async def delete_qc_team_member(member_id: str, current_user: dict = Depends(get
 class RejectionReasonCreate(BaseModel):
     name: str
     description: Optional[str] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    image: Optional[str] = None
 
 class RejectionReasonUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    image: Optional[str] = None
 
 @router.get("/rejection-reasons")
 async def list_rejection_reasons(current_user: dict = Depends(get_current_user)):
@@ -1701,6 +1707,9 @@ async def create_rejection_reason(data: RejectionReasonCreate, current_user: dic
         "tenant_id": tenant_id,
         "name": data.name,
         "description": data.description or "",
+        "color": data.color or "#334155",
+        "icon": data.icon or "circle",
+        "image": data.image or "",
         "created_at": now,
         "updated_at": now,
     }
@@ -1723,6 +1732,12 @@ async def update_rejection_reason(reason_id: str, data: RejectionReasonUpdate, c
         updates["name"] = data.name
     if data.description is not None:
         updates["description"] = data.description
+    if data.color is not None:
+        updates["color"] = data.color
+    if data.icon is not None:
+        updates["icon"] = data.icon
+    if data.image is not None:
+        updates["image"] = data.image
     await tdb.rejection_reasons.update_one({"id": reason_id}, {"$set": updates})
     updated = await tdb.rejection_reasons.find_one({"id": reason_id}, {"_id": 0})
     return updated
@@ -1735,6 +1750,207 @@ async def delete_rejection_reason(reason_id: str, current_user: dict = Depends(g
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Rejection reason not found")
     return {"message": "Rejection reason deleted"}
+
+
+# ──────────────────────────────────────────────
+# QC Station — tablet-first real-time rejection capture
+# A "session" is an in-progress inspection for a batch+stage by one operator.
+# Each tap increments a per-reason counter (autosaved). On submit it is
+# finalized into a normal inspection record (reusing record_inspection).
+# ──────────────────────────────────────────────
+
+class QCSessionStart(BaseModel):
+    batch_id: str
+    stage_id: str
+    crates_inspected: int = 0
+
+class QCSessionTap(BaseModel):
+    reason_id: str
+    delta: int  # +1 or -1
+
+class QCSessionUpdate(BaseModel):
+    crates_inspected: Optional[int] = None
+    remarks: Optional[str] = None
+
+
+def _public_session(s: dict) -> dict:
+    return {k: v for k, v in (s or {}).items() if k != "_id"}
+
+
+@router.get("/qc-sessions/active")
+async def get_active_qc_session(
+    batch_id: Optional[str] = None,
+    stage_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the current operator's open (unsubmitted) session, if any."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    query = {"tenant_id": tenant_id, "operator_id": current_user.get("id"), "status": "open"}
+    if batch_id:
+        query["batch_id"] = batch_id
+    if stage_id:
+        query["stage_id"] = stage_id
+    s = await tdb.qc_sessions.find_one(query, sort=[("created_at", -1)])
+    return _public_session(s) if s else None
+
+
+@router.post("/qc-sessions")
+async def start_qc_session(data: QCSessionStart, current_user: dict = Depends(get_current_user)):
+    """Start (or resume) a QC Station session for a batch+stage."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    batch = await tdb.production_batches.find_one({"id": data.batch_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    stage = next((s for s in batch.get("qc_stages", []) if s["id"] == data.stage_id), None)
+    if not stage:
+        raise HTTPException(status_code=400, detail="Invalid stage")
+
+    # Resume an existing open session for this operator+batch+stage
+    existing = await tdb.qc_sessions.find_one({
+        "tenant_id": tenant_id, "operator_id": current_user.get("id"),
+        "batch_id": data.batch_id, "stage_id": data.stage_id, "status": "open",
+    })
+    if existing:
+        if data.crates_inspected and data.crates_inspected != existing.get("crates_inspected"):
+            await tdb.qc_sessions.update_one(
+                {"id": existing["id"]},
+                {"$set": {"crates_inspected": data.crates_inspected, "updated_at": datetime.now(timezone.utc).isoformat()}},
+            )
+            existing["crates_inspected"] = data.crates_inspected
+        return _public_session(existing)
+
+    now = datetime.now(timezone.utc).isoformat()
+    session = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "batch_id": data.batch_id,
+        "batch_number": batch.get("batch_number") or batch.get("batch_no") or "",
+        "sku_name": batch.get("sku_name") or "",
+        "stage_id": data.stage_id,
+        "stage_name": stage["name"],
+        "stage_type": stage.get("stage_type", "qc"),
+        "crates_inspected": data.crates_inspected or 0,
+        "counts": {},          # {reason_id: count}
+        "remarks": "",
+        "status": "open",
+        "operator_id": current_user.get("id"),
+        "operator_name": current_user.get("name"),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await tdb.qc_sessions.insert_one(session)
+    return _public_session(session)
+
+
+@router.patch("/qc-sessions/{session_id}/tap")
+async def tap_qc_session(session_id: str, data: QCSessionTap, current_user: dict = Depends(get_current_user)):
+    """Increment/decrement a rejection reason counter (real-time autosave)."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    session = await tdb.qc_sessions.find_one({"id": session_id, "tenant_id": tenant_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("status") != "open":
+        raise HTTPException(status_code=400, detail="Session already submitted")
+
+    counts = session.get("counts", {}) or {}
+    current = int(counts.get(data.reason_id, 0))
+    new_val = max(0, current + int(data.delta))
+    counts[data.reason_id] = new_val
+    await tdb.qc_sessions.update_one(
+        {"id": session_id},
+        {"$set": {"counts": counts, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    updated = await tdb.qc_sessions.find_one({"id": session_id})
+    return _public_session(updated)
+
+
+@router.patch("/qc-sessions/{session_id}")
+async def update_qc_session(session_id: str, data: QCSessionUpdate, current_user: dict = Depends(get_current_user)):
+    """Update crates inspected / remarks on an open session."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    session = await tdb.qc_sessions.find_one({"id": session_id, "tenant_id": tenant_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("status") != "open":
+        raise HTTPException(status_code=400, detail="Session already submitted")
+    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if data.crates_inspected is not None:
+        updates["crates_inspected"] = max(0, int(data.crates_inspected))
+    if data.remarks is not None:
+        updates["remarks"] = data.remarks
+    await tdb.qc_sessions.update_one({"id": session_id}, {"$set": updates})
+    updated = await tdb.qc_sessions.find_one({"id": session_id})
+    return _public_session(updated)
+
+
+@router.delete("/qc-sessions/{session_id}")
+async def discard_qc_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    """Discard an open session without recording an inspection."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    result = await tdb.qc_sessions.delete_one({"id": session_id, "tenant_id": tenant_id, "status": "open"})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Open session not found")
+    return {"message": "Session discarded"}
+
+
+@router.post("/qc-sessions/{session_id}/submit")
+async def submit_qc_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    """Finalize a QC Station session into a normal inspection record."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    session = await tdb.qc_sessions.find_one({"id": session_id, "tenant_id": tenant_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("status") != "open":
+        raise HTTPException(status_code=400, detail="Session already submitted")
+
+    crates = int(session.get("crates_inspected", 0) or 0)
+    if crates <= 0:
+        raise HTTPException(status_code=400, detail="Set crates inspected before submitting")
+
+    # Map reason_id → reason name for the inspection payload
+    counts = session.get("counts", {}) or {}
+    reason_ids = [rid for rid, c in counts.items() if int(c) > 0]
+    rejections = []
+    if reason_ids:
+        reasons = await tdb.rejection_reasons.find(
+            {"tenant_id": tenant_id, "id": {"$in": reason_ids}}, {"_id": 0, "id": 1, "name": 1}
+        ).to_list(500)
+        name_by_id = {r["id"]: r["name"] for r in reasons}
+        for rid in reason_ids:
+            rejections.append(RejectionItem(
+                qty_rejected=int(counts[rid]),
+                reason=name_by_id.get(rid, "Unknown"),
+            ))
+
+    entry = InspectionEntry(
+        resource_id=current_user.get("id"),
+        resource_name=current_user.get("name") or "QC Operator",
+        date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        qty_inspected=crates,
+        rejections=rejections,
+    )
+    record = InspectionRecord(
+        stage_id=session["stage_id"],
+        entries=[entry],
+        remarks=session.get("remarks") or "Captured via QC Station",
+    )
+    # Reuse the canonical inspection logic (balances, totals, completion)
+    updated_batch = await record_inspection(session["batch_id"], record, current_user)
+
+    await tdb.qc_sessions.update_one(
+        {"id": session_id},
+        {"$set": {"status": "submitted", "submitted_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    total_rejected = sum(int(c) for c in counts.values())
+    return {"message": "Inspection recorded", "total_rejected": total_rejected, "batch": updated_batch}
+
 
 
 # ──────────────────────────────────────────────

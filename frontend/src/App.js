@@ -104,6 +104,7 @@ const ProductionBatches = lazy(() => import('./pages/ProductionBatches'));
 const ProductionDashboard = lazy(() => import('./pages/ProductionDashboard'));
 const BatchDetail = lazy(() => import('./pages/BatchDetail'));
 const QCRouteConfig = lazy(() => import('./pages/QCRouteConfig'));
+const QCStation = lazy(() => import('./pages/QCStation'));
 const RejectionReasons = lazy(() => import('./pages/RejectionReasons'));
 const RejectionReport = lazy(() => import('./pages/RejectionReport'));
 const RejectionCostConfig = lazy(() => import('./pages/RejectionCostConfig'));
@@ -420,6 +421,7 @@ function AppRouter() {
           <Route path="/production-batches" element={<ProtectedRoute moduleKey="production_batches"><ProductionBatches /></ProtectedRoute>} />
           <Route path="/production-batches/:batchId" element={<ProtectedRoute moduleKey="production_batches"><BatchDetail /></ProtectedRoute>} />
           <Route path="/qc-routes" element={<ProtectedRoute moduleKey="qc_routes"><QCRouteConfig /></ProtectedRoute>} />
+          <Route path="/qc-station" element={<ProtectedRoute moduleKey="qc_station"><QCStation /></ProtectedRoute>} />
           <Route path="/rejection-reasons" element={<ProtectedRoute moduleKey="rejection_reasons"><RejectionReasons /></ProtectedRoute>} />
           <Route path="/rejection-report" element={<ProtectedRoute moduleKey="rejection_report"><RejectionReport /></ProtectedRoute>} />
           <Route path="/production/rejection-cost-config" element={<ProtectedRoute moduleKey="rejection_cost_config"><RejectionCostConfig /></ProtectedRoute>} />

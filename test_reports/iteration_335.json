@@ -1,0 +1,44 @@
+{
+  "summary": "Regression + new-feature testing for QC Station module (tablet-first rejection capture) and Rejection Reasons visual config. Found & fixed one CRITICAL backend bug (POST/PUT /api/production/rejection-reasons returned 500 because Pydantic models were missing color/icon/image fields). After fix, 9/9 QC Station backend tests pass and the full UI flow works: batch → stage → capture (tap +1, undo -1, crates stepper), autosave, session resume, submit, error toast on pending<=0. Rejection Reasons admin config renders color+icon tile cards and edit preloads existing values.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST/PUT /api/production/rejection-reasons",
+        "issue": "AttributeError: RejectionReasonCreate/Update object has no attribute 'color'. Pydantic models did not declare color/icon/image but endpoint code reads them → HTTP 500 for every create/update.",
+        "priority": "CRITICAL",
+        "status": "FIXED by testing agent (added optional color/icon/image fields to the models)"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_qc_station.py",
+    "/app/test_reports/pytest/iteration_335_qc_station.xml"
+  ],
+  "action_items": [
+    "None blocking — QC Station feature is functionally complete after the RejectionReasonCreate/Update model fix.",
+    "Optional: consider auto-refreshing the Active Batches list on the QC Station step 1 after submit — currently returns to batch list which is correct, but the batch's stage pending count is only reflected on next stage tap."
+  ],
+  "critical_code_review_comments": [
+    "Pydantic model schema drift: RejectionReasonCreate/Update models must always stay in sync with fields consumed by the handler. This bug was invisible during main-agent curl testing because those tests must have submitted only {name}. Recommend adding a schema-level test or using `data.model_dump()` and spreading into the doc.",
+    "In submit_qc_session, reason names are resolved by a single {'id': {'$in': reason_ids}} query — good. However, if a reason was deleted between tapping and submitting, its counts silently become 'Unknown'. Consider warning the operator or blocking submit.",
+    "QCStation.js and RejectionReasons.js follow good testid conventions and are well-scoped — no >700 line concerns.",
+    "record_inspection has a subtle constraint: total_rej_bottles cannot exceed qty_inspected * bottles_per_crate per entry. On QC Station, if a user taps many rejections but sets crates=1 with a low bottles_per_crate, submit will 400. UI could surface this preemptively (disable submit or show hint) — minor UX polish."
+  ],
+  "updated_files": [
+    "/app/backend/routes/production_qc.py (added color/icon/image fields to RejectionReasonCreate and RejectionReasonUpdate models)",
+    "/app/backend/tests/test_qc_station.py (new — 9 test cases covering full QC Station lifecycle)"
+  ],
+  "success_rate": {"backend": "100% (9/9 QC-station tests, incl. lifecycle+submit+resume+discard+validation)", "frontend": "100% (all UI flows verified: reason CRUD with color/icon, batch→stage→capture, tap +1/undo -1, session resume, submit toast)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water) — login uses session_token as Bearer",
+  "seed_data_creation": "Test rejection reasons TEST_QCS_* and UITEST_QCS_* were created during tests and CLEANED UP afterwards.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend QC-Station suite lives at /app/backend/tests/test_qc_station.py — runs standalone (needs REACT_APP_BACKEND_URL env var only if not defaulting). Full lifecycle picks a batch with stage_balances[stage_id].pending > 0 automatically. On the UI, the module context is Sales by default; QC Station also renders directly at /qc-station regardless of the current sidebar module for the CEO account. Submit will 400 with 'Only N crates pending' when the chosen stage's pending==0 — this is expected behavior surfaced via a red toast.",
+  "rca of the issue": "RCA — Rejection Reasons POST 500: Pydantic model RejectionReasonCreate declared only {name, description}, but the create handler read data.color / data.icon / data.image. Pydantic v2 raises AttributeError on undeclared attributes. Repro: POST /api/production/rejection-reasons with body {\"name\":\"x\",\"color\":\"#fff\",\"icon\":\"circle\"} → 500 (backend log: AttributeError: 'RejectionReasonCreate' object has no attribute 'color'). Mitigation: added color/icon/image as Optional[str] to both Create and Update models. Verified: subsequent POST returned 200 with the payload persisted and reflected on GET."
+}
