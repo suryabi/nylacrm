@@ -5,6 +5,7 @@ Production QC Tracking Module
 - Rejection Cost Rules (per-stage cost config)
 """
 import asyncio
+import bcrypt
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -1617,12 +1618,49 @@ class QCTeamMemberUpdate(BaseModel):
     name: Optional[str] = None
     role: Optional[str] = None
 
+class QCFaceEnroll(BaseModel):
+    descriptors: List[List[float]]   # one or more 128-float face signatures
+
+class QCPinSet(BaseModel):
+    pin: Optional[str] = None        # 4-8 digits; null/empty clears it
+
+class QCPinVerify(BaseModel):
+    member_id: str
+    pin: str
+
+
+def _public_member(m: dict) -> dict:
+    """QC team member without sensitive fields (descriptors/pin hash)."""
+    if not m:
+        return m
+    out = {k: v for k, v in m.items() if k not in ("_id", "face_descriptors", "pin_hash")}
+    out["has_face"] = bool(m.get("face_descriptors"))
+    out["face_samples"] = len(m.get("face_descriptors") or [])
+    out["has_pin"] = bool(m.get("pin_hash"))
+    return out
+
+
 @router.get("/qc-team")
 async def list_qc_team(current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
-    members = await tdb.qc_team.find({"tenant_id": tenant_id}, {"_id": 0}).sort("name", 1).to_list(500)
-    return members
+    members = await tdb.qc_team.find({"tenant_id": tenant_id}).sort("name", 1).to_list(500)
+    return [_public_member(m) for m in members]
+
+
+@router.get("/qc-team/face-index")
+async def qc_team_face_index(current_user: dict = Depends(get_current_user)):
+    """Enrolled face signatures for the QC Station kiosk to match locally.
+    Returns descriptors (math only, no photos) — never PIN hashes."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    members = await tdb.qc_team.find(
+        {"tenant_id": tenant_id, "face_descriptors": {"$exists": True, "$ne": []}},
+        {"_id": 0, "id": 1, "name": 1, "role": 1, "face_descriptors": 1},
+    ).to_list(500)
+    return [{"id": m["id"], "name": m["name"], "role": m.get("role", ""),
+             "descriptors": m.get("face_descriptors", [])} for m in members]
+
 
 @router.post("/qc-team")
 async def create_qc_team_member(data: QCTeamMemberCreate, current_user: dict = Depends(get_current_user)):
@@ -1637,12 +1675,74 @@ async def create_qc_team_member(data: QCTeamMemberCreate, current_user: dict = D
         "tenant_id": tenant_id,
         "name": data.name,
         "role": data.role or "",
+        "face_descriptors": [],
+        "pin_hash": None,
         "created_at": now,
         "updated_at": now,
     }
     await tdb.qc_team.insert_one(member)
-    member.pop("_id", None)
-    return member
+    return _public_member(member)
+
+
+@router.put("/qc-team/{member_id}/face")
+async def enroll_qc_face(member_id: str, data: QCFaceEnroll, current_user: dict = Depends(get_current_user)):
+    """Store (append) numeric face signatures for a QC team member."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    member = await tdb.qc_team.find_one({"id": member_id, "tenant_id": tenant_id})
+    if not member:
+        raise HTTPException(status_code=404, detail="QC team member not found")
+    clean = [d for d in data.descriptors if isinstance(d, list) and len(d) == 128]
+    if not clean:
+        raise HTTPException(status_code=400, detail="No valid face signatures provided")
+    existing = member.get("face_descriptors") or []
+    updated = (existing + clean)[-10:]  # keep up to 10 samples
+    await tdb.qc_team.update_one({"id": member_id},
+        {"$set": {"face_descriptors": updated, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    return {"message": "Face enrolled", "face_samples": len(updated)}
+
+
+@router.delete("/qc-team/{member_id}/face")
+async def clear_qc_face(member_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    result = await tdb.qc_team.update_one({"id": member_id, "tenant_id": tenant_id},
+        {"$set": {"face_descriptors": [], "updated_at": datetime.now(timezone.utc).isoformat()}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="QC team member not found")
+    return {"message": "Face enrollment cleared"}
+
+
+@router.put("/qc-team/{member_id}/pin")
+async def set_qc_pin(member_id: str, data: QCPinSet, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    member = await tdb.qc_team.find_one({"id": member_id, "tenant_id": tenant_id})
+    if not member:
+        raise HTTPException(status_code=404, detail="QC team member not found")
+    pin_hash = None
+    if data.pin and data.pin.strip():
+        if not (data.pin.isdigit() and 4 <= len(data.pin) <= 8):
+            raise HTTPException(status_code=400, detail="PIN must be 4-8 digits")
+        pin_hash = bcrypt.hashpw(data.pin.encode(), bcrypt.gensalt()).decode()
+    await tdb.qc_team.update_one({"id": member_id},
+        {"$set": {"pin_hash": pin_hash, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    return {"message": "PIN updated" if pin_hash else "PIN cleared", "has_pin": bool(pin_hash)}
+
+
+@router.post("/qc-team/verify-pin")
+async def verify_qc_pin(data: QCPinVerify, current_user: dict = Depends(get_current_user)):
+    """Manual fallback: confirm a QC member by PIN when face fails."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    member = await tdb.qc_team.find_one({"id": data.member_id, "tenant_id": tenant_id})
+    if not member or not member.get("pin_hash"):
+        raise HTTPException(status_code=400, detail="No PIN set for this member")
+    ok = bcrypt.checkpw(data.pin.encode(), member["pin_hash"].encode())
+    if not ok:
+        raise HTTPException(status_code=401, detail="Incorrect PIN")
+    return {"id": member["id"], "name": member["name"], "role": member.get("role", "")}
+
 
 @router.put("/qc-team/{member_id}")
 async def update_qc_team_member(member_id: str, data: QCTeamMemberUpdate, current_user: dict = Depends(get_current_user)):
@@ -1660,8 +1760,8 @@ async def update_qc_team_member(member_id: str, data: QCTeamMemberUpdate, curren
     if data.role is not None:
         updates["role"] = data.role
     await tdb.qc_team.update_one({"id": member_id}, {"$set": updates})
-    updated = await tdb.qc_team.find_one({"id": member_id}, {"_id": 0})
-    return updated
+    updated = await tdb.qc_team.find_one({"id": member_id})
+    return _public_member(updated)
 
 @router.delete("/qc-team/{member_id}")
 async def delete_qc_team_member(member_id: str, current_user: dict = Depends(get_current_user)):
@@ -1767,6 +1867,8 @@ class QCSessionStart(BaseModel):
     batch_id: str
     stage_id: str
     crates_inspected: int = 0
+    qc_operator_id: Optional[str] = None
+    qc_operator_name: Optional[str] = None
 
 class QCSessionTap(BaseModel):
     reason_id: str
@@ -2158,12 +2260,13 @@ async def qc_shift_report(date: Optional[str] = None, current_user: dict = Depen
 async def get_active_qc_session(
     batch_id: Optional[str] = None,
     stage_id: Optional[str] = None,
+    qc_operator_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
     """Return the current operator's open (unsubmitted) session, if any."""
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
-    query = {"tenant_id": tenant_id, "operator_id": current_user.get("id"), "status": "open"}
+    query = {"tenant_id": tenant_id, "operator_id": qc_operator_id or current_user.get("id"), "status": "open"}
     if batch_id:
         query["batch_id"] = batch_id
     if stage_id:
@@ -2185,9 +2288,18 @@ async def start_qc_session(data: QCSessionStart, current_user: dict = Depends(ge
     if not stage:
         raise HTTPException(status_code=400, detail="Invalid stage")
 
+    # Kiosk mode: the QC team member (face/PIN identified) is the operator.
+    op_id = data.qc_operator_id or current_user.get("id")
+    op_name = data.qc_operator_name or current_user.get("name")
+    if data.qc_operator_id:
+        member = await tdb.qc_team.find_one({"id": data.qc_operator_id, "tenant_id": tenant_id})
+        if not member:
+            raise HTTPException(status_code=400, detail="Unknown QC team member")
+        op_name = member["name"]
+
     # Resume an existing open session for this operator+batch+stage
     existing = await tdb.qc_sessions.find_one({
-        "tenant_id": tenant_id, "operator_id": current_user.get("id"),
+        "tenant_id": tenant_id, "operator_id": op_id,
         "batch_id": data.batch_id, "stage_id": data.stage_id, "status": "open",
     })
     if existing:
@@ -2214,8 +2326,9 @@ async def start_qc_session(data: QCSessionStart, current_user: dict = Depends(ge
         "counts": {},          # {reason_id: count}
         "remarks": "",
         "status": "open",
-        "operator_id": current_user.get("id"),
-        "operator_name": current_user.get("name"),
+        "operator_id": op_id,
+        "operator_name": op_name,
+        "is_qc_member": bool(data.qc_operator_id),
         "created_at": now,
         "updated_at": now,
     }
@@ -2310,8 +2423,8 @@ async def submit_qc_session(session_id: str, current_user: dict = Depends(get_cu
             ))
 
     entry = InspectionEntry(
-        resource_id=current_user.get("id"),
-        resource_name=current_user.get("name") or "QC Operator",
+        resource_id=session.get("operator_id") or current_user.get("id"),
+        resource_name=session.get("operator_name") or current_user.get("name") or "QC Operator",
         date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         qty_inspected=crates,
         rejections=rejections,

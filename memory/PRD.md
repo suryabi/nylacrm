@@ -1913,3 +1913,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - SKU colour legend row under toolbar (code + swatch + name for each distinct SKU shown)
 - waitingCrates(b) = sum(stage pending) + (unallocated if created); batches sorted desc within each group so waiting batches float up
 - Amber "N waiting" badge on cards with crates awaiting QC; frontend-only (QCStation.js step 1), self-tested via screenshot
+
+## 2026-06 (fork): QC Kiosk Login — COMPLETE & VERIFIED
+- Face-recognition kiosk gate on /qc-station (on-device @vladmandic/face-api, descriptors only, no images stored) + PIN fallback + manual name pick
+- P0 hang FIXED: tfjs wasm backend crash on non-WebGL devices — now explicit webgl→cpu backend init in faceRecognition.js
+- E2E verified: face-scan mode streams/scans, manual pick → PIN login (Raju/1234) → operator attribution on QC captures
+- Endpoints: GET qc-team, GET qc-team/face-index, PUT qc-team/{id}/pin, PUT qc-team/{id}/face, POST qc-team/verify-pin

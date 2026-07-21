@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import axios from 'axios';
 import * as Icons from 'lucide-react';
-import { Loader2, ChevronLeft, Minus, Check, Factory, ArrowRight, MoveRight, RotateCcw, X, Search, LayoutGrid, Layers } from 'lucide-react';
+import { Loader2, ChevronLeft, Minus, Check, Factory, ArrowRight, MoveRight, RotateCcw, X, Search, LayoutGrid, Layers, LogOut, UserCircle2 } from 'lucide-react';
+import QCKioskLogin from '../components/qc/QCKioskLogin';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -89,6 +90,9 @@ export default function QCStation() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [skuFilter, setSkuFilter] = useState('all');
   const [groupBy, setGroupBy] = useState('sku');       // 'sku' | 'status'
+  const [operator, setOperator] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('qc_operator') || 'null'); } catch { return null; }
+  });
   const deepLinked = useRef(false);
 
   const fetchInit = useCallback(async () => {
@@ -174,10 +178,10 @@ export default function QCStation() {
 
   const openStage = async (st) => {
     setStage(st);
-    // Resume an open session if one exists, else start fresh
+    const opParam = operator ? `&qc_operator_id=${operator.id}` : '';
     try {
       const { data: active } = await axios.get(
-        `${API_URL}/production/qc-sessions/active?batch_id=${batch.id}&stage_id=${st.id}`,
+        `${API_URL}/production/qc-sessions/active?batch_id=${batch.id}&stage_id=${st.id}${opParam}`,
         { headers: getAuthHeaders() }
       );
       if (active) {
@@ -185,7 +189,9 @@ export default function QCStation() {
         setCrates(active.crates_inspected || 0);
       } else {
         const { data } = await axios.post(`${API_URL}/production/qc-sessions`,
-          { batch_id: batch.id, stage_id: st.id, crates_inspected: 0 }, { headers: getAuthHeaders() });
+          { batch_id: batch.id, stage_id: st.id, crates_inspected: 0,
+            qc_operator_id: operator?.id, qc_operator_name: operator?.name },
+          { headers: getAuthHeaders() });
         setSession(data);
         setCrates(0);
       }
@@ -252,7 +258,29 @@ export default function QCStation() {
 
   const resetAll = () => { setStep('batch'); setBatch(null); setStage(null); setSession(null); setCrates(0); };
 
+  const logout = () => {
+    localStorage.removeItem('qc_operator');
+    setOperator(null);
+    resetAll();
+  };
+
   if (loading) return <div className="flex items-center justify-center h-[70vh]"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>;
+
+  // Kiosk gate: require a QC operator (face/PIN) before anything else.
+  if (!operator) return <QCKioskLogin onLogin={setOperator} />;
+
+  // Small operator bar shown on every step.
+  const OperatorBar = () => (
+    <div className="flex items-center justify-end mb-3">
+      <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-full pl-2 pr-1 py-1" data-testid="qc-operator-bar">
+        <UserCircle2 size={18} className="text-emerald-500" />
+        <span className="text-sm font-semibold text-slate-700" data-testid="qc-operator-name">{operator.name}</span>
+        <button onClick={logout} className="ml-1 w-7 h-7 rounded-full hover:bg-red-50 flex items-center justify-center" title="Logout" data-testid="qc-logout-btn">
+          <LogOut size={14} className="text-red-500" />
+        </button>
+      </div>
+    </div>
+  );
 
   // ── STEP 1: Batch selection (filters · grouping · SKU colour-coding) ──
   if (step === 'batch') {
@@ -315,6 +343,7 @@ export default function QCStation() {
 
     return (
       <div className="p-4 sm:p-8 max-w-[1300px] mx-auto" data-testid="qc-station-batch-step">
+        <OperatorBar />
         <div className="mb-5">
           <h1 className="text-3xl font-bold tracking-tight text-slate-800">QC Station</h1>
           <p className="text-slate-500 mt-1">Select a batch to start capturing rejections</p>
@@ -416,6 +445,7 @@ export default function QCStation() {
     const stages = [...(batch.qc_stages || [])].sort((a, b) => a.order - b.order);
     return (
       <div className="p-4 sm:p-8 max-w-[1000px] mx-auto" data-testid="qc-station-stage-step">
+        <OperatorBar />
         <button onClick={resetAll} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4" data-testid="qc-back-to-batches">
           <ChevronLeft size={16} /> Batches
         </button>
@@ -506,9 +536,14 @@ export default function QCStation() {
             <p className="text-sm text-slate-500">{batch.sku_name} · <span className="text-amber-600 font-medium">{pendingFor(batch, stage.id)} crates pending</span> at this stage</p>
           </div>
         </div>
-        <button onClick={discard} className="text-sm text-slate-400 hover:text-red-500 flex items-center gap-1" data-testid="qc-discard">
-          <X size={15} /> Discard
-        </button>
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-xs bg-emerald-50 text-emerald-600 px-2 py-1 rounded-full" data-testid="qc-capture-operator">
+            <UserCircle2 size={13} /> {operator.name}
+          </span>
+          <button onClick={discard} className="text-sm text-slate-400 hover:text-red-500 flex items-center gap-1" data-testid="qc-discard">
+            <X size={15} /> Discard
+          </button>
+        </div>
       </div>
 
       {/* Crates inspected stepper */}

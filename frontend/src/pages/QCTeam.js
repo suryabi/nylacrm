@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { Plus, Pencil, Trash2, Loader2, Users, X, Check } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Users, X, Check, ScanFace, KeyRound, CircleCheck } from 'lucide-react';
+import { FaceEnrollModal, PinModal } from '../components/qc/FaceEnrollModal';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -18,6 +19,8 @@ export default function QCTeam() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: '', role: '' });
   const [saving, setSaving] = useState(false);
+  const [faceMember, setFaceMember] = useState(null);
+  const [pinMember, setPinMember] = useState(null);
 
   const fetchMembers = useCallback(async () => {
     try {
@@ -129,7 +132,8 @@ export default function QCTeam() {
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left px-5 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Name</th>
                 <th className="text-left px-5 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Role</th>
-                <th className="text-right px-5 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium w-24">Actions</th>
+                <th className="text-left px-5 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Kiosk Login</th>
+                <th className="text-right px-5 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium w-40">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -137,8 +141,24 @@ export default function QCTeam() {
                 <tr key={m.id} className="hover:bg-slate-50 transition-colors" data-testid={`member-row-${m.id}`}>
                   <td className="px-5 py-3 font-medium text-slate-800">{m.name}</td>
                   <td className="px-5 py-3 text-slate-500">{m.role || '-'}</td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full ${m.has_face ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`} data-testid={`face-status-${m.id}`}>
+                        {m.has_face ? <CircleCheck size={11} /> : <ScanFace size={11} />} Face{m.has_face ? ` (${m.face_samples})` : ''}
+                      </span>
+                      <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full ${m.has_pin ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>
+                        <KeyRound size={11} /> PIN
+                      </span>
+                    </div>
+                  </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => setFaceMember(m)} className="p-1.5 hover:bg-emerald-50 rounded-lg" data-testid={`enroll-face-${m.id}`} title="Enrol face">
+                        <ScanFace size={14} className="text-emerald-500" />
+                      </button>
+                      <button onClick={() => setPinMember(m)} className="p-1.5 hover:bg-blue-50 rounded-lg" data-testid={`set-pin-${m.id}`} title="Set PIN">
+                        <KeyRound size={14} className="text-blue-500" />
+                      </button>
                       <button onClick={() => openEdit(m)} className="p-1.5 hover:bg-slate-100 rounded-lg" data-testid={`edit-member-${m.id}`}>
                         <Pencil size={13} className="text-slate-400" />
                       </button>
@@ -153,6 +173,9 @@ export default function QCTeam() {
           </table>
         </div>
       )}
+
+      {faceMember && <FaceEnrollModal member={faceMember} onClose={() => setFaceMember(null)} onDone={fetchMembers} />}
+      {pinMember && <PinModal member={pinMember} onClose={() => setPinMember(null)} onDone={fetchMembers} />}
     </div>
   );
 }

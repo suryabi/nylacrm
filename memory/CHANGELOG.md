@@ -1405,3 +1405,11 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Per-distributor Stock Dashboard tab: new "Branded Stock by Customer" section below Stock by SKU (parent table unchanged; respects Bottles/Default-Crates toggle).
 - Global `/stock-dashboard`: new "Branded Stock" tab with section-count badge.
 - Tested: iteration_323 — backend 17/17 pytest, frontend all criteria pass (`/app/backend/tests/test_iteration_323_branded_stock_sections.py`).
+
+## 2026-06 (fork): QC Kiosk Login P0 fix — /qc-station hang resolved
+- Root cause 1: prior "timeout" was screenshot tool waiting on `networkidle` (camera stream keeps connection alive) — page never actually hung for users.
+- Root cause 2 (real bug): tfjs inside @vladmandic/face-api auto-tried the WASM backend, fetching `.wasm` relative to /static/js/ → SPA returned HTML → WebAssembly compile crash on devices without WebGL.
+- Fix: `initBackend()` in /app/frontend/src/lib/faceRecognition.js — `tf.setBackend('webgl')` (returns bool, doesn't throw) → fallback `tf.setBackend('cpu')` → `tf.ready()`. Failed loadModels no longer caches rejected promise.
+- QCKioskLogin.jsx: model-load failure now shows its own message and doesn't block manual login; camera errors differentiated (denied / not found / unavailable).
+- Verified E2E: kiosk gate renders, face-scan mode streams + scans (fake camera), manual pick → PIN (Raju/1234) → operator bar login works. Backend verify-pin correct/incorrect paths tested via curl. Console clean (0 wasm errors).
+- NOTE: qc-team face/pin endpoints are PUT (not POST): PUT /api/production/qc-team/{id}/pin, PUT .../face
