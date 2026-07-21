@@ -15,6 +15,7 @@ POST   /api/email-templates/{template_id}/render     → render with an entity
                                                        CRM document attachments)
 """
 
+import html as html_lib
 import os
 import re
 import uuid
@@ -244,12 +245,16 @@ async def _resolve_variables(
     return vars_map
 
 
-def _substitute(text: str, vars_map: dict) -> str:
+def _substitute(text: str, vars_map: dict, escape: bool = False) -> str:
     """Replace every {{var}} with the matching value from vars_map. Unknown
-    placeholders collapse to an empty string."""
+    placeholders collapse to an empty string. `escape=True` HTML-escapes each
+    substituted value (SEC-003: prevents stored HTML/script injection)."""
     if not text:
         return text or ""
-    return _PLACEHOLDER_RE.sub(lambda m: str(vars_map.get(m.group(1), "")), text)
+    def _val(m):
+        v = str(vars_map.get(m.group(1), ""))
+        return html_lib.escape(v) if escape else v
+    return _PLACEHOLDER_RE.sub(_val, text)
 
 
 def _to_public(doc: dict, current_user_id: str) -> dict:
@@ -431,7 +436,7 @@ async def render_template(
         "id": tpl["id"],
         "name": tpl["name"],
         "subject": _substitute(tpl.get("subject", ""), vars_map),
-        "body_html": _substitute(tpl.get("body_html", ""), vars_map),
+        "body_html": _substitute(tpl.get("body_html", ""), vars_map, escape=True),
         "to_emails": _substitute(tpl.get("to_emails", ""), vars_map),
         "cc_emails": _substitute(tpl.get("cc_emails", ""), vars_map),
         "bcc_emails": _substitute(tpl.get("bcc_emails", ""), vars_map),

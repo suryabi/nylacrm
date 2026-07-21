@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 334 — Regression tested the three security-audit fixes (SEC-001 tenant binding, SEC-002 CORS allowlist narrowing, SEC-003 email-template HTML escaping) plus auth + core CRUD to make sure nothing else broke. Backend: 16/16 pytest tests pass (test_security_audit_regression.py). Frontend: login UI works, session cookie is SameSite=Lax, dashboard/home renders, /accounts lists 13 tenant-scoped rows, account detail page opens, browser-side cross-tenant fetch (X-Tenant-ID: demo-co) returns 403 'Tenant mismatch' as expected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_security_audit_regression.py",
+    "/app/test_reports/pytest/iteration_334_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "backend/.env still has CORS_ORIGINS=\"*\" which is unused after SEC-002 (default_origins allowlist now controls CORS). Consider deleting the stale key or updating it to match the actual allowlist to avoid future confusion; a dev might reintroduce the vulnerability by reading this env value elsewhere.",
+    "The session cookie is httpOnly + Secure + SameSite=Lax (good). Verify browser flow for OAuth/callback pop-ups that may need SameSite=None; SEC-002 change to Lax could silently break cross-site OAuth callbacks if the redirect origin differs. Not observed in this smoke run but worth a manual check.",
+    "SEC-003 fix hinges on _substitute(text, vars_map, escape=True) for body_html. If a future template variable already contains pre-rendered HTML fragments (e.g. lists), html.escape will double-escape them. Currently no such variable was seen in account_details render, but note this constraint in the render helper docstring.",
+    "SEC-001 _bind_tenant() is applied in get_current_user_from_cookie_or_header only. Any other dependency that reads X-Tenant-ID directly (e.g. background job endpoints, distributor bulk uploads, webhook handlers) must be audited for the same pattern; a grep for 'X-Tenant-ID' in /app/backend beyond deps.py/server.py would be prudent."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_security_audit_regression.py (new)"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100%"},
+  "test_credentials": "admin@nylaairwater.earth / test123 (non-platform-admin, tenant nyla-air-water); surya.yadavalli@nylaairwater.earth / test123 (platform admin)",
+  "seed_data_creation": "One test lead 'TEST_SecAudit Regression Co' is created and deleted per run by test_create_lead_stamps_tenant. No other seed data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login response returns 'session_token' key AND sets an httpOnly session_token cookie (SameSite=Lax). Frontend stores localStorage.token = session_token and sends Bearer. /api/accounts returns paginated shape {data, total, page, page_size, total_pages}, not a raw array. Lead POST /api/leads requires fields 'company' and 'region' (both) in payload. Platform-admin override: passing X-Tenant-ID: demo-co as surya.yadavalli@nylaairwater.earth returns demo-co data; as admin@nylaairwater.earth returns 403 'Tenant mismatch'. CORS must be tested on http://localhost:8001 directly (the public ingress injects its own permissive CORS). The exact allowlist tested and confirmed: preview URL (design-workflow-hub-11.preview.emergentagent.com), crm.nylaairwater.earth (regex .nylaairwater.earth), and rejects arbitrary *.emergent.host + attacker.example.com.",
+  "rca of the issue": "Not applicable — this was a regression pass for a security fix that was already implemented by the main agent. No new bugs found. All three SEC fixes and dependent flows are behaving as designed."
+}

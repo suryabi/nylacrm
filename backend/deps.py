@@ -8,8 +8,29 @@ from fastapi import HTTPException, Request, Response
 from fastapi.security import HTTPBearer
 from config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION_HOURS
 from database import db
+from core.tenant import set_current_tenant
 
 security = HTTPBearer()
+
+
+def _bind_tenant(user: dict, request: Request) -> dict:
+    """SEC-001: derive the tenant from the authenticated user, never from the
+    client-supplied X-Tenant-ID header. A mismatching header is rejected
+    (403) unless the caller is a platform admin."""
+    user_tid = (user.get('tenant_id') or '').strip()
+    if not user_tid:
+        return user
+    header_tid = (request.headers.get('X-Tenant-ID') or '').strip()
+    if header_tid and header_tid != user_tid:
+        from routes.platform_admin import is_platform_admin
+        if is_platform_admin(user):
+            set_current_tenant(header_tid)
+            request.state.tenant_id = header_tid
+            return user
+        raise HTTPException(status_code=403, detail='Tenant mismatch')
+    set_current_tenant(user_tid)
+    request.state.tenant_id = user_tid
+    return user
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -46,7 +67,7 @@ async def get_current_user_from_cookie_or_header(request: Request):
                     # Valid session - get user
                     user = await db.users.find_one({'id': session['user_id']}, {'_id': 0, 'password': 0})
                     if user:
-                        return user
+                        return _bind_tenant(user, request)
     
     # Fall back to Authorization header (JWT or session token)
     auth_header = request.headers.get('Authorization')
@@ -71,7 +92,7 @@ async def get_current_user_from_cookie_or_header(request: Request):
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
             user = await db.users.find_one({'id': payload['user_id']}, {'_id': 0, 'password': 0})
             if user:
-                return user
+                return _bind_tenant(user, request)
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail='Token expired')
         except jwt.InvalidTokenError:
@@ -119,7 +140,7 @@ async def create_session(user_id: str, response: Response = None):
             value=session_token,
             httponly=True,
             secure=True,
-            samesite='none',
+            samesite='lax',
             max_age=JWT_EXPIRATION_HOURS * 3600
         )
     

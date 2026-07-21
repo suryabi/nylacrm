@@ -2991,7 +2991,7 @@ async def google_oauth_callback(request: Request, response: Response):
             value=session_token,
             httponly=True,
             secure=True,
-            samesite='none',  # Required for OAuth callback
+            samesite='lax',  # SEC-002: Lax is safe (frontend + API are same-origin)
             max_age=7*24*60*60,
             path='/'
         )
@@ -3072,7 +3072,7 @@ async def exchange_google_session(request: Request, response: Response):
         value=session_token,
         httponly=True,
         secure=True,
-        samesite='none',
+        samesite='lax',
         max_age=7*24*60*60,
         path='/'
     )
@@ -3120,7 +3120,9 @@ async def get_current_user_from_cookie_or_header(request: Request):
     if not user_doc:
         raise HTTPException(status_code=401, detail='User not found')
     
-    return user_doc
+    # SEC-001: bind tenant context to the authenticated user's tenant
+    from deps import _bind_tenant
+    return _bind_tenant(user_doc, request)
 
 @api_router.get("/auth/me")
 async def get_current_user_info(request: Request):
@@ -3440,7 +3442,7 @@ async def login(credentials: UserLogin, request: Request, response: Response):
         value=session_token,
         httponly=True,
         secure=True,
-        samesite='none',
+        samesite='lax',
         max_age=7*24*60*60,
         path='/'
     )
@@ -11007,29 +11009,30 @@ app.include_router(api_router)
 
 # CORS configuration - reads from environment variable for deployment flexibility
 # When credentials are enabled, we cannot use wildcard '*' - must specify exact origins
-cors_origins_env = os.environ.get('CORS_ORIGINS', '')
+cors_origins_env = os.environ.get('CORS_ORIGINS', '').strip().strip('"').strip("'")
 
 # Default allowed origins for production and development
 default_origins = [
     'https://crm.nylaairwater.earth',
+    'https://design-workflow-hub-11.preview.emergentagent.com',
+    'https://warehouse-qc-engine.emergent.host',
     'http://localhost:3000',
     'http://127.0.0.1:3000'
 ]
 
 if cors_origins_env and cors_origins_env != '*':
-    cors_origins = [origin.strip() for origin in cors_origins_env.split(',')]
+    cors_origins = list(default_origins) + [origin.strip() for origin in cors_origins_env.split(',') if origin.strip() and origin.strip() != '*']
 else:
     cors_origins = list(default_origins)
 
-# Regex to allow any subdomain under our known production/preview domains.
-# This covers:
-#   - https://*.emergent.host (Emergent native deployment URLs)
-#   - https://*.emergentagent.com and https://design-workflow-hub-11.preview.emergentagent.com (preview URLs)
-#   - https://*.nylaairwater.earth (custom tenant domains)
-#   - https://*.briefingiq.com (external integration partner)
+# SEC-002: credentialed CORS must NOT trust arbitrary sibling apps on the
+# shared platform domains (*.emergent.host / *.emergentagent.com). Only
+# subdomains of domains we own remain regex-allowed; our exact preview and
+# production URLs are in the explicit allowlist above (extendable via the
+# CORS_ORIGINS env var).
 cors_origin_regex = (
     r"https://([a-zA-Z0-9\-]+\.)*"
-    r"(emergent\.host|emergentagent\.com|nylaairwater\.earth|briefingiq\.com)$"
+    r"(nylaairwater\.earth|briefingiq\.com)$"
 )
 
 app.add_middleware(
