@@ -4,11 +4,11 @@ import axios from 'axios';
 import { Loader2, ScanFace, Users, KeyRound, ArrowLeft, ShieldCheck, Check, Eye } from 'lucide-react';
 import {
   loadModels, getDescriptor, getFullDetection, matchDescriptor, eyeOpenness,
-  CONFIRM_FRAMES, EAR_CLOSED, EAR_OPEN,
+  createBlinkDetector, CONFIRM_FRAMES,
 } from '../../lib/faceRecognition';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-const LIVENESS_TIMEOUT = 8000;
+const LIVENESS_TIMEOUT = 12000;
 
 function getAuthHeaders() {
   const token = localStorage.getItem('token');
@@ -24,7 +24,7 @@ export default function QCKioskLogin({ onLogin }) {
   const streakRef = useRef({ id: null, count: 0 });
   const phaseRef = useRef('scan');       // scan | liveness | success
   const candidateRef = useRef(null);
-  const blinkRef = useRef({ closed: false, started: 0 });
+  const blinkRef = useRef({ detect: null, started: 0 });
   const stoppedRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
@@ -70,7 +70,7 @@ export default function QCKioskLogin({ onLogin }) {
               if (streakRef.current.count >= CONFIRM_FRAMES) {
                 candidateRef.current = member;
                 setCandidate(member);
-                blinkRef.current = { closed: false, started: Date.now() };
+                blinkRef.current = { detect: createBlinkDetector(), started: Date.now() };
                 setPhaseBoth('liveness');
               }
             } else {
@@ -79,15 +79,13 @@ export default function QCKioskLogin({ onLogin }) {
           }
         } else if (phaseRef.current === 'liveness') {
           if (Date.now() - blinkRef.current.started > LIVENESS_TIMEOUT) {
-            toast.error("Couldn't verify a blink — let's try again");
+            toast.error("Couldn't verify a blink — face the camera and blink slowly");
             backToScan();
           } else {
             const det = await getFullDetection(videoRef.current, false);
             if (det) {
-              const ear = eyeOpenness(det.landmarks);
-              if (ear < EAR_CLOSED) {
-                blinkRef.current.closed = true;
-              } else if (blinkRef.current.closed && ear > EAR_OPEN) {
+              const blinked = blinkRef.current.detect(eyeOpenness(det.landmarks));
+              if (blinked) {
                 // Blink complete → final identity re-check before signing in.
                 const full = await getFullDetection(videoRef.current, true);
                 const m = full ? matchDescriptor(Array.from(full.descriptor), indexRef.current).member : null;
@@ -103,7 +101,7 @@ export default function QCKioskLogin({ onLogin }) {
         }
       } catch { /* ignore frame errors */ }
       if (!cancelled && !stoppedRef.current) {
-        timerRef.current = setTimeout(tick, phaseRef.current === 'liveness' ? 130 : 600);
+        timerRef.current = setTimeout(tick, phaseRef.current === 'liveness' ? 40 : 600);
       }
     };
 

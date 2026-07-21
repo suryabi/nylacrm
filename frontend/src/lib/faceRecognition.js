@@ -82,6 +82,27 @@ export function eyeOpenness(landmarks) {
   return (ear(landmarks.getLeftEye()) + ear(landmarks.getRightEye())) / 2;
 }
 
+// Adaptive blink detector: learns YOUR open-eye baseline, then detects a
+// relative dip (close) followed by recovery (open). Works across cameras/faces.
+export function createBlinkDetector() {
+  let baseline = null;
+  let frames = 0;
+  let closed = false;
+  return (ear) => {
+    frames += 1;
+    if (baseline === null) { baseline = ear; return false; }
+    if (!closed && ear > baseline * 0.85) baseline = baseline * 0.75 + ear * 0.25;
+    if (frames < 3) return false;
+    if (!closed && ear < baseline * 0.76) {
+      closed = true;
+    } else if (closed && ear > baseline * 0.9) {
+      closed = false;
+      return true;
+    }
+    return false;
+  };
+}
+
 // Quality gate: confident detection and face large enough in frame.
 export function isGoodFace(det, inputWidth = 480) {
   return !!det && det.detection.score >= 0.5 && det.detection.box.width >= inputWidth * 0.2;

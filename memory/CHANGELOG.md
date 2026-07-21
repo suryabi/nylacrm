@@ -1438,3 +1438,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Minus (−) on a tile now shows an in-tile confirmation overlay ("Remove 1 × {reason}?" Cancel/Remove), auto-dismisses after 5s; only Remove calls tap(id,-1)
 - LEARNING: parallel search_replace calls on the SAME file raced and corrupted QCStation.js (duplicated trailing JSX) — always edit the same file sequentially
 - Verified E2E: tap→count 1, minus→overlay, cancel→still 1, remove→0, discard cleanup
+
+## 2026-06 (fork): Blink liveness fix — adaptive detector (user reported constant timeout)
+- Root cause: fixed EAR thresholds (0.21/0.27) don't fit all faces/cameras, and 130ms poll + slow per-frame detection missed the ~150ms closed-eye moment
+- createBlinkDetector() in faceRecognition.js: learns per-person open-eye baseline (EMA), blink = dip below 76% of baseline then recovery above 90%
+- Liveness loop now runs back-to-back (40ms delay) for max frame rate; timeout 8s → 12s; prompt asks to "blink slowly"
+- Compile + kiosk smoke verified; real blink needs on-tablet retest by user
