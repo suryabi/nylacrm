@@ -1686,7 +1686,7 @@ async def create_qc_team_member(data: QCTeamMemberCreate, current_user: dict = D
 
 @router.put("/qc-team/{member_id}/face")
 async def enroll_qc_face(member_id: str, data: QCFaceEnroll, current_user: dict = Depends(get_current_user)):
-    """Store (append) numeric face signatures for a QC team member."""
+    """Store face signatures for a QC team member (replaces any previous enrollment)."""
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
     member = await tdb.qc_team.find_one({"id": member_id, "tenant_id": tenant_id})
@@ -1695,8 +1695,7 @@ async def enroll_qc_face(member_id: str, data: QCFaceEnroll, current_user: dict 
     clean = [d for d in data.descriptors if isinstance(d, list) and len(d) == 128]
     if not clean:
         raise HTTPException(status_code=400, detail="No valid face signatures provided")
-    existing = member.get("face_descriptors") or []
-    updated = (existing + clean)[-10:]  # keep up to 10 samples
+    updated = clean[-10:]  # keep up to 10 samples
     await tdb.qc_team.update_one({"id": member_id},
         {"$set": {"face_descriptors": updated, "updated_at": datetime.now(timezone.utc).isoformat()}})
     return {"message": "Face enrolled", "face_samples": len(updated)}

@@ -1422,3 +1422,7 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 ## 2026-06 (fork): Face recognition hardening (minimal core)
 - MATCH_THRESHOLD 0.5 → 0.45 (stricter); new CONFIRM_FRAMES=3 in faceRecognition.js
 - QCKioskLogin: login now requires 3 consecutive frames matching the same member (streakRef); different-member match resets streak, no-face frames keep it; scan interval 1200ms → 600ms (login still ~1.8s)
+
+## 2026-06 (fork): Face re-enrollment now REPLACES previous signatures
+- PUT /api/production/qc-team/{id}/face changed from append (last-10) to full replace
+- Verified via curl: enroll 3 samples → re-enroll 2 → index holds only the 2 new ones; test data cleaned up
