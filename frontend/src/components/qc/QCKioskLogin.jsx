@@ -32,7 +32,6 @@ export default function QCKioskLogin({ onLogin }) {
     if (scanRef.current) clearInterval(scanRef.current);
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     const op = { id: member.id, name: member.name, role: member.role || '' };
-    localStorage.setItem('qc_operator', JSON.stringify(op));
     toast.success(`Welcome, ${member.name}`);
     onLogin(op);
   }, [onLogin]);

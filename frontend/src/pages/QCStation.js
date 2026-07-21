@@ -90,9 +90,7 @@ export default function QCStation() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [skuFilter, setSkuFilter] = useState('all');
   const [groupBy, setGroupBy] = useState('sku');       // 'sku' | 'status'
-  const [operator, setOperator] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('qc_operator') || 'null'); } catch { return null; }
-  });
+  const [operator, setOperator] = useState(null); // in-memory only: leaving the page re-triggers kiosk login
   const deepLinked = useRef(false);
 
   const fetchInit = useCallback(async () => {
@@ -259,7 +257,6 @@ export default function QCStation() {
   const resetAll = () => { setStep('batch'); setBatch(null); setStage(null); setSession(null); setCrates(0); };
 
   const logout = () => {
-    localStorage.removeItem('qc_operator');
     setOperator(null);
     resetAll();
   };

@@ -1413,3 +1413,8 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - QCKioskLogin.jsx: model-load failure now shows its own message and doesn't block manual login; camera errors differentiated (denied / not found / unavailable).
 - Verified E2E: kiosk gate renders, face-scan mode streams + scans (fake camera), manual pick → PIN (Raju/1234) → operator bar login works. Backend verify-pin correct/incorrect paths tested via curl. Console clean (0 wasm errors).
 - NOTE: qc-team face/pin endpoints are PUT (not POST): PUT /api/production/qc-team/{id}/pin, PUT .../face
+
+## 2026-06 (fork): QC Kiosk re-authentication on every visit
+- Operator session is now in-memory only (removed qc_operator localStorage persistence in QCStation.js + QCKioskLogin.jsx)
+- Leaving /qc-station and returning always re-triggers the face/PIN kiosk gate
+- Verified E2E: entry gate → login (Suresh) → navigate to /leads → return → gate re-shown
