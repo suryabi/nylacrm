@@ -1457,3 +1457,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - FaceEnrollModal now accepts onSave/title props (reused for both QC team and CRM user enrollment)
 - TESTED: 7 backend curl scenarios (status/enroll/replace/login-ok/wrong-device/wrong-face/delete) + 7 UI flows via screenshots. Real-face E2E needs user device.
 - integration_expert playbook consulted (server-side matching + hashed device tokens confirmed as best practice)
+
+## 2026-06 (fork): Admin toggle to enable/disable Face ID for regular users
+- tenants.auth_config.face_id_enabled (default true). QC kiosk face login untouched.
+- Backend: face_auth.py _face_id_enabled() gate on /face/enroll (403) + /face/login (403); /face/status returns face_id_enabled; tenant_registration.py public /info exposes flag
+- Frontend: Switch (data-testid toggle-face-id) in TenantSettings → Settings tab auth section; FaceIdSetupPrompt suppresses prompt + sidebar setup (toast) and clears face_enrolled_device when disabled; Login page hides Face ID button via tenantInfo authConfig
+- TESTED: 9 curl scenarios (default on, disable→status/enroll/login blocked, public info, re-enable, QC team unaffected) + settings UI toggle screenshot (renders checked)

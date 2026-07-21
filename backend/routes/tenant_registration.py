@@ -193,7 +193,8 @@ async def get_tenant_public_info(tenant_id: str):
     auth_config_public = {
         "allow_password_login": auth_config.get('allow_password_login', True),
         "google_workspace_enabled": google_ws.get('enabled', False),
-        "google_workspace_domain": google_ws.get('allowed_domain', None)
+        "google_workspace_domain": google_ws.get('allowed_domain', None),
+        "face_id_enabled": auth_config.get('face_id_enabled', True)
     }
     
     # Build branding

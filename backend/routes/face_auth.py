@@ -35,18 +35,27 @@ def _distance(a, b):
     return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
 
 
+async def _face_id_enabled():
+    """Tenant-level switch for regular-user Face ID (QC kiosk unaffected)."""
+    tenant = await db.tenants.find_one({'tenant_id': get_current_tenant_id()}, {'_id': 0, 'auth_config': 1})
+    return (tenant or {}).get('auth_config', {}).get('face_id_enabled', True) is not False
+
+
 @router.get("/face/status")
 async def face_status(current_user: dict = Depends(get_current_user)):
     doc = await db.user_face_auth.find_one({'user_id': current_user['id']}, {'_id': 0})
     return {
         'enrolled': bool(doc and doc.get('descriptors')),
         'prompt_seen': bool(doc and doc.get('prompt_seen')),
+        'face_id_enabled': await _face_id_enabled(),
     }
 
 
 @router.post("/face/enroll")
 async def face_enroll(data: FaceEnrollIn, current_user: dict = Depends(get_current_user)):
     """Replace the user's Face ID enrollment and trust this device."""
+    if not await _face_id_enabled():
+        raise HTTPException(status_code=403, detail='Face ID is disabled by your workspace admin')
     clean = [d for d in data.descriptors if isinstance(d, list) and len(d) == 128][:MAX_DESCRIPTORS]
     if not clean:
         raise HTTPException(status_code=400, detail='No valid face signatures provided')
@@ -97,6 +106,8 @@ async def face_remove(current_user: dict = Depends(get_current_user)):
 @router.post("/face/login")
 async def face_login(data: FaceLoginIn, request: Request, response: Response):
     """Public: authenticate by face descriptor + trusted device token."""
+    if not await _face_id_enabled():
+        raise HTTPException(status_code=403, detail='Face ID login is disabled by your workspace admin')
     from deps import check_login_lockout, record_login_failure, clear_login_failures, get_client_ip
     login_ip = get_client_ip(request)
     await check_login_lockout('__faceid__', login_ip)

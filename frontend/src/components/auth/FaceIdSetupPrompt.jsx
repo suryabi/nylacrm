@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { toast } from 'sonner';
 import { ScanFace } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { FaceEnrollModal } from '../qc/FaceEnrollModal';
@@ -20,20 +21,27 @@ export default function FaceIdSetupPrompt() {
   const { user } = useAuth();
   const [showPrompt, setShowPrompt] = useState(false);
   const [showEnroll, setShowEnroll] = useState(false);
+  const enabledRef = React.useRef(true);
 
   useEffect(() => {
-    const openSetup = () => setShowEnroll(true);
+    const openSetup = () => {
+      if (!enabledRef.current) { toast.info('Face ID is disabled by your workspace admin'); return; }
+      setShowEnroll(true);
+    };
     window.addEventListener('open-face-setup', openSetup);
     return () => window.removeEventListener('open-face-setup', openSetup);
   }, []);
 
   useEffect(() => {
-    if (!user || sessionStorage.getItem('faceid_prompt_checked')) return;
-    sessionStorage.setItem('faceid_prompt_checked', '1');
+    if (!user) return;
     (async () => {
       try {
         const { data } = await axios.get(`${API_URL}/auth/face/status`, { headers: authHeaders(), withCredentials: true });
+        enabledRef.current = data.face_id_enabled !== false;
+        if (!enabledRef.current) { localStorage.removeItem('face_enrolled_device'); return; }
         if (data.enrolled) localStorage.setItem('face_enrolled_device', '1');
+        if (sessionStorage.getItem('faceid_prompt_checked')) return;
+        sessionStorage.setItem('faceid_prompt_checked', '1');
         if (!data.enrolled && !data.prompt_seen) setTimeout(() => setShowPrompt(true), 1200);
       } catch { /* silent */ }
     })();

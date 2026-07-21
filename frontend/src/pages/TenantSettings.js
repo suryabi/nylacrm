@@ -1876,6 +1876,21 @@ export default function TenantSettings() {
                   data-testid="toggle-password-login"
                 />
               </div>
+
+              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                <div>
+                  <p className="font-medium">Face ID Login</p>
+                  <p className="text-sm text-muted-foreground">Users can set up and sign in with Face ID on trusted devices (QC Station kiosk is unaffected)</p>
+                </div>
+                <Switch 
+                  checked={authConfig.face_id_enabled !== false} 
+                  onCheckedChange={(checked) => setAuthConfig(prev => ({
+                    ...prev,
+                    face_id_enabled: checked
+                  }))}
+                  data-testid="toggle-face-id"
+                />
+              </div>
             </CardContent>
           </Card>
           

@@ -58,8 +58,7 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(!!rememberedEmail);
   const [loading, setLoading] = useState(false);
   const [showFaceLogin, setShowFaceLogin] = useState(false);
-  const faceIdAvailable = localStorage.getItem('face_enrolled_device') === '1';
-  const [showRegister, setShowRegister] = useState(false);
+  const faceIdAvailable = localStorage.getItem('face_enrolled_device') === '1';  const [showRegister, setShowRegister] = useState(false);
   const [tenants, setTenants] = useState([]);
   const [selectedTenant, setSelectedTenant] = useState(tenantFromUrl || rememberedTenant);
   const [loadingTenants, setLoadingTenants] = useState(true);
@@ -389,7 +388,7 @@ export default function Login() {
                   <Button type="submit" disabled={loading} className="w-full h-12">
                     {loading ? 'Signing in...' : 'Sign In'}
                   </Button>
-                  {faceIdAvailable && (
+                  {faceIdAvailable && authConfig.face_id_enabled !== false && (
                     <Button type="button" variant="outline" className="w-full h-12"
                       onClick={() => setShowFaceLogin(true)} data-testid="face-login-button">
                       <ScanFace className="mr-2 h-5 w-5" /> Sign in with Face ID
