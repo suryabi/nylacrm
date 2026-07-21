@@ -1861,3 +1861,19 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Backend GET /production/qc-sessions/live: all OPEN qc_sessions tenant-wide, enriched with total_rejected, reason breakdown (name+color+count), started/last-activity times, active operator count
 - Frontend auto-refreshes every 5s; cards show operator avatar+active/idle status, batch/stage, crates/rejected/rej-per-crate, top-reason chips; live pulse header
 - Self-tested: curl (2 live sessions rendered) + UI screenshot (2 cards); reuses qc_sessions from QC Station (tested iteration_335)
+
+## 2026-06 (fork): QC Live Board enhancements (4)
+- Today floor summary strip: crates inspected, rejected, inspections submitted, live sessions (submitted inspections today + open sessions)
+- Reject Rate Guardrail: per-session reject_rate_pct vs tenant threshold -> card turns red + "Reject rate high" badge when over
+- Stale Session Alert: sessions idle beyond idle_alert_minutes -> amber card + "Idle — check in" badge + amber avatar
+- Big-Screen wall mode: fullscreen toggle + dark high-contrast 4-col layout for the QC floor monitor
+- New qc_settings collection (tenant): acceptable_reject_rate_pct (default 5), idle_alert_minutes (default 10); GET/PUT /production/qc-settings; inline settings popover on the board
+- Sessions now store bottles_per_crate (for accurate reject 
+## 2026-06 (fork): QC Live Board enhancements (4)
+- Today floor summary strip: crates inspected, rejected, inspections submitted, live sessions (submitted inspections today + open sessions)
+- Reject Rate Guardrail: per-session reject_rate_pct vs tenant threshold -> card turns red + "Reject rate high" badge when over
+- Stale Session Alert: sessions idle beyond idle_alert_minutes -> amber card + "Idle — check in" badge + amber avatar
+- Big-Screen wall mode: fullscreen toggle + dark high-contrast 4-col layout for the QC floor monitor
+- New qc_settings collection (tenant): acceptable_reject_rate_pct (default 5), idle_alert_minutes (default 10); GET/PUT /production/qc-settings; inline settings popover on the board
+- Sessions now store bottles_per_crate (for accurate reject %); live endpoint returns settings + today + per-session rate/over_threshold
+- Self-tested via curl (over_threshold at 50pct, today summary) + screenshots (light board red+amber cards + today strip; dark wall mode)

@@ -1777,12 +1777,54 @@ def _public_session(s: dict) -> dict:
     return {k: v for k, v in (s or {}).items() if k != "_id"}
 
 
+DEFAULT_ACCEPTABLE_REJECT_RATE_PCT = 5.0
+
+
+async def _get_qc_settings(tdb, tenant_id: str) -> dict:
+    doc = await tdb.qc_settings.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    if not doc:
+        return {"acceptable_reject_rate_pct": DEFAULT_ACCEPTABLE_REJECT_RATE_PCT,
+                "idle_alert_minutes": 10}
+    return {
+        "acceptable_reject_rate_pct": float(doc.get("acceptable_reject_rate_pct", DEFAULT_ACCEPTABLE_REJECT_RATE_PCT)),
+        "idle_alert_minutes": int(doc.get("idle_alert_minutes", 10)),
+    }
+
+
+class QCSettingsUpdate(BaseModel):
+    acceptable_reject_rate_pct: Optional[float] = None
+    idle_alert_minutes: Optional[int] = None
+
+
+@router.get("/qc-settings")
+async def get_qc_settings(current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    return await _get_qc_settings(get_tenant_db(), tenant_id)
+
+
+@router.put("/qc-settings")
+async def update_qc_settings(data: QCSettingsUpdate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if data.acceptable_reject_rate_pct is not None:
+        updates["acceptable_reject_rate_pct"] = max(0.0, float(data.acceptable_reject_rate_pct))
+    if data.idle_alert_minutes is not None:
+        updates["idle_alert_minutes"] = max(1, int(data.idle_alert_minutes))
+    await tdb.qc_settings.update_one({"tenant_id": tenant_id}, {"$set": updates}, upsert=True)
+    return await _get_qc_settings(tdb, tenant_id)
+
+
 @router.get("/qc-sessions/live")
 async def live_qc_sessions(current_user: dict = Depends(get_current_user)):
     """Supervisor board: all OPEN QC Station sessions across the tenant right
-    now, enriched with per-session totals and recency."""
+    now, enriched with per-session totals, reject-rate vs threshold, and a
+    floor-wide 'today' summary."""
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
+    settings = await _get_qc_settings(tdb, tenant_id)
+    threshold = settings["acceptable_reject_rate_pct"]
+
     sessions = await tdb.qc_sessions.find(
         {"tenant_id": tenant_id, "status": "open"}, {"_id": 0}
     ).sort("updated_at", -1).to_list(500)
@@ -1794,9 +1836,17 @@ async def live_qc_sessions(current_user: dict = Depends(get_current_user)):
     rmap = {r["id"]: r for r in reasons}
 
     out = []
+    live_crates = 0
+    live_rejected = 0
     for s in sessions:
         counts = s.get("counts", {}) or {}
         total_rejected = sum(int(c) for c in counts.values())
+        crates = int(s.get("crates_inspected", 0) or 0)
+        bpc = int(s.get("bottles_per_crate", 1) or 1)
+        bottles_inspected = crates * bpc
+        reject_rate_pct = round((total_rejected / bottles_inspected) * 100, 1) if bottles_inspected > 0 else 0.0
+        live_crates += crates
+        live_rejected += total_rejected
         breakdown = sorted(
             [
                 {
@@ -1819,15 +1869,37 @@ async def live_qc_sessions(current_user: dict = Depends(get_current_user)):
             "stage_id": s.get("stage_id"),
             "stage_name": s.get("stage_name"),
             "stage_type": s.get("stage_type"),
-            "crates_inspected": s.get("crates_inspected", 0),
+            "crates_inspected": crates,
+            "bottles_per_crate": bpc,
             "total_rejected": total_rejected,
+            "reject_rate_pct": reject_rate_pct,
+            "over_threshold": bottles_inspected > 0 and reject_rate_pct > threshold,
             "breakdown": breakdown,
             "started_at": s.get("created_at"),
             "last_activity_at": s.get("updated_at"),
         })
+
+    # ── Floor-wide "today" summary: submitted inspections today + live sessions ──
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    submitted = await tdb.inspections.find(
+        {"tenant_id": tenant_id, "inspected_at": {"$gte": today}},
+        {"_id": 0, "qty_inspected": 1, "qty_rejected": 1},
+    ).to_list(5000)
+    submitted_crates = sum(int(i.get("qty_inspected", 0) or 0) for i in submitted)
+    submitted_rejected = sum(int(i.get("qty_rejected", 0) or 0) for i in submitted)
+    today_crates = submitted_crates + live_crates
+    today_rejected = submitted_rejected + live_rejected
+
     return {
         "sessions": out,
         "active_operators": len({s["operator_id"] for s in out if s.get("operator_id")}),
+        "settings": settings,
+        "today": {
+            "crates_inspected": today_crates,
+            "rejected": today_rejected,
+            "inspections_submitted": len(submitted),
+            "live_sessions": len(out),
+        },
         "as_of": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -1884,6 +1956,7 @@ async def start_qc_session(data: QCSessionStart, current_user: dict = Depends(ge
         "batch_id": data.batch_id,
         "batch_number": batch.get("batch_number") or batch.get("batch_no") or "",
         "sku_name": batch.get("sku_name") or "",
+        "bottles_per_crate": await _effective_bottles_per_crate(tdb, batch),
         "stage_id": data.stage_id,
         "stage_name": stage["name"],
         "stage_type": stage.get("stage_type", "qc"),
