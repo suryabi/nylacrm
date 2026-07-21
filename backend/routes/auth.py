@@ -61,15 +61,21 @@ async def register(user_input: UserCreate):
 
 
 @router.post("/login")
-async def login(credentials: UserLogin, response: Response):
+async def login(credentials: UserLogin, request: Request, response: Response):
     """Login with email and password"""
+    from deps import check_login_lockout, record_login_failure, clear_login_failures, get_client_ip
+    login_ip = get_client_ip(request)
+    await check_login_lockout(credentials.email, login_ip)
     tdb = get_tdb()
     user_doc = await tdb.users.find_one({'email': credentials.email}, {'_id': 0})
     if not user_doc or not user_doc.get('password') or not verify_password(credentials.password, user_doc['password']):
+        await record_login_failure(credentials.email, login_ip)
         raise HTTPException(status_code=401, detail='Invalid credentials')
     
     if not user_doc.get('is_active', True):
         raise HTTPException(status_code=401, detail='Account is inactive')
+    
+    await clear_login_failures(credentials.email, login_ip)
     
     session_token = str(uuid.uuid4())
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
@@ -88,7 +94,7 @@ async def login(credentials: UserLogin, response: Response):
         value=session_token,
         httponly=True,
         secure=True,
-        samesite='none',
+        samesite='lax',
         max_age=7*24*60*60,
         path='/'
     )
@@ -226,7 +232,7 @@ async def google_oauth_callback(request: Request, response: Response):
             value=session_token,
             httponly=True,
             secure=True,
-            samesite='none',
+            samesite='lax',
             max_age=7*24*60*60,
             path='/'
         )
@@ -300,7 +306,7 @@ async def exchange_google_session(request: Request, response: Response):
         value=session_token,
         httponly=True,
         secure=True,
-        samesite='none',
+        samesite='lax',
         max_age=7*24*60*60,
         path='/'
     )
@@ -444,7 +450,7 @@ async def google_workspace_login(request: Request, response: Response):
             value=session_token,
             httponly=True,
             secure=True,
-            samesite='none',
+            samesite='lax',
             max_age=7*24*60*60,
             path='/'
         )

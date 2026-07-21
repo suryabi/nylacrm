@@ -32,6 +32,59 @@ def _bind_tenant(user: dict, request: Request) -> dict:
     request.state.tenant_id = user_tid
     return user
 
+
+# ── Login brute-force protection (Mongo-backed lockout) ──────────────────
+LOCKOUT_MAX_ATTEMPTS = 5
+LOCKOUT_WINDOW_MINUTES = 15
+
+
+def _lockout_ident(email: str, ip: str) -> str:
+    return f"{(ip or 'unknown').strip()}:{(email or '').lower().strip()}"
+
+
+async def check_login_lockout(email: str, ip: str):
+    """Raise 429 if this ip+email pair is currently locked out."""
+    doc = await db.login_attempts.find_one({'identifier': _lockout_ident(email, ip)})
+    locked_until = doc.get('locked_until') if doc else None
+    if locked_until:
+        locked_dt = datetime.fromisoformat(locked_until)
+        now = datetime.now(timezone.utc)
+        if locked_dt > now:
+            mins = int((locked_dt - now).total_seconds() // 60) + 1
+            raise HTTPException(
+                status_code=429,
+                detail=f'Too many failed login attempts. Try again in {mins} minute(s).'
+            )
+
+
+async def record_login_failure(email: str, ip: str):
+    """Count a failed login; lock the ip+email pair after LOCKOUT_MAX_ATTEMPTS
+    failures within the rolling window."""
+    ident = _lockout_ident(email, ip)
+    now = datetime.now(timezone.utc)
+    doc = await db.login_attempts.find_one({'identifier': ident})
+    count = 1
+    if doc and doc.get('last_attempt_at'):
+        last = datetime.fromisoformat(doc['last_attempt_at'])
+        if now - last < timedelta(minutes=LOCKOUT_WINDOW_MINUTES):
+            count = doc.get('count', 0) + 1
+    update = {'count': count, 'last_attempt_at': now.isoformat(), 'locked_until': None}
+    if count >= LOCKOUT_MAX_ATTEMPTS:
+        update['locked_until'] = (now + timedelta(minutes=LOCKOUT_WINDOW_MINUTES)).isoformat()
+        update['count'] = 0
+    await db.login_attempts.update_one({'identifier': ident}, {'$set': update}, upsert=True)
+
+
+async def clear_login_failures(email: str, ip: str):
+    await db.login_attempts.delete_one({'identifier': _lockout_ident(email, ip)})
+
+
+def get_client_ip(request: Request) -> str:
+    ip = request.headers.get('X-Forwarded-For', request.client.host if request.client else 'unknown')
+    if ip and ',' in ip:
+        ip = ip.split(',')[0].strip()
+    return ip or 'unknown'
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 

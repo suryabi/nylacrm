@@ -1839,3 +1839,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Remaining hardening backlog (not done): login rate limiting, stronger password policy (currently 6 chars min)
 - Regression suite added: /app/backend/tests/test_security_audit_regression.py
 - IMPORTANT: production still runs the vulnerable code until user redeploys
+
+## 2026-06 (fork): Login rate limiting (brute-force lockout)
+- Mongo-backed lockout in deps.py: 5 failed attempts per (IP + email) within 15 min -> 429 lockout for 15 min; counter cleared on successful login
+- Applied to both login endpoints (server.py /auth/login and routes/auth.py); login_attempts.identifier index ensured at startup
+- Also fixed 4 remaining samesite=none cookies in routes/auth.py -> lax (SEC-002 completion)
+- Verified via curl: 5x401 -> 429 with friendly message; success clears counter; frontend Login.js already displays the detail message

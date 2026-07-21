@@ -3397,13 +3397,19 @@ async def register(user_input: UserCreate):
 
 @api_router.post("/auth/login")
 async def login(credentials: UserLogin, request: Request, response: Response):
+    from deps import check_login_lockout, record_login_failure, clear_login_failures, get_client_ip
+    login_ip = get_client_ip(request)
+    await check_login_lockout(credentials.email, login_ip)
     # Use db directly (not get_tdb) for login since we don't have tenant context yet
     user_doc = await db.users.find_one({'email': credentials.email}, {'_id': 0})
     if not user_doc or not verify_password(credentials.password, user_doc['password']):
+        await record_login_failure(credentials.email, login_ip)
         raise HTTPException(status_code=401, detail='Invalid credentials')
     
     if not user_doc.get('is_active', True):
         raise HTTPException(status_code=401, detail='Account is inactive')
+    
+    await clear_login_failures(credentials.email, login_ip)
     
     # Create session token (same as Google OAuth flow)
     session_token = str(uuid.uuid4())
@@ -11114,6 +11120,10 @@ async def _ensure_txn_indexes_bg():
         await _ensure_txn_indexes()
     except Exception as e:
         logger.error(f"Failed to ensure accounting_transactions indexes: {e}")
+    try:
+        await db.login_attempts.create_index("identifier")
+    except Exception as e:
+        logger.error(f"Failed to ensure login_attempts index: {e}")
 
 
 @app.on_event("shutdown")
