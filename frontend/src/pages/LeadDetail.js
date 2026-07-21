@@ -56,7 +56,7 @@ import EntityContactsSection from '../components/EntityContactsSection';
 import ProposalCustomizeDialog from '../components/ProposalCustomizeDialog';
 import LeadBottleDesigns from '../components/LeadBottleDesigns';
 import { SectionHeader } from '../components/detail/SectionHeader';
-import AIDraftDialog, { AIAssistButton } from '../components/ai/AIDraftDialog';
+import AIDraftDialog from '../components/ai/AIDraftDialog';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -1219,7 +1219,6 @@ ${userEmail}`;
               <Building2 className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" /><span className="hidden sm:inline">Account</span>
             </Button>
           )}
-          <AIAssistButton onClick={() => setShowAIDraft(true)} />
           <Button onClick={() => navigate(`/leads/${id}/edit`)} data-testid="edit-lead-button" size="sm" className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3">
             <span className="hidden sm:inline">Edit Lead</span>
             <span className="sm:hidden">Edit</span>

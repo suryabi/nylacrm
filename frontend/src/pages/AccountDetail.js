@@ -51,7 +51,7 @@ import AccountZohoLedger from '../components/account/AccountZohoLedger';
 import AccountDocumentsSection from '../components/account/AccountDocumentsSection';
 import InlineComposer from '../components/gmail/InlineComposer';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
-import AIDraftDialog, { AIAssistButton } from '../components/ai/AIDraftDialog';
+import AIDraftDialog from '../components/ai/AIDraftDialog';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -1574,9 +1574,6 @@ ${googleMapsLink}`;
                 <><Share2 className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Share Details</span></>
               )}
             </Button>
-          )}
-          {!isEditing && (
-            <AIAssistButton onClick={() => setShowAIDraft(true)} className="flex-1 sm:flex-none h-9 sm:h-10" />
           )}
           {isEditing && (
             <Button

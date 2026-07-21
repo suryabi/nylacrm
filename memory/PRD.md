@@ -1821,3 +1821,6 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Step 2 = original form, with a Back button. State resets each time the dialog opens.
 - Verified via screenshots (checkbox gating + step transition + back button).
 - NOTE: production deploy on 2026-07-17 20:00 FAILED (deployment timeout waiting to become ready). requirements.txt has emergentintegrations pinned, backend starts clean in preview. If user raises it, run deployment_agent.
+
+## 2026-06 (fork): UI cleanup
+- Removed the "AI Assist" button from the top-right header of Lead Detail and Account Detail pages (Ask Nyla bottom-right avatar remains the single AI entry point).
