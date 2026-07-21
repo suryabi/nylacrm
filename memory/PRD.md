@@ -1877,3 +1877,10 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - New qc_settings collection (tenant): acceptable_reject_rate_pct (default 5), idle_alert_minutes (default 10); GET/PUT /production/qc-settings; inline settings popover on the board
 - Sessions now store bottles_per_crate (for accurate reject %); live endpoint returns settings + today + per-session rate/over_threshold
 - Self-tested via curl (over_threshold at 50pct, today summary) + screenshots (light board red+amber cards + today strip; dark wall mode)
+
+## 2026-06 (fork): QC Live Board — Alerts, Shift Report, Drilldown, Trends
+- Reject Alerts: one-shot per session (atomic reject_alert_sent flag) fired async on tap when reject % crosses threshold; Slack via post_event_message (event qc_reject_alert, skips if bot unconfigured) + email via Resend to qc_settings.alert_emails (fallback: Production Manager/Supervisor users); alert emails editable in Live Board settings popover
+- Shift Report: GET /production/qc-shift-report?date= -> landscape A4 reportlab PDF (per-batch crates/rejected/reject %/top reasons, over-threshold rows red, shift totals); "Shift Report" download button on the board
+- Batch Drilldown: clicking a live card opens modal with stage-by-stage inspection history (reuses GET /batches/{id}/history), reason chips + timestamps + remarks
+- Trend Sparkers: GET /production/qc-reason-trends -> per-reason 24h hourly buckets (submitted inspections by hour + open sessions at current hour); sparkline SVG panel "Today's defect trends"
+- Tested: iteration_336 — 9/9 new + 9/9 regression backend tests pass, all frontend flows verified; new test file /app/backend/tests/test_qc_live_board_enhancements.py
