@@ -1,0 +1,28 @@
+{
+  "summary": "Iteration 336 - QC Live Board enhancements (Reject Alerts, Shift Report PDF, Batch Drilldown, Trend Sparklines) verified end-to-end on backend + frontend. 9/9 new backend pytest cases pass; existing 9 QC Station regression tests still pass. UI verified: shift report PDF downloads, defect trends sparkline renders, alert_emails settings input persists, drill modal opens with stage-by-stage history (QC1: 18 crates / 19 rejected) and reason chips + timestamps, wall mode toggles dark theme, over-threshold red card badge shown at 12.5%. Alert flow: reject_alert_sent=true set atomically on threshold cross (25% > 5%), remains immutable on subsequent taps (verified via /qc-sessions/active). No 500s or new errors in backend logs during the flow.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_qc_live_board_enhancements.py",
+    "/app/backend/tests/test_qc_station.py",
+    "/app/test_reports/pytest/iteration_336_qc_live_board.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Alert idempotency uses a single atomic $set with reject_alert_sent guard — correct and race-safe. Good pattern.",
+    "qc-shift-report and qc-reason-trends use ISO string prefix bounds ($gte day, $lt day+'T24') to slice inspections — works because inspected_at is stored as ISO string with 'T' separator. If inspected_at ever changes to datetime type, these queries silently return empty. Consider a small comment or a datetime-aware alt query.",
+    "Sparkline component (SVG polyline) doesn't set a fixed viewBox height for very-tall single-hour spikes; visually still fine since it fills the SVG height, but a note-worthy edge case if only one hour has data (which happens today).",
+    "DrillModal fetches history on open — no loading skeleton visible (just re-renders when data arrives). Minor UX; not a blocker.",
+    "qc-shift-report PDF uses reportlab; date validation missing — an invalid date param would still generate a PDF for that garbage day. Not a security issue but could be tightened."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_qc_live_board_enhancements.py (new — 9 tests: qc-settings alert_emails CRUD 3x, reject-alert one-shot flow, shift report PDF today+empty-day, trends shape + open-session bump, batch history shape)"
+  ],
+  "success_rate": {"backend": "100% (9/9 new + 9/9 regression)", "frontend": "100% (all 4 enhancements + regression items verified)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water) — login uses session_token as Bearer",
+  "seed_data_creation": "Temporary qc-session on batch f0e618dc / stage s4-20d525e8 created for drilldown/red-card UI tests and DISCARDED afterwards. No leftover test data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Live Board enhancement suite: /app/backend/tests/test_qc_live_board_enhancements.py. The test_alert_fires_once_on_threshold_cross uses /api/production/qc-sessions/active (with batch_id+stage_id) to read the full session doc (incl. reject_alert_sent) — the /qc-sessions/live endpoint hides internal flags. Trends hourly buckets are in UTC. Shift-report PDF uses reportlab (landscape A4). Slack/email alert side-effects intentionally NOT verified in preview (no bot configured, Resend not inspected) — presence of the reject_alert_sent flag + immutable reject_alert_at is treated as sufficient proof the alert path fired without raising.",
+  "rca of the issue": "N/A — no bugs found in this iteration."
+}

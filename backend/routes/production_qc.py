@@ -4,6 +4,8 @@ Production QC Tracking Module
 - Production Batches (CRUD)
 - Rejection Cost Rules (per-stage cost config)
 """
+import asyncio
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
@@ -12,6 +14,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from deps import get_current_user, get_user_or_api_key
 from core.tenant import get_current_tenant_id
 from database import db, get_tenant_db
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/production", tags=["Production QC"])
 
@@ -1784,16 +1788,18 @@ async def _get_qc_settings(tdb, tenant_id: str) -> dict:
     doc = await tdb.qc_settings.find_one({"tenant_id": tenant_id}, {"_id": 0})
     if not doc:
         return {"acceptable_reject_rate_pct": DEFAULT_ACCEPTABLE_REJECT_RATE_PCT,
-                "idle_alert_minutes": 10}
+                "idle_alert_minutes": 10, "alert_emails": []}
     return {
         "acceptable_reject_rate_pct": float(doc.get("acceptable_reject_rate_pct", DEFAULT_ACCEPTABLE_REJECT_RATE_PCT)),
         "idle_alert_minutes": int(doc.get("idle_alert_minutes", 10)),
+        "alert_emails": doc.get("alert_emails") or [],
     }
 
 
 class QCSettingsUpdate(BaseModel):
     acceptable_reject_rate_pct: Optional[float] = None
     idle_alert_minutes: Optional[int] = None
+    alert_emails: Optional[List[str]] = None
 
 
 @router.get("/qc-settings")
@@ -1811,8 +1817,82 @@ async def update_qc_settings(data: QCSettingsUpdate, current_user: dict = Depend
         updates["acceptable_reject_rate_pct"] = max(0.0, float(data.acceptable_reject_rate_pct))
     if data.idle_alert_minutes is not None:
         updates["idle_alert_minutes"] = max(1, int(data.idle_alert_minutes))
+    if data.alert_emails is not None:
+        updates["alert_emails"] = [e.strip() for e in data.alert_emails if e and e.strip()]
     await tdb.qc_settings.update_one({"tenant_id": tenant_id}, {"$set": updates}, upsert=True)
     return await _get_qc_settings(tdb, tenant_id)
+
+
+async def _maybe_send_reject_alert(tdb, tenant_id: str, session_id: str):
+    """Fire a one-time Slack + email alert when a live session first crosses
+    the acceptable reject-rate threshold. Best-effort, never raises."""
+    try:
+        session = await tdb.qc_sessions.find_one({"id": session_id, "tenant_id": tenant_id})
+        if not session or session.get("reject_alert_sent"):
+            return
+        settings = await _get_qc_settings(tdb, tenant_id)
+        threshold = settings["acceptable_reject_rate_pct"]
+        crates = int(session.get("crates_inspected") or 0)
+        bpc = int(session.get("bottles_per_crate") or 1)
+        bottles = crates * bpc
+        if bottles <= 0:
+            return
+        total_rejected = sum(int(c) for c in (session.get("counts") or {}).values())
+        rate = round((total_rejected / bottles) * 100, 1)
+        if rate <= threshold:
+            return
+        # Claim the alert atomically so rapid taps only send once
+        res = await tdb.qc_sessions.update_one(
+            {"id": session_id, "reject_alert_sent": {"$ne": True}},
+            {"$set": {"reject_alert_sent": True,
+                      "reject_alert_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        if res.modified_count == 0:
+            return
+
+        batch_label = session.get("batch_number") or session.get("sku_name") or "Batch"
+        summary = (
+            f"QC ALERT: {batch_label} · {session.get('stage_name')} crossed the reject-rate threshold — "
+            f"{rate}% rejected (limit {threshold}%). "
+            f"Operator: {session.get('operator_name')} · {total_rejected} rejected / {crates} crates."
+        )
+
+        # Slack (skipped silently if the tenant hasn't configured the bot)
+        try:
+            from routes.slack import post_event_message
+            await post_event_message(tenant_id, "qc_reject_alert", summary)
+        except Exception:
+            logger.exception("QC reject alert: Slack post failed")
+
+        # Email — configured recipients, else Production Manager/Supervisor users
+        try:
+            from utils.email_sender import send_email
+            from database import db as _db
+            recipients = settings.get("alert_emails") or []
+            if not recipients:
+                users = await _db.users.find(
+                    {"tenant_id": tenant_id,
+                     "role": {"$in": ["Production Manager", "Production Supervisor"]},
+                     "is_active": {"$ne": False}},
+                    {"_id": 0, "email": 1},
+                ).to_list(50)
+                recipients = [u["email"] for u in users if u.get("email")]
+            html = (
+                f"<h2 style='color:#dc2626'>⚠ QC Reject-Rate Alert</h2>"
+                f"<p><strong>{batch_label}</strong> · {session.get('sku_name') or ''} — stage <strong>{session.get('stage_name')}</strong></p>"
+                f"<ul>"
+                f"<li>Reject rate: <strong>{rate}%</strong> (acceptable limit: {threshold}%)</li>"
+                f"<li>Rejected: <strong>{total_rejected}</strong> bottles out of {crates} crates ({bottles} bottles)</li>"
+                f"<li>Operator: {session.get('operator_name')}</li>"
+                f"</ul>"
+                f"<p>Open the QC Live Board to check in with the operator.</p>"
+            )
+            for to in recipients:
+                await send_email(to, f"QC Alert: {batch_label} reject rate {rate}% (limit {threshold}%)", html)
+        except Exception:
+            logger.exception("QC reject alert: email send failed")
+    except Exception:
+        logger.exception("QC reject alert failed")
 
 
 @router.get("/qc-sessions/live")
@@ -1904,6 +1984,176 @@ async def live_qc_sessions(current_user: dict = Depends(get_current_user)):
     }
 
 
+@router.get("/qc-reason-trends")
+async def qc_reason_trends(date: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """Hourly defect counts per rejection reason for a day (default today).
+    Submitted inspections bucket by their inspected_at hour; open live
+    sessions add their counts to the current hour."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    day = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    reasons = await tdb.rejection_reasons.find(
+        {"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1, "color": 1}
+    ).to_list(500)
+    color_by_name = {r["name"]: r.get("color", "#334155") for r in reasons}
+    name_by_id = {r["id"]: r["name"] for r in reasons}
+
+    hourly = {}  # name -> [24]
+
+    def bump(name, hour, qty):
+        hourly.setdefault(name, [0] * 24)
+        hourly[name][hour] += qty
+
+    inspections = await tdb.inspections.find(
+        {"tenant_id": tenant_id, "inspected_at": {"$gte": day, "$lt": day + "T24"}},
+        {"_id": 0, "inspected_at": 1, "entries": 1},
+    ).to_list(5000)
+    for insp in inspections:
+        try:
+            hour = datetime.fromisoformat(insp["inspected_at"]).hour
+        except Exception:
+            hour = 0
+        for e in insp.get("entries", []) or []:
+            for rj in e.get("rejections", []) or []:
+                bump(rj.get("reason", "Unknown"), hour, int(rj.get("qty_rejected", 0) or 0))
+
+    if day == datetime.now(timezone.utc).strftime("%Y-%m-%d"):
+        now_hour = datetime.now(timezone.utc).hour
+        open_sessions = await tdb.qc_sessions.find(
+            {"tenant_id": tenant_id, "status": "open"}, {"_id": 0, "counts": 1}
+        ).to_list(500)
+        for s in open_sessions:
+            for rid, c in (s.get("counts") or {}).items():
+                if int(c) > 0:
+                    bump(name_by_id.get(rid, "Unknown"), now_hour, int(c))
+
+    trends = sorted(
+        [{"reason": name, "color": color_by_name.get(name, "#334155"),
+          "total": sum(buckets), "hourly": buckets}
+         for name, buckets in hourly.items() if sum(buckets) > 0],
+        key=lambda x: x["total"], reverse=True,
+    )
+    return {"date": day, "trends": trends}
+
+
+@router.get("/qc-shift-report")
+async def qc_shift_report(date: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """End-of-shift QC summary PDF: one row per batch inspected on the day
+    with crates, rejections, reject rate and top reasons."""
+    from io import BytesIO
+    from fastapi.responses import Response
+    from reportlab.lib import colors as rl_colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    day = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    settings = await _get_qc_settings(tdb, tenant_id)
+    threshold = settings["acceptable_reject_rate_pct"]
+
+    inspections = await tdb.inspections.find(
+        {"tenant_id": tenant_id, "inspected_at": {"$gte": day, "$lt": day + "T24"}},
+        {"_id": 0},
+    ).to_list(5000)
+
+    # Aggregate per batch
+    per_batch = {}
+    for insp in inspections:
+        b = per_batch.setdefault(insp["batch_id"], {
+            "crates": 0, "rejected": 0, "stages": set(), "reasons": {}, "inspectors": set(),
+        })
+        b["crates"] += int(insp.get("qty_inspected", 0) or 0)
+        b["rejected"] += int(insp.get("qty_rejected", 0) or 0)
+        if insp.get("stage_name"):
+            b["stages"].add(insp["stage_name"])
+        if insp.get("inspected_by_name"):
+            b["inspectors"].add(insp["inspected_by_name"])
+        for e in insp.get("entries", []) or []:
+            for rj in e.get("rejections", []) or []:
+                name = rj.get("reason", "Unknown")
+                b["reasons"][name] = b["reasons"].get(name, 0) + int(rj.get("qty_rejected", 0) or 0)
+
+    batches = await tdb.production_batches.find(
+        {"tenant_id": tenant_id, "id": {"$in": list(per_batch.keys())}}, {"_id": 0}
+    ).to_list(500)
+    bmap = {b["id"]: b for b in batches}
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("t", parent=styles["Title"], fontSize=16, spaceAfter=2)
+    sub_style = ParagraphStyle("s", parent=styles["Normal"], fontSize=9, textColor=rl_colors.HexColor("#64748b"))
+    cell = ParagraphStyle("c", parent=styles["Normal"], fontSize=8)
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), leftMargin=14*mm, rightMargin=14*mm, topMargin=12*mm, bottomMargin=12*mm)
+    elems = [
+        Paragraph("QC Shift Report", title_style),
+        Paragraph(f"Date: {day} · Acceptable reject rate: {threshold}% · Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}", sub_style),
+        Spacer(1, 6*mm),
+    ]
+
+    total_crates = sum(v["crates"] for v in per_batch.values())
+    total_rejected = sum(v["rejected"] for v in per_batch.values())
+
+    rows = [["Batch", "SKU", "Stages", "Inspectors", "Crates", "Rejected", "Reject %", "Top Reasons"]]
+    flagged = []
+    for bid, v in sorted(per_batch.items(), key=lambda kv: kv[1]["rejected"], reverse=True):
+        batch = bmap.get(bid, {})
+        bpc = await _effective_bottles_per_crate(tdb, batch) if batch else 1
+        bottles = v["crates"] * max(1, bpc)
+        rate = round((v["rejected"] / bottles) * 100, 1) if bottles > 0 else 0.0
+        over = rate > threshold
+        top = ", ".join(f"{n} ({c})" for n, c in sorted(v["reasons"].items(), key=lambda x: x[1], reverse=True)[:3]) or "—"
+        rows.append([
+            Paragraph(batch.get("batch_number") or bid[:8], cell),
+            Paragraph(batch.get("sku_name") or "—", cell),
+            Paragraph(", ".join(sorted(v["stages"])) or "—", cell),
+            Paragraph(", ".join(sorted(v["inspectors"])) or "—", cell),
+            str(v["crates"]), str(v["rejected"]), f"{rate}%",
+            Paragraph(top, cell),
+        ])
+        if over:
+            flagged.append(len(rows) - 1)
+
+    if len(rows) == 1:
+        rows.append(["—", "No inspections recorded on this day", "", "", "", "", "", ""])
+
+    table = Table(rows, colWidths=[28*mm, 52*mm, 34*mm, 38*mm, 16*mm, 20*mm, 18*mm, 62*mm], repeatRows=1)
+    style = [
+        ("BACKGROUND", (0, 0), (-1, 0), rl_colors.HexColor("#0f172a")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), rl_colors.white),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.4, rl_colors.HexColor("#cbd5e1")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [rl_colors.white, rl_colors.HexColor("#f8fafc")]),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]
+    for r in flagged:
+        style.append(("BACKGROUND", (0, r), (-1, r), rl_colors.HexColor("#fee2e2")))
+        style.append(("TEXTCOLOR", (6, r), (6, r), rl_colors.HexColor("#dc2626")))
+    table.setStyle(TableStyle(style))
+    elems.append(table)
+
+    elems.append(Spacer(1, 6*mm))
+    elems.append(Paragraph(
+        f"<b>Shift totals:</b> {len(per_batch)} batches inspected · {total_crates} crates · "
+        f"{total_rejected} bottles rejected · {len(flagged)} batch(es) over threshold",
+        styles["Normal"],
+    ))
+    doc.build(elems)
+
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="qc-shift-report-{day}.pdf"'},
+    )
+
+
 @router.get("/qc-sessions/active")
 async def get_active_qc_session(
     batch_id: Optional[str] = None,
@@ -1993,6 +2243,8 @@ async def tap_qc_session(session_id: str, data: QCSessionTap, current_user: dict
         {"$set": {"counts": counts, "updated_at": datetime.now(timezone.utc).isoformat()}},
     )
     updated = await tdb.qc_sessions.find_one({"id": session_id})
+    if data.delta > 0:
+        asyncio.create_task(_maybe_send_reject_alert(tdb, tenant_id, session_id))
     return _public_session(updated)
 
 
