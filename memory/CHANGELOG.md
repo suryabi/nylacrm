@@ -1448,3 +1448,12 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 ## 2026-06 (fork): Enrollment replace guarantee + prettier tick ring
 - User reported enrollment still appending — verified PREVIEW backend replaces correctly (2x7 enrolls → 7 samples). User was almost certainly on PRODUCTION which still runs old append code (deploy failed). Belt-and-braces: FaceEnrollModal save() now calls DELETE face THEN PUT, guaranteeing erase on any backend version.
 - TickRing redesigned: 60 thin (2px) short ticks, slate-200 unfilled / emerald + glow filled, brighter longer leading tick, video inset 34px with ring-1 for clean separation
+
+## 2026-06 (fork): Face ID for CRM login (device-bound, bank-grade pattern)
+- Backend NEW /app/backend/routes/face_auth.py (registered at /api/auth): GET /face/status, POST /face/enroll (replace descriptors + bcrypt device hash, max 10 devices), POST /face/dismiss-prompt, DELETE /face, POST /face/login (public)
+- /face/login: server-side euclidean matching (threshold 0.45, 0.05 second-best margin), bcrypt device-token verification, rate-limited via check_login_lockout('__faceid__', ip), issues SAME session token + cookie as password login (auth_method: face_id)
+- Collection: user_face_auth {user_id, tenant_id, descriptors[<=10], devices[bcrypt hashes <=10], prompt_seen}
+- Frontend: getDeviceToken() (localStorage face_device_token), FaceLoginModal (align→blink→verify), FaceIdSetupPrompt (once-per-user popup after login + 'open-face-setup' event), sidebar "Face ID" button in DashboardLayout, "Sign in with Face ID" button on Login page (shown when localStorage face_enrolled_device='1'), AuthContext.completeLogin() shared by password + face login
+- FaceEnrollModal now accepts onSave/title props (reused for both QC team and CRM user enrollment)
+- TESTED: 7 backend curl scenarios (status/enroll/replace/login-ok/wrong-device/wrong-face/delete) + 7 UI flows via screenshots. Real-face E2E needs user device.
+- integration_expert playbook consulted (server-side matching + hashed device tokens confirmed as best practice)

@@ -38,7 +38,7 @@ const TickRing = ({ progress, done }) => {
   );
 };
 
-export const FaceEnrollModal = ({ member, onClose, onDone }) => {
+export const FaceEnrollModal = ({ member, onClose, onDone, onSave, title }) => {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
@@ -58,10 +58,15 @@ export const FaceEnrollModal = ({ member, onClose, onDone }) => {
     const save = async () => {
       setSaving(true);
       try {
-        // Erase any previous enrollment first, then store the fresh one.
-        await axios.delete(`${API_URL}/production/qc-team/${member.id}/face`, { headers: getAuthHeaders() });
-        await axios.put(`${API_URL}/production/qc-team/${member.id}/face`,
-          { descriptors: samplesRef.current.map(s => s.descriptor) }, { headers: getAuthHeaders() });
+        const descriptors = samplesRef.current.map(s => s.descriptor);
+        if (onSave) {
+          await onSave(descriptors);
+        } else {
+          // Erase any previous enrollment first, then store the fresh one.
+          await axios.delete(`${API_URL}/production/qc-team/${member.id}/face`, { headers: getAuthHeaders() });
+          await axios.put(`${API_URL}/production/qc-team/${member.id}/face`,
+            { descriptors }, { headers: getAuthHeaders() });
+        }
         setDone(true);
         toast.success(`Face ID set up for ${member.name}`);
         setTimeout(() => { onDone?.(); onClose(); }, 1400);
@@ -131,7 +136,7 @@ export const FaceEnrollModal = ({ member, onClose, onDone }) => {
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ScanFace size={18} className="text-slate-700" />
-            <p className="font-bold text-slate-800">Set up Face ID · {member.name}</p>
+            <p className="font-bold text-slate-800">{title || `Set up Face ID · ${member.name}`}</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100" data-testid="face-enroll-close"><X size={16} /></button>
         </div>

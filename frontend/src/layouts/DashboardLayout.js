@@ -10,6 +10,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import AIAssistant from '../components/ai/AIAssistant';
 import NotificationBell from '../components/NotificationBell';
 import FacilitySwitcher from '../components/distributor/FacilitySwitcher';
+import FaceIdSetupPrompt from '../components/auth/FaceIdSetupPrompt';
 import { 
   LogOut, Menu, ChevronDown, ChevronRight, 
   LayoutDashboard, Users, Building2, Store,
@@ -680,6 +681,17 @@ export default function DashboardLayout({ children }) {
 
             {isDistributorUser && <FacilitySwitcher />}
 
+            {/* Face ID setup */}
+            <Button
+              onClick={() => window.dispatchEvent(new CustomEvent('open-face-setup'))}
+              variant="ghost"
+              data-testid="faceid-sidebar-btn"
+              className="w-full justify-start text-white/60 hover:text-white hover:bg-white/10 rounded-lg mb-1"
+            >
+              <ShieldCheck className="h-4 w-4 mr-2" />
+              Face ID
+            </Button>
+
             {/* Theme Toggle */}
             <Button
               onClick={toggleTheme}
@@ -770,6 +782,7 @@ export default function DashboardLayout({ children }) {
       
       {/* Ask Nyla — consolidated AI assistant (CRM data + knowledge base) */}
       <AIAssistant />
+      <FaceIdSetupPrompt />
     </div>
   );
 }

@@ -13,9 +13,10 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Mail, Lock, Loader2, Building2, ArrowRight, BarChart3, Users, TrendingUp, Target, PieChart, Zap, Factory, Truck, Megaphone, Package, Boxes, ShieldCheck, Sparkles, Receipt, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Loader2, Building2, ArrowRight, BarChart3, Users, TrendingUp, Target, PieChart, Zap, Factory, Truck, Megaphone, Package, Boxes, ShieldCheck, Sparkles, Receipt, Eye, EyeOff, ScanFace } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
+import FaceLoginModal from '../components/auth/FaceLoginModal';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -37,7 +38,7 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const { login, user, loading: authLoading } = useAuth();
+  const { login, completeLogin, user, loading: authLoading } = useAuth();
   
   // Get tenant from URL query param
   const tenantFromUrl = searchParams.get('tenant');
@@ -56,6 +57,8 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(!!rememberedEmail);
   const [loading, setLoading] = useState(false);
+  const [showFaceLogin, setShowFaceLogin] = useState(false);
+  const faceIdAvailable = localStorage.getItem('face_enrolled_device') === '1';
   const [showRegister, setShowRegister] = useState(false);
   const [tenants, setTenants] = useState([]);
   const [selectedTenant, setSelectedTenant] = useState(tenantFromUrl || rememberedTenant);
@@ -386,7 +389,21 @@ export default function Login() {
                   <Button type="submit" disabled={loading} className="w-full h-12">
                     {loading ? 'Signing in...' : 'Sign In'}
                   </Button>
+                  {faceIdAvailable && (
+                    <Button type="button" variant="outline" className="w-full h-12"
+                      onClick={() => setShowFaceLogin(true)} data-testid="face-login-button">
+                      <ScanFace className="mr-2 h-5 w-5" /> Sign in with Face ID
+                    </Button>
+                  )}
                 </form>
+              )}
+
+              {showFaceLogin && (
+                <FaceLoginModal
+                  tenantId={selectedTenant}
+                  onClose={() => setShowFaceLogin(false)}
+                  onSuccess={(data) => { setShowFaceLogin(false); completeLogin(data, selectedTenant); }}
+                />
               )}
               
               {/* Only show regular Google if Workspace not enabled */}

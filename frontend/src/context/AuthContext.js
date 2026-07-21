@@ -151,17 +151,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (email, password, tenantId = null) => {
-    // Get tenant from parameter or localStorage
+  const completeLogin = (data, tenantId = null) => {
     const tenant = tenantId || localStorage.getItem('selectedTenant') || 'nyla-air-water';
-    
-    const response = await axios.post(`${API_URL}/auth/login`, { email, password }, {
-      withCredentials: true,  // Important: receive and store cookies
-      headers: {
-        'X-Tenant-ID': tenant
-      }
-    });
-    const { session_token, user: userData } = response.data;
+    const { session_token, user: userData } = data;
     // Store session token as backup (cookie is primary)
     if (session_token) {
       localStorage.setItem('token', session_token);
@@ -178,6 +170,19 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('sessionStartTime', now.toString());
     setActiveTime(0);
     return userData;
+  };
+
+  const login = async (email, password, tenantId = null) => {
+    // Get tenant from parameter or localStorage
+    const tenant = tenantId || localStorage.getItem('selectedTenant') || 'nyla-air-water';
+    
+    const response = await axios.post(`${API_URL}/auth/login`, { email, password }, {
+      withCredentials: true,  // Important: receive and store cookies
+      headers: {
+        'X-Tenant-ID': tenant
+      }
+    });
+    return completeLogin(response.data, tenant);
   };
 
   const register = async (userData) => {
@@ -223,6 +228,7 @@ export const AuthProvider = ({ children }) => {
       user, 
       loading, 
       login, 
+      completeLogin,
       register, 
       logout, 
       token,

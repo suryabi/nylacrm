@@ -11,6 +11,7 @@ routes_router = APIRouter()
 
 # Import domain routers
 from .auth import router as auth_router
+from .face_auth import router as face_auth_router
 from .leads import router as leads_router
 from .accounts import router as accounts_router
 from .tasks import router as tasks_router
@@ -71,6 +72,7 @@ from .gamma import router as gamma_router
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
 routes_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+routes_router.include_router(face_auth_router, prefix="/auth", tags=["Authentication"])
 routes_router.include_router(leads_router, prefix="/leads", tags=["Leads"])
 routes_router.include_router(accounts_router, prefix="/accounts", tags=["Accounts"])
 routes_router.include_router(tasks_router, prefix="/tasks", tags=["Tasks"])

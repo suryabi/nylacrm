@@ -55,3 +55,8 @@
 - Raju (id 35fd3d25-29e5-473c-a793-1545afb72343) — PIN: 1234 (tenant nyla-air-water)
 - Suresh (id 3e89d98b-f9da-475b-b69f-626734e5a9ca) — no PIN (direct manual login)
 - Kiosk gate at /qc-station (requires CRM login first); face enrollment via QC Team page (FaceEnrollModal)
+
+## Face ID (CRM login)
+- Device flag: localStorage 'face_enrolled_device'='1' shows the "Sign in with Face ID" button on /login
+- Device token: localStorage 'face_device_token' (auto-generated)
+- Backend test: POST /api/auth/face/login {descriptor:[128 floats], device_token} with X-Tenant-ID header
