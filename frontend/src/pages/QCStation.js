@@ -92,6 +92,31 @@ export default function QCStation() {
   const [groupBy, setGroupBy] = useState('sku');       // 'sku' | 'status'
   const [operator, setOperator] = useState(null); // in-memory only: leaving the page re-triggers kiosk login
   const deepLinked = useRef(false);
+  const confirmTimerRef = useRef(null);
+  const [confirmId, setConfirmId] = useState(null);
+
+  // Apple-like 3D press: tilt down, brighten, spring back + haptic tick.
+  const pressFx = (el) => {
+    try { navigator.vibrate && navigator.vibrate(15); } catch { /* unsupported */ }
+    el.animate([
+      { transform: 'perspective(600px) scale(1) rotateX(0deg) translateY(0)', filter: 'brightness(1)', boxShadow: '0 1px 2px rgba(15,23,42,0.15)' },
+      { transform: 'perspective(600px) scale(0.93) rotateX(8deg) translateY(3px)', filter: 'brightness(1.3)', boxShadow: '0 0 0 rgba(15,23,42,0.05)', offset: 0.3 },
+      { transform: 'perspective(600px) scale(1.03) rotateX(-2deg) translateY(-1px)', filter: 'brightness(1.05)', boxShadow: '0 10px 22px rgba(15,23,42,0.28)', offset: 0.7 },
+      { transform: 'perspective(600px) scale(1) rotateX(0deg) translateY(0)', filter: 'brightness(1)', boxShadow: '0 1px 2px rgba(15,23,42,0.15)' },
+    ], { duration: 340, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+  };
+
+  const askMinus = (id) => {
+    clearTimeout(confirmTimerRef.current);
+    setConfirmId(id);
+    confirmTimerRef.current = setTimeout(() => setConfirmId(null), 5000);
+  };
+
+  const confirmMinus = (id) => {
+    clearTimeout(confirmTimerRef.current);
+    setConfirmId(null);
+    tap(id, -1);
+  };
 
   const fetchInit = useCallback(async () => {
     try {
@@ -579,8 +604,8 @@ export default function QCStation() {
             return (
               <div key={r.id} className="relative select-none" data-testid={`qc-tile-${r.id}`}>
                 <button
-                  onClick={() => tap(r.id, 1)}
-                  className="w-full aspect-square rounded-3xl flex flex-col items-center justify-center gap-2 shadow-sm hover:shadow-lg transition-all active:scale-95 overflow-hidden relative"
+                  onClick={(e) => { pressFx(e.currentTarget); tap(r.id, 1); }}
+                  className="w-full aspect-square rounded-3xl flex flex-col items-center justify-center gap-2 shadow-sm overflow-hidden relative will-change-transform"
                   style={{ backgroundColor: r.color || '#334155' }}
                   data-testid={`qc-tile-tap-${r.id}`}
                 >
@@ -600,13 +625,26 @@ export default function QCStation() {
                 </button>
                 {count > 0 && (
                   <button
-                    onClick={() => tap(r.id, -1)}
+                    onClick={() => askMinus(r.id)}
                     className="absolute bottom-2 left-2 z-20 w-9 h-9 rounded-full bg-white/95 border border-slate-200 flex items-center justify-center shadow hover:bg-white active:scale-90"
                     data-testid={`qc-minus-${r.id}`}
                     title="Undo one"
                   >
                     <Minus size={16} className="text-slate-700" />
                   </button>
+                )}
+                {confirmId === r.id && (
+                  <div className="absolute inset-0 z-30 rounded-3xl bg-slate-900/85 backdrop-blur-sm flex flex-col items-center justify-center gap-3 animate-in fade-in zoom-in-95 duration-150" data-testid={`qc-minus-confirm-${r.id}`}>
+                    <p className="text-white text-sm font-semibold text-center px-3">Remove 1 × {r.name}?</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => setConfirmId(null)}
+                        className="px-4 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-sm font-medium active:scale-95"
+                        data-testid={`qc-minus-cancel-${r.id}`}>Cancel</button>
+                      <button onClick={() => confirmMinus(r.id)}
+                        className="px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold active:scale-95"
+                        data-testid={`qc-minus-confirm-btn-${r.id}`}>Remove</button>
+                    </div>
+                  </div>
                 )}
               </div>
             );

@@ -1432,3 +1432,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - FaceEnrollModal rewritten: auto-capture guided enrollment — "move your head slowly in a circle", 7 angle-distinct samples (POSE_GAP_MIN 0.055, stall fallback after 9 good frames), Face ID tick-ring SVG fills, quality gate hints, auto-save + success check animation. Manual capture button removed.
 - QCKioskLogin rewritten: phased flow scan → liveness → success. After 3-frame identity confirm, blink liveness challenge (EAR closed→open transition, 8s timeout, "Not me" button), final descriptor re-check post-blink, green success animation before login. Liveness loop at 130ms, scan at 600ms.
 - Verified headless: kiosk scan + enrollment modal render, quality gate rejects no-face feed, manual pick→PIN regression passes. REAL-FACE blink + circle enrollment need on-device user validation.
+
+## 2026-06 (fork): QC capture tile press UX + subtract confirmation
+- pressFx(): Web Animations API 3D press on defect tiles — perspective tilt (rotateX 8deg), scale dip 0.93 → spring overshoot 1.03, brightness flash, shadow lift, plus navigator.vibrate(15) haptic tick on supported tablets
+- Minus (−) on a tile now shows an in-tile confirmation overlay ("Remove 1 × {reason}?" Cancel/Remove), auto-dismisses after 5s; only Remove calls tap(id,-1)
+- LEARNING: parallel search_replace calls on the SAME file raced and corrupted QCStation.js (duplicated trailing JSX) — always edit the same file sequentially
+- Verified E2E: tap→count 1, minus→overlay, cancel→still 1, remove→0, discard cleanup
