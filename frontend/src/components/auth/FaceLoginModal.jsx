@@ -85,7 +85,12 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
         setReady(true);
         timerRef.current = setTimeout(tick, 400);
       } catch (e) {
-        setError(e.name === 'NotAllowedError' ? 'Camera permission denied' : 'Could not start camera');
+        setError(
+          e.name === 'NotAllowedError' ? 'Camera permission denied — allow camera access for this site'
+          : e.name === 'NotFoundError' ? 'No camera found on this device'
+          : e.name === 'NotReadableError' ? 'Camera is in use by another app — close it and retry'
+          : 'Could not start camera'
+        );
       }
     })();
 

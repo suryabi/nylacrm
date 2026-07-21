@@ -51,6 +51,7 @@ export const FaceEnrollModal = ({ member, onClose, onDone, onSave, title }) => {
   const [hint, setHint] = useState('Position your face in the circle');
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,8 +104,14 @@ export const FaceEnrollModal = ({ member, onClose, onDone, onSave, title }) => {
     };
 
     (async () => {
+      setError('');
       try {
         await loadModels();
+      } catch {
+        if (!cancelled) setError('Face models failed to load — check your internet connection and retry');
+        return;
+      }
+      try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 480, height: 480 } });
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
@@ -112,7 +119,12 @@ export const FaceEnrollModal = ({ member, onClose, onDone, onSave, title }) => {
         setReady(true);
         timerRef.current = setTimeout(tick, 600);
       } catch (e) {
-        setError(e.name === 'NotAllowedError' ? 'Camera permission denied' : 'Could not start camera / load models');
+        setError(
+          e.name === 'NotAllowedError' ? 'Camera permission denied — allow camera access for this site in your browser settings'
+          : e.name === 'NotFoundError' ? 'No camera found on this device'
+          : e.name === 'NotReadableError' ? 'Camera is in use by another app — close it and retry'
+          : `Could not start camera (${e.name || 'unknown error'})`
+        );
       }
     })();
 
@@ -121,7 +133,7 @@ export const FaceEnrollModal = ({ member, onClose, onDone, onSave, title }) => {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     };
-  }, [member.id, member.name, onClose, onDone]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [member.id, member.name, onClose, onDone, attempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reset = () => {
     samplesRef.current = [];
@@ -164,6 +176,11 @@ export const FaceEnrollModal = ({ member, onClose, onDone, onSave, title }) => {
           <p className="text-xs text-slate-400 text-center mb-4">
             {done ? '' : `${count}/${TARGET} angles · Only a numeric signature is stored — no photos. Replaces any previous enrollment.`}
           </p>
+          {error && (
+            <button onClick={() => setAttempt(a => a + 1)}
+              className="w-full px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold mb-2"
+              data-testid="face-retry-btn">Try again</button>
+          )}
           {!done && count > 0 && !saving && (
             <button onClick={reset} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm" data-testid="face-reset-btn">Start over</button>
           )}
