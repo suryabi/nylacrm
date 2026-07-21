@@ -2108,7 +2108,7 @@ async def qc_shift_report(date: Optional[str] = None, current_user: dict = Depen
         over = rate > threshold
         top = ", ".join(f"{n} ({c})" for n, c in sorted(v["reasons"].items(), key=lambda x: x[1], reverse=True)[:3]) or "—"
         rows.append([
-            Paragraph(batch.get("batch_number") or bid[:8], cell),
+            Paragraph(batch.get("batch_code") or batch.get("batch_number") or bid[:8], cell),
             Paragraph(batch.get("sku_name") or "—", cell),
             Paragraph(", ".join(sorted(v["stages"])) or "—", cell),
             Paragraph(", ".join(sorted(v["inspectors"])) or "—", cell),
@@ -2204,7 +2204,7 @@ async def start_qc_session(data: QCSessionStart, current_user: dict = Depends(ge
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
         "batch_id": data.batch_id,
-        "batch_number": batch.get("batch_number") or batch.get("batch_no") or "",
+        "batch_number": batch.get("batch_code") or batch.get("batch_number") or batch.get("batch_no") or "",
         "sku_name": batch.get("sku_name") or "",
         "bottles_per_crate": await _effective_bottles_per_crate(tdb, batch),
         "stage_id": data.stage_id,

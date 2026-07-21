@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import axios from 'axios';
 import * as Icons from 'lucide-react';
-import { Loader2, ChevronLeft, Minus, Check, Factory, ArrowRight, PackageCheck, RotateCcw, X } from 'lucide-react';
+import { Loader2, ChevronLeft, Minus, Check, Factory, ArrowRight, MoveRight, RotateCcw, X } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -22,6 +23,7 @@ function iconComponent(name) {
 const ACTIVE_STATUSES = ['in_qc', 'in_labeling', 'in_final_qc', 'created'];
 
 export default function QCStation() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [step, setStep] = useState('batch');    // batch | stage | capture
   const [loading, setLoading] = useState(true);
   const [batches, setBatches] = useState([]);
@@ -31,6 +33,9 @@ export default function QCStation() {
   const [session, setSession] = useState(null);
   const [crates, setCrates] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [receiveQty, setReceiveQty] = useState({});   // stageId -> qty input
+  const [receiving, setReceiving] = useState(null);   // stageId being moved
+  const deepLinked = useRef(false);
 
   const fetchInit = useCallback(async () => {
     try {
@@ -54,12 +59,64 @@ export default function QCStation() {
       const { data } = await axios.get(`${API_URL}/production/batches/${b.id}`, { headers: getAuthHeaders() });
       setBatch(data);
       setStep('stage');
+      return data;
     } catch {
       toast.error('Failed to open batch');
+      return null;
     }
   };
 
-  const pendingFor = (b, stageId) => (b.stage_balances?.[stageId]?.pending) || 0;
+  const refreshBatch = async () => {
+    if (!batch) return null;
+    try {
+      const { data } = await axios.get(`${API_URL}/production/batches/${batch.id}`, { headers: getAuthHeaders() });
+      setBatch(data);
+      return data;
+    } catch { return null; }
+  };
+
+  // Deep link from Batch Detail: /qc-station?batch=<id>
+  useEffect(() => {
+    const bid = searchParams.get('batch');
+    if (bid && !deepLinked.current && !loading) {
+      deepLinked.current = true;
+      openBatch({ id: bid });
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  const balFor = (b, stageId) => (b?.stage_balances?.[stageId]) || {};
+  const pendingFor = (b, stageId) => balFor(b, stageId).pending || 0;
+
+  // Where do crates come from for this stage, and how many are available?
+  const receiveSource = (b, st) => {
+    const stages = [...(b.qc_stages || [])].sort((a, x) => a.order - x.order);
+    if (stages.length && st.id === stages[0].id) {
+      return { label: 'Unallocated', available: b.unallocated_crates || 0 };
+    }
+    const prev = [...stages].filter(s => s.order < st.order).pop();
+    if (!prev) return { label: 'Unallocated', available: b.unallocated_crates || 0 };
+    return { label: `${prev.name} (passed)`, available: balFor(b, prev.id).passed || 0 };
+  };
+
+  const receiveCrates = async (st) => {
+    const qty = parseInt(receiveQty[st.id] || '0', 10);
+    if (!qty || qty <= 0) { toast.error('Enter a quantity'); return; }
+    setReceiving(st.id);
+    try {
+      await axios.post(`${API_URL}/production/batches/${batch.id}/move`,
+        { to_stage_id: st.id, quantity: qty, notes: 'Received via QC Station' },
+        { headers: getAuthHeaders() });
+      toast.success(`${qty} crates received at ${st.name}`);
+      setReceiveQty(p => ({ ...p, [st.id]: '' }));
+      await refreshBatch();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to receive crates');
+    } finally {
+      setReceiving(null);
+    }
+  };
 
   const openStage = async (st) => {
     setStage(st);
@@ -85,7 +142,9 @@ export default function QCStation() {
   };
 
   const saveCrates = async (val) => {
-    const v = Math.max(0, val);
+    const pending = pendingFor(batch, stage?.id);
+    const v = Math.min(Math.max(0, val), pending || 0);
+    if (val > pending) toast.warning(`Only ${pending} crates pending at ${stage?.name}`);
     setCrates(v);
     if (!session) return;
     try {
@@ -162,7 +221,7 @@ export default function QCStation() {
                 className="bg-white border border-slate-200 rounded-2xl p-5 text-left hover:border-slate-800 hover:shadow-md transition-all active:scale-[0.98]"
                 data-testid={`qc-batch-${b.id}`}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-lg font-bold text-slate-800">{b.batch_number || 'Batch'}</span>
+                  <span className="text-lg font-bold text-slate-800">{b.batch_code || b.batch_number || 'Batch'}</span>
                   <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">{(b.status || '').replace(/_/g, ' ')}</span>
                 </div>
                 <p className="text-sm text-slate-600 truncate">{b.sku_name}</p>
@@ -175,7 +234,7 @@ export default function QCStation() {
     );
   }
 
-  // ── STEP 2: Stage selection ──
+  // ── STEP 2: Stage selection (mirrors the batch's stage flow) ──
   if (step === 'stage') {
     const stages = [...(batch.qc_stages || [])].sort((a, b) => a.order - b.order);
     return (
@@ -183,22 +242,72 @@ export default function QCStation() {
         <button onClick={resetAll} className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 mb-4" data-testid="qc-back-to-batches">
           <ChevronLeft size={16} /> Batches
         </button>
-        <h1 className="text-2xl font-bold text-slate-800">{batch.batch_number}</h1>
-        <p className="text-slate-500 mb-6">{batch.sku_name} · pick the QC stage</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">{batch.batch_code || batch.batch_number || batch.sku_name}</h1>
+            <p className="text-slate-500">{batch.sku_name} · pick the QC stage</p>
+          </div>
+          <div className="bg-slate-100 rounded-xl px-4 py-2 text-center" data-testid="qc-unallocated">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Unallocated</p>
+            <p className="text-xl font-extrabold text-slate-800">{batch.unallocated_crates || 0} <span className="text-xs font-medium text-slate-400">crates</span></p>
+          </div>
+        </div>
+        <div className="space-y-4 mt-6">
           {stages.map(st => {
-            const pending = pendingFor(batch, st.id);
+            const bal = balFor(batch, st.id);
+            const pending = bal.pending || 0;
+            const src = receiveSource(batch, st);
+            const canInspect = pending > 0;
             return (
-              <button key={st.id} onClick={() => openStage(st)}
-                className="bg-white border border-slate-200 rounded-2xl p-6 text-left hover:border-slate-800 hover:shadow-md transition-all active:scale-[0.98] flex items-center justify-between"
-                data-testid={`qc-stage-${st.id}`}>
-                <div>
-                  <p className="text-xl font-bold text-slate-800">{st.name}</p>
-                  <p className="text-sm text-slate-500 capitalize mt-0.5">{(st.stage_type || '').replace(/_/g, ' ')}</p>
-                  <p className="text-xs text-slate-400 mt-2">{pending} crates pending</p>
+              <div key={st.id} className={`bg-white border rounded-2xl p-5 transition-all ${canInspect ? 'border-slate-200 hover:border-slate-800 hover:shadow-md' : 'border-slate-200 opacity-95'}`} data-testid={`qc-stage-${st.id}`}>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-xl font-bold text-slate-800">{st.name}</p>
+                    <p className="text-sm text-slate-500 capitalize">{(st.stage_type || '').replace(/_/g, ' ')}</p>
+                  </div>
+                  {canInspect ? (
+                    <button onClick={() => openStage(st)}
+                      className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold flex items-center gap-2 active:scale-95"
+                      data-testid={`qc-inspect-stage-${st.id}`}>
+                      Inspect <ArrowRight size={16} />
+                    </button>
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">No crates pending — receive crates first</span>
+                  )}
                 </div>
-                <ArrowRight className="text-slate-300" />
-              </button>
+                {/* Stage flow balances — same numbers as Batch Detail */}
+                <div className="grid grid-cols-4 gap-2 mt-4">
+                  {[
+                    { label: 'Received', value: bal.received || 0, unit: 'crates', cls: 'text-slate-700' },
+                    { label: 'Pending', value: pending, unit: 'crates', cls: 'text-amber-600' },
+                    { label: 'Passed', value: bal.passed || 0, unit: 'crates', cls: 'text-emerald-600' },
+                    { label: 'Rejected', value: bal.rejected || 0, unit: 'bottles', cls: 'text-red-600' },
+                  ].map(m => (
+                    <div key={m.label} className="bg-slate-50 rounded-xl px-2 py-2 text-center">
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wider">{m.label}</p>
+                      <p className={`text-lg font-extrabold ${m.cls}`}>{m.value}</p>
+                      <p className="text-[9px] text-slate-400">{m.unit}</p>
+                    </div>
+                  ))}
+                </div>
+                {/* Inline receive — same move endpoint as Batch Detail */}
+                {src.available > 0 && (
+                  <div className="mt-3 flex items-center gap-2 flex-wrap bg-blue-50/60 border border-blue-100 rounded-xl px-3 py-2.5" data-testid={`qc-receive-panel-${st.id}`}>
+                    <MoveRight size={14} className="text-blue-500 flex-shrink-0" />
+                    <span className="text-xs text-blue-700 font-medium">Receive from {src.label} ({src.available} available)</span>
+                    <input type="number" min="1" max={src.available} placeholder={`Max ${src.available}`}
+                      value={receiveQty[st.id] || ''}
+                      onChange={e => setReceiveQty(p => ({ ...p, [st.id]: e.target.value }))}
+                      className="w-24 border border-blue-200 rounded-lg px-2 py-1.5 text-sm bg-white"
+                      data-testid={`qc-receive-qty-${st.id}`} />
+                    <button onClick={() => receiveCrates(st)} disabled={receiving === st.id}
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold disabled:opacity-50 flex items-center gap-1 active:scale-95"
+                      data-testid={`qc-receive-btn-${st.id}`}>
+                      {receiving === st.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Receive
+                    </button>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
@@ -212,12 +321,12 @@ export default function QCStation() {
       {/* Header */}
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <button onClick={() => setStep('stage')} className="p-2 rounded-lg hover:bg-slate-100" data-testid="qc-back-to-stages">
+          <button onClick={async () => { await refreshBatch(); setStep('stage'); }} className="p-2 rounded-lg hover:bg-slate-100" data-testid="qc-back-to-stages">
             <ChevronLeft size={20} className="text-slate-500" />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-slate-800 leading-tight">{batch.batch_number || batch.sku_name || 'Batch'} · {stage.name}</h1>
-            <p className="text-sm text-slate-500">{batch.sku_name}</p>
+            <h1 className="text-xl font-bold text-slate-800 leading-tight">{batch.batch_code || batch.batch_number || batch.sku_name || 'Batch'} · {stage.name}</h1>
+            <p className="text-sm text-slate-500">{batch.sku_name} · <span className="text-amber-600 font-medium">{pendingFor(batch, stage.id)} crates pending</span> at this stage</p>
           </div>
         </div>
         <button onClick={discard} className="text-sm text-slate-400 hover:text-red-500 flex items-center gap-1" data-testid="qc-discard">

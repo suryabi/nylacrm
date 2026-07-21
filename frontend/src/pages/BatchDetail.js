@@ -6,7 +6,7 @@ import {
   ArrowLeft, Package, Calendar, Boxes, Tag,
   Loader2, FlaskConical, Paintbrush, ShieldCheck,
   Trash2, ArrowRight, MoveRight, ClipboardCheck,
-  Clock, User, AlertTriangle, AlertCircle, ChevronDown, ChevronUp, Plus, Warehouse, Send, Pencil, Check,
+  Clock, User, AlertTriangle, AlertCircle, ChevronDown, ChevronUp, Plus, Warehouse, Send, Pencil, Check, TabletSmartphone,
 } from 'lucide-react';
 import Breadcrumbs from '../components/Breadcrumbs';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
@@ -303,6 +303,9 @@ export default function BatchDetail() {
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5 truncate">{batch.sku_name}</p>
         </div>
+        <button onClick={() => navigate(`/qc-station?batch=${batchId}`)} className="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-cyan-700 hover:bg-cyan-50 border border-cyan-200 rounded-lg flex items-center gap-1 sm:gap-1.5 flex-shrink-0" data-testid="open-qc-station-btn" title="Open this batch on the tablet QC Station">
+          <TabletSmartphone size={14} /> <span className="hidden sm:inline">QC Station</span>
+        </button>
         <button onClick={openEdit} className="px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-slate-700 hover:bg-slate-100 rounded-lg flex items-center gap-1 sm:gap-1.5 flex-shrink-0" data-testid="edit-batch-btn">
           <Pencil size={14} /> <span className="hidden sm:inline">Edit</span>
         </button>

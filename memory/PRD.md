@@ -1888,3 +1888,10 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## 2026-06 (fork): UOM clarity confirmation + labels
 - CONFIRMED to user: rejections tracked in BOTTLES (qty_rejected), inspections in CRATES (qty_inspected); validation rejected <= crates x bottles_per_crate; stage flow converts bottles -> crate equivalents; total_rejected/balances stored in bottles; QC Station is an extension of core record_inspection (same inspections collection, balances, reports)
 - Label tweaks for clarity: QC Station "Rejected bottles" + "each tap = 1 rejected bottle" hint; Live Board "Bottles rejected today", "Rejected (btl)", drilldown "bottles rejected"; shift report PDF column "Rejected (btl)"
+
+## 2026-06 (fork): QC Station integrated with the batch stage flow
+- Stage picker now mirrors Batch Detail: per-stage Received/Pending/Passed(crates)/Rejected(bottles) balances + Unallocated tile
+- Stages with 0 pending are not inspectable ("receive crates first"); inline "Receive from Unallocated / prev stage (passed)" uses the same POST /batches/{id}/move endpoint as Batch Detail
+- Capture screen shows "N crates pending at this stage" and clamps crates-inspected to pending (backend already validates)
+- Batch Detail header: new "QC Station" deep-link button -> /qc-station?batch={id} (auto-opens stage step)
+- Fixed batch label: batches use batch_code (not batch_number) — sessions, QC Station cards, capture header, Live Board and shift report now show batch_code
