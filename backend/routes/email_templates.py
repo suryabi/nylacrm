@@ -90,6 +90,7 @@ _ACCOUNT_DETAILS_BODY = (
     "(Account Reference: <strong>{{account_id}}</strong>).</p>"
     "<p><strong>Tax Details</strong></p>"
     "<ul><li><strong>GST Number:</strong> {{gst_number}}</li>"
+    "<li><strong>Trade Name:</strong> {{gst_trade_name}}</li>"
     "<li><strong>PAN:</strong> {{pan_number}}</li></ul>"
     "<p><strong>Addresses</strong></p>"
     "<ul><li><strong>Billing Address:</strong> {{billing_address}}</li>"
@@ -117,9 +118,15 @@ async def _ensure_system_templates(tenant_id: str) -> None:
     """Idempotently seed built-in public templates for this tenant."""
     for t in _SYSTEM_TEMPLATES:
         existing = await _db.email_templates.find_one(
-            {"tenant_id": tenant_id, "system_key": t["system_key"]}, {"_id": 0, "id": 1}
+            {"tenant_id": tenant_id, "system_key": t["system_key"]}, {"_id": 0, "id": 1, "body_html": 1, "subject": 1}
         )
         if existing:
+            if existing.get("body_html") != t["body_html"] or existing.get("subject") != t["subject"]:
+                await _db.email_templates.update_one(
+                    {"tenant_id": tenant_id, "system_key": t["system_key"]},
+                    {"$set": {"body_html": t["body_html"], "subject": t["subject"],
+                              "updated_at": datetime.now(timezone.utc).isoformat()}}
+                )
             continue
         now = datetime.now(timezone.utc).isoformat()
         await _db.email_templates.insert_one({
@@ -198,15 +205,25 @@ async def _resolve_variables(
         vars_map["contact_email"] = doc.get("email") or doc.get("contact_email") or doc.get("delivery_contact_email") or ""
         vars_map["gst_number"] = doc.get("gst_number") or ""
         vars_map["pan_number"] = doc.get("pan_number") or ""
-        # Billing address prefixed with the GST legal name (deduped).
+        vars_map["gst_trade_name"] = doc.get("gst_trade_name") or ""
+        # Billing address prefixed with GST trade name + legal name (deduped).
         legal = (doc.get("gst_legal_name") or "").strip()
-        billing = _fmt_addr(doc.get("billing_address"))
-        if legal and billing and legal.lower() not in billing.lower():
-            billing = f"{legal}, {billing}"
-        elif not billing:
-            billing = legal
-        vars_map["billing_address"] = billing
-        vars_map["delivery_address"] = _fmt_addr(doc.get("delivery_address"))
+        trade = (doc.get("gst_trade_name") or "").strip()
+        billing_addr = _fmt_addr(doc.get("billing_address"))
+        parts = []
+        if trade and trade.lower() not in billing_addr.lower():
+            parts.append(trade)
+        if legal and legal.lower() != trade.lower() and legal.lower() not in billing_addr.lower():
+            parts.append(legal)
+        if billing_addr:
+            parts.append(billing_addr)
+        vars_map["billing_address"] = ", ".join(parts)
+        # Delivery address prefixed with the outlet (account) name (deduped).
+        outlet = (doc.get("account_name") or "").strip()
+        delivery_addr = _fmt_addr(doc.get("delivery_address"))
+        if outlet and outlet.lower() not in delivery_addr.lower():
+            delivery_addr = f"{outlet}, {delivery_addr}" if delivery_addr else outlet
+        vars_map["delivery_address"] = delivery_addr
         vars_map["delivery_contact"] = " · ".join(
             [x for x in [doc.get("delivery_contact_name"), doc.get("delivery_contact_phone")] if x]
         )

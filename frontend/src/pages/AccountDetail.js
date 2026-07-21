@@ -79,16 +79,23 @@ const buildShareBodyHtml = (account, opts = {}) => {
   const salesContact = salesperson ? [salesperson.name, salesperson.phone].filter(Boolean).join(' · ') : '';
   const accRef = account.account_id || account.id || '';
 
-  // Billing address prefixed with the GST legal name (deduped if already present).
+  // Billing address prefixed with GST trade name + legal name (deduped if already present).
   const legal = (account.gst_legal_name || '').trim();
+  const trade = (account.gst_trade_name || '').trim();
   const billingAddr = fmtShareAddr(account.billing_address);
-  const billing = (legal && billingAddr && !billingAddr.toLowerCase().includes(legal.toLowerCase()))
-    ? `${legal}, ${billingAddr}`
-    : (billingAddr || legal);
+  const billingParts = [];
+  if (trade && !(billingAddr || '').toLowerCase().includes(trade.toLowerCase())) billingParts.push(trade);
+  if (legal && legal.toLowerCase() !== trade.toLowerCase() && !(billingAddr || '').toLowerCase().includes(legal.toLowerCase())) billingParts.push(legal);
+  if (billingAddr) billingParts.push(billingAddr);
+  const billing = billingParts.join(', ');
 
-  // Delivery address + a Google Maps link (precise pin if available, else a search).
+  // Delivery address prefixed with the outlet (account) name + a Google Maps link.
   const da = account.delivery_address || {};
-  const deliveryAddr = fmtShareAddr(da);
+  const rawDeliveryAddr = fmtShareAddr(da);
+  const outlet = (account.account_name || '').trim();
+  const deliveryAddr = (outlet && rawDeliveryAddr && !rawDeliveryAddr.toLowerCase().includes(outlet.toLowerCase()))
+    ? `${outlet}, ${rawDeliveryAddr}`
+    : (rawDeliveryAddr || outlet);
   let mapsLink = (da.maps_link || '').trim();
   if (!mapsLink && da.lat != null && da.lng != null) {
     mapsLink = `https://www.google.com/maps?q=${da.lat},${da.lng}`;
@@ -114,7 +121,7 @@ const buildShareBodyHtml = (account, opts = {}) => {
   return '<p>Hi,</p>'
     + `<p>Please find below the account details for <strong>${escHtml(account.account_name)}</strong> (Account Reference: <strong>${escHtml(accRef)}</strong>).</p>`
     + '<p><strong>Tax Details</strong></p>'
-    + `<ul>${item('GST Number', account.gst_number)}${item('PAN', account.pan_number)}</ul>`
+    + `<ul>${item('GST Number', account.gst_number)}${item('Trade Name', account.gst_trade_name)}${item('PAN', account.pan_number)}</ul>`
     + '<p><strong>Addresses</strong></p>'
     + `<ul>${item('Billing Address', billing)}${item('Delivery Address', deliveryAddr)}${mapsItem}</ul>`
     + '<p><strong>Contacts</strong></p>'

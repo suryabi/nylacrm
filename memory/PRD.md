@@ -1824,3 +1824,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## 2026-06 (fork): UI cleanup
 - Removed the "AI Assist" button from the top-right header of Lead Detail and Account Detail pages (Ask Nyla bottom-right avatar remains the single AI entry point).
+
+## 2026-06 (fork): Share Account Details email enhancements
+- Tax Details now includes Trade Name (gst_trade_name)
+- Billing Address prefixed with GST Trade Name + Legal Name (deduped)
+- Delivery Address prefixed with Outlet (account) name (deduped)
+- Applied in both frontend composer (AccountDetail.js buildShareBodyHtml) and backend system template renderer (email_templates.py); seeded system templates now auto-sync body updates
