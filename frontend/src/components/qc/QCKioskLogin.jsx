@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { Loader2, ScanFace, Users, KeyRound, X, ArrowLeft, ShieldCheck } from 'lucide-react';
-import { loadModels, getDescriptor, matchDescriptor, CONFIRM_FRAMES } from '../../lib/faceRecognition';
+import { Loader2, ScanFace, Users, KeyRound, ArrowLeft, ShieldCheck, Check, Eye } from 'lucide-react';
+import {
+  loadModels, getDescriptor, getFullDetection, matchDescriptor, eyeOpenness,
+  CONFIRM_FRAMES, EAR_CLOSED, EAR_OPEN,
+} from '../../lib/faceRecognition';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+const LIVENESS_TIMEOUT = 8000;
 
 function getAuthHeaders() {
   const token = localStorage.getItem('token');
@@ -15,13 +19,17 @@ function getAuthHeaders() {
 export default function QCKioskLogin({ onLogin }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
-  const scanRef = useRef(null);
+  const timerRef = useRef(null);
   const indexRef = useRef([]);
-  const busyRef = useRef(false);
   const streakRef = useRef({ id: null, count: 0 });
+  const phaseRef = useRef('scan');       // scan | liveness | success
+  const candidateRef = useRef(null);
+  const blinkRef = useRef({ closed: false, started: 0 });
+  const stoppedRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
-  const [scanning, setScanning] = useState(true);
+  const [phase, setPhase] = useState('scan');
+  const [candidate, setCandidate] = useState(null);
   const [members, setMembers] = useState([]);
   const [mode, setMode] = useState('face');       // face | pick | pin
   const [picked, setPicked] = useState(null);
@@ -29,16 +37,76 @@ export default function QCKioskLogin({ onLogin }) {
   const [verifying, setVerifying] = useState(false);
 
   const doLogin = useCallback((member) => {
-    setScanning(false);
-    if (scanRef.current) clearInterval(scanRef.current);
+    stoppedRef.current = true;
+    if (timerRef.current) clearTimeout(timerRef.current);
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     const op = { id: member.id, name: member.name, role: member.role || '' };
     toast.success(`Welcome, ${member.name}`);
     onLogin(op);
   }, [onLogin]);
 
+  const setPhaseBoth = (p) => { phaseRef.current = p; setPhase(p); };
+
+  const backToScan = useCallback(() => {
+    streakRef.current = { id: null, count: 0 };
+    candidateRef.current = null;
+    setCandidate(null);
+    setPhaseBoth('scan');
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
+
+    const tick = async () => {
+      if (cancelled || stoppedRef.current || !videoRef.current) return;
+      try {
+        if (phaseRef.current === 'scan') {
+          const d = await getDescriptor(videoRef.current);
+          if (d && indexRef.current.length) {
+            const { member } = matchDescriptor(d, indexRef.current);
+            if (member) {
+              const s = streakRef.current;
+              streakRef.current = { id: member.id, count: s.id === member.id ? s.count + 1 : 1 };
+              if (streakRef.current.count >= CONFIRM_FRAMES) {
+                candidateRef.current = member;
+                setCandidate(member);
+                blinkRef.current = { closed: false, started: Date.now() };
+                setPhaseBoth('liveness');
+              }
+            } else {
+              streakRef.current = { id: null, count: 0 };
+            }
+          }
+        } else if (phaseRef.current === 'liveness') {
+          if (Date.now() - blinkRef.current.started > LIVENESS_TIMEOUT) {
+            toast.error("Couldn't verify a blink — let's try again");
+            backToScan();
+          } else {
+            const det = await getFullDetection(videoRef.current, false);
+            if (det) {
+              const ear = eyeOpenness(det.landmarks);
+              if (ear < EAR_CLOSED) {
+                blinkRef.current.closed = true;
+              } else if (blinkRef.current.closed && ear > EAR_OPEN) {
+                // Blink complete → final identity re-check before signing in.
+                const full = await getFullDetection(videoRef.current, true);
+                const m = full ? matchDescriptor(Array.from(full.descriptor), indexRef.current).member : null;
+                if (m && m.id === candidateRef.current?.id) {
+                  setPhaseBoth('success');
+                  setTimeout(() => doLogin(candidateRef.current), 900);
+                  return;
+                }
+                backToScan();
+              }
+            }
+          }
+        }
+      } catch { /* ignore frame errors */ }
+      if (!cancelled && !stoppedRef.current) {
+        timerRef.current = setTimeout(tick, phaseRef.current === 'liveness' ? 130 : 600);
+      }
+    };
+
     (async () => {
       try {
         const [idx, mem] = await Promise.all([
@@ -58,23 +126,7 @@ export default function QCKioskLogin({ onLogin }) {
         streamRef.current = stream;
         if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
         setReady(true);
-        scanRef.current = setInterval(async () => {
-          if (busyRef.current || !videoRef.current) return;
-          busyRef.current = true;
-          try {
-            const d = await getDescriptor(videoRef.current);
-            if (d && indexRef.current.length) {
-              const { member } = matchDescriptor(d, indexRef.current);
-              if (member) {
-                const s = streakRef.current;
-                streakRef.current = { id: member.id, count: s.id === member.id ? s.count + 1 : 1 };
-                if (streakRef.current.count >= CONFIRM_FRAMES) doLogin(member);
-              } else {
-                streakRef.current = { id: null, count: 0 };
-              }
-            }
-          } catch { /* ignore frame errors */ } finally { busyRef.current = false; }
-        }, 600);
+        timerRef.current = setTimeout(tick, 600);
       } catch (e) {
         setError(
           e.name === 'NotAllowedError' ? 'Camera permission denied — use manual login below'
@@ -84,8 +136,13 @@ export default function QCKioskLogin({ onLogin }) {
         setReady(false);
       }
     })();
-    return () => { cancelled = true; if (scanRef.current) clearInterval(scanRef.current); if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop()); };
-  }, [doLogin]);
+
+    return () => {
+      cancelled = true;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    };
+  }, [doLogin, backToScan]);
 
   const pickMember = (m) => {
     if (m.has_pin) { setPicked(m); setPin(''); setMode('pin'); }
@@ -118,7 +175,7 @@ export default function QCKioskLogin({ onLogin }) {
           <>
             <div className="relative rounded-3xl overflow-hidden bg-slate-900 aspect-square mb-4 shadow-lg">
               <video ref={videoRef} muted playsInline className="w-full h-full object-cover -scale-x-100" />
-              {ready && scanning && (
+              {ready && phase === 'scan' && (
                 <>
                   <div className="absolute inset-6 border-2 border-white/40 rounded-3xl" />
                   <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/50 px-3 py-1.5 rounded-full text-white text-xs">
@@ -126,6 +183,22 @@ export default function QCKioskLogin({ onLogin }) {
                     Scanning…
                   </div>
                 </>
+              )}
+              {ready && phase === 'liveness' && candidate && (
+                <div className="absolute inset-0 flex flex-col items-center justify-end pb-5" data-testid="qc-liveness-prompt">
+                  <div className="absolute inset-6 border-2 border-sky-400/70 rounded-3xl animate-pulse" />
+                  <div className="bg-black/60 backdrop-blur px-4 py-2.5 rounded-2xl text-center mb-2">
+                    <p className="text-white font-semibold text-sm">{candidate.name}</p>
+                    <p className="text-sky-300 text-xs flex items-center gap-1.5 justify-center mt-0.5"><Eye size={12} /> Blink to confirm it's you</p>
+                  </div>
+                  <button onClick={backToScan} className="text-white/70 text-xs underline underline-offset-2" data-testid="qc-not-me-btn">Not me</button>
+                </div>
+              )}
+              {phase === 'success' && candidate && (
+                <div className="absolute inset-0 bg-emerald-500/85 flex flex-col items-center justify-center gap-2" data-testid="qc-face-success">
+                  <Check className="text-white animate-in zoom-in duration-300" size={64} strokeWidth={3} />
+                  <p className="text-white font-bold">Welcome, {candidate.name}</p>
+                </div>
               )}
               {!ready && !error && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-2">

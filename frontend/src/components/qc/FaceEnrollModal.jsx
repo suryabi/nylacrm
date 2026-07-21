@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { Loader2, Camera, Check, X, ScanFace } from 'lucide-react';
-import { loadModels, getDescriptor } from '../../lib/faceRecognition';
+import { Loader2, Check, X, ScanFace } from 'lucide-react';
+import { loadModels, getFullDetection, headPose, poseGap, isGoodFace } from '../../lib/faceRecognition';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-const SAMPLES_NEEDED = 3;
+const TARGET = 7;          // angle samples to collect
+const POSE_GAP_MIN = 0.055; // how different a new head angle must be
 
 function getAuthHeaders() {
   const token = localStorage.getItem('token');
@@ -13,17 +14,80 @@ function getAuthHeaders() {
   return { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' };
 }
 
+// Face ID-style tick ring that fills as samples are captured.
+const TickRing = ({ progress, done }) => {
+  const ticks = 36;
+  const filled = Math.round(progress * ticks);
+  return (
+    <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none">
+      {Array.from({ length: ticks }).map((_, i) => (
+        <line key={i} x1="100" y1="3" x2="100" y2="15"
+          stroke={done ? '#10b981' : i < filled ? '#10b981' : 'rgba(148,163,184,0.35)'}
+          strokeWidth="3.5" strokeLinecap="round"
+          style={{ transition: 'stroke 0.3s ease' }}
+          transform={`rotate(${(360 / ticks) * i} 100 100)`} />
+      ))}
+    </svg>
+  );
+};
+
 export const FaceEnrollModal = ({ member, onClose, onDone }) => {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const timerRef = useRef(null);
+  const samplesRef = useRef([]);   // [{descriptor, pose}]
+  const stalledRef = useRef(0);
+  const doneRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
-  const [samples, setSamples] = useState([]);
-  const [capturing, setCapturing] = useState(false);
+  const [count, setCount] = useState(0);
+  const [hint, setHint] = useState('Position your face in the circle');
+  const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+
+    const save = async () => {
+      setSaving(true);
+      try {
+        await axios.put(`${API_URL}/production/qc-team/${member.id}/face`,
+          { descriptors: samplesRef.current.map(s => s.descriptor) }, { headers: getAuthHeaders() });
+        setDone(true);
+        toast.success(`Face ID set up for ${member.name}`);
+        setTimeout(() => { onDone?.(); onClose(); }, 1400);
+      } catch (err) {
+        doneRef.current = false;
+        toast.error(err.response?.data?.detail || 'Failed to save — try again');
+        setSaving(false);
+        timerRef.current = setTimeout(tick, 400);
+      }
+    };
+
+    const tick = async () => {
+      if (cancelled || doneRef.current) return;
+      try {
+        const det = await getFullDetection(videoRef.current, true);
+        if (!isGoodFace(det)) {
+          setHint(det ? 'Move a little closer' : 'Position your face in the circle');
+        } else {
+          const pose = headPose(det.landmarks);
+          const isNewAngle = samplesRef.current.every(s => poseGap(s.pose, pose) > POSE_GAP_MIN);
+          stalledRef.current += 1;
+          if (samplesRef.current.length === 0 || isNewAngle || stalledRef.current > 9) {
+            samplesRef.current.push({ descriptor: Array.from(det.descriptor), pose });
+            stalledRef.current = 0;
+            setCount(samplesRef.current.length);
+            setHint(samplesRef.current.length >= TARGET ? 'All angles captured' : 'Move your head slowly in a circle');
+            if (samplesRef.current.length >= TARGET) { doneRef.current = true; save(); return; }
+          } else {
+            setHint('Keep turning your head slowly…');
+          }
+        }
+      } catch { /* ignore frame errors */ }
+      if (!cancelled && !doneRef.current) timerRef.current = setTimeout(tick, 380);
+    };
+
     (async () => {
       try {
         await loadModels();
@@ -32,39 +96,24 @@ export const FaceEnrollModal = ({ member, onClose, onDone }) => {
         streamRef.current = stream;
         if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
         setReady(true);
+        timerRef.current = setTimeout(tick, 600);
       } catch (e) {
         setError(e.name === 'NotAllowedError' ? 'Camera permission denied' : 'Could not start camera / load models');
       }
     })();
-    return () => { cancelled = true; if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop()); };
-  }, []);
 
-  const capture = useCallback(async () => {
-    if (!ready || capturing) return;
-    setCapturing(true);
-    try {
-      const d = await getDescriptor(videoRef.current);
-      if (!d) { toast.error('No face detected — look straight at the camera'); return; }
-      setSamples(prev => [...prev, d]);
-      toast.success(`Captured ${samples.length + 1}/${SAMPLES_NEEDED}`);
-    } finally {
-      setCapturing(false);
-    }
-  }, [ready, capturing, samples.length]);
+    return () => {
+      cancelled = true;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    };
+  }, [member.id, member.name, onClose, onDone]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const save = async () => {
-    if (samples.length === 0) return;
-    setSaving(true);
-    try {
-      await axios.put(`${API_URL}/production/qc-team/${member.id}/face`, { descriptors: samples }, { headers: getAuthHeaders() });
-      toast.success(`Face enrolled for ${member.name}`);
-      onDone?.();
-      onClose();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to save face');
-    } finally {
-      setSaving(false);
-    }
+  const reset = () => {
+    samplesRef.current = [];
+    stalledRef.current = 0;
+    setCount(0);
+    setHint('Move your head slowly in a circle');
   };
 
   return (
@@ -73,40 +122,37 @@ export const FaceEnrollModal = ({ member, onClose, onDone }) => {
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ScanFace size={18} className="text-slate-700" />
-            <p className="font-bold text-slate-800">Enrol face · {member.name}</p>
+            <p className="font-bold text-slate-800">Set up Face ID · {member.name}</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100" data-testid="face-enroll-close"><X size={16} /></button>
         </div>
-        <div className="p-5">
-          <div className="relative rounded-2xl overflow-hidden bg-slate-900 aspect-square mb-4">
-            <video ref={videoRef} muted playsInline className="w-full h-full object-cover -scale-x-100" />
-            {!ready && !error && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-2">
-                <Loader2 className="w-6 h-6 animate-spin" /><span className="text-xs">Starting camera…</span>
-              </div>
-            )}
-            {error && <div className="absolute inset-0 flex items-center justify-center text-red-300 text-sm px-6 text-center">{error}</div>}
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-              {Array.from({ length: SAMPLES_NEEDED }).map((_, i) => (
-                <span key={i} className={`w-2.5 h-2.5 rounded-full ${i < samples.length ? 'bg-emerald-400' : 'bg-white/40'}`} />
-              ))}
+        <div className="p-6">
+          <div className="relative aspect-square max-w-[300px] mx-auto mb-5">
+            <TickRing progress={count / TARGET} done={done} />
+            <div className="absolute inset-5 rounded-full overflow-hidden bg-slate-900">
+              <video ref={videoRef} muted playsInline className="w-full h-full object-cover -scale-x-100" />
+              {!ready && !error && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin" /><span className="text-xs">Starting camera…</span>
+                </div>
+              )}
+              {error && <div className="absolute inset-0 flex items-center justify-center text-red-300 text-xs px-6 text-center">{error}</div>}
+              {done && (
+                <div className="absolute inset-0 bg-emerald-500/85 flex items-center justify-center" data-testid="face-enroll-success">
+                  <Check className="text-white animate-in zoom-in duration-300" size={64} strokeWidth={3} />
+                </div>
+              )}
             </div>
           </div>
-          <p className="text-xs text-slate-500 text-center mb-4">Capture {SAMPLES_NEEDED} shots from slightly different angles. Only a numeric signature is stored — no photos.</p>
-          <div className="flex gap-2">
-            {samples.length < SAMPLES_NEEDED ? (
-              <button onClick={capture} disabled={!ready || capturing}
-                className="flex-1 px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50" data-testid="face-capture-btn">
-                {capturing ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />} Capture ({samples.length}/{SAMPLES_NEEDED})
-              </button>
-            ) : (
-              <button onClick={save} disabled={saving}
-                className="flex-1 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50" data-testid="face-save-btn">
-                {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} Save enrolment
-              </button>
-            )}
-            {samples.length > 0 && <button onClick={() => setSamples([])} className="px-4 py-3 rounded-xl border border-slate-200 text-slate-600 text-sm" data-testid="face-reset-btn">Reset</button>}
-          </div>
+          <p className="text-sm font-medium text-slate-700 text-center mb-1" data-testid="face-enroll-hint">
+            {done ? `Face ID ready for ${member.name}` : saving ? 'Saving…' : hint}
+          </p>
+          <p className="text-xs text-slate-400 text-center mb-4">
+            {done ? '' : `${count}/${TARGET} angles · Only a numeric signature is stored — no photos. Replaces any previous enrollment.`}
+          </p>
+          {!done && count > 0 && !saving && (
+            <button onClick={reset} className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm" data-testid="face-reset-btn">Start over</button>
+          )}
         </div>
       </div>
     </div>

@@ -1426,3 +1426,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 ## 2026-06 (fork): Face re-enrollment now REPLACES previous signatures
 - PUT /api/production/qc-team/{id}/face changed from append (last-10) to full replace
 - Verified via curl: enroll 3 samples → re-enroll 2 → index holds only the 2 new ones; test data cleaned up
+
+## 2026-06 (fork): Apple-style Face ID experience (option c)
+- faceRecognition.js: added getFullDetection, headPose (yaw/pitch from 68 landmarks), poseGap, eyeOpenness (EAR), isGoodFace quality gate; EAR_CLOSED=0.21, EAR_OPEN=0.27
+- FaceEnrollModal rewritten: auto-capture guided enrollment — "move your head slowly in a circle", 7 angle-distinct samples (POSE_GAP_MIN 0.055, stall fallback after 9 good frames), Face ID tick-ring SVG fills, quality gate hints, auto-save + success check animation. Manual capture button removed.
+- QCKioskLogin rewritten: phased flow scan → liveness → success. After 3-frame identity confirm, blink liveness challenge (EAR closed→open transition, 8s timeout, "Not me" button), final descriptor re-check post-blink, green success animation before login. Liveness loop at 130ms, scan at 600ms.
+- Verified headless: kiosk scan + enrollment modal render, quality gate rejects no-face feed, manual pick→PIN regression passes. REAL-FACE blink + circle enrollment need on-device user validation.
