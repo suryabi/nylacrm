@@ -1845,3 +1845,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Applied to both login endpoints (server.py /auth/login and routes/auth.py); login_attempts.identifier index ensured at startup
 - Also fixed 4 remaining samesite=none cookies in routes/auth.py -> lax (SEC-002 completion)
 - Verified via curl: 5x401 -> 429 with friendly message; success clears counter; frontend Login.js already displays the detail message
+
+## 2026-06 (fork): QC Station — tablet-first real-time rejection capture (NEW MODULE)
+- Same-app new module (moduleKey qc_station) under Production; route /qc-station; menu after Production Batches
+- Flow: pick active batch -> pick QC stage -> set crates inspected -> tap large reason tiles (each tap +1 rejected, undo -1, live counter) -> Submit
+- Real-time autosave per tap; sessions stored in new qc_sessions collection (tenant-scoped); resume open session on re-entry
+- Submit reuses record_inspection so existing balances/reports/costs stay intact (maps reason_id -> reason name)
+- Rejection Reasons admin page enhanced: color swatch + lucide icon picker + optional image upload + live tile preview + card grid
+- Backend endpoints in production_qc.py: GET /qc-sessions/active, POST /qc-sessions, PATCH /qc-sessions/{id}/tap, PATCH /qc-sessions/{id}, DELETE /qc-sessions/{id}, POST /qc-sessions/{id}/submit; rejection-reasons now carry color/icon/image
+- role.py: added qc_station module key/label/Production category
+- Tested: testing_agent iteration_335 — 9/9 backend + 100 0.000000rontend pass (new /app/backend/tests/test_qc_station.py)
