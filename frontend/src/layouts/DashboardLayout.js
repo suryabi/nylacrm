@@ -16,7 +16,7 @@ import {
   Search, Target, CalendarDays, UsersRound,
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
-  Kanban, Wrench, Box, ShieldCheck, Boxes, TabletSmartphone,
+  Kanban, Wrench, Box, ShieldCheck, Boxes, TabletSmartphone, Radio,
   Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Bell, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus, PanelLeftClose, PanelLeftOpen, Printer, Mail, Share2, MessageSquareWarning, RotateCcw, TrendingUp, Banknote
 } from 'lucide-react';
 
@@ -120,6 +120,7 @@ const productionNavigationGroups = [
       { name: 'Dashboard', href: '/production-dashboard', icon: BarChart3, moduleKey: 'production_dashboard', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Production Batches', href: '/production-batches', icon: Factory, moduleKey: 'production_batches', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'QC Station', href: '/qc-station', icon: TabletSmartphone, moduleKey: 'qc_station', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'QC Live Board', href: '/qc-live-board', icon: Radio, moduleKey: 'qc_live_board', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Admin', 'System Admin'] },
       { name: 'QC Routes', href: '/qc-routes', icon: ArrowRight, moduleKey: 'qc_routes', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
       { name: 'QC Team', href: '/qc-team', icon: Users, moduleKey: 'qc_team', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
       { name: 'Rejection Reasons', href: '/rejection-reasons', icon: AlertTriangle, moduleKey: 'rejection_reasons', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },

@@ -1777,6 +1777,61 @@ def _public_session(s: dict) -> dict:
     return {k: v for k, v in (s or {}).items() if k != "_id"}
 
 
+@router.get("/qc-sessions/live")
+async def live_qc_sessions(current_user: dict = Depends(get_current_user)):
+    """Supervisor board: all OPEN QC Station sessions across the tenant right
+    now, enriched with per-session totals and recency."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    sessions = await tdb.qc_sessions.find(
+        {"tenant_id": tenant_id, "status": "open"}, {"_id": 0}
+    ).sort("updated_at", -1).to_list(500)
+
+    # Resolve reason names/colors once for building a top-reasons summary
+    reasons = await tdb.rejection_reasons.find(
+        {"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1, "color": 1}
+    ).to_list(500)
+    rmap = {r["id"]: r for r in reasons}
+
+    out = []
+    for s in sessions:
+        counts = s.get("counts", {}) or {}
+        total_rejected = sum(int(c) for c in counts.values())
+        breakdown = sorted(
+            [
+                {
+                    "reason_id": rid,
+                    "name": (rmap.get(rid) or {}).get("name", "Unknown"),
+                    "color": (rmap.get(rid) or {}).get("color", "#334155"),
+                    "count": int(c),
+                }
+                for rid, c in counts.items() if int(c) > 0
+            ],
+            key=lambda x: x["count"], reverse=True,
+        )
+        out.append({
+            "id": s.get("id"),
+            "operator_id": s.get("operator_id"),
+            "operator_name": s.get("operator_name"),
+            "batch_id": s.get("batch_id"),
+            "batch_number": s.get("batch_number"),
+            "sku_name": s.get("sku_name"),
+            "stage_id": s.get("stage_id"),
+            "stage_name": s.get("stage_name"),
+            "stage_type": s.get("stage_type"),
+            "crates_inspected": s.get("crates_inspected", 0),
+            "total_rejected": total_rejected,
+            "breakdown": breakdown,
+            "started_at": s.get("created_at"),
+            "last_activity_at": s.get("updated_at"),
+        })
+    return {
+        "sessions": out,
+        "active_operators": len({s["operator_id"] for s in out if s.get("operator_id")}),
+        "as_of": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @router.get("/qc-sessions/active")
 async def get_active_qc_session(
     batch_id: Optional[str] = None,

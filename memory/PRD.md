@@ -1855,3 +1855,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Backend endpoints in production_qc.py: GET /qc-sessions/active, POST /qc-sessions, PATCH /qc-sessions/{id}/tap, PATCH /qc-sessions/{id}, DELETE /qc-sessions/{id}, POST /qc-sessions/{id}/submit; rejection-reasons now carry color/icon/image
 - role.py: added qc_station module key/label/Production category
 - Tested: testing_agent iteration_335 — 9/9 backend + 100 0.000000rontend pass (new /app/backend/tests/test_qc_station.py)
+
+## 2026-06 (fork): QC Live Board (supervisor real-time view)
+- New page /qc-live-board (moduleKey qc_live_board) under Production menu, gated to manager/supervisor+ roles
+- Backend GET /production/qc-sessions/live: all OPEN qc_sessions tenant-wide, enriched with total_rejected, reason breakdown (name+color+count), started/last-activity times, active operator count
+- Frontend auto-refreshes every 5s; cards show operator avatar+active/idle status, batch/stage, crates/rejected/rej-per-crate, top-reason chips; live pulse header
+- Self-tested: curl (2 live sessions rendered) + UI screenshot (2 cards); reuses qc_sessions from QC Station (tested iteration_335)
