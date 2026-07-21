@@ -14,19 +14,26 @@ function getAuthHeaders() {
   return { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' };
 }
 
-// Face ID-style tick ring that fills as samples are captured.
+// Face ID-style tick ring that fills clockwise as samples are captured.
 const TickRing = ({ progress, done }) => {
-  const ticks = 36;
-  const filled = Math.round(progress * ticks);
+  const ticks = 60;
+  const filled = done ? ticks : Math.round(progress * ticks);
   return (
     <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full pointer-events-none">
-      {Array.from({ length: ticks }).map((_, i) => (
-        <line key={i} x1="100" y1="3" x2="100" y2="15"
-          stroke={done ? '#10b981' : i < filled ? '#10b981' : 'rgba(148,163,184,0.35)'}
-          strokeWidth="3.5" strokeLinecap="round"
-          style={{ transition: 'stroke 0.3s ease' }}
-          transform={`rotate(${(360 / ticks) * i} 100 100)`} />
-      ))}
+      {Array.from({ length: ticks }).map((_, i) => {
+        const active = i < filled;
+        const leading = !done && active && i === filled - 1;
+        return (
+          <line key={i} x1="100" y1={leading ? 3 : 4.5} x2="100" y2={leading ? 13 : 11.5}
+            stroke={active ? '#10b981' : '#e2e8f0'}
+            strokeWidth={leading ? 3 : 2} strokeLinecap="round"
+            style={{
+              transition: 'stroke 0.35s ease, stroke-width 0.2s ease',
+              filter: active ? 'drop-shadow(0 0 1.5px rgba(16,185,129,0.55))' : 'none',
+            }}
+            transform={`rotate(${(360 / ticks) * i} 100 100)`} />
+        );
+      })}
     </svg>
   );
 };
@@ -51,6 +58,8 @@ export const FaceEnrollModal = ({ member, onClose, onDone }) => {
     const save = async () => {
       setSaving(true);
       try {
+        // Erase any previous enrollment first, then store the fresh one.
+        await axios.delete(`${API_URL}/production/qc-team/${member.id}/face`, { headers: getAuthHeaders() });
         await axios.put(`${API_URL}/production/qc-team/${member.id}/face`,
           { descriptors: samplesRef.current.map(s => s.descriptor) }, { headers: getAuthHeaders() });
         setDone(true);
@@ -129,7 +138,7 @@ export const FaceEnrollModal = ({ member, onClose, onDone }) => {
         <div className="p-6">
           <div className="relative aspect-square max-w-[300px] mx-auto mb-5">
             <TickRing progress={count / TARGET} done={done} />
-            <div className="absolute inset-5 rounded-full overflow-hidden bg-slate-900">
+            <div className="absolute inset-[34px] rounded-full overflow-hidden bg-slate-900 ring-1 ring-slate-100 shadow-inner">
               <video ref={videoRef} muted playsInline className="w-full h-full object-cover -scale-x-100" />
               {!ready && !error && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-2">

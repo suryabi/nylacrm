@@ -1444,3 +1444,7 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - createBlinkDetector() in faceRecognition.js: learns per-person open-eye baseline (EMA), blink = dip below 76% of baseline then recovery above 90%
 - Liveness loop now runs back-to-back (40ms delay) for max frame rate; timeout 8s → 12s; prompt asks to "blink slowly"
 - Compile + kiosk smoke verified; real blink needs on-tablet retest by user
+
+## 2026-06 (fork): Enrollment replace guarantee + prettier tick ring
+- User reported enrollment still appending — verified PREVIEW backend replaces correctly (2x7 enrolls → 7 samples). User was almost certainly on PRODUCTION which still runs old append code (deploy failed). Belt-and-braces: FaceEnrollModal save() now calls DELETE face THEN PUT, guaranteeing erase on any backend version.
+- TickRing redesigned: 60 thin (2px) short ticks, slate-200 unfilled / emerald + glow filled, brighter longer leading tick, video inset 34px with ring-1 for clean separation
