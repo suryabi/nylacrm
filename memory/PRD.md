@@ -1895,3 +1895,10 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Capture screen shows "N crates pending at this stage" and clamps crates-inspected to pending (backend already validates)
 - Batch Detail header: new "QC Station" deep-link button -> /qc-station?batch={id} (auto-opens stage step)
 - Fixed batch label: batches use batch_code (not batch_number) — sessions, QC Station cards, capture header, Live Board and shift report now show batch_code
+
+## 2026-06 (fork): QC Station <-> Batch Detail integration VERIFIED (iteration_337, 22/22 tests)
+- Batch Detail header "QC Station" button deep-links to /qc-station?batch={id} (auto-opens that batch's stage step)
+- QC Station stage step mirrors batch flow: per-stage Received/Pending/Passed (crates) + Rejected (bottles) + Unallocated tile; inline Receive uses same POST /batches/{id}/move
+- Submissions route through record_inspection -> update same stage_balances + total_rejected; appear in Batch Detail Inspection Records by QC person + reason
+- Units confirmed: rejected=bottles, received/pending/passed=crates; Batch Detail column now "Rejected (btl)"; crates-inspected clamped to stage pending
+- New tests: /app/backend/tests/test_qc_station_batch_integration.py; test batch 790149fb reset to clean state after testing
