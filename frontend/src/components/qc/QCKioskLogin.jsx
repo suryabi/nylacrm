@@ -2,7 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { Loader2, ScanFace, Users, KeyRound, ArrowLeft, ShieldCheck, Check } from 'lucide-react';
-import { loadModels, getDescriptor, matchDescriptor, CONFIRM_FRAMES } from '../../lib/faceRecognition';
+import {
+  loadModels, getDescriptor, getFullDetection, matchDescriptor, CONFIRM_FRAMES,
+  eyeOpenness, headPose, createLivenessDetector, faceDebugEnabled,
+} from '../../lib/faceRecognition';
+import FaceDebugPanel from '../auth/FaceDebugPanel';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const CONFIRM_TIMEOUT = 20000; // return to scanning if nobody taps
@@ -32,6 +36,10 @@ export default function QCKioskLogin({ onLogin }) {
   const [picked, setPicked] = useState(null);
   const [pin, setPin] = useState('');
   const [verifying, setVerifying] = useState(false);
+  const [debug, setDebug] = useState(null);
+  const livenessRef = useRef(null);
+  const confirmActionRef = useRef(null);
+  const debugOn = faceDebugEnabled();
   const onLoginRef = useRef(onLogin);
   onLoginRef.current = onLogin;
 
@@ -71,6 +79,7 @@ export default function QCKioskLogin({ onLogin }) {
               if (streakRef.current.count >= CONFIRM_FRAMES) {
                 candidateRef.current = member;
                 setCandidate(member);
+                livenessRef.current = createLivenessDetector();
                 setPhaseBoth('confirm');
                 confirmTimerRef.current = setTimeout(() => {
                   if (phaseRef.current === 'confirm') backToScan();
@@ -80,10 +89,18 @@ export default function QCKioskLogin({ onLogin }) {
               streakRef.current = { id: null, count: 0 };
             }
           }
+        } else if (phaseRef.current === 'confirm' && livenessRef.current) {
+          const t0 = performance.now();
+          const det = await getFullDetection(videoRef.current, false);
+          if (det) {
+            const ev = livenessRef.current.update({ ear: eyeOpenness(det.landmarks), yaw: headPose(det.landmarks).yaw });
+            if (debugOn) setDebug({ ...livenessRef.current.state, fps: 1000 / Math.max(1, performance.now() - t0), event: ev || undefined });
+            if (ev && confirmActionRef.current) { confirmActionRef.current(); return; }
+          }
         }
       } catch { /* ignore frame errors */ }
       if (!cancelled && !stoppedRef.current) {
-        timerRef.current = setTimeout(tick, 600);
+        timerRef.current = setTimeout(tick, phaseRef.current === 'confirm' ? 70 : 600);
       }
     };
 
@@ -129,6 +146,7 @@ export default function QCKioskLogin({ onLogin }) {
     setPhaseBoth('success');
     setTimeout(() => doLogin(candidateRef.current), 700);
   };
+  confirmActionRef.current = confirmIdentity;
 
   const pickMember = (m) => {
     if (m.has_pin) { setPicked(m); setPin(''); setMode('pin'); }
@@ -161,6 +179,7 @@ export default function QCKioskLogin({ onLogin }) {
           <>
             <div className="relative rounded-3xl overflow-hidden bg-slate-900 aspect-square mb-4 shadow-lg">
               <video ref={videoRef} muted playsInline className="w-full h-full object-cover -scale-x-100" />
+              {debugOn && <FaceDebugPanel data={debug} />}
               {ready && phase === 'scan' && (
                 <>
                   <div className="absolute inset-6 border-2 border-white/40 rounded-3xl" />
@@ -180,6 +199,7 @@ export default function QCKioskLogin({ onLogin }) {
                     className="w-full max-w-[260px] px-4 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-base active:scale-95 transition-transform"
                     data-testid="qc-confirm-yes-btn">Yes, it's me — start</button>
                   <button onClick={backToScan} className="text-white/70 text-sm underline underline-offset-2" data-testid="qc-not-me-btn">Not me</button>
+                  <p className="text-white/50 text-[11px] -mt-1">A blink or slight head turn also confirms</p>
                 </div>
               )}
               {phase === 'success' && candidate && (

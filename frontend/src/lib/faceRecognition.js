@@ -82,32 +82,52 @@ export function eyeOpenness(landmarks) {
   return (ear(landmarks.getLeftEye()) + ear(landmarks.getRightEye())) / 2;
 }
 
-// Dual liveness: passes on a blink OR a slight head turn (photos can do neither).
-// Blink uses an adaptive per-person baseline; head turn uses yaw delta from start.
-export function createLivenessDetector() {
+// Dual liveness: fires 'blink' or 'turn'. Object API exposes live state for the
+// on-screen debug meter (enable with ?facedebug=1). Thresholds tunable via opts.
+export function createLivenessDetector(opts = {}) {
+  const dipRatio = opts.dipRatio ?? 0.85;
+  const recoverRatio = opts.recoverRatio ?? 0.93;
+  const yawDelta = opts.yawDelta ?? 0.04;
   let baseEar = null;
   let yaw0 = null;
   let frames = 0;
   let closed = false;
   let yawHits = 0;
-  return ({ ear, yaw }) => {
-    frames += 1;
-    if (baseEar === null) { baseEar = ear; yaw0 = yaw; return false; }
-    if (!closed && ear > baseEar * 0.9) baseEar = baseEar * 0.8 + ear * 0.2;
-    if (frames < 3) return false;
-    if (!closed && ear < baseEar * 0.82) {
-      closed = true;
-    } else if (closed && ear > baseEar * 0.92) {
-      return true;
-    }
-    if (Math.abs(yaw - yaw0) > 0.055) {
-      yawHits += 1;
-      if (yawHits >= 2) return true;
-    } else {
-      yawHits = 0;
-    }
-    return false;
+  const state = { ear: 0, baseEar: 0, ratio: 1, yawDiff: 0, closed: false, frames: 0 };
+  return {
+    state,
+    update({ ear, yaw }) {
+      frames += 1;
+      state.frames = frames;
+      state.ear = ear;
+      if (baseEar === null) { baseEar = ear; yaw0 = yaw; state.baseEar = baseEar; return null; }
+      if (!closed && ear > baseEar * 0.9) baseEar = baseEar * 0.8 + ear * 0.2;
+      state.baseEar = baseEar;
+      state.ratio = baseEar ? ear / baseEar : 1;
+      state.yawDiff = Math.abs(yaw - yaw0);
+      state.closed = closed;
+      if (frames < 3) return null;
+      if (!closed && ear < baseEar * dipRatio) {
+        closed = true;
+        state.closed = true;
+      } else if (closed && ear > baseEar * recoverRatio) {
+        return 'blink';
+      }
+      if (state.yawDiff > yawDelta) {
+        yawHits += 1;
+        if (yawHits >= 2) return 'turn';
+      } else {
+        yawHits = 0;
+      }
+      return null;
+    },
   };
+}
+
+export function faceDebugEnabled() {
+  try {
+    return new URLSearchParams(window.location.search).has('facedebug') || localStorage.getItem('face_debug') === '1';
+  } catch { return false; }
 }
 
 // Wait up to ~2s for a good frontal frame (used after a head-turn liveness pass).

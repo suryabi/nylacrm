@@ -1482,3 +1482,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - QCKioskLogin: 3-frame match → confirm overlay "Welcome, X" with [Yes, it's me — start] + [Not me]; 20s auto-return to scanning
 - createLivenessDetector/eyeOpenness remain in lib but unused by login flows
 - Verified: modal align phase + kiosk PIN regression pass; tap-confirm needs real-face user validation
+
+## 2026-06 (fork): Option 2 + Option 4 combined — tap OR gesture confirm + debug meter
+- Confirm screens (CRM FaceLoginModal + QCKioskLogin) now ALSO auto-confirm on gesture: blink (dip<0.85 base, recover>0.93) or head turn (yawΔ>0.04, 2 frames) — tap remains fallback for all devices
+- createLivenessDetector refactored to object API {update(), state} with tunable opts; confirm-phase loop at 70ms
+- FaceDebugPanel (components/auth/FaceDebugPanel.jsx): live EAR/baseline/ratio/yawΔ/fps/event overlay — enable via ?facedebug=1 or localStorage face_debug=1 (works on /login and /qc-station)
+- Verified: compile clean, both pages load with facedebug param; gesture auto-confirm needs real-face user validation (debug values will guide threshold tuning)

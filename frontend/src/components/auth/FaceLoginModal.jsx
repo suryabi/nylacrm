@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Loader2, X, ScanFace, Check } from 'lucide-react';
-import { loadModels, getFullDetection, isGoodFace, captureFrontal, getDeviceToken } from '../../lib/faceRecognition';
+import {
+  loadModels, getFullDetection, isGoodFace, captureFrontal, getDeviceToken,
+  eyeOpenness, headPose, createLivenessDetector, faceDebugEnabled,
+} from '../../lib/faceRecognition';
+import FaceDebugPanel from './FaceDebugPanel';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -16,6 +20,10 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
   const [phase, setPhase] = useState('align'); // align | verifying | confirm | success
   const [pending, setPending] = useState(null); // server login response awaiting user tap
   const [error, setError] = useState('');
+  const [debug, setDebug] = useState(null);
+  const livenessRef = useRef(null);
+  const confirmRef = useRef(null);
+  const debugOn = faceDebugEnabled();
   const onSuccessRef = useRef(onSuccess);
   onSuccessRef.current = onSuccess;
 
@@ -32,6 +40,7 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
           { descriptor: Array.from(full.descriptor), device_token: getDeviceToken() },
           { withCredentials: true, headers: { 'X-Tenant-ID': tenantId } });
         setPending(data);
+        livenessRef.current = createLivenessDetector();
         setPhaseBoth('confirm');
       } catch (err) {
         setError(err.response?.data?.detail || 'Face login failed — try again or use your password');
@@ -55,10 +64,18 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
           } else {
             alignRef.current = 0;
           }
+        } else if (phaseRef.current === 'confirm' && livenessRef.current) {
+          const t0 = performance.now();
+          const det = await getFullDetection(videoRef.current, false);
+          if (det) {
+            const ev = livenessRef.current.update({ ear: eyeOpenness(det.landmarks), yaw: headPose(det.landmarks).yaw });
+            if (debugOn) setDebug({ ...livenessRef.current.state, fps: 1000 / Math.max(1, performance.now() - t0), event: ev || undefined });
+            if (ev && confirmRef.current) { confirmRef.current(); return; }
+          }
         }
       } catch { /* ignore frame errors */ }
       if (!cancelled && !stoppedRef.current) {
-        timerRef.current = setTimeout(tick, 400);
+        timerRef.current = setTimeout(tick, phaseRef.current === 'confirm' ? 70 : 400);
       }
     };
 
@@ -94,6 +111,7 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
     setPhaseBoth('success');
     setTimeout(() => onSuccessRef.current(pending), 600);
   };
+  confirmRef.current = confirmLogin;
 
   const notMe = async () => {
     const token = pending?.session_token;
@@ -129,6 +147,7 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
             <div className={`absolute inset-0 rounded-full border-2 transition-colors duration-300 ${phase === 'confirm' ? 'border-sky-400' : phase === 'success' ? 'border-emerald-500' : 'border-slate-200'}`} />
             <div className="absolute inset-3 rounded-full overflow-hidden bg-slate-900">
               <video ref={videoRef} muted playsInline className="w-full h-full object-cover -scale-x-100" />
+              {debugOn && <FaceDebugPanel data={debug} />}
               {!ready && !error && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-2">
                   <Loader2 className="w-6 h-6 animate-spin" /><span className="text-xs">Starting camera…</span>
@@ -152,6 +171,7 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
               <button onClick={notMe}
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm hover:bg-slate-50"
                 data-testid="face-login-notme-btn">Not me</button>
+              <p className="text-[11px] text-slate-400 mt-2">Tip: a blink or slight head turn also confirms</p>
             </div>
           ) : (
             <p className="text-sm font-medium text-slate-700 text-center flex items-center justify-center gap-1.5" data-testid="face-login-status">
