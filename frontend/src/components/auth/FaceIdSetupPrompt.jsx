@@ -43,8 +43,9 @@ export default function FaceIdSetupPrompt() {
         enabledRef.current = data.face_id_enabled !== false;
         if (!enabledRef.current) { localStorage.removeItem('face_enrolled_device'); return; }
         if (data.enrolled && data.device_trusted) localStorage.setItem('face_enrolled_device', '1');
-        if (sessionStorage.getItem('faceid_prompt_checked')) return;
-        sessionStorage.setItem('faceid_prompt_checked', '1');
+        const checkedKey = `faceid_prompt_checked_${user.id}`;
+        if (sessionStorage.getItem(checkedKey)) return;
+        sessionStorage.setItem(checkedKey, '1');
         if (!data.enrolled && !data.prompt_seen) {
           setTimeout(() => setShowPrompt('setup'), 1200);
         } else if (data.enrolled && !data.device_trusted &&

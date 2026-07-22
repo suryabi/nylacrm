@@ -163,7 +163,7 @@ async def face_login(data: FaceLoginIn, request: Request, response: Response):
 
     if not any(verify_password(data.device_token, h) for h in best.get('devices', [])):
         await record_login_failure('__faceid__', login_ip)
-        raise HTTPException(status_code=401, detail='This device is not set up for Face ID — sign in with your password first')
+        raise HTTPException(status_code=401, detail="This device isn't enabled for your Face ID yet — sign in with your password once and tap 'Enable here' when prompted")
 
     tdb = get_tenant_db()
     user_doc = await tdb.users.find_one({'id': best['user_id']}, {'_id': 0})

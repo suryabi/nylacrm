@@ -1494,3 +1494,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - NEW POST /api/auth/face/trust-device {device_token}: adds device hash to enrolled user (requires enrollment); GET /face/status now accepts ?device_token= and returns device_trusted
 - FaceIdSetupPrompt: three states — not enrolled → "Set up Face ID?"; enrolled but device untrusted → "Enable Face ID on this device?" (one-tap trust, per-user skip flag faceid_trust_skip_{userId}); enrolled+trusted → sets face_enrolled_device flag
 - TESTED: 7 curl scenarios (enroll D1/status D1 trusted/D2 untrusted/trust D2/login via D2) + UI trust-prompt flow via browser (prompt → Enable here → flag set); test data cleaned
+
+## 2026-06 (fork): iPad "device not set up" report — root cause + shared-device prompt bug
+- User's production iPad hit the device-trust check (face matched, device untrusted) because PRODUCTION predates the trust-device feature — redeploy required
+- REAL BUG fixed: faceid_prompt_checked sessionStorage key was global per browser session → on shared devices only the FIRST user to log in ever saw the trust/setup prompt. Now per-user: faceid_prompt_checked_{userId}
+- Untrusted-device 401 message now instructive ("sign in with your password once and tap 'Enable here'")
+- Verified: trust prompt appears, skip persists per user across re-login; curl confirms new message; test data cleaned
