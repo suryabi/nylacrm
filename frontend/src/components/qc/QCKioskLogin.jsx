@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { Loader2, ScanFace, Users, KeyRound, ArrowLeft, ShieldCheck, Check, Eye } from 'lucide-react';
-import {
-  loadModels, getDescriptor, getFullDetection, matchDescriptor, eyeOpenness, headPose,
-  createLivenessDetector, captureFrontal, CONFIRM_FRAMES,
-} from '../../lib/faceRecognition';
+import { Loader2, ScanFace, Users, KeyRound, ArrowLeft, ShieldCheck, Check } from 'lucide-react';
+import { loadModels, getDescriptor, matchDescriptor, CONFIRM_FRAMES } from '../../lib/faceRecognition';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-const LIVENESS_TIMEOUT = 12000;
+const CONFIRM_TIMEOUT = 20000; // return to scanning if nobody taps
 
 function getAuthHeaders() {
   const token = localStorage.getItem('token');
@@ -20,11 +17,11 @@ export default function QCKioskLogin({ onLogin }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
+  const confirmTimerRef = useRef(null);
   const indexRef = useRef([]);
   const streakRef = useRef({ id: null, count: 0 });
-  const phaseRef = useRef('scan');       // scan | liveness | success
+  const phaseRef = useRef('scan');       // scan | confirm | success
   const candidateRef = useRef(null);
-  const blinkRef = useRef({ detect: null, started: 0 });
   const stoppedRef = useRef(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
@@ -41,6 +38,7 @@ export default function QCKioskLogin({ onLogin }) {
   const doLogin = useCallback((member) => {
     stoppedRef.current = true;
     if (timerRef.current) clearTimeout(timerRef.current);
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     const op = { id: member.id, name: member.name, role: member.role || '' };
     toast.success(`Welcome, ${member.name}`);
@@ -50,6 +48,7 @@ export default function QCKioskLogin({ onLogin }) {
   const setPhaseBoth = (p) => { phaseRef.current = p; setPhase(p); };
 
   const backToScan = useCallback(() => {
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
     streakRef.current = { id: null, count: 0 };
     candidateRef.current = null;
     setCandidate(null);
@@ -72,38 +71,19 @@ export default function QCKioskLogin({ onLogin }) {
               if (streakRef.current.count >= CONFIRM_FRAMES) {
                 candidateRef.current = member;
                 setCandidate(member);
-                blinkRef.current = { detect: createLivenessDetector(), started: Date.now() };
-                setPhaseBoth('liveness');
+                setPhaseBoth('confirm');
+                confirmTimerRef.current = setTimeout(() => {
+                  if (phaseRef.current === 'confirm') backToScan();
+                }, CONFIRM_TIMEOUT);
               }
             } else {
               streakRef.current = { id: null, count: 0 };
             }
           }
-        } else if (phaseRef.current === 'liveness') {
-          if (Date.now() - blinkRef.current.started > LIVENESS_TIMEOUT) {
-            toast.error("Couldn't verify — blink or turn your head slightly");
-            backToScan();
-          } else {
-            const det = await getFullDetection(videoRef.current, false);
-            if (det) {
-              const alive = blinkRef.current.detect({ ear: eyeOpenness(det.landmarks), yaw: headPose(det.landmarks).yaw });
-              if (alive) {
-                // Liveness passed → wait for a frontal frame, re-check identity, sign in.
-                const full = await captureFrontal(videoRef.current);
-                const m = full ? matchDescriptor(Array.from(full.descriptor), indexRef.current).member : null;
-                if (m && m.id === candidateRef.current?.id) {
-                  setPhaseBoth('success');
-                  setTimeout(() => doLogin(candidateRef.current), 900);
-                  return;
-                }
-                backToScan();
-              }
-            }
-          }
         }
       } catch { /* ignore frame errors */ }
       if (!cancelled && !stoppedRef.current) {
-        timerRef.current = setTimeout(tick, phaseRef.current === 'liveness' ? 40 : 600);
+        timerRef.current = setTimeout(tick, 600);
       }
     };
 
@@ -140,9 +120,15 @@ export default function QCKioskLogin({ onLogin }) {
     return () => {
       cancelled = true;
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const confirmIdentity = () => {
+    setPhaseBoth('success');
+    setTimeout(() => doLogin(candidateRef.current), 700);
+  };
 
   const pickMember = (m) => {
     if (m.has_pin) { setPicked(m); setPin(''); setMode('pin'); }
@@ -184,14 +170,16 @@ export default function QCKioskLogin({ onLogin }) {
                   </div>
                 </>
               )}
-              {ready && phase === 'liveness' && candidate && (
-                <div className="absolute inset-0 flex flex-col items-center justify-end pb-5" data-testid="qc-liveness-prompt">
-                  <div className="absolute inset-6 border-2 border-sky-400/70 rounded-3xl animate-pulse" />
-                  <div className="bg-black/60 backdrop-blur px-4 py-2.5 rounded-2xl text-center mb-2">
-                    <p className="text-white font-semibold text-sm">{candidate.name}</p>
-                    <p className="text-sky-300 text-xs flex items-center gap-1.5 justify-center mt-0.5"><Eye size={12} /> Blink or turn your head slightly</p>
+              {ready && phase === 'confirm' && candidate && (
+                <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm flex flex-col items-center justify-center gap-4 p-6 animate-in fade-in duration-200" data-testid="qc-confirm-overlay">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-sky-500 to-sky-700 text-white flex items-center justify-center font-bold text-xl">
+                    {(candidate.name || '?').split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase()}
                   </div>
-                  <button onClick={backToScan} className="text-white/70 text-xs underline underline-offset-2" data-testid="qc-not-me-btn">Not me</button>
+                  <p className="text-white text-xl font-bold">Welcome, {candidate.name}</p>
+                  <button onClick={confirmIdentity}
+                    className="w-full max-w-[260px] px-4 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-base active:scale-95 transition-transform"
+                    data-testid="qc-confirm-yes-btn">Yes, it's me — start</button>
+                  <button onClick={backToScan} className="text-white/70 text-sm underline underline-offset-2" data-testid="qc-not-me-btn">Not me</button>
                 </div>
               )}
               {phase === 'success' && candidate && (

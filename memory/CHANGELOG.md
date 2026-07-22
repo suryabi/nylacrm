@@ -1475,3 +1475,10 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - captureFrontal() waits up to ~2s for a good frontal frame before the final identity check/submit (prevents mismatch right after a head turn)
 - Applied to QCKioskLogin + FaceLoginModal; prompts now say "Blink or turn your head slightly"
 - LEARNING (2nd occurrence): parallel search_replace on the SAME file dropped one edit silently — edit same-file changes sequentially, then grep-verify
+
+## 2026-06 (fork): Liveness replaced with TAP-TO-CONFIRM (user choice: Option 2)
+- ALL gesture detection (blink/head-turn) removed from login flows
+- FaceLoginModal: align → server match → confirm screen "Recognized as X" with [Sign in as X] + [Not me] (Not me best-effort invalidates the just-created session via /auth/logout)
+- QCKioskLogin: 3-frame match → confirm overlay "Welcome, X" with [Yes, it's me — start] + [Not me]; 20s auto-return to scanning
+- createLivenessDetector/eyeOpenness remain in lib but unused by login flows
+- Verified: modal align phase + kiosk PIN regression pass; tap-confirm needs real-face user validation

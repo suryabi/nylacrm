@@ -1,31 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Loader2, X, ScanFace, Eye, Check } from 'lucide-react';
-import {
-  loadModels, getFullDetection, eyeOpenness, headPose, isGoodFace,
-  createLivenessDetector, captureFrontal, getDeviceToken,
-} from '../../lib/faceRecognition';
+import { Loader2, X, ScanFace, Check } from 'lucide-react';
+import { loadModels, getFullDetection, isGoodFace, captureFrontal, getDeviceToken } from '../../lib/faceRecognition';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-const BLINK_TIMEOUT = 12000;
 
 export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
   const phaseRef = useRef('align');
-  const blinkRef = useRef({ detect: null, started: 0 });
   const alignRef = useRef(0);
   const stoppedRef = useRef(false);
   const [ready, setReady] = useState(false);
-  const [phase, setPhase] = useState('align'); // align | blink | verifying | success
+  const [phase, setPhase] = useState('align'); // align | verifying | confirm | success
+  const [pending, setPending] = useState(null); // server login response awaiting user tap
   const [error, setError] = useState('');
   const onSuccessRef = useRef(onSuccess);
   onSuccessRef.current = onSuccess;
 
+  const setPhaseBoth = (p) => { phaseRef.current = p; setPhase(p); };
+
   useEffect(() => {
     let cancelled = false;
-    const setPhaseBoth = (p) => { phaseRef.current = p; setPhase(p); };
 
     const submit = async () => {
       const full = await captureFrontal(videoRef.current);
@@ -34,9 +31,8 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
         const { data } = await axios.post(`${API_URL}/auth/face/login`,
           { descriptor: Array.from(full.descriptor), device_token: getDeviceToken() },
           { withCredentials: true, headers: { 'X-Tenant-ID': tenantId } });
-        stoppedRef.current = true;
-        setPhaseBoth('success');
-        setTimeout(() => onSuccessRef.current(data), 800);
+        setPending(data);
+        setPhaseBoth('confirm');
       } catch (err) {
         setError(err.response?.data?.detail || 'Face login failed — try again or use your password');
         setPhaseBoth('align');
@@ -53,28 +49,16 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
             alignRef.current += 1;
             if (alignRef.current >= 2) {
               setError('');
-              blinkRef.current = { detect: createLivenessDetector(), started: Date.now() };
-              setPhaseBoth('blink');
-            }
-          } else {
-            alignRef.current = 0;
-          }
-        } else if (phaseRef.current === 'blink') {
-          if (Date.now() - blinkRef.current.started > BLINK_TIMEOUT) {
-            setError('Not verified — blink or turn your head slightly');
-            setPhaseBoth('align');
-            alignRef.current = 0;
-          } else {
-            const det = await getFullDetection(videoRef.current, false);
-            if (det && blinkRef.current.detect({ ear: eyeOpenness(det.landmarks), yaw: headPose(det.landmarks).yaw })) {
               setPhaseBoth('verifying');
               await submit();
             }
+          } else {
+            alignRef.current = 0;
           }
         }
       } catch { /* ignore frame errors */ }
       if (!cancelled && !stoppedRef.current) {
-        timerRef.current = setTimeout(tick, phaseRef.current === 'blink' ? 40 : 400);
+        timerRef.current = setTimeout(tick, 400);
       }
     };
 
@@ -105,12 +89,30 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
     };
   }, [tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const statusText = {
-    align: 'Position your face in the circle',
-    blink: 'Blink or turn your head slightly',
-    verifying: 'Verifying…',
-    success: 'Welcome back!',
-  }[phase];
+  const confirmLogin = () => {
+    stoppedRef.current = true;
+    setPhaseBoth('success');
+    setTimeout(() => onSuccessRef.current(pending), 600);
+  };
+
+  const notMe = async () => {
+    const token = pending?.session_token;
+    setPending(null);
+    setError('');
+    alignRef.current = 0;
+    setPhaseBoth('align');
+    // Best-effort: invalidate the session that was created for the wrong match.
+    if (token) {
+      try {
+        await axios.post(`${API_URL}/auth/logout`, {}, {
+          withCredentials: true,
+          headers: { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId },
+        });
+      } catch { /* ignore */ }
+    }
+  };
+
+  const pendingName = pending?.user?.name || pending?.user?.email || '';
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" data-testid="face-login-modal">
@@ -124,7 +126,7 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
         </div>
         <div className="p-6">
           <div className="relative aspect-square max-w-[260px] mx-auto mb-4">
-            <div className={`absolute inset-0 rounded-full border-2 transition-colors duration-300 ${phase === 'blink' ? 'border-sky-400 animate-pulse' : phase === 'success' ? 'border-emerald-500' : 'border-slate-200'}`} />
+            <div className={`absolute inset-0 rounded-full border-2 transition-colors duration-300 ${phase === 'confirm' ? 'border-sky-400' : phase === 'success' ? 'border-emerald-500' : 'border-slate-200'}`} />
             <div className="absolute inset-3 rounded-full overflow-hidden bg-slate-900">
               <video ref={videoRef} muted playsInline className="w-full h-full object-cover -scale-x-100" />
               {!ready && !error && (
@@ -139,11 +141,24 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
               )}
             </div>
           </div>
-          <p className="text-sm font-medium text-slate-700 text-center flex items-center justify-center gap-1.5" data-testid="face-login-status">
-            {phase === 'blink' && <Eye size={14} className="text-sky-500" />}
-            {phase === 'verifying' && <Loader2 size={14} className="animate-spin" />}
-            {statusText}
-          </p>
+
+          {phase === 'confirm' && pending ? (
+            <div className="text-center animate-in fade-in zoom-in-95 duration-200" data-testid="face-login-confirm">
+              <p className="text-sm text-slate-500 mb-3">Recognized as</p>
+              <p className="text-lg font-bold text-slate-800 -mt-2 mb-4">{pendingName}</p>
+              <button onClick={confirmLogin}
+                className="w-full px-4 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold mb-2"
+                data-testid="face-login-confirm-btn">Sign in as {pendingName}</button>
+              <button onClick={notMe}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm hover:bg-slate-50"
+                data-testid="face-login-notme-btn">Not me</button>
+            </div>
+          ) : (
+            <p className="text-sm font-medium text-slate-700 text-center flex items-center justify-center gap-1.5" data-testid="face-login-status">
+              {phase === 'verifying' && <Loader2 size={14} className="animate-spin" />}
+              {{ align: 'Position your face in the circle', verifying: 'Verifying…', success: 'Welcome back!' }[phase]}
+            </p>
+          )}
           {error && <p className="text-xs text-red-500 text-center mt-2" data-testid="face-login-error">{error}</p>}
         </div>
       </div>
