@@ -2,11 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { Loader2, Check, X, ScanFace } from 'lucide-react';
-import { loadModels, getFullDetection, headPose, poseGap, isGoodFace } from '../../lib/faceRecognition';
+import { loadModels, getFullDetection, headPose, poseGap, faceDebugEnabled } from '../../lib/faceRecognition';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-const TARGET = 7;          // angle samples to collect
-const POSE_GAP_MIN = 0.055; // how different a new head angle must be
+const TARGET = 5;          // angle samples to collect
+const POSE_GAP_MIN = 0.04; // how different a new head angle must be
+const MIN_SCORE = 0.4;
+const MIN_WIDTH_RATIO = 0.15;
 
 function getAuthHeaders() {
   const token = localStorage.getItem('token');
@@ -52,6 +54,8 @@ export const FaceEnrollModal = ({ member, onClose, onDone, onSave, title }) => {
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [debug, setDebug] = useState(null);
+  const debugOn = faceDebugEnabled();
 
   useEffect(() => {
     let cancelled = false;
@@ -83,13 +87,25 @@ export const FaceEnrollModal = ({ member, onClose, onDone, onSave, title }) => {
       if (cancelled || doneRef.current) return;
       try {
         const det = await getFullDetection(videoRef.current, true);
-        if (!isGoodFace(det)) {
-          setHint(det ? 'Move a little closer' : 'Position your face in the circle');
+        const vw = (videoRef.current && videoRef.current.videoWidth) || 480;
+        if (debugOn) {
+          setDebug({
+            score: det ? det.detection.score : null,
+            bw: det ? Math.round(det.detection.box.width) : null,
+            vw, samples: samplesRef.current.length,
+          });
+        }
+        if (!det) {
+          setHint('Position your face in the circle');
+        } else if (det.detection.box.width < vw * MIN_WIDTH_RATIO) {
+          setHint('Move a little closer');
+        } else if (det.detection.score < MIN_SCORE) {
+          setHint('Hold steady — a bit more light helps');
         } else {
           const pose = headPose(det.landmarks);
           const isNewAngle = samplesRef.current.every(s => poseGap(s.pose, pose) > POSE_GAP_MIN);
           stalledRef.current += 1;
-          if (samplesRef.current.length === 0 || isNewAngle || stalledRef.current > 9) {
+          if (samplesRef.current.length === 0 || isNewAngle || stalledRef.current > 5) {
             samplesRef.current.push({ descriptor: Array.from(det.descriptor), pose });
             stalledRef.current = 0;
             setCount(samplesRef.current.length);
@@ -156,6 +172,11 @@ export const FaceEnrollModal = ({ member, onClose, onDone, onSave, title }) => {
           <div className="relative aspect-square max-w-[300px] mx-auto mb-5">
             <TickRing progress={count / TARGET} done={done} />
             <div className="absolute inset-[34px] rounded-full overflow-hidden bg-slate-900 ring-1 ring-slate-100 shadow-inner">
+              {debugOn && debug && (
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 bg-black/75 text-emerald-300 font-mono text-[10px] leading-4 rounded-lg px-2 py-1 pointer-events-none whitespace-nowrap" data-testid="enroll-debug-panel">
+                  score {debug.score ? debug.score.toFixed(2) : '—'} · face {debug.bw ?? '—'}px / {debug.vw}px · {debug.samples}/{TARGET}
+                </div>
+              )}
               <video ref={videoRef} muted playsInline className="w-full h-full object-cover -scale-x-100" />
               {!ready && !error && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-2">

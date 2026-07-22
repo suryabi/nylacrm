@@ -17,6 +17,7 @@ import { Mail, Lock, Loader2, Building2, ArrowRight, BarChart3, Users, TrendingU
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import FaceLoginModal from '../components/auth/FaceLoginModal';
+import { faceDebugEnabled } from '../lib/faceRecognition';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -58,7 +59,9 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(!!rememberedEmail);
   const [loading, setLoading] = useState(false);
   const [showFaceLogin, setShowFaceLogin] = useState(false);
-  const faceIdAvailable = localStorage.getItem('face_enrolled_device') === '1';  const [showRegister, setShowRegister] = useState(false);
+  const faceIdAvailable = localStorage.getItem('face_enrolled_device') === '1';
+  useEffect(() => { faceDebugEnabled(); }, []);
+  const [showRegister, setShowRegister] = useState(false);
   const [tenants, setTenants] = useState([]);
   const [selectedTenant, setSelectedTenant] = useState(tenantFromUrl || rememberedTenant);
   const [loadingTenants, setLoadingTenants] = useState(true);

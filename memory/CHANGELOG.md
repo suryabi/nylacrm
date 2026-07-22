@@ -1500,3 +1500,10 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - REAL BUG fixed: faceid_prompt_checked sessionStorage key was global per browser session → on shared devices only the FIRST user to log in ever saw the trust/setup prompt. Now per-user: faceid_prompt_checked_{userId}
 - Untrusted-device 401 message now instructive ("sign in with your password once and tap 'Enable here'")
 - Verified: trust prompt appears, skip persists per user across re-login; curl confirms new message; test data cleaned
+
+## 2026-06 (fork): Enrollment "gray ticks" fix — quality gate too strict for iPad wide cameras
+- Root cause: isGoodFace assumed 480px frames + score>=0.5 + face>=20% width; iPad wide front cam gives bigger frames/smaller relative faces/lower scores at angles → every frame rejected → zero ticks
+- Fixes: detector scoreThreshold 0.5→0.35; isGoodFace now uses det.detection.imageWidth (actual frame), score>=0.4, width>=15%; enrollment TARGET 7→5 samples; POSE_GAP_MIN 0.055→0.04; stall fallback 9→5 frames (guarantees progress even holding still)
+- Granular hints: no face / move closer / hold steady-more light
+- Enrollment debug overlay (score · face px / frame px · samples) — ?facedebug=1 now PERSISTS via localStorage (set on login page mount, clear with ?facedebug=0)
+- REGRESSION during edit: comment swallowed newline in Login.js (showRegister undefined) — caught by screenshot, fixed

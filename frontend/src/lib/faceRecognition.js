@@ -34,7 +34,7 @@ export function loadModels() {
   return loadPromise;
 }
 
-const detectorOpts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
+const detectorOpts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.35 });
 
 // Full detection with landmarks (and optionally the 128-float descriptor).
 export async function getFullDetection(input, withDescriptor = true) {
@@ -126,7 +126,10 @@ export function createLivenessDetector(opts = {}) {
 
 export function faceDebugEnabled() {
   try {
-    return new URLSearchParams(window.location.search).has('facedebug') || localStorage.getItem('face_debug') === '1';
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('facedebug') === '0') { localStorage.removeItem('face_debug'); return false; }
+    if (p.has('facedebug')) { localStorage.setItem('face_debug', '1'); return true; }
+    return localStorage.getItem('face_debug') === '1';
   } catch { return false; }
 }
 
@@ -140,9 +143,12 @@ export async function captureFrontal(video, tries = 14, delayMs = 150) {
   return null;
 }
 
-// Quality gate: confident detection and face large enough in frame.
-export function isGoodFace(det, inputWidth = 480) {
-  return !!det && det.detection.score >= 0.5 && det.detection.box.width >= inputWidth * 0.2;
+// Quality gate: confident detection and face large enough, relative to the
+// actual camera frame size (wide front cameras make faces look small).
+export function isGoodFace(det, minScore = 0.4, minWidthRatio = 0.15) {
+  if (!det) return false;
+  const w = det.detection.imageWidth || 480;
+  return det.detection.score >= minScore && det.detection.box.width >= w * minWidthRatio;
 }
 
 export function distance(a, b) {
