@@ -19,6 +19,8 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
   const [ready, setReady] = useState(false);
   const [phase, setPhase] = useState('align'); // align | blink | verifying | success
   const [error, setError] = useState('');
+  const onSuccessRef = useRef(onSuccess);
+  onSuccessRef.current = onSuccess;
 
   useEffect(() => {
     let cancelled = false;
@@ -33,7 +35,7 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
           { withCredentials: true, headers: { 'X-Tenant-ID': tenantId } });
         stoppedRef.current = true;
         setPhaseBoth('success');
-        setTimeout(() => onSuccess(data), 800);
+        setTimeout(() => onSuccessRef.current(data), 800);
       } catch (err) {
         setError(err.response?.data?.detail || 'Face login failed — try again or use your password');
         setPhaseBoth('align');
@@ -100,7 +102,7 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     };
-  }, [tenantId, onSuccess]);
+  }, [tenantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const statusText = {
     align: 'Position your face in the circle',

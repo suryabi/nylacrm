@@ -1463,3 +1463,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Backend: face_auth.py _face_id_enabled() gate on /face/enroll (403) + /face/login (403); /face/status returns face_id_enabled; tenant_registration.py public /info exposes flag
 - Frontend: Switch (data-testid toggle-face-id) in TenantSettings → Settings tab auth section; FaceIdSetupPrompt suppresses prompt + sidebar setup (toast) and clears face_enrolled_device when disabled; Login page hides Face ID button via tenantInfo authConfig
 - TESTED: 9 curl scenarios (default on, disable→status/enroll/login blocked, public info, re-enable, QC team unaffected) + settings UI toggle screenshot (renders checked)
+
+## 2026-06 (fork): FIXED camera "blinking" bug in all Face ID interfaces
+- Root cause: camera-init useEffect depended on callback props (onSuccess/onLogin/onClose) recreated on every parent re-render (Login page re-renders ~4s via AnimatePresence carousel; QCStation re-renders on polling) → effect cleanup+re-run → camera stop/start loop = visible flash + recognition state reset each cycle ("nothing happens")
+- Fix: callbacks moved to refs (onSuccessRef/onLoginRef), effect deps reduced to stable values ([tenantId], [], [member.id, attempt]) in FaceLoginModal, QCKioskLogin, FaceEnrollModal
+- Verified via instrumented getUserMedia/track-stop counters: exactly 1 init + 0 stops over 10s (the single extra init observed is React.StrictMode dev double-mount, absent in prod builds)
+- LEARNING: never put inline callback props in camera/stream effect deps

@@ -35,6 +35,8 @@ export default function QCKioskLogin({ onLogin }) {
   const [picked, setPicked] = useState(null);
   const [pin, setPin] = useState('');
   const [verifying, setVerifying] = useState(false);
+  const onLoginRef = useRef(onLogin);
+  onLoginRef.current = onLogin;
 
   const doLogin = useCallback((member) => {
     stoppedRef.current = true;
@@ -42,8 +44,8 @@ export default function QCKioskLogin({ onLogin }) {
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     const op = { id: member.id, name: member.name, role: member.role || '' };
     toast.success(`Welcome, ${member.name}`);
-    onLogin(op);
-  }, [onLogin]);
+    onLoginRef.current(op);
+  }, []);
 
   const setPhaseBoth = (p) => { phaseRef.current = p; setPhase(p); };
 
@@ -140,7 +142,7 @@ export default function QCKioskLogin({ onLogin }) {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     };
-  }, [doLogin, backToScan]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pickMember = (m) => {
     if (m.has_pin) { setPicked(m); setPin(''); setMode('pin'); }

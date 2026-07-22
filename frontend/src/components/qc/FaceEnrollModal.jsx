@@ -133,7 +133,7 @@ export const FaceEnrollModal = ({ member, onClose, onDone, onSave, title }) => {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     };
-  }, [member.id, member.name, onClose, onDone, attempt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [member.id, attempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reset = () => {
     samplesRef.current = [];
