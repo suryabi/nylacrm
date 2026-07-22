@@ -82,25 +82,42 @@ export function eyeOpenness(landmarks) {
   return (ear(landmarks.getLeftEye()) + ear(landmarks.getRightEye())) / 2;
 }
 
-// Adaptive blink detector: learns YOUR open-eye baseline, then detects a
-// relative dip (close) followed by recovery (open). Works across cameras/faces.
-export function createBlinkDetector() {
-  let baseline = null;
+// Dual liveness: passes on a blink OR a slight head turn (photos can do neither).
+// Blink uses an adaptive per-person baseline; head turn uses yaw delta from start.
+export function createLivenessDetector() {
+  let baseEar = null;
+  let yaw0 = null;
   let frames = 0;
   let closed = false;
-  return (ear) => {
+  let yawHits = 0;
+  return ({ ear, yaw }) => {
     frames += 1;
-    if (baseline === null) { baseline = ear; return false; }
-    if (!closed && ear > baseline * 0.85) baseline = baseline * 0.75 + ear * 0.25;
+    if (baseEar === null) { baseEar = ear; yaw0 = yaw; return false; }
+    if (!closed && ear > baseEar * 0.9) baseEar = baseEar * 0.8 + ear * 0.2;
     if (frames < 3) return false;
-    if (!closed && ear < baseline * 0.76) {
+    if (!closed && ear < baseEar * 0.82) {
       closed = true;
-    } else if (closed && ear > baseline * 0.9) {
-      closed = false;
+    } else if (closed && ear > baseEar * 0.92) {
       return true;
+    }
+    if (Math.abs(yaw - yaw0) > 0.055) {
+      yawHits += 1;
+      if (yawHits >= 2) return true;
+    } else {
+      yawHits = 0;
     }
     return false;
   };
+}
+
+// Wait up to ~2s for a good frontal frame (used after a head-turn liveness pass).
+export async function captureFrontal(video, tries = 14, delayMs = 150) {
+  for (let i = 0; i < tries; i++) {
+    const det = await getFullDetection(video, true);
+    if (isGoodFace(det)) return det;
+    await new Promise(r => setTimeout(r, delayMs));
+  }
+  return null;
 }
 
 // Quality gate: confident detection and face large enough in frame.

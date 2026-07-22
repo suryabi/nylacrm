@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Loader2, X, ScanFace, Eye, Check } from 'lucide-react';
 import {
-  loadModels, getFullDetection, eyeOpenness, isGoodFace, createBlinkDetector, getDeviceToken,
+  loadModels, getFullDetection, eyeOpenness, headPose, isGoodFace,
+  createLivenessDetector, captureFrontal, getDeviceToken,
 } from '../../lib/faceRecognition';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -27,7 +28,7 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
     const setPhaseBoth = (p) => { phaseRef.current = p; setPhase(p); };
 
     const submit = async () => {
-      const full = await getFullDetection(videoRef.current, true);
+      const full = await captureFrontal(videoRef.current);
       if (!full) { setPhaseBoth('align'); alignRef.current = 0; return; }
       try {
         const { data } = await axios.post(`${API_URL}/auth/face/login`,
@@ -52,7 +53,7 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
             alignRef.current += 1;
             if (alignRef.current >= 2) {
               setError('');
-              blinkRef.current = { detect: createBlinkDetector(), started: Date.now() };
+              blinkRef.current = { detect: createLivenessDetector(), started: Date.now() };
               setPhaseBoth('blink');
             }
           } else {
@@ -60,12 +61,12 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
           }
         } else if (phaseRef.current === 'blink') {
           if (Date.now() - blinkRef.current.started > BLINK_TIMEOUT) {
-            setError('Blink not detected — try blinking slowly');
+            setError('Not verified — blink or turn your head slightly');
             setPhaseBoth('align');
             alignRef.current = 0;
           } else {
             const det = await getFullDetection(videoRef.current, false);
-            if (det && blinkRef.current.detect(eyeOpenness(det.landmarks))) {
+            if (det && blinkRef.current.detect({ ear: eyeOpenness(det.landmarks), yaw: headPose(det.landmarks).yaw })) {
               setPhaseBoth('verifying');
               await submit();
             }
@@ -106,7 +107,7 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
 
   const statusText = {
     align: 'Position your face in the circle',
-    blink: 'Blink to confirm it\'s you',
+    blink: 'Blink or turn your head slightly',
     verifying: 'Verifying…',
     success: 'Welcome back!',
   }[phase];

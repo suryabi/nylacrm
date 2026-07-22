@@ -3,8 +3,8 @@ import { toast } from 'sonner';
 import axios from 'axios';
 import { Loader2, ScanFace, Users, KeyRound, ArrowLeft, ShieldCheck, Check, Eye } from 'lucide-react';
 import {
-  loadModels, getDescriptor, getFullDetection, matchDescriptor, eyeOpenness,
-  createBlinkDetector, CONFIRM_FRAMES,
+  loadModels, getDescriptor, getFullDetection, matchDescriptor, eyeOpenness, headPose,
+  createLivenessDetector, captureFrontal, CONFIRM_FRAMES,
 } from '../../lib/faceRecognition';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -72,7 +72,7 @@ export default function QCKioskLogin({ onLogin }) {
               if (streakRef.current.count >= CONFIRM_FRAMES) {
                 candidateRef.current = member;
                 setCandidate(member);
-                blinkRef.current = { detect: createBlinkDetector(), started: Date.now() };
+                blinkRef.current = { detect: createLivenessDetector(), started: Date.now() };
                 setPhaseBoth('liveness');
               }
             } else {
@@ -81,15 +81,15 @@ export default function QCKioskLogin({ onLogin }) {
           }
         } else if (phaseRef.current === 'liveness') {
           if (Date.now() - blinkRef.current.started > LIVENESS_TIMEOUT) {
-            toast.error("Couldn't verify a blink — face the camera and blink slowly");
+            toast.error("Couldn't verify — blink or turn your head slightly");
             backToScan();
           } else {
             const det = await getFullDetection(videoRef.current, false);
             if (det) {
-              const blinked = blinkRef.current.detect(eyeOpenness(det.landmarks));
-              if (blinked) {
-                // Blink complete → final identity re-check before signing in.
-                const full = await getFullDetection(videoRef.current, true);
+              const alive = blinkRef.current.detect({ ear: eyeOpenness(det.landmarks), yaw: headPose(det.landmarks).yaw });
+              if (alive) {
+                // Liveness passed → wait for a frontal frame, re-check identity, sign in.
+                const full = await captureFrontal(videoRef.current);
                 const m = full ? matchDescriptor(Array.from(full.descriptor), indexRef.current).member : null;
                 if (m && m.id === candidateRef.current?.id) {
                   setPhaseBoth('success');
@@ -189,7 +189,7 @@ export default function QCKioskLogin({ onLogin }) {
                   <div className="absolute inset-6 border-2 border-sky-400/70 rounded-3xl animate-pulse" />
                   <div className="bg-black/60 backdrop-blur px-4 py-2.5 rounded-2xl text-center mb-2">
                     <p className="text-white font-semibold text-sm">{candidate.name}</p>
-                    <p className="text-sky-300 text-xs flex items-center gap-1.5 justify-center mt-0.5"><Eye size={12} /> Blink to confirm it's you</p>
+                    <p className="text-sky-300 text-xs flex items-center gap-1.5 justify-center mt-0.5"><Eye size={12} /> Blink or turn your head slightly</p>
                   </div>
                   <button onClick={backToScan} className="text-white/70 text-xs underline underline-offset-2" data-testid="qc-not-me-btn">Not me</button>
                 </div>

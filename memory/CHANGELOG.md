@@ -1469,3 +1469,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Fix: callbacks moved to refs (onSuccessRef/onLoginRef), effect deps reduced to stable values ([tenantId], [], [member.id, attempt]) in FaceLoginModal, QCKioskLogin, FaceEnrollModal
 - Verified via instrumented getUserMedia/track-stop counters: exactly 1 init + 0 stops over 10s (the single extra init observed is React.StrictMode dev double-mount, absent in prod builds)
 - LEARNING: never put inline callback props in camera/stream effect deps
+
+## 2026-06 (fork): Liveness switched to dual blink-OR-head-turn (user: blink failed 10x)
+- createLivenessDetector() replaces createBlinkDetector: passes on adaptive blink (dip<0.82 baseline, recover>0.92) OR yaw delta >0.055 sustained 2 frames (head turn — robust even when eye landmarks are too coarse)
+- captureFrontal() waits up to ~2s for a good frontal frame before the final identity check/submit (prevents mismatch right after a head turn)
+- Applied to QCKioskLogin + FaceLoginModal; prompts now say "Blink or turn your head slightly"
+- LEARNING (2nd occurrence): parallel search_replace on the SAME file dropped one edit silently — edit same-file changes sequentially, then grep-verify
