@@ -26,6 +26,10 @@ class FaceEnrollIn(BaseModel):
     device_token: str
 
 
+class FaceTrustIn(BaseModel):
+    device_token: str
+
+
 class FaceLoginIn(BaseModel):
     descriptor: List[float]
     device_token: str
@@ -42,13 +46,37 @@ async def _face_id_enabled():
 
 
 @router.get("/face/status")
-async def face_status(current_user: dict = Depends(get_current_user)):
+async def face_status(device_token: str = None, current_user: dict = Depends(get_current_user)):
     doc = await db.user_face_auth.find_one({'user_id': current_user['id']}, {'_id': 0})
+    device_trusted = bool(
+        device_token and doc and any(verify_password(device_token, h) for h in doc.get('devices', []))
+    )
     return {
         'enrolled': bool(doc and doc.get('descriptors')),
         'prompt_seen': bool(doc and doc.get('prompt_seen')),
+        'device_trusted': device_trusted,
         'face_id_enabled': await _face_id_enabled(),
     }
+
+
+@router.post("/face/trust-device")
+async def face_trust_device(data: FaceTrustIn, current_user: dict = Depends(get_current_user)):
+    """Bind an additional device (e.g. shared factory tablet) without re-enrolling the face."""
+    if not await _face_id_enabled():
+        raise HTTPException(status_code=403, detail='Face ID is disabled by your workspace admin')
+    if not data.device_token or len(data.device_token) < 16:
+        raise HTTPException(status_code=400, detail='Invalid device token')
+    doc = await db.user_face_auth.find_one({'user_id': current_user['id']}, {'_id': 0})
+    if not doc or not doc.get('descriptors'):
+        raise HTTPException(status_code=400, detail='Set up Face ID first')
+    devices = doc.get('devices', [])
+    if not any(verify_password(data.device_token, h) for h in devices):
+        devices = (devices + [hash_password(data.device_token)])[-MAX_DEVICES:]
+        await db.user_face_auth.update_one(
+            {'user_id': current_user['id']},
+            {'$set': {'devices': devices, 'updated_at': datetime.now(timezone.utc).isoformat()}},
+        )
+    return {'message': 'Device trusted for Face ID'}
 
 
 @router.post("/face/enroll")

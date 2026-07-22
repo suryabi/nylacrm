@@ -19,7 +19,7 @@ function authHeaders() {
 // opener via the global 'open-face-setup' event (sidebar "Face ID" button).
 export default function FaceIdSetupPrompt() {
   const { user } = useAuth();
-  const [showPrompt, setShowPrompt] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false); // 'setup' | 'trust' | false
   const [showEnroll, setShowEnroll] = useState(false);
   const enabledRef = React.useRef(true);
 
@@ -36,20 +36,46 @@ export default function FaceIdSetupPrompt() {
     if (!user) return;
     (async () => {
       try {
-        const { data } = await axios.get(`${API_URL}/auth/face/status`, { headers: authHeaders(), withCredentials: true });
+        const { data } = await axios.get(`${API_URL}/auth/face/status`, {
+          headers: authHeaders(), withCredentials: true,
+          params: { device_token: getDeviceToken() },
+        });
         enabledRef.current = data.face_id_enabled !== false;
         if (!enabledRef.current) { localStorage.removeItem('face_enrolled_device'); return; }
-        if (data.enrolled) localStorage.setItem('face_enrolled_device', '1');
+        if (data.enrolled && data.device_trusted) localStorage.setItem('face_enrolled_device', '1');
         if (sessionStorage.getItem('faceid_prompt_checked')) return;
         sessionStorage.setItem('faceid_prompt_checked', '1');
-        if (!data.enrolled && !data.prompt_seen) setTimeout(() => setShowPrompt(true), 1200);
+        if (!data.enrolled && !data.prompt_seen) {
+          setTimeout(() => setShowPrompt('setup'), 1200);
+        } else if (data.enrolled && !data.device_trusted &&
+                   !localStorage.getItem(`faceid_trust_skip_${user.id}`)) {
+          setTimeout(() => setShowPrompt('trust'), 1200);
+        }
       } catch { /* silent */ }
     })();
   }, [user]);
 
   const skip = async () => {
+    const wasTrust = showPrompt === 'trust';
     setShowPrompt(false);
+    if (wasTrust) {
+      localStorage.setItem(`faceid_trust_skip_${user.id}`, '1');
+      return;
+    }
     try { await axios.post(`${API_URL}/auth/face/dismiss-prompt`, {}, { headers: authHeaders(), withCredentials: true }); } catch { /* ok */ }
+  };
+
+  const trustThisDevice = async () => {
+    try {
+      await axios.post(`${API_URL}/auth/face/trust-device`,
+        { device_token: getDeviceToken() },
+        { headers: authHeaders(), withCredentials: true });
+      localStorage.setItem('face_enrolled_device', '1');
+      toast.success('Face ID enabled on this device');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not enable Face ID here');
+    }
+    setShowPrompt(false);
   };
 
   const saveEnrollment = async (descriptors) => {
@@ -68,16 +94,33 @@ export default function FaceIdSetupPrompt() {
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900 mb-4">
               <ScanFace className="text-white" size={26} />
             </div>
-            <h2 className="text-lg font-bold text-slate-800 mb-1">Set up Face ID?</h2>
-            <p className="text-sm text-slate-500 mb-5">Sign in faster next time — just look at the camera. Only a numeric signature is stored, never photos. Works on this device.</p>
-            <div className="flex gap-2">
-              <button onClick={skip}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50"
-                data-testid="faceid-skip-btn">Skip</button>
-              <button onClick={() => { setShowPrompt(false); setShowEnroll(true); }}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold"
-                data-testid="faceid-setup-btn">Set up Face ID</button>
-            </div>
+            {showPrompt === 'trust' ? (
+              <>
+                <h2 className="text-lg font-bold text-slate-800 mb-1">Enable Face ID on this device?</h2>
+                <p className="text-sm text-slate-500 mb-5">You already have Face ID set up. Enable it here to sign in with your face on this device too — no re-enrollment needed.</p>
+                <div className="flex gap-2">
+                  <button onClick={skip}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50"
+                    data-testid="faceid-trust-skip-btn">Not on this device</button>
+                  <button onClick={trustThisDevice}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold"
+                    data-testid="faceid-trust-btn">Enable here</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-lg font-bold text-slate-800 mb-1">Set up Face ID?</h2>
+                <p className="text-sm text-slate-500 mb-5">Sign in faster next time — just look at the camera. Only a numeric signature is stored, never photos. Works on this device.</p>
+                <div className="flex gap-2">
+                  <button onClick={skip}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50"
+                    data-testid="faceid-skip-btn">Skip</button>
+                  <button onClick={() => { setShowPrompt(false); setShowEnroll(true); }}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold"
+                    data-testid="faceid-setup-btn">Set up Face ID</button>
+                </div>
+              </>
+            )}
             <p className="text-[11px] text-slate-400 mt-3">You can set this up anytime from the sidebar → Face ID</p>
           </div>
         </div>

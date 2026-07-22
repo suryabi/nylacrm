@@ -1488,3 +1488,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - createLivenessDetector refactored to object API {update(), state} with tunable opts; confirm-phase loop at 70ms
 - FaceDebugPanel (components/auth/FaceDebugPanel.jsx): live EAR/baseline/ratio/yawΔ/fps/event overlay — enable via ?facedebug=1 or localStorage face_debug=1 (works on /login and /qc-station)
 - Verified: compile clean, both pages load with facedebug param; gesture auto-confirm needs real-face user validation (debug values will guide threshold tuning)
+
+## 2026-06 (fork): Shared-device Face ID (factory multi-user support)
+- Multi-user per device already worked (per-user device hash lists + tenant-wide matching); GAP was binding a NEW device without re-enrollment
+- NEW POST /api/auth/face/trust-device {device_token}: adds device hash to enrolled user (requires enrollment); GET /face/status now accepts ?device_token= and returns device_trusted
+- FaceIdSetupPrompt: three states — not enrolled → "Set up Face ID?"; enrolled but device untrusted → "Enable Face ID on this device?" (one-tap trust, per-user skip flag faceid_trust_skip_{userId}); enrolled+trusted → sets face_enrolled_device flag
+- TESTED: 7 curl scenarios (enroll D1/status D1 trusted/D2 untrusted/trust D2/login via D2) + UI trust-prompt flow via browser (prompt → Enable here → flag set); test data cleaned
