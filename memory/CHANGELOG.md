@@ -1507,3 +1507,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Granular hints: no face / move closer / hold steady-more light
 - Enrollment debug overlay (score · face px / frame px · samples) — ?facedebug=1 now PERSISTS via localStorage (set on login page mount, clear with ?facedebug=0)
 - REGRESSION during edit: comment swallowed newline in Login.js (showRegister undefined) — caught by screenshot, fixed
+
+## 2026-06 (fork): Editable child SKU quantities (branded stock adjustment)
+- New AdjustChildQtyDialog (components/distributor/): pencil on each customer-branded child row in BrandedStockSections → pick warehouse → enter NEW quantity → delta preview → saves as a branding entry (decrease: child→Generic, increase: Generic→child with availability validation)
+- BrandedStockSections accepts onChanged; wired to fetchDashboard (StockDashboardTab) + fetchStockData (StockDashboard page) so parent/generic totals refresh automatically
+- Backend unchanged — reused POST /api/branding-entries bidirectional reclassification + stock-breakdown endpoint
+- TESTED E2E: curl (decrease/increase/over-limit rejection) + full UI flow (dialog values, preview, save, auto-refresh, reopen shows new values); test data reverted

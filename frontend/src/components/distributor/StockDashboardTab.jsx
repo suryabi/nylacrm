@@ -711,6 +711,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
             sections={brandedSections}
             pkgBySku={brandedPkgLookup}
             viewCrates={viewCrates}
+            onChanged={fetchDashboard}
           />
         </div>
       )}

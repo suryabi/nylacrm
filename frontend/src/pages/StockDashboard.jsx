@@ -657,6 +657,7 @@ export default function StockDashboard() {
                 return m;
               }, {})}
               viewCrates={unitMode === 'default_crate'}
+              onChanged={fetchStockData}
             />
           )}
         </TabsContent>

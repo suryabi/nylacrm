@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { Tags, Package, Factory, Warehouse, UserRound } from 'lucide-react';
+import { Tags, Package, Factory, Warehouse, UserRound, Pencil } from 'lucide-react';
+import AdjustChildQtyDialog from './AdjustChildQtyDialog';
 
 const fmt = (v) => (Number(v) || 0).toLocaleString('en-IN');
 
@@ -24,7 +25,7 @@ function LocationChips({ locations = [] }) {
   );
 }
 
-function ChildRow({ entry, qty }) {
+function ChildRow({ entry, qty, onAdjust }) {
   return (
     <div className="flex items-start justify-between gap-3 px-3 py-2" data-testid={`branded-child-row-${entry.child_sku_id || 'unclassified'}`}>
       <div className="min-w-0">
@@ -36,9 +37,21 @@ function ChildRow({ entry, qty }) {
         </div>
         <LocationChips locations={entry.locations} />
       </div>
-      <span className={`text-sm font-bold tabular-nums flex-shrink-0 ${entry.quantity > 0 ? 'text-slate-800' : 'text-slate-300'}`}>
-        {qty(entry.quantity)}
-      </span>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <span className={`text-sm font-bold tabular-nums ${entry.quantity > 0 ? 'text-slate-800' : 'text-slate-300'}`}>
+          {qty(entry.quantity)}
+        </span>
+        {onAdjust && (entry.locations || []).length > 0 && (
+          <button
+            onClick={onAdjust}
+            title="Adjust quantity"
+            className="p-1 rounded hover:bg-indigo-50 text-slate-300 hover:text-indigo-600 transition-colors"
+            data-testid={`adjust-child-qty-btn-${entry.child_sku_id}`}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -49,7 +62,8 @@ function ChildRow({ entry, qty }) {
  * per-customer branded buckets. Used by BOTH the per-distributor Stock
  * Dashboard tab and the global Stock Dashboard page.
  */
-export function BrandedStockSections({ sections = [], pkgBySku = {}, viewCrates = false }) {
+export function BrandedStockSections({ sections = [], pkgBySku = {}, viewCrates = false, onChanged }) {
+  const [adjust, setAdjust] = useState(null); // { sec, entry }
   if (!sections.length) return null;
 
   const qtyFor = (sec) => (q) => {
@@ -125,7 +139,8 @@ export function BrandedStockSections({ sections = [], pkgBySku = {}, viewCrates 
                         </div>
                         <div className="divide-y divide-slate-100">
                           {cust.children.map((e) => (
-                            <ChildRow key={e.child_sku_id} entry={e} qty={qty} />
+                            <ChildRow key={e.child_sku_id} entry={e} qty={qty}
+                              onAdjust={onChanged ? () => setAdjust({ sec, entry: e }) : undefined} />
                           ))}
                         </div>
                       </div>
@@ -139,6 +154,15 @@ export function BrandedStockSections({ sections = [], pkgBySku = {}, viewCrates 
           </Card>
         );
       })}
+      {adjust && (
+        <AdjustChildQtyDialog
+          skuId={adjust.sec.sku_id}
+          skuName={adjust.sec.sku_name}
+          entry={adjust.entry}
+          onClose={() => setAdjust(null)}
+          onChanged={onChanged}
+        />
+      )}
     </div>
   );
 }
