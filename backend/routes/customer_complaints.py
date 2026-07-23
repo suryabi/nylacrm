@@ -69,6 +69,7 @@ class ComplaintCreate(BaseModel):
     category: str = "other"
     priority: str = "medium"
     department: Optional[str] = None
+    city: Optional[str] = None
     assigned_to: Optional[str] = None
     assigned_to_name: Optional[str] = None
 
@@ -87,6 +88,7 @@ class ComplaintUpdate(BaseModel):
     priority: Optional[str] = None
     status: Optional[str] = None
     department: Optional[str] = None
+    city: Optional[str] = None
     assigned_to: Optional[str] = None
     assigned_to_name: Optional[str] = None
 
@@ -144,6 +146,16 @@ async def entity_cities(link_type: str, current_user: dict = Depends(get_current
     return {"cities": sorted({c for c in cities if c})}
 
 
+@router.get("/meta/filter-cities")
+async def filter_cities(current_user: dict = Depends(get_current_user)):
+    """Distinct cities present on existing complaints — used by the list-page city filter."""
+    tenant_id = get_current_tenant_id()
+    cities = await _db.customer_complaints.distinct(
+        "city", {"tenant_id": tenant_id, "city": {"$nin": [None, ""]}}
+    )
+    return {"cities": sorted({c for c in cities if c})}
+
+
 @router.get("/meta/entity-search")
 async def entity_search(
     link_type: str,
@@ -170,6 +182,7 @@ async def entity_search(
             ]
         rows = await _db.leads.find(query, {"_id": 0}).limit(20).to_list(20)
         results = [{"id": r["id"], "name": r.get("company") or r.get("contact_person") or "Lead",
+                    "city": r.get("city"),
                     "subtitle": " · ".join([x for x in [r.get("lead_id"), r.get("city")] if x])} for r in rows]
     elif link_type == "account":
         query = {"tenant_id": tenant_id}
@@ -183,6 +196,7 @@ async def entity_search(
             ]
         rows = await _db.accounts.find(query, {"_id": 0}).limit(20).to_list(20)
         results = [{"id": r["id"], "name": r.get("account_name") or "Account",
+                    "city": r.get("city"),
                     "subtitle": " · ".join([x for x in [r.get("account_id"), r.get("city")] if x])} for r in rows]
     elif link_type == "distributor":
         query = {"tenant_id": tenant_id}
@@ -193,6 +207,7 @@ async def entity_search(
             ]
         rows = await _db.distributors.find(query, {"_id": 0}).limit(20).to_list(20)
         results = [{"id": r["id"], "name": r.get("distributor_name") or "Distributor",
+                    "city": r.get("city"),
                     "subtitle": r.get("distributor_code") or ""} for r in rows]
     else:
         raise HTTPException(status_code=400, detail="Invalid link_type")
@@ -206,10 +221,12 @@ async def list_complaints(
     priority: Optional[str] = None,
     category: Optional[str] = None,
     department: Optional[str] = None,
+    city: Optional[str] = None,
+    link_type: Optional[str] = None,
     assigned_to: Optional[str] = None,
     search: Optional[str] = None,
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
     current_user: dict = Depends(get_current_user),
 ):
     tenant_id = get_current_tenant_id()
@@ -222,16 +239,27 @@ async def list_complaints(
         query["category"] = category
     if department and department != "all":
         query["department"] = department
+    if city and city != "all":
+        query["city"] = city
+    if link_type and link_type != "all":
+        query["link_type"] = link_type
+    and_clauses = []
     if assigned_to and assigned_to != "all":
-        query["assigned_to"] = assigned_to
+        if assigned_to == "unassigned":
+            and_clauses.append({"$or": [{"assigned_to": None}, {"assigned_to": ""}, {"assigned_to": {"$exists": False}}]})
+        else:
+            query["assigned_to"] = assigned_to
     if search:
-        query["$or"] = [
+        and_clauses.append({"$or": [
             {"title": {"$regex": search, "$options": "i"}},
             {"complaint_number": {"$regex": search, "$options": "i"}},
             {"customer_name": {"$regex": search, "$options": "i"}},
             {"sku_names": {"$regex": search, "$options": "i"}},
             {"department": {"$regex": search, "$options": "i"}},
-        ]
+            {"city": {"$regex": search, "$options": "i"}},
+        ]})
+    if and_clauses:
+        query["$and"] = and_clauses
 
     total = await _db.customer_complaints.count_documents(query)
     skip = (page - 1) * page_size
@@ -294,6 +322,7 @@ async def create_complaint(body: ComplaintCreate, current_user: dict = Depends(g
         "priority": body.priority,
         "status": "open",
         "department": body.department,
+        "city": (body.city or "").strip() or None,
         "assigned_to": body.assigned_to,
         "assigned_to_name": body.assigned_to_name,
         "photos": [],
@@ -335,6 +364,9 @@ async def update_complaint(complaint_id: str, body: ComplaintUpdate, current_use
         raise HTTPException(status_code=400, detail="Invalid category")
     if "department" in updates and updates["department"] and updates["department"] not in DEPARTMENTS:
         raise HTTPException(status_code=400, detail="Invalid department")
+    if "city" in updates:
+        c = (updates.get("city") or "").strip() if updates.get("city") is not None else None
+        updates["city"] = c or None
 
     now = _now()
     updates["updated_at"] = now

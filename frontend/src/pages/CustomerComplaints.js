@@ -22,7 +22,7 @@ import {
 } from '../components/ui/command';
 import {
   MessageSquareWarning, Plus, Search, Loader2, ChevronLeft, ChevronRight,
-  Paperclip, MessageSquare, ChevronsUpDown, Check, X,
+  Paperclip, MessageSquare, ChevronsUpDown, Check, X, Layers, ChevronDown,
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -53,18 +53,29 @@ export default function CustomerComplaints() {
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
-  const [options, setOptions] = useState({ statuses: [], priorities: [], categories: [], departments: [], users: [] });
+  const [cityFilter, setCityFilter] = useState('all');
+  const [linkTypeFilter, setLinkTypeFilter] = useState('all');
+  const [assignedFilter, setAssignedFilter] = useState('all');
+  const [groupBy, setGroupBy] = useState('none');
+  const [cities, setCities] = useState([]);
+  const [options, setOptions] = useState({ statuses: [], priorities: [], categories: [], departments: [], link_types: [], users: [] });
   const [showCreate, setShowCreate] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState({});
+
+  const grouped = groupBy !== 'none';
 
   const fetchList = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page, page_size: 20 });
+      const params = new URLSearchParams({ page: grouped ? 1 : page, page_size: grouped ? 500 : 20 });
       if (search) params.set('search', search);
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (priorityFilter !== 'all') params.set('priority', priorityFilter);
       if (categoryFilter !== 'all') params.set('category', categoryFilter);
       if (departmentFilter !== 'all') params.set('department', departmentFilter);
+      if (cityFilter !== 'all') params.set('city', cityFilter);
+      if (linkTypeFilter !== 'all') params.set('link_type', linkTypeFilter);
+      if (assignedFilter !== 'all') params.set('assigned_to', assignedFilter);
       const res = await axios.get(`${API}/complaints?${params}`, { headers: HEAD() });
       setData(res.data);
     } catch (e) {
@@ -72,13 +83,57 @@ export default function CustomerComplaints() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, priorityFilter, categoryFilter, departmentFilter]);
+  }, [page, search, statusFilter, priorityFilter, categoryFilter, departmentFilter, cityFilter, linkTypeFilter, assignedFilter, grouped]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
   useEffect(() => {
     axios.get(`${API}/complaints/meta/options`, { headers: HEAD() })
       .then((r) => setOptions(r.data)).catch(() => {});
+    axios.get(`${API}/complaints/meta/filter-cities`, { headers: HEAD() })
+      .then((r) => setCities(r.data.cities || [])).catch(() => {});
   }, []);
+
+  const resetPage = () => setPage(1);
+
+  const clearFilters = () => {
+    setSearch(''); setStatusFilter('all'); setPriorityFilter('all'); setCategoryFilter('all');
+    setDepartmentFilter('all'); setCityFilter('all'); setLinkTypeFilter('all'); setAssignedFilter('all');
+    setGroupBy('none'); setPage(1);
+  };
+
+  const activeFilterCount = [statusFilter, priorityFilter, categoryFilter, departmentFilter, cityFilter, linkTypeFilter, assignedFilter]
+    .filter((v) => v !== 'all').length + (search ? 1 : 0);
+
+  // Group rows client-side when grouping is active.
+  const groupKeyFor = (row) => {
+    switch (groupBy) {
+      case 'department': return row.department || 'Unassigned department';
+      case 'priority': return row.priority || 'unspecified';
+      case 'city': return row.city || 'No city';
+      case 'status': return row.status || 'unspecified';
+      case 'category': return row.category || 'other';
+      case 'assigned_to': return row.assigned_to_name || 'Unassigned';
+      default: return '';
+    }
+  };
+
+  const groups = React.useMemo(() => {
+    if (!grouped) return [];
+    const map = new Map();
+    (data.data || []).forEach((row) => {
+      const k = groupKeyFor(row);
+      if (!map.has(k)) map.set(k, []);
+      map.get(k).push(row);
+    });
+    // Sort groups: by priority order if grouping by priority, otherwise alphabetically.
+    const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3, unspecified: 4 };
+    const arr = Array.from(map.entries()).map(([k, rows]) => ({ key: k, rows }));
+    if (groupBy === 'priority') arr.sort((a, b) => (priorityOrder[a.key] ?? 99) - (priorityOrder[b.key] ?? 99));
+    else arr.sort((a, b) => String(a.key).localeCompare(String(b.key)));
+    return arr;
+  }, [data.data, groupBy, grouped]);
+
+  const toggleGroup = (k) => setCollapsedGroups((prev) => ({ ...prev, [k]: !prev[k] }));
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -100,96 +155,107 @@ export default function CustomerComplaints() {
 
       {/* Filters */}
       <Card>
-        <CardContent className="p-4 flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search by number, title, customer, SKU…"
-              className="pl-8 h-9"
-              data-testid="complaints-search"
-            />
+        <CardContent className="p-4 space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); resetPage(); }}
+                placeholder="Search by number, title, customer, SKU, city…"
+                className="pl-8 h-9"
+                data-testid="complaints-search"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-muted-foreground" />
+              <Select value={groupBy} onValueChange={(v) => { setGroupBy(v); setPage(1); }}>
+                <SelectTrigger className="h-9 w-[170px]" data-testid="filter-groupby"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No grouping</SelectItem>
+                  <SelectItem value="department">Group by Department</SelectItem>
+                  <SelectItem value="priority">Group by Priority</SelectItem>
+                  <SelectItem value="city">Group by City</SelectItem>
+                  <SelectItem value="status">Group by Status</SelectItem>
+                  <SelectItem value="category">Group by Category</SelectItem>
+                  <SelectItem value="assigned_to">Group by Assignee</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <FilterSelect value={statusFilter} onChange={(v) => { setStatusFilter(v); setPage(1); }}
-            options={options.statuses} placeholder="Status" testid="filter-status" />
-          <FilterSelect value={priorityFilter} onChange={(v) => { setPriorityFilter(v); setPage(1); }}
-            options={options.priorities} placeholder="Priority" testid="filter-priority" />
-          <FilterSelect value={categoryFilter} onChange={(v) => { setCategoryFilter(v); setPage(1); }}
-            options={options.categories} placeholder="Category" testid="filter-category" />
-          <FilterSelect value={departmentFilter} onChange={(v) => { setDepartmentFilter(v); setPage(1); }}
-            options={options.departments} placeholder="Department" testid="filter-department" />
+          <div className="flex flex-wrap items-center gap-3">
+            <FilterSelect value={statusFilter} onChange={(v) => { setStatusFilter(v); resetPage(); }}
+              options={options.statuses} placeholder="Status" testid="filter-status" />
+            <FilterSelect value={priorityFilter} onChange={(v) => { setPriorityFilter(v); resetPage(); }}
+              options={options.priorities} placeholder="Priority" testid="filter-priority" />
+            <FilterSelect value={categoryFilter} onChange={(v) => { setCategoryFilter(v); resetPage(); }}
+              options={options.categories} placeholder="Category" testid="filter-category" />
+            <FilterSelect value={departmentFilter} onChange={(v) => { setDepartmentFilter(v); resetPage(); }}
+              options={options.departments} placeholder="Department" testid="filter-department" />
+            <FilterSelect value={cityFilter} onChange={(v) => { setCityFilter(v); resetPage(); }}
+              options={cities} placeholder="City" testid="filter-city" preserveCase />
+            <FilterSelect value={linkTypeFilter} onChange={(v) => { setLinkTypeFilter(v); resetPage(); }}
+              options={options.link_types} placeholder="Linked to" testid="filter-linktype" />
+            <Select value={assignedFilter} onValueChange={(v) => { setAssignedFilter(v); resetPage(); }}>
+              <SelectTrigger className="h-9 w-[170px]" data-testid="filter-assigned"><SelectValue placeholder="Assignee" /></SelectTrigger>
+              <SelectContent className="max-h-[260px]">
+                <SelectItem value="all">All Assignees</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {(options.users || []).map((u) => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {activeFilterCount > 0 && (
+              <Button variant="ghost" size="sm" className="h-9 text-muted-foreground" onClick={clearFilters} data-testid="clear-filters">
+                <X className="h-4 w-4 mr-1" /> Clear ({activeFilterCount})
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 
       {/* List */}
-      <Card>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="py-16 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : data.data.length === 0 ? (
-            <div className="py-16 text-center text-muted-foreground">
-              <MessageSquareWarning className="h-12 w-12 mx-auto mb-3 opacity-40" />
-              <p>No issues found</p>
-              <p className="text-sm">Click "New Issue" to log one.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm" data-testid="complaints-table">
-                <thead>
-                  <tr className="border-b bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="text-left p-3 font-medium">Issue</th>
-                    <th className="text-left p-3 font-medium">Customer</th>
-                    <th className="text-left p-3 font-medium">SKUs</th>
-                    <th className="text-center p-3 font-medium">Category</th>
-                    <th className="text-center p-3 font-medium">Department</th>
-                    <th className="text-center p-3 font-medium">Priority</th>
-                    <th className="text-center p-3 font-medium">Status</th>
-                    <th className="text-left p-3 font-medium">Assigned</th>
-                    <th className="text-center p-3 font-medium"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.data.map((c) => (
-                    <tr key={c.id}
-                      className="border-b hover:bg-rose-50/40 cursor-pointer transition-colors"
-                      onClick={() => navigate(`/complaints/${c.id}`)}
-                      data-testid={`complaint-row-${c.id}`}>
-                      <td className="p-3">
-                        <p className="font-medium text-slate-800">{c.title}</p>
-                        <p className="text-xs text-muted-foreground">{c.complaint_number}</p>
-                      </td>
-                      <td className="p-3">
-                        {c.customer_name || <span className="text-muted-foreground">-</span>}
-                        {c.link_type && <span className="block text-[11px] text-muted-foreground capitalize">{c.link_type}</span>}
-                      </td>
-                      <td className="p-3 max-w-[180px]">
-                        <span className="text-xs text-slate-600 line-clamp-1">{(c.sku_names || []).join(', ') || '-'}</span>
-                      </td>
-                      <td className="p-3 text-center"><span className="text-xs capitalize">{c.category}</span></td>
-                      <td className="p-3 text-center">
-                        {c.department ? <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{c.department}</Badge> : <span className="text-xs text-muted-foreground">-</span>}
-                      </td>
-                      <td className="p-3 text-center"><Badge className={PRIORITY_STYLES[c.priority]}>{LABEL(c.priority)}</Badge></td>
-                      <td className="p-3 text-center"><Badge className={STATUS_STYLES[c.status]}>{LABEL(c.status)}</Badge></td>
-                      <td className="p-3 text-xs text-slate-600">{c.assigned_to_name || <span className="text-muted-foreground">Unassigned</span>}</td>
-                      <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                          {c.photo_count > 0 && <span className="flex items-center gap-0.5"><Paperclip className="h-3 w-3" />{c.photo_count}</span>}
-                          {c.comment_count > 0 && <span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{c.comment_count}</span>}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {loading ? (
+        <Card><CardContent className="py-16 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></CardContent></Card>
+      ) : data.data.length === 0 ? (
+        <Card><CardContent className="py-16 text-center text-muted-foreground">
+          <MessageSquareWarning className="h-12 w-12 mx-auto mb-3 opacity-40" />
+          <p>No issues found</p>
+          <p className="text-sm">Adjust filters or click "New Issue" to log one.</p>
+        </CardContent></Card>
+      ) : !grouped ? (
+        <Card><CardContent className="p-0">
+          <IssuesTable rows={data.data} onOpen={(id) => navigate(`/complaints/${id}`)} />
+        </CardContent></Card>
+      ) : (
+        <div className="space-y-3">
+          {groups.map(({ key, rows }) => {
+            const isCollapsed = collapsedGroups[key];
+            return (
+              <Card key={key} data-testid={`group-${key}`}>
+                <button
+                  onClick={() => toggleGroup(key)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b"
+                  data-testid={`group-toggle-${key}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                    <span className="font-semibold text-slate-800">{formatGroupKey(groupBy, key)}</span>
+                    <Badge variant="outline" className="ml-1">{rows.length}</Badge>
+                  </div>
+                </button>
+                {!isCollapsed && (
+                  <CardContent className="p-0">
+                    <IssuesTable rows={rows} onOpen={(id) => navigate(`/complaints/${id}`)} />
+                  </CardContent>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
-      {/* Pagination */}
-      {data.total_pages > 1 && (
+      {/* Pagination — only when not grouped */}
+      {!grouped && data.total_pages > 1 && (
         <div className="flex items-center justify-end gap-2">
           <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)} data-testid="complaints-prev">
             <ChevronLeft className="h-4 w-4" />
@@ -212,12 +278,72 @@ export default function CustomerComplaints() {
   );
 }
 
-const FilterSelect = ({ value, onChange, options, placeholder, testid }) => (
+const formatGroupKey = (groupBy, key) => {
+  if (groupBy === 'priority' || groupBy === 'status' || groupBy === 'category') return LABEL(key);
+  return key;
+};
+
+const IssuesTable = ({ rows, onOpen }) => (
+  <div className="overflow-x-auto">
+    <table className="w-full text-sm" data-testid="complaints-table">
+      <thead>
+        <tr className="border-b bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+          <th className="text-left p-3 font-medium">Issue</th>
+          <th className="text-left p-3 font-medium">Customer</th>
+          <th className="text-left p-3 font-medium">City</th>
+          <th className="text-left p-3 font-medium">SKUs</th>
+          <th className="text-center p-3 font-medium">Category</th>
+          <th className="text-center p-3 font-medium">Department</th>
+          <th className="text-center p-3 font-medium">Priority</th>
+          <th className="text-center p-3 font-medium">Status</th>
+          <th className="text-left p-3 font-medium">Assigned</th>
+          <th className="text-center p-3 font-medium"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((c) => (
+          <tr key={c.id}
+            className="border-b hover:bg-rose-50/40 cursor-pointer transition-colors"
+            onClick={() => onOpen(c.id)}
+            data-testid={`complaint-row-${c.id}`}>
+            <td className="p-3">
+              <p className="font-medium text-slate-800">{c.title}</p>
+              <p className="text-xs text-muted-foreground">{c.complaint_number}</p>
+            </td>
+            <td className="p-3">
+              {c.customer_name || <span className="text-muted-foreground">-</span>}
+              {c.link_type && <span className="block text-[11px] text-muted-foreground capitalize">{c.link_type}</span>}
+            </td>
+            <td className="p-3 text-xs text-slate-600">{c.city || <span className="text-muted-foreground">-</span>}</td>
+            <td className="p-3 max-w-[180px]">
+              <span className="text-xs text-slate-600 line-clamp-1">{(c.sku_names || []).join(', ') || '-'}</span>
+            </td>
+            <td className="p-3 text-center"><span className="text-xs capitalize">{c.category}</span></td>
+            <td className="p-3 text-center">
+              {c.department ? <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{c.department}</Badge> : <span className="text-xs text-muted-foreground">-</span>}
+            </td>
+            <td className="p-3 text-center"><Badge className={PRIORITY_STYLES[c.priority]}>{LABEL(c.priority)}</Badge></td>
+            <td className="p-3 text-center"><Badge className={STATUS_STYLES[c.status]}>{LABEL(c.status)}</Badge></td>
+            <td className="p-3 text-xs text-slate-600">{c.assigned_to_name || <span className="text-muted-foreground">Unassigned</span>}</td>
+            <td className="p-3 text-center">
+              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                {c.photo_count > 0 && <span className="flex items-center gap-0.5"><Paperclip className="h-3 w-3" />{c.photo_count}</span>}
+                {c.comment_count > 0 && <span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{c.comment_count}</span>}
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+const FilterSelect = ({ value, onChange, options, placeholder, testid, preserveCase }) => (
   <Select value={value} onValueChange={onChange}>
     <SelectTrigger className="h-9 w-[150px]" data-testid={testid}><SelectValue placeholder={placeholder} /></SelectTrigger>
-    <SelectContent>
+    <SelectContent className="max-h-[260px]">
       <SelectItem value="all">All {placeholder}</SelectItem>
-      {(options || []).map((o) => <SelectItem key={o} value={o}>{LABEL(o)}</SelectItem>)}
+      {(options || []).map((o) => <SelectItem key={o} value={o}>{preserveCase ? o : LABEL(o)}</SelectItem>)}
     </SelectContent>
   </Select>
 );
@@ -364,6 +490,7 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
         sku_names: selectedSkus.map((s) => s.name),
         category, priority,
         department: department || null,
+        city: city || null,
         assigned_to: assignedTo || null,
         assigned_to_name: assignedUser?.name || null,
       };
@@ -413,7 +540,10 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
             )}
             <div className={`space-y-1.5 ${cityFilterable ? 'col-span-2' : ''}`}>
               <Label className="capitalize">{linkType}</Label>
-              <EntityPicker linkType={linkType} city={city} value={entity} onSelect={setEntity} />
+              <EntityPicker linkType={linkType} city={city} value={entity} onSelect={(e) => {
+                setEntity(e);
+                if (e?.city) setCity(e.city);
+              }} />
             </div>
           </div>
 

@@ -4,6 +4,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import {
@@ -15,7 +16,7 @@ import {
 } from '../components/ui/alert-dialog';
 import {
   ArrowLeft, Loader2, Upload, Trash2, Send, MessageSquare, ImageIcon,
-  Tag, Package, User, Calendar, X,
+  Tag, Package, User, Calendar, X, MapPin,
 } from 'lucide-react';
 import { PRIORITY_STYLES, STATUS_STYLES, LABEL } from './CustomerComplaints';
 import { useTenantConfig } from '../context/TenantConfigContext';
@@ -160,6 +161,7 @@ export default function CustomerComplaintDetail() {
               <div className="flex flex-wrap gap-4 text-sm">
                 <Meta icon={Tag} label="Category" value={LABEL(complaint.category)} />
                 {complaint.customer_name && <Meta icon={User} label={LABEL(complaint.link_type || 'Customer')} value={complaint.customer_name} />}
+                {complaint.city && <Meta icon={MapPin} label="City" value={complaint.city} />}
                 <Meta icon={Calendar} label="Created" value={new Date(complaint.created_at).toLocaleDateString()} />
               </div>
               {(complaint.sku_names || []).length > 0 && (
@@ -258,6 +260,9 @@ export default function CustomerComplaintDetail() {
                   </SelectContent>
                 </Select>
               </Field>
+              <Field label="City">
+                <CityEditor value={complaint.city || ''} disabled={!canEdit} onSave={(v) => patch({ city: v || null })} />
+              </Field>
               <Field label="Assigned to">
                 <Select value={complaint.assigned_to || 'unassigned'}
                   onValueChange={(v) => {
@@ -306,6 +311,23 @@ const Field = ({ label, children }) => (
     {children}
   </div>
 );
+
+const CityEditor = ({ value, disabled, onSave }) => {
+  const [v, setV] = useState(value);
+  useEffect(() => { setV(value); }, [value]);
+  const commit = () => { if ((v || '').trim() !== (value || '').trim()) onSave((v || '').trim()); };
+  return (
+    <Input
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); } }}
+      placeholder="Enter city"
+      disabled={disabled}
+      data-testid="complaint-city-input"
+    />
+  );
+};
 
 // Photo thumbnail — fetched as a blob (img tags can't send auth headers).
 const PhotoThumb = ({ complaintId, photo, canEdit, onRemove }) => {
