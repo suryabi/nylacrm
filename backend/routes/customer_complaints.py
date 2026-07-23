@@ -41,6 +41,10 @@ STATUSES = ["open", "in_progress", "awaiting_customer", "resolved", "closed"]
 PRIORITIES = ["low", "medium", "high", "urgent"]
 CATEGORIES = ["quality", "packaging", "delivery", "billing", "other"]
 LINK_TYPES = ["lead", "account", "distributor"]
+DEPARTMENTS = [
+    "Admin", "Sales", "Production", "Marketing", "Finance",
+    "Distribution", "HR", "IT", "Operations", "Quality",
+]
 ADMIN_ROLES = {"ceo", "admin", "system admin", "director"}
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/heic"}
@@ -64,6 +68,7 @@ class ComplaintCreate(BaseModel):
     sku_names: List[str] = []
     category: str = "other"
     priority: str = "medium"
+    department: Optional[str] = None
     assigned_to: Optional[str] = None
     assigned_to_name: Optional[str] = None
 
@@ -81,6 +86,7 @@ class ComplaintUpdate(BaseModel):
     category: Optional[str] = None
     priority: Optional[str] = None
     status: Optional[str] = None
+    department: Optional[str] = None
     assigned_to: Optional[str] = None
     assigned_to_name: Optional[str] = None
 
@@ -122,6 +128,7 @@ async def get_options(current_user: dict = Depends(get_current_user)):
         "priorities": PRIORITIES,
         "categories": CATEGORIES,
         "link_types": LINK_TYPES,
+        "departments": DEPARTMENTS,
         "users": users,
     }
 
@@ -198,6 +205,7 @@ async def list_complaints(
     status: Optional[str] = None,
     priority: Optional[str] = None,
     category: Optional[str] = None,
+    department: Optional[str] = None,
     assigned_to: Optional[str] = None,
     search: Optional[str] = None,
     page: int = Query(1, ge=1),
@@ -212,6 +220,8 @@ async def list_complaints(
         query["priority"] = priority
     if category and category != "all":
         query["category"] = category
+    if department and department != "all":
+        query["department"] = department
     if assigned_to and assigned_to != "all":
         query["assigned_to"] = assigned_to
     if search:
@@ -220,6 +230,7 @@ async def list_complaints(
             {"complaint_number": {"$regex": search, "$options": "i"}},
             {"customer_name": {"$regex": search, "$options": "i"}},
             {"sku_names": {"$regex": search, "$options": "i"}},
+            {"department": {"$regex": search, "$options": "i"}},
         ]
 
     total = await _db.customer_complaints.count_documents(query)
@@ -262,6 +273,8 @@ async def create_complaint(body: ComplaintCreate, current_user: dict = Depends(g
         raise HTTPException(status_code=400, detail="Invalid category")
     if body.priority not in PRIORITIES:
         raise HTTPException(status_code=400, detail="Invalid priority")
+    if body.department and body.department not in DEPARTMENTS:
+        raise HTTPException(status_code=400, detail="Invalid department")
 
     now = _now()
     doc = {
@@ -280,6 +293,7 @@ async def create_complaint(body: ComplaintCreate, current_user: dict = Depends(g
         "category": body.category,
         "priority": body.priority,
         "status": "open",
+        "department": body.department,
         "assigned_to": body.assigned_to,
         "assigned_to_name": body.assigned_to_name,
         "photos": [],
@@ -319,6 +333,8 @@ async def update_complaint(complaint_id: str, body: ComplaintUpdate, current_use
         raise HTTPException(status_code=400, detail="Invalid priority")
     if "category" in updates and updates["category"] not in CATEGORIES:
         raise HTTPException(status_code=400, detail="Invalid category")
+    if "department" in updates and updates["department"] and updates["department"] not in DEPARTMENTS:
+        raise HTTPException(status_code=400, detail="Invalid department")
 
     now = _now()
     updates["updated_at"] = now

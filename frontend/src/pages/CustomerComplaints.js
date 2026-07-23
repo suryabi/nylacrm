@@ -52,7 +52,8 @@ export default function CustomerComplaints() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [options, setOptions] = useState({ statuses: [], priorities: [], categories: [], users: [] });
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [options, setOptions] = useState({ statuses: [], priorities: [], categories: [], departments: [], users: [] });
   const [showCreate, setShowCreate] = useState(false);
 
   const fetchList = useCallback(async () => {
@@ -63,6 +64,7 @@ export default function CustomerComplaints() {
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (priorityFilter !== 'all') params.set('priority', priorityFilter);
       if (categoryFilter !== 'all') params.set('category', categoryFilter);
+      if (departmentFilter !== 'all') params.set('department', departmentFilter);
       const res = await axios.get(`${API}/complaints?${params}`, { headers: HEAD() });
       setData(res.data);
     } catch (e) {
@@ -70,7 +72,7 @@ export default function CustomerComplaints() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, priorityFilter, categoryFilter]);
+  }, [page, search, statusFilter, priorityFilter, categoryFilter, departmentFilter]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
   useEffect(() => {
@@ -115,6 +117,8 @@ export default function CustomerComplaints() {
             options={options.priorities} placeholder="Priority" testid="filter-priority" />
           <FilterSelect value={categoryFilter} onChange={(v) => { setCategoryFilter(v); setPage(1); }}
             options={options.categories} placeholder="Category" testid="filter-category" />
+          <FilterSelect value={departmentFilter} onChange={(v) => { setDepartmentFilter(v); setPage(1); }}
+            options={options.departments} placeholder="Department" testid="filter-department" />
         </CardContent>
       </Card>
 
@@ -138,6 +142,7 @@ export default function CustomerComplaints() {
                     <th className="text-left p-3 font-medium">Customer</th>
                     <th className="text-left p-3 font-medium">SKUs</th>
                     <th className="text-center p-3 font-medium">Category</th>
+                    <th className="text-center p-3 font-medium">Department</th>
                     <th className="text-center p-3 font-medium">Priority</th>
                     <th className="text-center p-3 font-medium">Status</th>
                     <th className="text-left p-3 font-medium">Assigned</th>
@@ -162,6 +167,9 @@ export default function CustomerComplaints() {
                         <span className="text-xs text-slate-600 line-clamp-1">{(c.sku_names || []).join(', ') || '-'}</span>
                       </td>
                       <td className="p-3 text-center"><span className="text-xs capitalize">{c.category}</span></td>
+                      <td className="p-3 text-center">
+                        {c.department ? <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{c.department}</Badge> : <span className="text-xs text-muted-foreground">-</span>}
+                      </td>
                       <td className="p-3 text-center"><Badge className={PRIORITY_STYLES[c.priority]}>{LABEL(c.priority)}</Badge></td>
                       <td className="p-3 text-center"><Badge className={STATUS_STYLES[c.status]}>{LABEL(c.status)}</Badge></td>
                       <td className="p-3 text-xs text-slate-600">{c.assigned_to_name || <span className="text-muted-foreground">Unassigned</span>}</td>
@@ -328,6 +336,7 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
   const [selectedSkus, setSelectedSkus] = useState([]); // [{id,name}]
   const [category, setCategory] = useState('quality');
   const [priority, setPriority] = useState('medium');
+  const [department, setDepartment] = useState('');
   const [assignedTo, setAssignedTo] = useState('');
 
   useEffect(() => {
@@ -354,6 +363,7 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
         sku_ids: selectedSkus.map((s) => s.id),
         sku_names: selectedSkus.map((s) => s.name),
         category, priority,
+        department: department || null,
         assigned_to: assignedTo || null,
         assigned_to_name: assignedUser?.name || null,
       };
@@ -446,6 +456,17 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
               <SelectContent className="max-h-[260px]">
                 <SelectItem value="unassigned">Unassigned</SelectItem>
                 {(options.users || []).map((u) => <SelectItem key={u.id} value={u.id}>{u.name}{u.role ? ` · ${u.role}` : ''}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Department</Label>
+            <Select value={department || 'none'} onValueChange={(v) => setDepartment(v === 'none' ? '' : v)}>
+              <SelectTrigger data-testid="complaint-department-select"><SelectValue placeholder="No department" /></SelectTrigger>
+              <SelectContent className="max-h-[260px]">
+                <SelectItem value="none">No department</SelectItem>
+                {(options.departments || []).map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

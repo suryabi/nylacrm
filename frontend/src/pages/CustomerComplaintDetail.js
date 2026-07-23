@@ -32,7 +32,7 @@ export default function CustomerComplaintDetail() {
 
   const [loading, setLoading] = useState(true);
   const [complaint, setComplaint] = useState(null);
-  const [options, setOptions] = useState({ statuses: [], priorities: [], users: [] });
+  const [options, setOptions] = useState({ statuses: [], priorities: [], departments: [], users: [] });
   const [comment, setComment] = useState('');
   const [posting, setPosting] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -136,6 +136,9 @@ export default function CustomerComplaintDetail() {
               <h1 className="text-2xl font-bold text-slate-800">{complaint.title}</h1>
               <Badge className={PRIORITY_STYLES[complaint.priority]}>{LABEL(complaint.priority)}</Badge>
               <Badge className={STATUS_STYLES[complaint.status]}>{LABEL(complaint.status)}</Badge>
+              {complaint.department && (
+                <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200" data-testid="complaint-department-badge">{complaint.department}</Badge>
+              )}
             </div>
             <p className="text-sm text-muted-foreground mt-0.5">{complaint.complaint_number}</p>
           </div>
@@ -243,6 +246,16 @@ export default function CustomerComplaintDetail() {
                 <Select value={complaint.priority} onValueChange={(v) => patch({ priority: v })} disabled={!canEdit}>
                   <SelectTrigger data-testid="complaint-priority-select"><SelectValue /></SelectTrigger>
                   <SelectContent>{options.priorities.map((p) => <SelectItem key={p} value={p}>{LABEL(p)}</SelectItem>)}</SelectContent>
+                </Select>
+              </Field>
+              <Field label="Department">
+                <Select value={complaint.department || 'none'}
+                  onValueChange={(v) => patch({ department: v === 'none' ? null : v })} disabled={!canEdit}>
+                  <SelectTrigger data-testid="complaint-department-select"><SelectValue placeholder="No department" /></SelectTrigger>
+                  <SelectContent className="max-h-[260px]">
+                    <SelectItem value="none">No department</SelectItem>
+                    {(options.departments || []).map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                  </SelectContent>
                 </Select>
               </Field>
               <Field label="Assigned to">
