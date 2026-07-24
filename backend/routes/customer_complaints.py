@@ -18,14 +18,16 @@ Routes (mounted under /api/complaints)
   GET    /{id}/photos/{photo_id}    → download a photo (auth header)
   DELETE /{id}/photos/{photo_id}    → soft-delete a photo
 """
+import io
 import os
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
+from openpyxl import Workbook, load_workbook
 from pydantic import BaseModel, Field
 
 from deps import get_current_user
@@ -215,22 +217,18 @@ async def entity_search(
 
 
 # ── List / Create ──────────────────────────────────────────────────────────
-@router.get("")
-async def list_complaints(
-    status: Optional[str] = None,
-    priority: Optional[str] = None,
-    category: Optional[str] = None,
-    department: Optional[str] = None,
-    city: Optional[str] = None,
-    link_type: Optional[str] = None,
-    assigned_to: Optional[str] = None,
-    search: Optional[str] = None,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=500),
-    current_user: dict = Depends(get_current_user),
-):
-    tenant_id = get_current_tenant_id()
-    query = {"tenant_id": tenant_id}
+def _build_list_query(
+    tenant_id: str,
+    status: Optional[str],
+    priority: Optional[str],
+    category: Optional[str],
+    department: Optional[str],
+    city: Optional[str],
+    link_type: Optional[str],
+    assigned_to: Optional[str],
+    search: Optional[str],
+) -> dict:
+    query: dict = {"tenant_id": tenant_id}
     if status and status != "all":
         query["status"] = status
     if priority and priority != "all":
@@ -260,6 +258,25 @@ async def list_complaints(
         ]})
     if and_clauses:
         query["$and"] = and_clauses
+    return query
+
+
+@router.get("")
+async def list_complaints(
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    category: Optional[str] = None,
+    department: Optional[str] = None,
+    city: Optional[str] = None,
+    link_type: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=500),
+    current_user: dict = Depends(get_current_user),
+):
+    tenant_id = get_current_tenant_id()
+    query = _build_list_query(tenant_id, status, priority, category, department, city, link_type, assigned_to, search)
 
     total = await _db.customer_complaints.count_documents(query)
     skip = (page - 1) * page_size
@@ -336,6 +353,181 @@ async def create_complaint(body: ComplaintCreate, current_user: dict = Depends(g
     }
     await _db.customer_complaints.insert_one(doc)
     return _public(doc)
+
+
+# ── Export / Import ──────────────────────────────────────────────────────
+EXPORT_COLUMNS = [
+    "Issue Number", "Title", "Details", "Customer", "Linked To",
+    "City", "SKUs", "Category", "Department", "Priority", "Status",
+    "Assigned To", "Created At",
+]
+
+
+@router.get("/export")
+async def export_complaints(
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    category: Optional[str] = None,
+    department: Optional[str] = None,
+    city: Optional[str] = None,
+    link_type: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    search: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Download the currently-filtered issues as an .xlsx spreadsheet."""
+    tenant_id = get_current_tenant_id()
+    query = _build_list_query(tenant_id, status, priority, category, department, city, link_type, assigned_to, search)
+    docs = await _db.customer_complaints.find(
+        query, {"_id": 0, "comments": 0, "photos": 0},
+    ).sort("created_at", -1).to_list(10000)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Issues"
+    ws.append(EXPORT_COLUMNS)
+    for d in docs:
+        ws.append([
+            d.get("complaint_number") or "",
+            d.get("title") or "",
+            d.get("details") or "",
+            d.get("customer_name") or "",
+            (d.get("link_type") or "").capitalize(),
+            d.get("city") or "",
+            ", ".join(d.get("sku_names") or []),
+            (d.get("category") or "").capitalize(),
+            d.get("department") or "",
+            (d.get("priority") or "").capitalize(),
+            (d.get("status") or "").replace("_", " ").title(),
+            d.get("assigned_to_name") or "",
+            d.get("created_at") or "",
+        ])
+    for i, _ in enumerate(EXPORT_COLUMNS, start=1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = 22
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f"issues-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M')}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+def _norm(v) -> str:
+    return str(v).strip() if v is not None else ""
+
+
+def _match_ci(value: str, allowed: List[str]) -> Optional[str]:
+    """Case-insensitive match against an allowed list; return canonical or None."""
+    v = _norm(value).lower()
+    if not v:
+        return None
+    for a in allowed:
+        if a.lower() == v:
+            return a
+    return None
+
+
+@router.post("/import")
+async def import_complaints(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Bulk-create issues from an uploaded .xlsx spreadsheet.
+
+    Columns are matched by header (case-insensitive). Only Title is required.
+    Values that don't match the known enums (Category / Priority / Status /
+    Department / Linked To) are left blank instead of rejecting the row.
+    """
+    tenant_id = get_current_tenant_id()
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty file")
+    try:
+        wb = load_workbook(io.BytesIO(raw), data_only=True, read_only=True)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read spreadsheet. Please upload a .xlsx file.")
+    ws = wb.active
+    rows = ws.iter_rows(values_only=True)
+    try:
+        header = [(_norm(h) or "").lower() for h in next(rows)]
+    except StopIteration:
+        raise HTTPException(status_code=400, detail="Spreadsheet is empty")
+
+    col = {name: i for i, name in enumerate(header) if name}
+
+    def cell(row, *names):
+        for n in names:
+            i = col.get(n.lower())
+            if i is not None and i < len(row):
+                v = row[i]
+                if v is not None and _norm(v):
+                    return _norm(v)
+        return ""
+
+    created = 0
+    skipped = 0
+    errors: List[str] = []
+    now = _now()
+    for idx, row in enumerate(rows, start=2):
+        if row is None or all((v is None or _norm(v) == "") for v in row):
+            continue
+        title = cell(row, "title", "issue", "issue title", "summary")
+        if not title:
+            skipped += 1
+            errors.append(f"Row {idx}: missing title")
+            continue
+
+        category = _match_ci(cell(row, "category"), CATEGORIES) or "other"
+        priority = _match_ci(cell(row, "priority"), PRIORITIES) or "medium"
+        status = _match_ci(cell(row, "status"), STATUSES) or "open"
+        # Also accept "in progress" (with a space) → "in_progress"
+        status_raw = cell(row, "status").lower().replace(" ", "_")
+        if status_raw in STATUSES:
+            status = status_raw
+        department = _match_ci(cell(row, "department"), DEPARTMENTS)  # None if unknown
+        link_type_raw = cell(row, "linked to", "link type", "linked").lower()
+        link_type_v = link_type_raw if link_type_raw in LINK_TYPES else None
+
+        skus_raw = cell(row, "skus", "sku")
+        sku_names = [s.strip() for s in skus_raw.split(",") if s.strip()] if skus_raw else []
+
+        doc = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "complaint_number": await _next_complaint_number(tenant_id),
+            "title": title,
+            "details": cell(row, "details", "description") or "",
+            "link_type": link_type_v,
+            "lead_id": None,
+            "account_id": None,
+            "distributor_id": None,
+            "customer_name": cell(row, "customer", "customer name") or None,
+            "sku_ids": [],
+            "sku_names": sku_names,
+            "category": category,
+            "priority": priority,
+            "status": status,
+            "department": department,
+            "city": cell(row, "city") or None,
+            "assigned_to": None,
+            "assigned_to_name": cell(row, "assigned to", "assigned", "assignee") or None,
+            "photos": [],
+            "comments": [],
+            "created_by": current_user.get("id"),
+            "created_by_name": current_user.get("name"),
+            "created_at": now,
+            "updated_at": now,
+            "resolved_at": now if status == "resolved" else None,
+            "closed_at": now if status == "closed" else None,
+        }
+        await _db.customer_complaints.insert_one(doc)
+        created += 1
+
+    return {"created": created, "skipped": skipped, "errors": errors[:20]}
 
 
 @router.get("/{complaint_id}")

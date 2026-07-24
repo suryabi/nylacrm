@@ -23,6 +23,7 @@ import {
 import {
   MessageSquareWarning, Plus, Search, Loader2, ChevronLeft, ChevronRight,
   Paperclip, MessageSquare, ChevronsUpDown, Check, X, Layers, ChevronDown,
+  Download, Upload,
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -61,6 +62,9 @@ export default function CustomerComplaints() {
   const [options, setOptions] = useState({ statuses: [], priorities: [], categories: [], departments: [], link_types: [], users: [] });
   const [showCreate, setShowCreate] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState({});
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importRef = React.useRef(null);
 
   const grouped = groupBy !== 'none';
 
@@ -135,6 +139,65 @@ export default function CustomerComplaints() {
 
   const toggleGroup = (k) => setCollapsedGroups((prev) => ({ ...prev, [k]: !prev[k] }));
 
+  const buildFilterParams = () => {
+    const p = new URLSearchParams();
+    if (search) p.set('search', search);
+    if (statusFilter !== 'all') p.set('status', statusFilter);
+    if (priorityFilter !== 'all') p.set('priority', priorityFilter);
+    if (categoryFilter !== 'all') p.set('category', categoryFilter);
+    if (departmentFilter !== 'all') p.set('department', departmentFilter);
+    if (cityFilter !== 'all') p.set('city', cityFilter);
+    if (linkTypeFilter !== 'all') p.set('link_type', linkTypeFilter);
+    if (assignedFilter !== 'all') p.set('assigned_to', assignedFilter);
+    return p;
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = buildFilterParams();
+      const res = await axios.get(`${API}/complaints/export?${params}`, {
+        headers: HEAD(), responseType: 'blob',
+      });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `issues-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${data.total} issue${data.total === 1 ? '' : 's'}`);
+    } catch (e) {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await axios.post(`${API}/complaints/import`, form, {
+        headers: { ...HEAD(), 'Content-Type': 'multipart/form-data' },
+      });
+      const { created, skipped, errors } = res.data;
+      if (created > 0) toast.success(`Imported ${created} issue${created === 1 ? '' : 's'}${skipped ? ` (${skipped} skipped)` : ''}`);
+      else toast.error(`No issues imported${skipped ? ` — ${skipped} skipped` : ''}`);
+      if (errors && errors.length) console.warn('Import warnings:', errors);
+      await fetchList();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Import failed');
+    } finally {
+      setImporting(false);
+      if (importRef.current) importRef.current.value = '';
+    }
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -148,9 +211,30 @@ export default function CustomerComplaints() {
             <p className="text-sm text-slate-500">{data.total} issue{data.total === 1 ? '' : 's'} tracked</p>
           </div>
         </div>
-        <Button onClick={() => setShowCreate(true)} className="bg-rose-600 hover:bg-rose-700" data-testid="new-complaint-btn">
-          <Plus className="h-4 w-4 mr-2" /> New Issue
-        </Button>
+        <div className="flex items-center gap-2">
+          <input ref={importRef} type="file" accept=".xlsx" hidden onChange={handleImport} data-testid="issues-import-input" />
+          <Button
+            variant="outline"
+            onClick={() => importRef.current?.click()}
+            disabled={importing}
+            data-testid="issues-import-btn"
+          >
+            {importing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+            Import
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            disabled={exporting || data.total === 0}
+            data-testid="issues-export-btn"
+          >
+            {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+            Export
+          </Button>
+          <Button onClick={() => setShowCreate(true)} className="bg-rose-600 hover:bg-rose-700" data-testid="new-complaint-btn">
+            <Plus className="h-4 w-4 mr-2" /> New Issue
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
