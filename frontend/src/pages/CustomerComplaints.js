@@ -198,6 +198,24 @@ export default function CustomerComplaints() {
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await axios.get(`${API}/complaints/import-template`, {
+        headers: HEAD(), responseType: 'blob',
+      });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'issues-import-template.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Failed to download template');
+    }
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -213,6 +231,14 @@ export default function CustomerComplaints() {
         </div>
         <div className="flex items-center gap-2">
           <input ref={importRef} type="file" accept=".xlsx" hidden onChange={handleImport} data-testid="issues-import-input" />
+          <button
+            type="button"
+            onClick={handleDownloadTemplate}
+            className="text-xs text-slate-500 hover:text-rose-600 underline underline-offset-4"
+            data-testid="issues-template-btn"
+          >
+            Download template
+          </button>
           <Button
             variant="outline"
             onClick={() => importRef.current?.click()}

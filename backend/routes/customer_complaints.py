@@ -363,6 +363,52 @@ EXPORT_COLUMNS = [
 ]
 
 
+@router.get("/import-template")
+async def import_template(current_user: dict = Depends(get_current_user)):
+    """Download a blank .xlsx template with the correct header row plus a
+    hidden `Instructions` sheet listing the valid enum values."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Issues"
+    ws.append(EXPORT_COLUMNS)
+    # Sample row (row 2) to guide the user
+    ws.append([
+        "(auto)", "Cap leaks on 500ml bottle", "Batch B123 shows visible seepage",
+        "Empire Restaurant", "Account", "Bengaluru", "500ml PET",
+        "quality", "Production", "high", "open", "Priya Sharma", "",
+    ])
+    for i in range(1, len(EXPORT_COLUMNS) + 1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = 22
+
+    ins = wb.create_sheet("Instructions")
+    ins.append(["Field", "Required?", "Valid values / Notes"])
+    ins.append(["Issue Number", "No", "Leave blank — auto-generated on import"])
+    ins.append(["Title", "Yes", "Free text — row is skipped if empty"])
+    ins.append(["Details", "No", "Free text description"])
+    ins.append(["Customer", "No", "Free text (e.g. account/lead/distributor name)"])
+    ins.append(["Linked To", "No", " / ".join(LINK_TYPES) + " — anything else is left blank"])
+    ins.append(["City", "No", "Free text"])
+    ins.append(["SKUs", "No", "Comma-separated list, e.g. '500ml PET, 1L PET'"])
+    ins.append(["Category", "No", " / ".join(CATEGORIES) + " — invalid → 'other'"])
+    ins.append(["Department", "No", " / ".join(DEPARTMENTS) + " — invalid → left blank"])
+    ins.append(["Priority", "No", " / ".join(PRIORITIES) + " — invalid → 'medium'"])
+    ins.append(["Status", "No", " / ".join(s.replace('_', ' ') for s in STATUSES) + " — invalid → 'open'"])
+    ins.append(["Assigned To", "No", "Free text (name)"])
+    ins.append(["Created At", "No", "Ignored — set automatically at import time"])
+    for i in range(1, 4):
+        ins.column_dimensions[ins.cell(row=1, column=i).column_letter].width = 30
+    ins.column_dimensions["C"].width = 60
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="issues-import-template.xlsx"'},
+    )
+
+
 @router.get("/export")
 async def export_complaints(
     status: Optional[str] = None,
