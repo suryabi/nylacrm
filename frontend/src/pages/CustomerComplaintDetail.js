@@ -16,7 +16,7 @@ import {
 } from '../components/ui/alert-dialog';
 import {
   ArrowLeft, Loader2, Upload, Trash2, Send, MessageSquare, ImageIcon,
-  Tag, Package, User, Calendar, X, MapPin,
+  Tag, Package, User, Calendar, X, MapPin, Pencil, Check,
 } from 'lucide-react';
 import { PRIORITY_STYLES, STATUS_STYLES, LABEL } from './CustomerComplaints';
 import { useTenantConfig } from '../context/TenantConfigContext';
@@ -38,6 +38,8 @@ export default function CustomerComplaintDetail() {
   const [posting, setPosting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
   const fileRef = useRef(null);
 
   const fetchComplaint = useCallback(async () => {
@@ -65,6 +67,13 @@ export default function CustomerComplaintDetail() {
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Update failed');
     }
+  };
+
+  const saveTitle = async () => {
+    const t = titleDraft.trim();
+    if (!t) { toast.error('Title cannot be empty'); return; }
+    await patch({ title: t });
+    setEditingTitle(false);
   };
 
   const addComment = async () => {
@@ -134,7 +143,42 @@ export default function CustomerComplaintDetail() {
           </Button>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold text-slate-800">{complaint.title}</h1>
+              {editingTitle ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    className="h-9 text-lg font-semibold w-[28rem] max-w-full"
+                    maxLength={200}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveTitle();
+                      if (e.key === 'Escape') setEditingTitle(false);
+                    }}
+                    data-testid="complaint-title-edit-input"
+                  />
+                  <Button size="icon" className="h-9 w-9" onClick={saveTitle} data-testid="complaint-title-save-btn">
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => setEditingTitle(false)} data-testid="complaint-title-cancel-btn">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <h1 className="text-2xl font-bold text-slate-800">{complaint.title}</h1>
+                  {canEdit && (
+                    <Button
+                      size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground"
+                      onClick={() => { setTitleDraft(complaint.title || ''); setEditingTitle(true); }}
+                      title="Edit title"
+                      data-testid="complaint-title-edit-btn"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </>
+              )}
               <Badge className={PRIORITY_STYLES[complaint.priority]}>{LABEL(complaint.priority)}</Badge>
               <Badge className={STATUS_STYLES[complaint.status]}>{LABEL(complaint.status)}</Badge>
               {complaint.department && (

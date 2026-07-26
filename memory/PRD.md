@@ -1928,3 +1928,6 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - **Backend**: `models/tenant.py` TenantModules `extra=allow` + `Tenant.platform_modules` dict; `tenant_admin.py` PUT /current/config — modules editable by super admin/CEO/System Admin, platform_modules 403 for non-super-admin; `platform_admin.py` PUT tenants/{id} accepts platform_modules.
 - **Frontend**: TenantSettings Modules tab rebuilt on ModuleMatrix (locked platform-disabled rows greyed, read-only mode for Director/Admin); PlatformAdmin Modules tab now edits platform_modules with full registry; TenantConfigContext.isModuleEnabled checks BOTH layers.
 - **Verified**: testing_agent iteration_338 — backend 5/5 (role gates, persistence, 403s), frontend 100% (search, bulk toggles, save→sidebar disappearance E2E, platform lock reflected in tenant view, regressions). ⚠️ Redeploy for production.
+
+### 2026-07-26 — ✏️ Editable Issue title (Issues module) ✅ DONE (self-tested)
+- `CustomerComplaintDetail.js`: pencil icon next to the title (visible with edit permission) → inline Input w/ Save (Enter) / Cancel (Esc); calls existing PUT /api/complaints/{id} {title}. Testids: complaint-title-edit-btn / -edit-input / -save-btn / -cancel-btn. Backend already supported title in ComplaintUpdate. Verified E2E (UI edit persisted to DB via API check, then reverted).
