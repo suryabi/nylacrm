@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import axios from 'axios';
+import { syncTenantCurrency } from '../utils/currency';
 
 const TenantConfigContext = createContext();
 
@@ -84,6 +85,76 @@ const applyBrandingColors = (branding) => {
   if (branding?.secondary_color) {
     root.style.setProperty('--tenant-secondary', branding.secondary_color);
   }
+};
+
+// Swap the browser favicon + document title based on tenant branding.
+const applyTenantIcon = (branding) => {
+  if (typeof document === 'undefined') return;
+  const iconUrl = branding?.favicon_url || branding?.logo_url;
+  if (iconUrl) {
+    // Remove any existing icon links, then add a fresh one so the browser
+    // reloads the icon (some browsers cache the previous <link href>).
+    document.querySelectorAll("link[rel~='icon']").forEach((l) => l.remove());
+    const link = document.createElement('link');
+    link.rel = 'icon';
+    link.href = iconUrl;
+    document.head.appendChild(link);
+  }
+  if (branding?.app_name) {
+    document.title = branding.app_name;
+  }
+};
+
+// Runtime currency symbol swap. Many UI strings in the codebase hard-code the
+// rupee glyph (₹). Rather than editing every file, we register a
+// MutationObserver on document.body that rewrites `₹` in visible text nodes to
+// the active tenant currency symbol whenever it isn't INR. This runs cheaply
+// (text nodes only) and reacts to any subsequent DOM change.
+let _currencyObserver = null;
+let _currencyTarget = '\u20B9';
+const RUPEE = '\u20B9';
+
+const _rewriteRupee = (root) => {
+  if (_currencyTarget === RUPEE || !root) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.nodeValue && n.nodeValue.indexOf(RUPEE) !== -1
+      ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
+  });
+  let n;
+  const nodes = [];
+  while ((n = walker.nextNode())) nodes.push(n);
+  nodes.forEach((tn) => {
+    tn.nodeValue = tn.nodeValue.split(RUPEE).join(_currencyTarget);
+  });
+};
+
+const applyCurrencySwap = (symbol) => {
+  if (typeof document === 'undefined') return;
+  _currencyTarget = symbol || RUPEE;
+  // One-off rewrite of what's already rendered.
+  _rewriteRupee(document.body);
+  if (_currencyObserver) return;
+  _currencyObserver = new MutationObserver((mutations) => {
+    if (_currencyTarget === RUPEE) return;
+    for (const m of mutations) {
+      if (m.type === 'characterData' && m.target && m.target.nodeValue && m.target.nodeValue.indexOf(RUPEE) !== -1) {
+        m.target.nodeValue = m.target.nodeValue.split(RUPEE).join(_currencyTarget);
+      } else if (m.type === 'childList') {
+        m.addedNodes.forEach((node) => {
+          if (node.nodeType === 3) {
+            if (node.nodeValue && node.nodeValue.indexOf(RUPEE) !== -1) {
+              node.nodeValue = node.nodeValue.split(RUPEE).join(_currencyTarget);
+            }
+          } else if (node.nodeType === 1) {
+            _rewriteRupee(node);
+          }
+        });
+      }
+    }
+  });
+  _currencyObserver.observe(document.body, {
+    childList: true, subtree: true, characterData: true,
+  });
 };
 
 // Mapping from module keys to their corresponding routes
@@ -253,6 +324,15 @@ export const TenantConfigProvider = ({ children }) => {
       
       // Apply branding colors to CSS custom properties
       applyBrandingColors(fetchedBranding);
+      // Apply browser tab icon + title from tenant branding
+      applyTenantIcon(fetchedBranding);
+      // Sync tenant currency into globals so utils/currency.js can read it
+      syncTenantCurrency(
+        config?.settings?.currency,
+        config?.settings?.currency_symbol
+      );
+      // Runtime rupee → active-currency swap for any text that hard-codes ₹
+      applyCurrencySwap(config?.settings?.currency_symbol);
       
       // Fetch role permissions for the current user's role
       try {
