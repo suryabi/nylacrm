@@ -155,7 +155,7 @@ export default function BudgetRequest() {
       
       <div className="relative max-w-6xl mx-auto space-y-6 p-6 lg:p-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/50 dark:to-teal-900/30">
               <Wallet className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />

@@ -142,7 +142,7 @@ export default function TravelRequest() {
       
       <div className="relative max-w-6xl mx-auto space-y-6 p-6 lg:p-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/50 dark:to-purple-900/30">
               <Plane className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
@@ -285,13 +285,13 @@ function TravelRequestCard({ request, onApprove, showActions, onViewDetail }) {
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <MapPin className="h-3 w-3" /> From
           </p>
-          <p className="font-medium text-slate-700 dark:text-slate-300">{request.from_location}</p>
+          <p className="font-medium text-slate-700 dark:text-slate-300 break-words">{request.from_location}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <MapPin className="h-3 w-3" /> To
           </p>
-          <p className="font-medium text-slate-700 dark:text-slate-300">{request.to_location}</p>
+          <p className="font-medium text-slate-700 dark:text-slate-300 break-words">{request.to_location}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground flex items-center gap-1">

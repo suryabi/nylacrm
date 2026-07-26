@@ -409,7 +409,37 @@ const formatGroupKey = (groupBy, key) => {
 const IssuesTable = ({ rows, onOpen, bulk }) => {
   const allSelected = rows.length > 0 && rows.every((r) => bulk.isSelected(r.id));
   return (
-  <div className="overflow-x-auto">
+  <>
+  {/* Mobile card list (< sm) */}
+  <div className="sm:hidden divide-y" data-testid="complaints-card-list">
+    {rows.map((c) => (
+      <div key={c.id} className="p-3 flex gap-3 active:bg-rose-50/40" onClick={() => onOpen(c.id)} data-testid={`complaint-card-${c.id}`}>
+        <div onClick={(e) => e.stopPropagation()} className="pt-0.5">
+          <Checkbox checked={bulk.isSelected(c.id)} onCheckedChange={() => bulk.toggle(c.id)} aria-label={`Select ${c.complaint_number}`} />
+        </div>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-medium text-slate-800 text-sm leading-snug">{c.title}</p>
+            <Badge className={`${STATUS_STYLES[c.status]} shrink-0`}>{LABEL(c.status)}</Badge>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {c.complaint_number}
+            {c.customer_name ? ` · ${c.customer_name}` : ''}
+            {c.city ? ` · ${c.city}` : ''}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge className={PRIORITY_STYLES[c.priority]}>{LABEL(c.priority)}</Badge>
+            {c.department && <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{c.department}</Badge>}
+            <span className="text-[11px] text-muted-foreground">{c.assigned_to_name || 'Unassigned'}</span>
+            {c.photo_count > 0 && <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground"><Paperclip className="h-3 w-3" />{c.photo_count}</span>}
+            {c.comment_count > 0 && <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground"><MessageSquare className="h-3 w-3" />{c.comment_count}</span>}
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+  {/* Desktop table (sm and up) */}
+  <div className="hidden sm:block overflow-x-auto">
     <table className="w-full text-sm" data-testid="complaints-table">
       <thead>
         <tr className="border-b bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
@@ -477,6 +507,7 @@ const IssuesTable = ({ rows, onOpen, bulk }) => {
       </tbody>
     </table>
   </div>
+  </>
   );
 };
 

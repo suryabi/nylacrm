@@ -79,7 +79,9 @@ export default function LeadsList() {
   
   // Mobile view state
   const [showFilters, setShowFilters] = useState(false);
-  const [viewMode, setViewMode] = useState('table'); // 'table' or 'cards'
+  const [viewMode, setViewMode] = useState(() =>
+    (typeof window !== 'undefined' && window.innerWidth < 640) ? 'cards' : 'table'
+  ); // 'table' or 'cards' — phones default to cards
   
   // Check if we have URL params from dashboard navigation
   const urlParams = new URLSearchParams(window.location.search);

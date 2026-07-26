@@ -1947,3 +1947,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - **Issues page** header buttons row → flex-wrap (New Issue no longer clipped at 390px).
 - Verified 390px/820px/1920px: no horizontal overflow on leads/accounts/dashboard/issues/global-stock-dashboard; desktop tables unaffected; dialogs fit.
 - **Future rounds (backlog)**: card-style row layouts for key tables on phones; distribution portal + production + approvals screens deep pass.
+
+### 2026-07-26 — 📱 Mobile/Tablet Responsiveness — Round 2 ✅ DONE (screenshot-verified 390px + desktop regression)
+- Header wrap fixes (clipped action buttons at 390px): LeaveManagement.js, TravelRequest.js, BudgetRequest.js (flex-wrap + gap-3); TravelRequest From/To values break-words (no more overlap).
+- Distributor portal: DeliveriesTab.jsx Stock Out section header now wraps ("Generate Missing EBEs" no longer overflows). Portal home/stock dashboard verified fine on mobile.
+- Issues list: NEW mobile card layout (<sm) in IssuesTable — data-testid complaints-card-list / complaint-card-{id}; desktop table untouched (hidden sm:block).
+- Leads list: viewMode now defaults to 'cards' on phones (<640px), 'table' on desktop.
+- Noted (not fixed, minor): unknown routes like /distributor-stock render a blank page (no 404 catch-all).
+- Verified: Issues cards + Leads cards + fixed headers @390px; desktop Issues=table, Leads=table.

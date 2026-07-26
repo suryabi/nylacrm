@@ -740,7 +740,7 @@ export default function DeliveriesTab({
     <Collapsible open={custSectionOpen} onOpenChange={setCustSectionOpen}>
     <Card>
       <CardHeader className="flex flex-col gap-4">
-        <div className="flex flex-row items-center justify-between">
+        <div className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CollapsibleTrigger asChild>
             <button className="flex items-center gap-2 text-left hover:text-emerald-700 transition-colors" data-testid="cust-section-trigger">
               <ChevronDown className={`h-5 w-5 shrink-0 transition-transform duration-200 ${custSectionOpen ? '' : '-rotate-90'}`} />
@@ -750,7 +750,7 @@ export default function DeliveriesTab({
               </div>
             </button>
           </CollapsibleTrigger>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Backfill External Billing Entries for historical completed
                 deliveries (distributor-billed accounts whose EBE was never
                 generated). Admin-only; idempotent. */}

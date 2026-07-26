@@ -106,7 +106,7 @@ export default function LeaveManagement() {
       <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] opacity-30 dark:opacity-10 pointer-events-none" />
       
       <div className="relative max-w-6xl mx-auto space-y-6 p-6 lg:p-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-gradient-to-br from-sky-100 to-blue-100 dark:from-sky-900/50 dark:to-blue-900/30">
             <CalendarDays className="h-6 w-6 text-sky-600 dark:text-sky-400" />
