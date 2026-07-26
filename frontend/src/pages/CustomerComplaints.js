@@ -233,7 +233,7 @@ export default function CustomerComplaints() {
             <p className="text-sm text-slate-500">{data.total} issue{data.total === 1 ? '' : 's'} tracked</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input ref={importRef} type="file" accept=".xlsx" hidden onChange={handleImport} data-testid="issues-import-input" />
           <button
             type="button"

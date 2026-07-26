@@ -279,3 +279,26 @@
 @media (prefers-reduced-motion: reduce) {
     .alert-ring { animation: none; }
 }
+
+/* ── Mobile & tablet responsiveness (global) ─────────────────────────────
+   1. Wide data tables: on phones, let every table scroll horizontally
+      instead of clipping off-screen. `display:block` + overflow makes the
+      table its own scroll container without needing wrapper divs across
+      100+ pages. Tables narrower than the viewport are unaffected visually.
+   2. Dialogs: cap height and allow internal scrolling so tall forms are
+      usable on small screens. */
+@media (max-width: 767px) {
+  table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  div[role="dialog"],
+  div[role="alertdialog"] {
+    max-height: 92vh;
+    overflow-y: auto;
+    max-width: calc(100vw - 1rem);
+  }
+}
