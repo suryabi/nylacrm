@@ -137,6 +137,7 @@ const DistributorList = lazy(() => import('./pages/DistributorList'));
 const DistributorDetail = lazy(() => import('./pages/DistributorDetail'));
 const StockTransfers = lazy(() => import('./pages/StockTransfers'));
 const StockDashboard = lazy(() => import('./pages/StockDashboard'));
+const GlobalStockDashboard = lazy(() => import('./pages/GlobalStockDashboard'));
 const TaskManagement = lazy(() => import('./pages/TaskManagement'));
 const TaskDetail = lazy(() => import('./pages/TaskDetail'));
 const PerformanceTracker = lazy(() => import('./pages/PerformanceTracker'));
@@ -445,6 +446,7 @@ function AppRouter() {
           <Route path="/accounting/employees" element={<ProtectedRoute moduleKey="accounting_employees"><EmployeesAccounting /></ProtectedRoute>} />
           <Route path="/admin/vendor-types" element={<ProtectedRoute moduleKey="vendor_types"><VendorTypes /></ProtectedRoute>} />
           <Route path="/stock-dashboard" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><StockDashboard /></ProtectedRoute>} />
+          <Route path="/global-stock-dashboard" element={<ProtectedRoute moduleKey="global_stock_dashboard" appModule="distribution"><GlobalStockDashboard /></ProtectedRoute>} />
           <Route path="/cost-cards" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><CostCards /></ProtectedRoute>} />
           
           {/* Task Management */}
