@@ -8,6 +8,9 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
+import { Checkbox } from '../components/ui/checkbox';
+import BulkDeleteBar from '../components/admin/BulkDeleteBar';
+import { useBulkSelect } from '../hooks/useBulkSelect';
 import { toast } from 'sonner';
 import { 
   FilterContainer, 
@@ -79,6 +82,7 @@ export default function AccountsList() {
   const navigate = useNavigate();
   const { navigateTo, saveFilters } = useNavigation();
   const [accounts, setAccounts] = useState([]);
+  const bulk = useBulkSelect();
   const [stats, setStats] = useState({ total_accounts: 0, by_type: {}, by_category: {} });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -429,6 +433,14 @@ export default function AccountsList() {
                 <table className="w-full text-sm" data-testid="accounts-table">
                   <thead>
                     <tr className="border-b-2 border-amber-100 dark:border-amber-900/30 bg-gradient-to-r from-amber-50/80 to-orange-50/50 dark:from-amber-900/20 dark:to-orange-900/10">
+                      <th className="w-10 pl-4">
+                        <Checkbox
+                          checked={accounts.length > 0 && accounts.every((a) => bulk.isSelected(a.id))}
+                          onCheckedChange={() => bulk.toggleAll(accounts.map((a) => a.id))}
+                          aria-label="Select all"
+                          data-testid="accounts-select-all"
+                        />
+                      </th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Account</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Contact</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Location</th>
@@ -450,6 +462,14 @@ export default function AccountsList() {
                         }} 
                         data-testid={`account-row-${account.account_id}`}
                       >
+                        <td className="w-10 pl-4" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={bulk.isSelected(account.id)}
+                            onCheckedChange={() => bulk.toggle(account.id)}
+                            aria-label={`Select ${account.account_name}`}
+                            data-testid={`account-select-${account.account_id}`}
+                          />
+                        </td>
                         <td className="py-5 px-5">
                           <div className="flex items-center gap-3">
                             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/50 dark:to-orange-900/30 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
@@ -626,6 +646,15 @@ export default function AccountsList() {
         entityName={accountToDelete?.name}
         onConfirm={confirmDeleteAccount}
         loading={!!deletingAccountId}
+      />
+
+      <BulkDeleteBar
+        count={bulk.size}
+        entityLabel="account"
+        collection="accounts"
+        ids={bulk.ids}
+        onCancel={bulk.clear}
+        onCleared={() => { bulk.clear(); fetchAccounts(); }}
       />
     </div>
   );

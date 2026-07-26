@@ -27,6 +27,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
+import { Checkbox } from '../components/ui/checkbox';
+import BulkDeleteBar from '../components/admin/BulkDeleteBar';
+import { useBulkSelect } from '../hooks/useBulkSelect';
 import { toast } from 'sonner';
 import { 
   Plus, Pencil, Trash2, Loader2, Users, Truck, Package, 
@@ -65,6 +68,7 @@ const getIconComponent = (iconName) => {
 
 export default function MasterContactCategories() {
   const [categories, setCategories] = useState([]);
+  const bulk = useBulkSelect();
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -245,6 +249,14 @@ export default function MasterContactCategories() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={categories.length > 0 && categories.every((c) => bulk.isSelected(c.id))}
+                    onCheckedChange={() => bulk.toggleAll(categories.map((c) => c.id))}
+                    aria-label="Select all"
+                    data-testid="cat-select-all"
+                  />
+                </TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead className="text-center">Status</TableHead>
@@ -257,6 +269,14 @@ export default function MasterContactCategories() {
                 const IconComponent = getIconComponent(category.icon);
                 return (
                   <TableRow key={category.id}>
+                    <TableCell className="w-10">
+                      <Checkbox
+                        checked={bulk.isSelected(category.id)}
+                        onCheckedChange={() => bulk.toggle(category.id)}
+                        aria-label={`Select ${category.name}`}
+                        data-testid={`cat-select-${category.id}`}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div 
@@ -427,6 +447,15 @@ export default function MasterContactCategories() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <BulkDeleteBar
+        count={bulk.size}
+        entityLabel="category"
+        collection="contact_categories"
+        ids={bulk.ids}
+        onCancel={bulk.clear}
+        onCleared={() => { bulk.clear(); fetchCategories(); }}
+      />
     </div>
   );
 }

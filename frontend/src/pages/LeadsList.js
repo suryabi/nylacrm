@@ -15,6 +15,8 @@ import { MultiSelect } from '../components/ui/multi-select';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
 import { Checkbox } from '../components/ui/checkbox';
+import BulkDeleteBar from '../components/admin/BulkDeleteBar';
+import { useBulkSelect } from '../hooks/useBulkSelect';
 import { 
   FilterContainer, 
   FilterItem, 
@@ -65,6 +67,7 @@ export default function LeadsList() {
   const canDelete = ['ceo', 'admin', 'system admin'].includes((user?.role || '').toLowerCase());
   const [deletingLead, setDeletingLead] = useState(false);
   const [leads, setLeads] = useState([]);
+  const bulk = useBulkSelect();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const { statuses, getStatusLabel, getStatusColor } = useLeadStatuses();
@@ -1072,6 +1075,14 @@ export default function LeadsList() {
                 <Table>
                   <TableHeader>
                     <TableRow className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
+                      <TableHead className="w-10 pl-3">
+                        <Checkbox
+                          checked={displayLeads.length > 0 && displayLeads.every((l) => bulk.isSelected(l.id))}
+                          onCheckedChange={() => bulk.toggleAll(displayLeads.map((l) => l.id))}
+                          aria-label="Select all"
+                          data-testid="leads-select-all"
+                        />
+                      </TableHead>
                       <TableHead className="w-[400px] min-w-[200px] sm:min-w-[400px] sm:max-w-[400px]"><button onClick={() => handleSort('company')} className="flex items-center hover:text-foreground font-semibold text-xs sm:text-sm" data-testid="sort-company">Lead{getSortIcon('company')}</button></TableHead>
                       <TableHead className="hidden sm:table-cell"><button onClick={() => handleSort('city')} className="flex items-center hover:text-foreground font-semibold" data-testid="sort-location">Location{getSortIcon('city')}</button></TableHead>
                       <TableHead className="w-[60px] sm:w-[80px]"><button onClick={() => handleSort('assigned_to')} className="flex items-center hover:text-foreground font-semibold text-xs sm:text-sm" data-testid="sort-assigned">Owner{getSortIcon('assigned_to')}</button></TableHead>
@@ -1088,6 +1099,14 @@ export default function LeadsList() {
                         saveFilters({ searchQuery, statusFilter, territoryFilter, stateFilter, cityFilter, assignedToFilter, timeFilter });
                         navigateTo(`/leads/${lead.id}`, { label: lead.company || lead.name || 'Lead Details' });
                       }} data-testid={`lead-row-${lead.id}`}>
+                        <TableCell className="w-10 pl-3" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={bulk.isSelected(lead.id)}
+                            onCheckedChange={() => bulk.toggle(lead.id)}
+                            aria-label={`Select ${lead.company || lead.name}`}
+                            data-testid={`lead-select-${lead.id}`}
+                          />
+                        </TableCell>
                         <TableCell className="w-[200px] sm:w-[400px] sm:min-w-[400px] sm:max-w-[400px] py-2 sm:py-4" data-testid={`lead-cell-${lead.id}`}>
                           <div className="flex items-center gap-1.5 sm:gap-2">
                             {getTemperatureIcon(lead.temperature)}
@@ -1202,6 +1221,15 @@ export default function LeadsList() {
         entityName={leadToDelete?.company || leadToDelete?.name}
         onConfirm={handleDelete}
         loading={deletingLead}
+      />
+
+      <BulkDeleteBar
+        count={bulk.size}
+        entityLabel="lead"
+        collection="leads"
+        ids={bulk.ids}
+        onCancel={bulk.clear}
+        onCleared={() => { bulk.clear(); fetchLeads(); }}
       />
     </div>
   );

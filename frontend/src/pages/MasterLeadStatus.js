@@ -28,6 +28,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
+import { Checkbox } from '../components/ui/checkbox';
+import BulkDeleteBar from '../components/admin/BulkDeleteBar';
+import { useBulkSelect } from '../hooks/useBulkSelect';
 import { Plus, Pencil, Trash2, GripVertical, Loader2, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -56,6 +59,7 @@ const getColorClass = (color) => {
 
 export default function MasterLeadStatus() {
   const [statuses, setStatuses] = useState([]);
+  const bulk = useBulkSelect();
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -219,6 +223,13 @@ export default function MasterLeadStatus() {
                 }`}
                 data-testid={`status-row-${status.id}`}
               >
+                <Checkbox
+                  checked={bulk.isSelected(status.id)}
+                  onCheckedChange={() => bulk.toggle(status.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={`Select ${status.label}`}
+                  data-testid={`status-select-${status.id}`}
+                />
                 <GripVertical className="h-5 w-5 text-muted-foreground/50" />
                 
                 <div className="flex-1 flex items-center gap-4">
@@ -337,6 +348,15 @@ export default function MasterLeadStatus() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <BulkDeleteBar
+        count={bulk.size}
+        entityLabel="status"
+        collection="lead_statuses"
+        ids={bulk.ids}
+        onCancel={bulk.clear}
+        onCleared={() => { bulk.clear(); fetchStatuses(); }}
+      />
     </div>
   );
 }

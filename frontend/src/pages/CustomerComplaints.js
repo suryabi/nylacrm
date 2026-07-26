@@ -8,6 +8,9 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
+import { Checkbox } from '../components/ui/checkbox';
+import BulkDeleteBar from '../components/admin/BulkDeleteBar';
+import { useBulkSelect } from '../hooks/useBulkSelect';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
@@ -65,6 +68,7 @@ export default function CustomerComplaints() {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const importRef = React.useRef(null);
+  const bulk = useBulkSelect();
 
   const grouped = groupBy !== 'none';
 
@@ -334,7 +338,7 @@ export default function CustomerComplaints() {
         </CardContent></Card>
       ) : !grouped ? (
         <Card><CardContent className="p-0">
-          <IssuesTable rows={data.data} onOpen={(id) => navigate(`/complaints/${id}`)} />
+          <IssuesTable rows={data.data} onOpen={(id) => navigate(`/complaints/${id}`)} bulk={bulk} />
         </CardContent></Card>
       ) : (
         <div className="space-y-3">
@@ -355,7 +359,7 @@ export default function CustomerComplaints() {
                 </button>
                 {!isCollapsed && (
                   <CardContent className="p-0">
-                    <IssuesTable rows={rows} onOpen={(id) => navigate(`/complaints/${id}`)} />
+                    <IssuesTable rows={rows} onOpen={(id) => navigate(`/complaints/${id}`)} bulk={bulk} />
                   </CardContent>
                 )}
               </Card>
@@ -384,6 +388,15 @@ export default function CustomerComplaints() {
           onCreated={(id) => { setShowCreate(false); navigate(`/complaints/${id}`); }}
         />
       )}
+
+      <BulkDeleteBar
+        count={bulk.size}
+        entityLabel="issue"
+        collection="complaints"
+        ids={bulk.ids}
+        onCancel={bulk.clear}
+        onCleared={() => { bulk.clear(); fetchList(); }}
+      />
     </div>
   );
 }
@@ -393,11 +406,21 @@ const formatGroupKey = (groupBy, key) => {
   return key;
 };
 
-const IssuesTable = ({ rows, onOpen }) => (
+const IssuesTable = ({ rows, onOpen, bulk }) => {
+  const allSelected = rows.length > 0 && rows.every((r) => bulk.isSelected(r.id));
+  return (
   <div className="overflow-x-auto">
     <table className="w-full text-sm" data-testid="complaints-table">
       <thead>
         <tr className="border-b bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+          <th className="p-3 w-10">
+            <Checkbox
+              checked={allSelected}
+              onCheckedChange={() => bulk.toggleAll(rows.map((r) => r.id))}
+              aria-label="Select all"
+              data-testid="complaints-select-all"
+            />
+          </th>
           <th className="text-left p-3 font-medium">Issue</th>
           <th className="text-left p-3 font-medium">Customer</th>
           <th className="text-left p-3 font-medium">City</th>
@@ -416,6 +439,14 @@ const IssuesTable = ({ rows, onOpen }) => (
             className="border-b hover:bg-rose-50/40 cursor-pointer transition-colors"
             onClick={() => onOpen(c.id)}
             data-testid={`complaint-row-${c.id}`}>
+            <td className="p-3" onClick={(e) => e.stopPropagation()}>
+              <Checkbox
+                checked={bulk.isSelected(c.id)}
+                onCheckedChange={() => bulk.toggle(c.id)}
+                aria-label={`Select ${c.complaint_number}`}
+                data-testid={`complaint-select-${c.id}`}
+              />
+            </td>
             <td className="p-3">
               <p className="font-medium text-slate-800">{c.title}</p>
               <p className="text-xs text-muted-foreground">{c.complaint_number}</p>
@@ -446,7 +477,8 @@ const IssuesTable = ({ rows, onOpen }) => (
       </tbody>
     </table>
   </div>
-);
+  );
+};
 
 const FilterSelect = ({ value, onChange, options, placeholder, testid, preserveCase }) => (
   <Select value={value} onValueChange={onChange}>

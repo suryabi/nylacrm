@@ -47,16 +47,27 @@ import { cn } from '../lib/utils';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import { isValidMapsLink } from '../utils/mapsLink';
 import { MapsLinkInput } from '../components/MapsLinkInput';
+import { Checkbox } from '../components/ui/checkbox';
+import BulkDeleteBar from '../components/admin/BulkDeleteBar';
+import { useBulkSelect } from '../hooks/useBulkSelect';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 // Contact Row (table) Component
-const ContactRow = ({ contact, onEdit, onDelete, onView, onShare }) => (
+const ContactRow = ({ contact, onEdit, onDelete, onView, onShare, bulk }) => (
   <TableRow
     className="cursor-pointer hover:bg-slate-50/80"
     onClick={() => onView(contact)}
     data-testid={`contact-row-${contact.id}`}
   >
+    <TableCell className="w-10 pl-3" onClick={(e) => e.stopPropagation()}>
+      <Checkbox
+        checked={bulk.isSelected(contact.id)}
+        onCheckedChange={() => bulk.toggle(contact.id)}
+        aria-label={`Select ${contact.name}`}
+        data-testid={`contact-select-${contact.id}`}
+      />
+    </TableCell>
     {/* Name + avatar + designation */}
     <TableCell className="min-w-[200px]">
       <div className="flex items-center gap-3">
@@ -204,6 +215,7 @@ const ImageUploader = ({ label, image, onImageChange, onClear }) => {
 export default function ContactsList() {
   const navigate = useNavigate();
   const [contacts, setContacts] = useState([]);
+  const bulk = useBulkSelect();
   const [loading, setLoading] = useState(true);
   const [filterOptions, setFilterOptions] = useState({ categories: [], companies: [], cities: [] });
   
@@ -732,6 +744,14 @@ export default function ContactsList() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50/60 hover:bg-slate-50/60">
+                  <TableHead className="w-10 pl-3">
+                    <Checkbox
+                      checked={contacts.length > 0 && contacts.every((c) => bulk.isSelected(c.id))}
+                      onCheckedChange={() => bulk.toggleAll(contacts.map((c) => c.id))}
+                      aria-label="Select all"
+                      data-testid="contacts-select-all"
+                    />
+                  </TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Company</TableHead>
                   <TableHead>Category</TableHead>
@@ -750,6 +770,7 @@ export default function ContactsList() {
                     onDelete={handleDelete}
                     onView={setViewContact}
                     onShare={openShare}
+                    bulk={bulk}
                   />
                 ))}
               </TableBody>
@@ -1273,6 +1294,15 @@ export default function ContactsList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <BulkDeleteBar
+        count={bulk.size}
+        entityLabel="contact"
+        collection="contacts"
+        ids={bulk.ids}
+        onCancel={bulk.clear}
+        onCleared={() => { bulk.clear(); fetchContacts(); }}
+      />
     </div>
   );
 }

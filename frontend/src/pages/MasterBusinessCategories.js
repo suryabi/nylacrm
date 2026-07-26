@@ -19,6 +19,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from '../components/ui/dialog';
+import { Checkbox } from '../components/ui/checkbox';
+import BulkDeleteBar from '../components/admin/BulkDeleteBar';
+import { useBulkSelect } from '../hooks/useBulkSelect';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -90,6 +93,7 @@ const getIconComponent = (iconName) => {
 
 export default function MasterBusinessCategories() {
   const [categories, setCategories] = useState([]);
+  const bulk = useBulkSelect();
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -289,6 +293,13 @@ export default function MasterBusinessCategories() {
                         className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:shadow-md transition-all cursor-move group"
                         data-testid={`category-${category.id}`}
                       >
+                        <Checkbox
+                          checked={bulk.isSelected(category.id)}
+                          onCheckedChange={() => bulk.toggle(category.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Select ${category.name}`}
+                          data-testid={`category-select-${category.id}`}
+                        />
                         <GripVertical className="h-4 w-4 text-muted-foreground/50 group-hover:text-muted-foreground" />
                         
                         <div className={`p-2 rounded-lg ${getColorClass(category.color).replace('text-', 'bg-').split(' ')[0]}/20`}>
@@ -523,6 +534,15 @@ export default function MasterBusinessCategories() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
+
+      <BulkDeleteBar
+        count={bulk.size}
+        entityLabel="category"
+        collection="business_categories"
+        ids={bulk.ids}
+        onCancel={bulk.clear}
+        onCleared={() => { bulk.clear(); fetchCategories(); }}
+      />
     </div>
   );
 }

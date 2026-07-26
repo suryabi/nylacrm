@@ -19,6 +19,8 @@ import {
 } from '@phosphor-icons/react';
 import { Plus, Search, Phone, RefreshCw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import axios from 'axios';
+import BulkDeleteBar from '../components/admin/BulkDeleteBar';
+import { useBulkSelect } from '../hooks/useBulkSelect';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -165,6 +167,7 @@ export default function DistributorList() {
   
   const [loading, setLoading] = useState(true);
   const [distributors, setDistributors] = useState([]);
+  const bulk = useBulkSelect();
   const [summary, setSummary] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -660,6 +663,14 @@ export default function DistributorList() {
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-emerald-50/30 border-b border-emerald-100/60">
+                    <th className="p-4 w-10">
+                      <Checkbox
+                        checked={sortedDistributors.length > 0 && sortedDistributors.every((d) => bulk.isSelected(d.id))}
+                        onCheckedChange={() => bulk.toggleAll(sortedDistributors.map((d) => d.id))}
+                        aria-label="Select all"
+                        data-testid="distributors-select-all"
+                      />
+                    </th>
                     <SortableHeader label="Distributor" sortKey="distributor_name" currentSort={sort} onSort={handleSort} />
                     <SortableHeader label="Code" sortKey="distributor_code" currentSort={sort} onSort={handleSort} />
                     <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
@@ -680,6 +691,14 @@ export default function DistributorList() {
                       onClick={() => handleRowClick(dist.id)}
                       data-testid={`distributor-row-${dist.id}`}
                     >
+                      <td className="p-4 w-10" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={bulk.isSelected(dist.id)}
+                          onCheckedChange={() => bulk.toggle(dist.id)}
+                          aria-label={`Select ${dist.distributor_name}`}
+                          data-testid={`distributor-select-${dist.id}`}
+                        />
+                      </td>
                       <td className="p-4">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-slate-900" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
@@ -792,6 +811,15 @@ export default function DistributorList() {
           </>
         )}
       </div>
+
+      <BulkDeleteBar
+        count={bulk.size}
+        entityLabel="distributor"
+        collection="distributors"
+        ids={bulk.ids}
+        onCancel={bulk.clear}
+        onCleared={() => { bulk.clear(); fetchDistributors(); }}
+      />
     </div>
   );
 }

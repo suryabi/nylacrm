@@ -22,12 +22,16 @@ import {
   MapPin, Plus, Edit2, Trash2, ChevronRight, ChevronDown, 
   Globe, Building, Home, Loader2, Search
 } from 'lucide-react';
+import { Checkbox } from '../components/ui/checkbox';
+import BulkDeleteBar from '../components/admin/BulkDeleteBar';
+import { useBulkSelect } from '../hooks/useBulkSelect';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 export default function MasterLocations() {
   const [loading, setLoading] = useState(true);
   const [locations, setLocations] = useState([]);
+  const bulk = useBulkSelect();
   const [flatData, setFlatData] = useState({ territories: [], states: [], cities: [] });
   const [expandedTerritories, setExpandedTerritories] = useState({});
   const [expandedStates, setExpandedStates] = useState({});
@@ -408,6 +412,12 @@ export default function MasterLocations() {
                           className="flex items-center justify-between p-2 pl-4 hover:bg-slate-50"
                         >
                           <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={bulk.isSelected(city.id)}
+                              onCheckedChange={() => bulk.toggle(city.id)}
+                              aria-label={`Select ${city.name}`}
+                              data-testid={`city-select-${city.id}`}
+                            />
                             <Home className="h-3 w-3 text-purple-600" />
                             <span className="text-sm">{city.name}</span>
                             {city.color && (
@@ -562,6 +572,15 @@ export default function MasterLocations() {
         </DialogContent>
       </Dialog>
       </div>
+
+      <BulkDeleteBar
+        count={bulk.size}
+        entityLabel="city"
+        collection="master_cities"
+        ids={bulk.ids}
+        onCancel={bulk.clear}
+        onCleared={() => { bulk.clear(); fetchLocations(); }}
+      />
     </div>
   );
 }

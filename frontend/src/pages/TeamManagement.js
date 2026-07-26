@@ -32,6 +32,10 @@ import {
 import { Plus, Loader2, Edit, Trash2, Clock, Activity, Eye, MousePointer, Users, X } from 'lucide-react';
 import { formatDuration, formatRelativeTime, getPageName } from '../hooks/useActivityTracker';
 import { useMasterLocations } from '../hooks/useMasterLocations';
+import { Checkbox } from '../components/ui/checkbox';
+import BulkDeleteBar from '../components/admin/BulkDeleteBar';
+import { useBulkSelect } from '../hooks/useBulkSelect';
+import { useAuth } from '../context/AuthContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -68,6 +72,8 @@ const toTitleCase = (str) => {
 
 export default function TeamManagement() {
   const [users, setUsers] = useState([]);
+  const { user: currentUser } = useAuth();
+  const bulk = useBulkSelect();
   const [teamActivity, setTeamActivity] = useState({});
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -312,6 +318,14 @@ export default function TeamManagement() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">
+                <Checkbox
+                  checked={sortedUsers.length > 0 && sortedUsers.every((u) => u.id === currentUser?.id || bulk.isSelected(u.id))}
+                  onCheckedChange={() => bulk.toggleAll(sortedUsers.filter((u) => u.id !== currentUser?.id).map((u) => u.id))}
+                  aria-label="Select all"
+                  data-testid="users-select-all"
+                />
+              </TableHead>
               <TableHead>Name & Designation</TableHead>
               <TableHead>Contact</TableHead>
               <TableHead>Territory</TableHead>
@@ -340,6 +354,16 @@ export default function TeamManagement() {
               
               return (
               <TableRow key={user.id} data-testid={`team-member-${user.id}`}>
+                <TableCell className="w-10">
+                  {user.id !== currentUser?.id && (
+                    <Checkbox
+                      checked={bulk.isSelected(user.id)}
+                      onCheckedChange={() => bulk.toggle(user.id)}
+                      aria-label={`Select ${user.name}`}
+                      data-testid={`user-select-${user.id}`}
+                    />
+                  )}
+                </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <div className="relative">
@@ -640,6 +664,15 @@ export default function TeamManagement() {
           )}
         </DialogContent>
       </Dialog>
+
+      <BulkDeleteBar
+        count={bulk.size}
+        entityLabel="user"
+        collection="users"
+        ids={bulk.ids}
+        onCancel={bulk.clear}
+        onCleared={() => { bulk.clear(); fetchUsers(); }}
+      />
       </div>
     </div>
   );

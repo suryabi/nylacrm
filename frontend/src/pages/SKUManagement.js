@@ -31,6 +31,9 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { Switch } from '../components/ui/switch';
+import { Checkbox } from '../components/ui/checkbox';
+import BulkDeleteBar from '../components/admin/BulkDeleteBar';
+import { useBulkSelect } from '../hooks/useBulkSelect';
 
 const categoryColors = {
   'Jar': 'bg-blue-100 text-blue-800',
@@ -77,6 +80,7 @@ export default function SKUManagement() {
   const { user } = useAuth();
   const canHardDelete = ['CEO', 'Admin', 'System Admin'].includes(user?.role);
   const [skus, setSkus] = useState([]);
+  const bulk = useBulkSelect();
   const [categories, setCategories] = useState([]);
   const [packagingTypes, setPackagingTypes] = useState([]);
   const [cogsComponents, setCogsComponents] = useState([]);
@@ -574,6 +578,14 @@ export default function SKUManagement() {
                     }`}
                     data-testid={`sku-row-${sku.id}`}
                   >
+                    <div onClick={(e) => e.stopPropagation()} className="mr-3">
+                      <Checkbox
+                        checked={bulk.isSelected(sku.id)}
+                        onCheckedChange={() => bulk.toggle(sku.id)}
+                        aria-label={`Select ${sku.sku_name || sku.sku}`}
+                        data-testid={`sku-select-${sku.id}`}
+                      />
+                    </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{sku.sku_name || sku.sku}</span>
@@ -1073,6 +1085,15 @@ export default function SKUManagement() {
         onChanged={fetchChildCounts}
       />
       </div>
+
+      <BulkDeleteBar
+        count={bulk.size}
+        entityLabel="SKU"
+        collection="master_skus"
+        ids={bulk.ids}
+        onCancel={bulk.clear}
+        onCleared={() => { bulk.clear(); fetchSkus(); }}
+      />
     </div>
   );
 }
