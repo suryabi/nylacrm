@@ -1941,3 +1941,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - **Backend**: new `routes/global_stock_dashboard.py` → GET /api/distributor/global-stock-dashboard. Hierarchy Warehouse → parent SKU → child SKU with 4 metrics each in BOTH crates & units: on_hand (distributor_stock=CRATES + factory_warehouse_stock=UNITS/bottles ÷ bottles_per_crate), delivered (delivery status delivered/complete), reserved (draft/confirmed/scheduled deliveries), sent (completed outbound stock transfers by source_location). units_per_crate per SKU from row-level bottles_per_crate → master_skus packaging fallback. ⚠️ UNIT TRUTH: factory_warehouse_stock is BOTTLES; distributor_stock/deliveries/transfers are CRATES.
 - **Frontend**: `pages/GlobalStockDashboard.jsx` — KPI cards, Crates⇄Units toggle (gsd-unit-crates/units), search (gsd-search-input), collapsible warehouse cards w/ inline totals, expandable SKU rows w/ child breakdown incl. "Generic / Unbranded" bucket (only when real children exist).
 - Verified: grand totals cross-checked vs raw Mongo (6,976 crates / 123k units); child hierarchy shows 24 Brand → Generic 300u + branded child 100u w/ 24u reserved.
+
+### 2026-07-26 — 📱 Mobile/Tablet Responsiveness — Round 1 ✅ DONE (tested 100%, iteration_339)
+- **Global CSS** (bottom of index.css, @media max-width:767px): every <table> → display:block + overflow-x:auto (horizontal swipe instead of clipping, no per-page wrappers needed); div[role=dialog]/[role=alertdialog] → max-height 92vh + overflow-y auto + max-width calc(100vw-1rem).
+- **Issues page** header buttons row → flex-wrap (New Issue no longer clipped at 390px).
+- Verified 390px/820px/1920px: no horizontal overflow on leads/accounts/dashboard/issues/global-stock-dashboard; desktop tables unaffected; dialogs fit.
+- **Future rounds (backlog)**: card-style row layouts for key tables on phones; distribution portal + production + approvals screens deep pass.
