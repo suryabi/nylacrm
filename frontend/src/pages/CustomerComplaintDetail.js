@@ -40,6 +40,8 @@ export default function CustomerComplaintDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [detailsDraft, setDetailsDraft] = useState('');
   const fileRef = useRef(null);
 
   const fetchComplaint = useCallback(async () => {
@@ -74,6 +76,11 @@ export default function CustomerComplaintDetail() {
     if (!t) { toast.error('Title cannot be empty'); return; }
     await patch({ title: t });
     setEditingTitle(false);
+  };
+
+  const saveDetails = async () => {
+    await patch({ details: detailsDraft.trim() });
+    setEditingDetails(false);
   };
 
   const addComment = async () => {
@@ -199,9 +206,40 @@ export default function CustomerComplaintDetail() {
         {/* Left: details + photos + comments */}
         <div className="lg:col-span-2 space-y-6">
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Details</CardTitle></CardHeader>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">Details</CardTitle>
+              {canEdit && !editingDetails && (
+                <Button
+                  size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground"
+                  onClick={() => { setDetailsDraft(complaint.details || ''); setEditingDetails(true); }}
+                  title="Edit details"
+                  data-testid="complaint-details-edit-btn"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-slate-700 whitespace-pre-wrap">{complaint.details || <span className="text-muted-foreground italic">No details provided.</span>}</p>
+              {editingDetails ? (
+                <div className="space-y-2">
+                  <Textarea
+                    value={detailsDraft}
+                    onChange={(e) => setDetailsDraft(e.target.value)}
+                    rows={5}
+                    autoFocus
+                    placeholder="Describe the issue…"
+                    data-testid="complaint-details-edit-input"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="ghost" size="sm" onClick={() => setEditingDetails(false)} data-testid="complaint-details-cancel-btn">Cancel</Button>
+                    <Button size="sm" onClick={saveDetails} data-testid="complaint-details-save-btn">
+                      <Check className="h-4 w-4 mr-1" /> Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-700 whitespace-pre-wrap">{complaint.details || <span className="text-muted-foreground italic">No details provided.</span>}</p>
+              )}
               <div className="flex flex-wrap gap-4 text-sm">
                 <Meta icon={Tag} label="Category" value={LABEL(complaint.category)} />
                 {complaint.customer_name && <Meta icon={User} label={LABEL(complaint.link_type || 'Customer')} value={complaint.customer_name} />}

@@ -1931,3 +1931,7 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ### 2026-07-26 — ✏️ Editable Issue title (Issues module) ✅ DONE (self-tested)
 - `CustomerComplaintDetail.js`: pencil icon next to the title (visible with edit permission) → inline Input w/ Save (Enter) / Cancel (Esc); calls existing PUT /api/complaints/{id} {title}. Testids: complaint-title-edit-btn / -edit-input / -save-btn / -cancel-btn. Backend already supported title in ComplaintUpdate. Verified E2E (UI edit persisted to DB via API check, then reverted).
+
+### 2026-07-26 — ✏️ Editable Issue details (inline) ✅ DONE (self-tested E2E)
+- `CustomerComplaintDetail.js`: pencil on the Details card header → inline Textarea w/ Save/Cancel (testids complaint-details-edit-btn / -edit-input / -save-btn / -cancel-btn), uses existing PUT /api/complaints/{id} {details}. Verified: edit persisted, then reverted.
+- ⚠️ AGENT LESSON: do NOT issue multiple parallel search_replace calls against the SAME file — they clobber each other (caused corrupted duplicates twice this session in TenantSettings.js and CustomerComplaintDetail.js). Sequential edits per file.
