@@ -48,7 +48,9 @@ class TenantAuthConfig(BaseModel):
 
 
 class TenantModules(BaseModel):
-    """Module configuration for a tenant - controls which features are enabled"""
+    """Module configuration for a tenant - controls which features are enabled.
+    extra='allow' so new sidebar module keys survive round-trips without model changes."""
+    model_config = {"extra": "allow"}
     
     # === CORE MODULES ===
     home: bool = True
@@ -307,6 +309,9 @@ class Tenant(BaseModel):
     # Configuration
     branding: TenantBranding = Field(default_factory=TenantBranding)
     modules: TenantModules = Field(default_factory=TenantModules)
+    # Platform-level provisioning layer (managed by Platform Admin only).
+    # Missing key = allowed. Effective visibility = platform_modules AND modules.
+    platform_modules: Dict[str, bool] = Field(default_factory=dict)
     integrations: TenantIntegrations = Field(default_factory=TenantIntegrations)
     settings: TenantSettings = Field(default_factory=TenantSettings)
     auth_config: TenantAuthConfig = Field(default_factory=TenantAuthConfig)

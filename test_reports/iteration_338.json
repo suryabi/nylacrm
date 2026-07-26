@@ -1,0 +1,16 @@
+{
+  "summary": "Tested two-layer module control (platform_modules + modules). Backend: 5/5 pytest tests pass covering demo-co CEO tenant module toggle + persistence, 403 on platform_modules by non-super-admin, super admin can set platform_modules for demo-co, non-admin role blocked, cleanup restored. Frontend: Tenant Settings Modules tab renders all expected data-testids (info banner, search, group cards for production/accounting/settings_integrations, per-item switches, save button, bulk buttons). Search filter works ('qc' -> only QC rows visible, bottle_preview hidden). E2E toggle flow: turned OFF bottle_preview -> save toast -> sidebar 'Bottle Preview' disappeared after reload -> restored ON -> sidebar item returned. Group bulk 'Disable all pricing_logistics' turned both toggles off. Platform Admin /platform-admin -> selected nyla-air-water workspace -> Modules tab shows amber banner, platform-* prefixed toggles, save button. Two-layer lock: disabled gamma_generator at platform level -> Tenant Settings shows 'Presentation Generator' row with 'Disabled at platform level' text and disabled switch. Cleanup re-enabled gamma_generator so sidebar shows Presentation Generator again. Regression sidebar shows Leads/Accounts/Dashboard/Bottle Preview/Presentation Generator.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_module_control.py", "/app/test_reports/pytest/module_control.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": ["/app/backend/tests/test_module_control.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth/test123 (super admin), surya.yadavalli@demo-co.com/demo123 (demo-co CEO, X-Tenant-ID: demo-co), creative.director@nylaairwater.earth/test123 (non-admin)",
+  "seed_data_creation": "None. Toggled modules were restored to original state.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Two-layer module control fully verified. Backend endpoints: PUT /api/tenants/current/config (modules for super-admin-email/CEO/System Admin, platform_modules only super-admin-email), PUT /api/platform-admin/tenants/{id} (platform_modules by super admin). Frontend data-testids used: tab-modules, modules-info-banner, tenant-module-search-input, tenant-module-group-{groupId}, tenant-module-toggle-{moduleKey}, tenant-module-row-{moduleKey}, tenant-module-disable-all-{groupId}, save-modules-btn, platform-modules-banner, platform-module-toggle-{key}, platform-save-modules-btn. All toggles reset to enabled state after tests.",
+  "rca of the issue": "N/A - no issues found"
+}

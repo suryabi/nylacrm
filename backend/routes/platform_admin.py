@@ -152,8 +152,8 @@ async def update_tenant(
     # Allowed fields for platform admin to update
     allowed_fields = [
         'name', 'is_active', 'is_trial', 'trial_ends_at', 
-        'subscription_plan', 'branding', 'modules', 'settings', 
-        'auth_config', 'company_profile'
+        'subscription_plan', 'branding', 'modules', 'platform_modules',
+        'settings', 'auth_config', 'company_profile'
     ]
     
     for field in allowed_fields:

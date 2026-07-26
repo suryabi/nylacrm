@@ -25,148 +25,13 @@ import InvoiceRelinkTool from '../components/InvoiceRelinkTool';
 import EmailSignatureSettings from '../components/gmail/EmailSignatureSettings';
 import OutstandingBackfillTool from '../components/OutstandingBackfillTool';
 import SkuAliasTool from '../components/SkuAliasTool';
+import ModuleMatrix from '../components/admin/ModuleMatrix';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
-// Complete Module Configuration - All features that can be enabled/disabled
-const MODULE_CONFIG = {
-  core: {
-    title: 'Core Modules',
-    description: 'Essential CRM features',
-    modules: [
-      { key: 'home', label: 'Home', icon: Building2, description: 'Homepage & welcome screen' },
-      { key: 'dashboard', label: 'Dashboard', icon: Kanban, description: 'Main dashboard view' },
-      { key: 'leads', label: 'Leads', icon: Users, description: 'Lead management and tracking' },
-      { key: 'pipeline', label: 'Pipeline', icon: Kanban, description: 'Visual sales pipeline (Kanban)' },
-      { key: 'accounts', label: 'Accounts', icon: Building2, description: 'Customer account management' },
-      { key: 'sales_portal', label: 'Sales Portal', icon: Building2, description: 'Sales portal & order management' },
-      { key: 'contacts', label: 'Contacts', icon: Contact, description: 'Contact directory' },
-    ]
-  },
-  reports: {
-    title: 'Dashboard Reports',
-    description: 'Analytics and reporting modules',
-    modules: [
-      { key: 'report_sales_overview', label: 'Sales Overview', icon: Kanban, description: 'Sales dashboard overview' },
-      { key: 'report_revenue', label: 'Revenue Report', icon: DollarSign, description: 'Revenue analytics' },
-      { key: 'report_revenue_analytics', label: 'Revenue Analytics', icon: BarChart3, description: 'Revenue by city / category / SKU / territory / state + MoM compare' },
-      { key: 'report_sku_performance', label: 'SKU Performance', icon: Boxes, description: 'Product/SKU analysis' },
-      { key: 'report_resource_performance', label: 'Resource Performance', icon: Users, description: 'Team performance metrics' },
-      { key: 'report_account_performance', label: 'Account Performance', icon: Building2, description: 'Account-level analytics' },
-    ]
-  },
-  sales_ops: {
-    title: 'Lead & Sales Operations',
-    description: 'Sales workflow and operations',
-    modules: [
-      { key: 'lead_discovery', label: 'Lead Discovery', icon: Users, description: 'Find & import new leads' },
-      { key: 'target_planning', label: 'Target Planning', icon: Target, description: 'Sales target management' },
-      { key: 'performance_tracker', label: 'Performance Tracker', icon: Target, description: 'Monthly performance tracking & KPIs' },
-      { key: 'investor_dashboard', label: 'Investor Dashboard', icon: DollarSign, description: 'Investor-facing annual plan & monthly updates' },
-      { key: 'daily_status', label: 'Daily Status', icon: CalendarDays, description: 'Daily activity updates' },
-      { key: 'status_summary', label: 'Status Summary', icon: Users, description: 'Team status aggregation' },
-    ]
-  },
-  pricing: {
-    title: 'Pricing & Logistics',
-    description: 'Cost and logistics calculators',
-    modules: [
-      { key: 'cogs_calculator', label: 'COGS Calculator', icon: DollarSign, description: 'Cost of goods calculator' },
-      { key: 'transport_calculator', label: 'Transport Calculator', icon: Plane, description: 'Logistics cost estimation' },
-    ]
-  },
-  products: {
-    title: 'Product & SKU',
-    description: 'Product catalog management',
-    modules: [
-      { key: 'sku_management', label: 'SKU Management', icon: Boxes, description: 'Product catalog & SKUs' },
-      { key: 'bottle_preview', label: 'Bottle Preview', icon: Boxes, description: 'Product visualization' },
-    ]
-  },
-  documents: {
-    title: 'Documents',
-    description: 'Document & file management',
-    modules: [
-      { key: 'company_documents', label: 'Company Documents', icon: FileText, description: 'Policies & company docs' },
-      { key: 'files_documents', label: 'Files & Documents', icon: FolderOpen, description: 'File storage & sharing' },
-    ]
-  },
-  requests: {
-    title: 'Request Management',
-    description: 'Approval workflows',
-    modules: [
-      { key: 'leaves', label: 'Leave Requests', icon: CalendarDays, description: 'Leave application workflow' },
-      { key: 'travel_requests', label: 'Travel Requests', icon: Plane, description: 'Travel approval workflow' },
-      { key: 'budget_requests', label: 'Budget Requests', icon: Wallet, description: 'Budget approval workflow' },
-      { key: 'expense_management', label: 'Expense Management', icon: DollarSign, description: 'Expense tracking & claims' },
-    ]
-  },
-  collaboration: {
-    title: 'Meetings & Tasks',
-    description: 'Team collaboration tools',
-    modules: [
-      { key: 'meetings', label: 'Meetings', icon: Calendar, description: 'Meeting scheduling & Zoom' },
-      { key: 'task_management', label: 'Tasks', icon: Calendar, description: 'Task assignment & tracking' },
-      { key: 'task_milestones', label: 'Milestones', icon: Target, description: 'Task milestones management' },
-      { key: 'task_labels', label: 'Labels', icon: Tag, description: 'Task label management' },
-    ]
-  },
-  organization: {
-    title: 'Organization & Master Data',
-    description: 'Company setup & configuration',
-    modules: [
-      { key: 'company_profile', label: 'Company Profile', icon: Building2, description: 'Company information display' },
-      { key: 'team', label: 'Team Management', icon: Users, description: 'Team hierarchy & users' },
-      { key: 'master_locations', label: 'Master Locations', icon: MapPin, description: 'Territory & location setup' },
-      { key: 'lead_statuses', label: 'Lead Statuses', icon: Settings, description: 'Lead status configuration' },
-      { key: 'business_categories', label: 'Business Categories', icon: Building2, description: 'Industry categorization' },
-      { key: 'contact_categories', label: 'Contact Categories', icon: Contact, description: 'Contact type definitions' },
-      { key: 'expense_categories', label: 'Expense Categories', icon: DollarSign, description: 'Expense type setup' },
-    ]
-  },
-  production: {
-    title: 'Production Modules (Beta)',
-    description: 'Manufacturing & operations - Coming soon',
-    modules: [
-      { key: 'maintenance', label: 'Maintenance', icon: Wrench, description: 'Equipment maintenance tracking' },
-      { key: 'inventory', label: 'Inventory', icon: Boxes, description: 'Inventory management' },
-      { key: 'quality_control', label: 'Quality Control', icon: ShieldCheck, description: 'QC processes & checks' },
-      { key: 'assets', label: 'Assets', icon: Box, description: 'Asset tracking & management' },
-      { key: 'vendors', label: 'Vendors', icon: Building2, description: 'Vendor management' },
-    ]
-  },
-  distribution: {
-    title: 'Distribution',
-    description: 'Distributor & supply chain management',
-    modules: [
-      { key: 'distributors', label: 'Distributors', icon: Truck, description: 'Distributor master data' },
-      { key: 'distributor_coverage', label: 'Operating Coverage', icon: MapPin, description: 'Distributor territory coverage' },
-      { key: 'distributor_locations', label: 'Warehouse Locations', icon: Building2, description: 'Distributor warehouse locations' },
-      { key: 'distributor_margins', label: 'Margin Matrix', icon: DollarSign, description: 'City & SKU level margins' },
-      { key: 'distributor_assignments', label: 'Account Assignments', icon: Users, description: 'Account-distributor mapping' },
-      { key: 'distributor_shipments', label: 'Primary Shipments', icon: Truck, description: 'Stock shipments to distributors' },
-      { key: 'distributor_deliveries', label: 'Account Deliveries', icon: Package, description: 'Deliveries to end accounts' },
-      { key: 'distributor_stock', label: 'Stock Management', icon: Boxes, description: 'Distributor inventory levels' },
-    ]
-  },
-  marketing: {
-    title: 'Marketing',
-    description: 'Content calendar and social media planning',
-    modules: [
-      { key: 'marketing_calendar', label: 'Content Calendar', icon: CalendarDays, description: 'Plan & schedule marketing content' },
-      { key: 'marketing_masters', label: 'Marketing Masters', icon: Settings, description: 'Categories, platforms & events' },
-      { key: 'meeting_minutes', label: 'Meeting Minutes', icon: ClipboardList, description: 'Record meeting notes & action items' },
-    ]
-  },
-  ai_knowledge: {
-    title: 'AI & Knowledge',
-    description: 'AI assistant and knowledge base management',
-    modules: [
-      { key: 'knowledge_base', label: 'Knowledge Base', icon: BookOpen, description: 'Admin-managed library of docs, FAQs, and URLs powering Ask Nyla' },
-      { key: 'ask_nyla', label: 'Ask Nyla', icon: Sparkles, description: 'Floating AI chat assistant grounded in your knowledge base' },
-    ]
-  }
-};
+// Users who can edit module toggles: platform super admins + System Admin / CEO roles
+const PLATFORM_ADMIN_EMAILS = ['surya.yadavalli@gmail.com', 'surya.yadavalli@nylaairwater.earth'];
+const MODULE_EDITOR_ROLES = ['CEO', 'System Admin'];
 
 // Timezone options
 const TIMEZONES = [
@@ -229,6 +94,7 @@ export default function TenantSettings() {
   });
   
   const [modules, setModules] = useState({});
+  const [platformModulesCfg, setPlatformModulesCfg] = useState({});
   
   const [settings, setSettings] = useState({
     timezone: 'Asia/Kolkata',
@@ -352,6 +218,7 @@ export default function TenantSettings() {
       if (config.modules) {
         setModules(config.modules);
       }
+      setPlatformModulesCfg(config.platform_modules || {});
       
       if (config.settings) {
         setSettings(config.settings);
@@ -472,7 +339,7 @@ export default function TenantSettings() {
     } catch (error) {
       console.error('Failed to save modules:', error);
       if (error.response?.status === 403) {
-        toast.error('Module changes require super admin access');
+        toast.error('Module changes require Super Admin, System Admin or CEO access');
       } else {
         toast.error('Failed to save module settings');
       }
@@ -1413,45 +1280,39 @@ export default function TenantSettings() {
         </TabsContent>
 
         {/* Modules Tab */}
-        <TabsContent value="modules" className="space-y-6">
-          {Object.entries(MODULE_CONFIG).map(([groupKey, group]) => (
-            <Card key={groupKey}>
-              <CardHeader>
-                <CardTitle className="text-lg">{group.title}</CardTitle>
-                <CardDescription>Enable or disable features</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {group.modules.map((module) => {
-                    const Icon = module.icon;
-                    const isEnabled = modules[module.key] !== false;
-                    return (
-                      <div key={module.key} className="flex items-center justify-between p-4 rounded-lg border hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-4">
-                          <div className={`p-2 rounded-lg ${isEnabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                            <Icon className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{module.label}</p>
-                            <p className="text-sm text-muted-foreground">{module.description}</p>
-                          </div>
-                        </div>
-                        <Switch checked={isEnabled} onCheckedChange={(checked) => toggleModule(module.key, checked)} data-testid={`toggle-${module.key}`} />
-                      </div>
-                    );
-                  })}
+        <TabsContent value="modules" className="space-y-4">
+          {(() => {
+            const canEditModules = MODULE_EDITOR_ROLES.includes(user?.role) || PLATFORM_ADMIN_EMAILS.includes(user?.email?.toLowerCase());
+            const lockedKeys = new Set(Object.entries(platformModulesCfg).filter(([, v]) => v === false).map(([k]) => k));
+            return (
+              <>
+                <div className="p-4 rounded-lg border bg-muted/30" data-testid="modules-info-banner">
+                  <p className="text-sm font-medium">Enable or disable modules & menu items for your workspace</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Items disabled here disappear from the sidebar for all users. Items marked with a lock are disabled at the platform level and can only be re-enabled by a Platform Admin.
+                    {!canEditModules && ' Your role can view this configuration, but only Super Admin, System Admin or CEO can change it.'}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-          <div className="sticky bottom-0 bg-background pt-4 pb-2 border-t border-border mt-6">
-            <div className="flex justify-end">
-              <Button onClick={saveModules} disabled={saving} data-testid="save-modules-btn">
-                {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                Save Modules
-              </Button>
-            </div>
-          </div>
+                <ModuleMatrix
+                  values={modules}
+                  onToggle={toggleModule}
+                  lockedKeys={lockedKeys}
+                  readOnly={!canEditModules}
+                  testPrefix="tenant-module"
+                />
+                {canEditModules && (
+                  <div className="sticky bottom-0 bg-background pt-4 pb-2 border-t border-border mt-6">
+                    <div className="flex justify-end">
+                      <Button onClick={saveModules} disabled={saving} data-testid="save-modules-btn">
+                        {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                        Save Modules
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </TabsContent>
 
         {/* Roles Tab */}

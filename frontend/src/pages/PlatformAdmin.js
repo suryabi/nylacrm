@@ -17,6 +17,7 @@ import {
   Puzzle, Save, AlertTriangle
 } from 'lucide-react';
 import axios from 'axios';
+import ModuleMatrix from '../components/admin/ModuleMatrix';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -641,41 +642,26 @@ export default function PlatformAdmin() {
                   </TabsContent>
 
                   <TabsContent value="modules" className="space-y-4">
-                    <p className="text-sm text-muted-foreground">Toggle modules on/off for this tenant</p>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {[
-                        { key: 'dashboard', label: 'Dashboard' },
-                        { key: 'leads', label: 'Leads' },
-                        { key: 'pipeline', label: 'Pipeline' },
-                        { key: 'accounts', label: 'Accounts' },
-                        { key: 'sales_portal', label: 'Sales Portal' },
-                        { key: 'lead_discovery', label: 'Lead Discovery' },
-                        { key: 'target_planning', label: 'Target Planning' },
-                        { key: 'performance_tracker', label: 'Performance Tracker' },
-                        { key: 'investor_dashboard', label: 'Investor Dashboard' },
-                        { key: 'cogs_calculator', label: 'COGS Calculator' },
-                        { key: 'team', label: 'Team Management' },
-                        { key: 'contacts', label: 'Contacts' },
-                        { key: 'marketing_calendar', label: 'Marketing Calendar' },
-                        { key: 'marketing_masters', label: 'Marketing Masters' },
-                        { key: 'meeting_minutes', label: 'Meeting Minutes' },
-                      ].map(({ key, label }) => (
-                        <div key={key} className="flex items-center justify-between p-3 border rounded-lg">
-                          <span className="text-sm">{label}</span>
-                          <Switch
-                            checked={tenantDetails.modules?.[key] !== false}
-                            onCheckedChange={(checked) => setTenantDetails(prev => ({
-                              ...prev,
-                              modules: { ...prev.modules, [key]: checked }
-                            }))}
-                          />
-                        </div>
-                      ))}
+                    <div className="p-4 rounded-lg border bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800" data-testid="platform-modules-banner">
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-400">Platform provisioning — which modules this tenant is allowed to use</p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                        Modules disabled here are completely unavailable to the tenant, even if their admin enables them in Tenant Settings. A menu item is visible only when BOTH this layer and the tenant layer enable it.
+                      </p>
                     </div>
-                    <Button onClick={handleSaveTenantConfig} disabled={saving}>
-                      {saving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                      Save Modules
-                    </Button>
+                    <ModuleMatrix
+                      values={tenantDetails.platform_modules || {}}
+                      onToggle={(key, checked) => setTenantDetails(prev => ({
+                        ...prev,
+                        platform_modules: { ...prev.platform_modules, [key]: checked }
+                      }))}
+                      testPrefix="platform-module"
+                    />
+                    <div className="sticky bottom-0 bg-background pt-3 pb-1 border-t flex justify-end">
+                      <Button onClick={handleSaveTenantConfig} disabled={saving} data-testid="platform-save-modules-btn">
+                        {saving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                        Save Modules
+                      </Button>
+                    </div>
                   </TabsContent>
 
                   <TabsContent value="sso" className="space-y-4">

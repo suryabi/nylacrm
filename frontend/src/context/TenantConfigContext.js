@@ -250,6 +250,7 @@ export const TenantConfigProvider = ({ children }) => {
   const { user, token } = useAuth();
   const [tenantConfig, setTenantConfig] = useState(null);
   const [modules, setModules] = useState({});
+  const [platformModules, setPlatformModules] = useState({});
   const [branding, setBranding] = useState(DEFAULT_BRANDING);
   const [rolePermissions, setRolePermissions] = useState({});
   const [industry, setIndustry] = useState({ industry_type: 'generic', industry_features: [], industry_config: {} });
@@ -284,6 +285,7 @@ export const TenantConfigProvider = ({ children }) => {
       const config = configResponse.data;
       setTenantConfig(config);
       setModules(config.modules || {});
+      setPlatformModules(config.platform_modules || {});
 
       // Bridge the tenant idle-timeout to AuthContext (a separate, outer provider
       // that can't consume this context). AuthContext reads this from localStorage.
@@ -369,14 +371,18 @@ export const TenantConfigProvider = ({ children }) => {
     fetchTenantConfig();
   }, [fetchTenantConfig]);
 
-  // Check if a specific module is enabled for the tenant
+  // Check if a specific module is enabled: BOTH the platform provisioning layer
+  // (platform_modules) AND the tenant layer (modules) must allow it.
+  // Missing key in either layer = enabled (backwards compatible default).
   const isModuleEnabled = useCallback((moduleKey) => {
-    // If modules not loaded or key doesn't exist, default to enabled
+    if (platformModules && platformModules[moduleKey] === false) {
+      return false;
+    }
     if (!modules || modules[moduleKey] === undefined) {
       return true;
     }
     return modules[moduleKey] !== false;
-  }, [modules]);
+  }, [modules, platformModules]);
 
   // Check if the current user's role has permission to view a module
   const hasRolePermission = useCallback((moduleKey) => {
@@ -499,6 +505,7 @@ export const TenantConfigProvider = ({ children }) => {
     <TenantConfigContext.Provider value={{
       tenantConfig,
       modules,
+      platformModules,
       branding,
       rolePermissions,
       industry,

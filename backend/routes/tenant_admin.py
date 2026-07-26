@@ -339,12 +339,19 @@ async def update_current_tenant_config(
     if 'settings' in data:
         update_data['settings'] = data['settings']
     
-    # Modules require super admin
+    # Modules can be changed by Super Admin, System Admin or CEO
     if 'modules' in data:
-        if is_super_admin(current_user):
+        if is_super_admin(current_user) or current_user.get('role') in ['CEO', 'System Admin']:
             update_data['modules'] = data['modules']
         else:
-            raise HTTPException(status_code=403, detail="Module changes require Super Admin access")
+            raise HTTPException(status_code=403, detail="Module changes require Super Admin, System Admin or CEO access")
+
+    # platform_modules is a provisioning layer — only Super Admin may change it
+    if 'platform_modules' in data:
+        if is_super_admin(current_user):
+            update_data['platform_modules'] = data['platform_modules']
+        else:
+            raise HTTPException(status_code=403, detail="Platform module changes require Super Admin access")
     
     # Auth config (Google Workspace, etc.) requires admin
     if 'auth_config' in data:
