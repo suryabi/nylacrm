@@ -767,8 +767,14 @@ function TransferDetailDialog({ transfer, onClose }) {
                       <span className="text-xs text-slate-400">Generic (unbranded)</span>
                     )}
                   </td>
-                  <td className="p-2.5 text-right">
-                    <span className="font-semibold text-slate-800">{it.quantity} {it.packaging_type_name || ''}</span>
+                  <td className="p-2.5 text-right whitespace-nowrap">
+                    <span className="font-semibold text-slate-800">{it.quantity}</span>
+                    {it.packaging_type_name && (
+                      <>
+                        <span className="mx-1 text-slate-400">×</span>
+                        <span className="text-xs text-emerald-700 font-medium">{it.packaging_type_name}</span>
+                      </>
+                    )}
                     {it.quantity_units ? <p className="text-[10px] text-slate-400">{Number(it.quantity_units).toLocaleString('en-IN')} bottles</p> : null}
                   </td>
                   <td className="p-2.5 text-right text-slate-600">{it.rate ? `₹${Number(it.rate).toLocaleString('en-IN')}` : '—'}</td>

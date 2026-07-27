@@ -1992,3 +1992,5 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ### 2026-07-27 — 🔍 Stock Transfer detail popup + RetroCategorize contrast fix ✅ DONE
 - BUG FIX (testing_agent iteration_341 verified): RetroCategorizeDialog picker highlighted option was unreadable (dark green accent bg vs dark text) → CommandItem now data-[selected=true]:bg-violet-100 text-slate-900.
 - NEW: TransferDetailDialog in StockTransfers.js — click any transfer row (transfer-row-{id}, guards clicks on buttons/menus) → popup (transfer-detail-dialog) with: header badges (doc type/zoho/reversed + Zoho # & link), source→destination card w/ GSTINs, items table incl. 'Branding / Child SKU' column (badge or 'Generic (unbranded)') + bottles subtext + rate/value, totals footer, and Customer-branded vs Generic summary cards with per-child breakdown. Verified incl. child SKU rendering (temp DB tag, reverted).
+
+### 2026-07-27 — Transfer detail Qty display fix ✅ (screenshot-verified): '100 12 Bottle Crate' → '100 × 12 Bottle Crate' (qty bold slate, × grey, packaging name emerald)
