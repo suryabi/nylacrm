@@ -1985,3 +1985,6 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ### 2026-07-27 — Rename: 'Sample Delivery Requests' → 'Delivery Requests' ✅ (sidebar nav x3 groups + moduleRegistry; page h1 remains 'Stock Delivery Requests')
 
 ### 2026-07-27 — Nav fix: 'Tasks - Internal' (customer_complaints) removed from SALES sidebar; lives only under PRODUCTION. 'Tasks & Requests' (task_management) untouched everywhere. ✅
+
+### 2026-07-27 — 🎛 Stock Transfers row actions → ellipsis dropdown ✅ (screenshot-verified)
+- StockTransfers.js: all row actions (Invoice/Challan PDF, E-way Bill, Share, Retry Zoho, Edit Qty, Categorize, Reverse, Cleanup) moved from inline buttons into a DropdownMenu (transfer-actions-btn-{id}) in a new trailing column; Zoho cell keeps status badge + external link + Reversed badge; all original data-testids preserved as menu items. ShareDialog now exported from components/share/ShareButton.jsx and opened via shareTransfer state (dialog must live outside dropdown). Reverse styled destructive red.

@@ -167,7 +167,7 @@ const RecipientField = ({ which, list, setList, candidates, locked }) => {
   );
 };
 
-const ShareDialog = ({ documentType, documentId, leadId, testIdBase, onClose }) => {
+export const ShareDialog = ({ documentType, documentId, leadId, testIdBase, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [title, setTitle] = useState('');

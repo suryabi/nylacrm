@@ -16,9 +16,14 @@ import {
 import {
   ArrowLeftRight, Plus, Search, X, Loader2, Truck, AlertTriangle, ExternalLink,
   RefreshCw, FileText, Package, Building2, Download, Undo2, Pencil, ShieldCheck, Tag,
+  MoreHorizontal, Share2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { ShareButton } from '../components/share/ShareButton';
+import { ShareDialog } from '../components/share/ShareButton';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
 import RetroCategorizeDialog from '../components/distributor/RetroCategorizeDialog';
 import { useAuth } from '../context/AuthContext';
 
@@ -1083,6 +1088,7 @@ export default function StockTransfers() {
   const canEditQty = QTY_EDIT_ROLES.includes(user?.role);
   const canRetro = RETRO_ROLES.includes(user?.role);
   const [editTransfer, setEditTransfer] = useState(null);
+  const [shareTransfer, setShareTransfer] = useState(null);
   const [retroTarget, setRetroTarget] = useState(null);
   // ── Stock transfer requests (request → approval → fulfillment) ──
   const [view, setView] = useState(() =>
@@ -1493,16 +1499,16 @@ export default function StockTransfers() {
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="bg-emerald-50/30 border-b border-emerald-100/60">
-                  {['Transfer #', 'Date', 'Source → Destination', 'Items', 'Doc Type', 'Zoho', 'Created By'].map((h) => (
-                    <th key={h} className="text-left p-3 text-[10px] uppercase tracking-wider font-semibold text-emerald-800/70">{h}</th>
+                  {['Transfer #', 'Date', 'Source → Destination', 'Items', 'Doc Type', 'Zoho', 'Created By', ''].map((h, hi) => (
+                    <th key={hi} className="text-left p-3 text-[10px] uppercase tracking-wider font-semibold text-emerald-800/70">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={7} className="p-10 text-center"><Loader2 className="h-6 w-6 animate-spin text-emerald-600 mx-auto" /></td></tr>
+                  <tr><td colSpan={8} className="p-10 text-center"><Loader2 className="h-6 w-6 animate-spin text-emerald-600 mx-auto" /></td></tr>
                 ) : (data.items || []).length === 0 ? (
-                  <tr><td colSpan={7} className="p-10 text-center text-slate-500">No stock transfers yet. Click <b>+ New Stock Transfer</b> above to create one.</td></tr>
+                  <tr><td colSpan={8} className="p-10 text-center text-slate-500">No stock transfers yet. Click <b>+ New Stock Transfer</b> above to create one.</td></tr>
                 ) : (data.items || []).map((t, i) => (
                   <tr key={t.id} className={`border-b border-emerald-50 ${i % 2 === 1 ? 'bg-emerald-50/40' : 'bg-white'} hover:bg-emerald-50/60`} data-testid={`transfer-row-${t.id}`}>
                     <td className="p-3 font-mono text-xs text-emerald-700">{t.transfer_number}</td>
@@ -1533,96 +1539,10 @@ export default function StockTransfers() {
                             <ExternalLink className="h-3.5 w-3.5" />
                           </a>
                         )}
-                        {t.zoho_status === 'synced' && t.zoho_invoice_id && (
-                          <Button
-                            size="sm" variant="ghost"
-                            className="h-7 px-2 text-[10px] text-slate-700 hover:text-slate-900 hover:bg-slate-100"
-                            onClick={() => downloadZohoPdf(t)}
-                            title={`Download ${t.zoho_doc_type === 'delivery_challan' ? 'Delivery Challan' : 'Invoice'} PDF from Zoho`}
-                            data-testid={`zoho-pdf-btn-${t.id}`}
-                          >
-                            <Download className="h-3 w-3 mr-1" />
-                            {t.zoho_doc_type === 'delivery_challan' ? 'Challan' : 'Invoice'} PDF
-                          </Button>
-                        )}
-                        {t.zoho_status === 'failed' && (
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => retryZoho(t.id)} title="Retry Zoho push" data-testid={`retry-zoho-${t.id}`}>
-                            <RefreshCw className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        {Number(t.total_value || 0) > 50000 && (
-                          <Button
-                            size="sm" variant="ghost"
-                            className="h-7 px-2 text-[10px] text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50"
-                            onClick={() => downloadEwayBill(t)}
-                            title={`Total ₹${Number(t.total_value).toLocaleString('en-IN')} — exceeds ₹50,000 threshold. Download E-way Bill JSON.`}
-                            data-testid={`eway-bill-btn-${t.id}`}
-                          >
-                            <Download className="h-3 w-3 mr-1" /> E-way Bill
-                          </Button>
-                        )}
-                        {t.zoho_status === 'synced' && t.zoho_invoice_id && (
-                          <ShareButton
-                            documentType="stock_transfer_doc"
-                            documentId={t.id}
-                            label="Share"
-                            className="h-7 px-2 text-[10px] text-teal-700 hover:text-teal-800 hover:bg-teal-50"
-                            testId={`transfer-${t.id}`}
-                          />
-                        )}
-                        {t.status === 'reversed' ? (
-                          <>
-                            <Badge variant="outline" className="text-[10px] bg-rose-50 text-rose-700 border-rose-200" data-testid={`reversed-badge-${t.id}`}>
-                              <Undo2 className="h-3 w-3 mr-1" />Reversed
-                            </Badge>
-                            {t.zoho_cleanup_pending && (
-                              <Button
-                                size="sm" variant="ghost"
-                                className="h-7 px-2 text-[10px] text-amber-700 hover:text-amber-800 hover:bg-amber-50"
-                                onClick={() => retryReverseCleanup(t)}
-                                disabled={reversingId === t.id}
-                                title={`Zoho cleanup pending: ${t.zoho_cleanup_error || ''} — retry`}
-                                data-testid={`reverse-cleanup-btn-${t.id}`}
-                              >
-                                {reversingId === t.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />} Cleanup
-                              </Button>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            {canEditQty && (
-                              <Button
-                                size="sm" variant="ghost"
-                                className="h-7 px-2 text-[10px] text-amber-700 hover:text-amber-800 hover:bg-amber-50"
-                                onClick={() => setEditTransfer(t)}
-                                title="Edit line quantities (CEO / System Admin) — adjusts stock in both warehouses"
-                                data-testid={`edit-qty-btn-${t.id}`}
-                              >
-                                <Pencil className="h-3 w-3 mr-1" /> Edit Qty
-                              </Button>
-                            )}
-                            {canRetro && t.status === 'completed' && (t.items || []).some(it => !it.child_sku_id && customerParents?.has(it.sku_id)) && (
-                              <Button
-                                size="sm" variant="ghost"
-                                className="h-7 px-2 text-[10px] text-violet-700 hover:text-violet-800 hover:bg-violet-50"
-                                onClick={() => openRetroDialog(t)}
-                                title="Retrospectively categorize a Generic line into a customer-specific child SKU"
-                                data-testid={`retro-categorize-transfer-btn-${t.id}`}
-                              >
-                                <Tag className="h-3 w-3 mr-1" /> Categorize
-                              </Button>
-                            )}
-                            <Button
-                              size="sm" variant="ghost"
-                              className="h-7 px-2 text-[10px] text-rose-700 hover:text-rose-800 hover:bg-rose-50"
-                              onClick={() => reverseTransfer(t)}
-                              disabled={reversingId === t.id}
-                              title="Reverse this transfer — restore stock in both warehouses and void/delete the Zoho document"
-                              data-testid={`reverse-transfer-btn-${t.id}`}
-                            >
-                              {reversingId === t.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Undo2 className="h-3 w-3 mr-1" />} Reverse
-                            </Button>
-                          </>
+                        {t.status === 'reversed' && (
+                          <Badge variant="outline" className="text-[10px] bg-rose-50 text-rose-700 border-rose-200" data-testid={`reversed-badge-${t.id}`}>
+                            <Undo2 className="h-3 w-3 mr-1" />Reversed
+                          </Badge>
                         )}
                       </div>
                       {t.zoho_status === 'failed' && t.zoho_error && (
@@ -1630,6 +1550,92 @@ export default function StockTransfers() {
                       )}
                     </td>
                     <td className="p-3 text-xs text-slate-600">{t.created_by_name}</td>
+                    <td className="p-3 text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="sm" variant="ghost"
+                            className="h-8 w-8 p-0 text-slate-500 hover:text-slate-800 hover:bg-emerald-50"
+                            title="Actions"
+                            data-testid={`transfer-actions-btn-${t.id}`}
+                          >
+                            {reversingId === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-60">
+                          <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-slate-400">
+                            {t.transfer_number}
+                          </DropdownMenuLabel>
+                          {t.zoho_status === 'synced' && t.zoho_invoice_id && (
+                            <DropdownMenuItem onClick={() => downloadZohoPdf(t)} data-testid={`zoho-pdf-btn-${t.id}`}>
+                              <Download className="h-3.5 w-3.5 mr-2 text-slate-500" />
+                              Download {t.zoho_doc_type === 'delivery_challan' ? 'Challan' : 'Invoice'} PDF
+                            </DropdownMenuItem>
+                          )}
+                          {Number(t.total_value || 0) > 50000 && (
+                            <DropdownMenuItem onClick={() => downloadEwayBill(t)} data-testid={`eway-bill-btn-${t.id}`}>
+                              <Download className="h-3.5 w-3.5 mr-2 text-indigo-600" />
+                              Download E-way Bill
+                            </DropdownMenuItem>
+                          )}
+                          {t.zoho_status === 'synced' && t.zoho_invoice_id && (
+                            <DropdownMenuItem onClick={() => setShareTransfer(t)} data-testid={`share-btn-transfer-${t.id}`}>
+                              <Share2 className="h-3.5 w-3.5 mr-2 text-teal-600" />
+                              Share via email…
+                            </DropdownMenuItem>
+                          )}
+                          {t.zoho_status === 'failed' && (
+                            <DropdownMenuItem onClick={() => retryZoho(t.id)} data-testid={`retry-zoho-${t.id}`}>
+                              <RefreshCw className="h-3.5 w-3.5 mr-2 text-slate-500" />
+                              Retry Zoho push
+                            </DropdownMenuItem>
+                          )}
+                          {t.status === 'reversed' ? (
+                            t.zoho_cleanup_pending && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => retryReverseCleanup(t)}
+                                  disabled={reversingId === t.id}
+                                  data-testid={`reverse-cleanup-btn-${t.id}`}
+                                >
+                                  <RefreshCw className="h-3.5 w-3.5 mr-2 text-amber-600" />
+                                  Retry Zoho cleanup
+                                </DropdownMenuItem>
+                              </>
+                            )
+                          ) : (
+                            <>
+                              {(canEditQty || (canRetro && t.status === 'completed' && (t.items || []).some(it => !it.child_sku_id && customerParents?.has(it.sku_id)))) && (
+                                <DropdownMenuSeparator />
+                              )}
+                              {canEditQty && (
+                                <DropdownMenuItem onClick={() => setEditTransfer(t)} data-testid={`edit-qty-btn-${t.id}`}>
+                                  <Pencil className="h-3.5 w-3.5 mr-2 text-amber-600" />
+                                  Edit quantities
+                                </DropdownMenuItem>
+                              )}
+                              {canRetro && t.status === 'completed' && (t.items || []).some(it => !it.child_sku_id && customerParents?.has(it.sku_id)) && (
+                                <DropdownMenuItem onClick={() => openRetroDialog(t)} data-testid={`retro-categorize-transfer-btn-${t.id}`}>
+                                  <Tag className="h-3.5 w-3.5 mr-2 text-violet-600" />
+                                  Categorize child SKU
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
+                                onClick={() => reverseTransfer(t)}
+                                disabled={reversingId === t.id}
+                                data-testid={`reverse-transfer-btn-${t.id}`}
+                              >
+                                <Undo2 className="h-3.5 w-3.5 mr-2" />
+                                Reverse transfer
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1648,6 +1654,14 @@ export default function StockTransfers() {
       <NewRequestDialog open={showRequestDialog} onClose={() => setShowRequestDialog(false)} onCreated={loadRequests} />
       <RequestActionDialog action={reqAction} onClose={() => setReqAction(null)} onDone={loadRequests} />
       <EditQtyDialog transfer={editTransfer} onClose={() => setEditTransfer(null)} onSaved={load} />
+      {shareTransfer && (
+        <ShareDialog
+          documentType="stock_transfer_doc"
+          documentId={shareTransfer.id}
+          testIdBase={`transfer-${shareTransfer.id}`}
+          onClose={() => setShareTransfer(null)}
+        />
+      )}
       {retroTarget && (
         <RetroCategorizeDialog
           open={!!retroTarget}
