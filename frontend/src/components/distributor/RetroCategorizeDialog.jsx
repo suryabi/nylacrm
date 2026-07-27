@@ -188,16 +188,16 @@ export default function RetroCategorizeDialog({
                           key={c.id}
                           value={`${c.child_sku_name} ${c.customer_account_name || ''} ${c.account_city || ''}`}
                           onSelect={() => setChildId(c.id)}
-                          className="flex items-start gap-2 cursor-pointer py-2"
+                          className="flex items-start gap-2 cursor-pointer py-2 data-[selected=true]:bg-violet-100 data-[selected=true]:text-slate-900 aria-selected:bg-violet-100"
                           data-testid={`retro-child-option-${ci}`}
                         >
-                          <Tag className="h-3.5 w-3.5 text-violet-500 mt-0.5 flex-shrink-0" />
+                          <Tag className="h-3.5 w-3.5 text-violet-600 mt-0.5 flex-shrink-0" />
                           <div className="min-w-0">
                             <div className="text-sm font-medium text-slate-800 truncate">{c.child_sku_name}</div>
-                            <div className="flex items-center gap-1 text-[11px] text-slate-500 truncate">
+                            <div className="flex items-center gap-1 text-[11px] text-slate-600 truncate">
                               <Building2 className="h-2.5 w-2.5 flex-shrink-0" />
                               <span className="truncate">{c.customer_account_name || 'Unknown account'}</span>
-                              {c.account_city && <span className="text-slate-400">· {c.account_city}</span>}
+                              {c.account_city && <span className="text-slate-500">· {c.account_city}</span>}
                             </div>
                           </div>
                         </CommandItem>
