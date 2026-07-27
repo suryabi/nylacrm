@@ -659,7 +659,44 @@ export default function DistributorList() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Mobile card list (< sm) */}
+            <div className="sm:hidden divide-y divide-emerald-50" data-testid="distributors-card-list">
+              {sortedDistributors.map((dist) => (
+                <div
+                  key={dist.id}
+                  className="p-4 flex gap-3 active:bg-emerald-50/60"
+                  onClick={() => handleRowClick(dist.id)}
+                  data-testid={`distributor-card-${dist.id}`}
+                >
+                  <div onClick={(e) => e.stopPropagation()} className="pt-0.5">
+                    <Checkbox
+                      checked={bulk.isSelected(dist.id)}
+                      onCheckedChange={() => bulk.toggle(dist.id)}
+                      aria-label={`Select ${dist.distributor_name}`}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-medium text-slate-900 leading-snug">{dist.distributor_name}</p>
+                      {getStatusBadge(dist.status)}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline" className="font-mono text-[10px] bg-slate-50 border-slate-200 text-slate-600">{dist.distributor_code}</Badge>
+                      {dist.is_self_managed && (
+                        <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] px-1.5 py-0" variant="outline">Self Managed</Badge>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+                      {dist.primary_contact_name && <span className="flex items-center gap-1"><Users className="h-3 w-3 text-slate-400" />{dist.primary_contact_name}</span>}
+                      {dist.primary_contact_mobile && <span className="flex items-center gap-1"><Phone className="h-3 w-3 text-slate-400" />{dist.primary_contact_mobile}</span>}
+                      <span className="flex items-center gap-1"><MapPin className="h-3 w-3 text-emerald-600" />{dist.coverage_count || 0} cities</span>
+                      <span className="flex items-center gap-1"><Package className="h-3 w-3 text-blue-600" />{dist.locations_count || 0} locations</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-emerald-50/30 border-b border-emerald-100/60">
@@ -752,7 +789,7 @@ export default function DistributorList() {
             </div>
             
             {/* Pagination */}
-            <div className="flex items-center justify-between p-4 border-t border-emerald-50 bg-slate-50/50">
+            <div className="flex flex-wrap items-center justify-between gap-2 p-4 border-t border-emerald-50 bg-slate-50/50">
               <div className="text-sm text-slate-600">
                 Showing <span className="font-medium">{startIndex}</span> to <span className="font-medium">{endIndex}</span> of <span className="font-medium">{total}</span> distributors
               </div>

@@ -1955,3 +1955,10 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Leads list: viewMode now defaults to 'cards' on phones (<640px), 'table' on desktop.
 - Noted (not fixed, minor): unknown routes like /distributor-stock render a blank page (no 404 catch-all).
 - Verified: Issues cards + Leads cards + fixed headers @390px; desktop Issues=table, Leads=table.
+
+### 2026-07-27 — 📱 Mobile/Tablet Responsiveness — Round 3 ✅ DONE (screenshot-verified 390px + desktop regression)
+- Accounts list: mobile card view (<sm) — accounts-card-list / account-card-{account_id} (name, lead-type badge, city/state, contact, sales person, category); desktop table hidden sm:block, unchanged.
+- Distributors list: mobile card view — distributors-card-list / distributor-card-{id} (name, status badge, code, self-managed, contact, coverage/locations); pagination footer now wraps.
+- NEW 404 catch-all: pages/NotFound.jsx + <Route path="*"> in App.js (Go Back / Go Home buttons) — unknown routes no longer render blank pages.
+- Accounting dashboard audited @390px: already fully responsive, no changes needed.
+- Verified: 13 account cards + 17 distributor cards on phone; desktop shows tables (cards hidden); /distributor-stock now shows 404.

@@ -138,6 +138,7 @@ const DistributorDetail = lazy(() => import('./pages/DistributorDetail'));
 const StockTransfers = lazy(() => import('./pages/StockTransfers'));
 const StockDashboard = lazy(() => import('./pages/StockDashboard'));
 const GlobalStockDashboard = lazy(() => import('./pages/GlobalStockDashboard'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 const TaskManagement = lazy(() => import('./pages/TaskManagement'));
 const TaskDetail = lazy(() => import('./pages/TaskDetail'));
 const PerformanceTracker = lazy(() => import('./pages/PerformanceTracker'));
@@ -475,6 +476,8 @@ function AppRouter() {
           <Route path="/personal-calendar" element={<ProtectedRoute moduleKey="personal_calendar"><PersonalCalendar /></ProtectedRoute>} />
           {/* Mail (Gmail integration) */}
           <Route path="/mail" element={<ProtectedRoute moduleKey="mail"><Mail /></ProtectedRoute>} />
+          {/* Catch-all 404 */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
         </Suspense>
         <Toaster />

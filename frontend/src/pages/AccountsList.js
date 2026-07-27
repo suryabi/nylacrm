@@ -429,7 +429,45 @@ export default function AccountsList() {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              {/* Mobile card list (< sm) */}
+              <div className="sm:hidden divide-y divide-slate-100 dark:divide-slate-800/50" data-testid="accounts-card-list">
+                {accounts.map((account, idx) => (
+                  <div
+                    key={account.id || idx}
+                    className="p-4 flex gap-3 active:bg-amber-50/50"
+                    onClick={() => {
+                      saveFilters({ searchTerm, territoryFilter, stateFilter, cityFilter, accountTypeFilter });
+                      navigateTo(`/accounts/${account.account_id}`, { label: account.account_name || 'Account Details' });
+                    }}
+                    data-testid={`account-card-${account.account_id}`}
+                  >
+                    <div onClick={(e) => e.stopPropagation()} className="pt-0.5">
+                      <Checkbox
+                        checked={bulk.isSelected(account.id)}
+                        onCheckedChange={() => bulk.toggle(account.id)}
+                        aria-label={`Select ${account.account_name}`}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-semibold text-slate-800 dark:text-white leading-snug">{account.account_name}</p>
+                        <Badge variant="outline" className="text-[10px] shrink-0 bg-sky-50 text-sky-700 border-sky-300">{account.lead_type || 'B2B'}</Badge>
+                      </div>
+                      <p className="text-[11px] font-mono text-slate-400">{account.account_id}</p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-400">
+                        {(account.city || account.state) && (
+                          <span className="flex items-center gap-1"><MapPin className="h-3 w-3 text-slate-400" />{[account.city, account.state].filter(Boolean).join(', ')}</span>
+                        )}
+                        {account.contact_name && <span className="flex items-center gap-1"><User className="h-3 w-3 text-slate-400" />{account.contact_name}</span>}
+                        {account.contact_number && <span className="flex items-center gap-1"><Phone className="h-3 w-3 text-slate-400" />{account.contact_number}</span>}
+                        {account.sales_person_name && <span className="flex items-center gap-1"><Users className="h-3 w-3 text-blue-500" />{account.sales_person_name}</span>}
+                      </div>
+                      {account.category && <Badge variant="outline" className="text-[10px] border-slate-200 bg-slate-50 dark:bg-slate-800">{account.category}</Badge>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full text-sm" data-testid="accounts-table">
                   <thead>
                     <tr className="border-b-2 border-amber-100 dark:border-amber-900/30 bg-gradient-to-r from-amber-50/80 to-orange-50/50 dark:from-amber-900/20 dark:to-orange-900/10">
