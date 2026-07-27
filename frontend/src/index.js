@@ -9,3 +9,11 @@ root.render(
     <App />
   </React.StrictMode>,
 );
+
+// PWA: register the safe (network-first) service worker in production builds only.
+// Dev/preview skips it so hot reload never fights a SW.
+if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/pwa-sw.js").catch(() => {});
+  });
+}

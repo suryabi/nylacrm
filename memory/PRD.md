@@ -1962,3 +1962,8 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - NEW 404 catch-all: pages/NotFound.jsx + <Route path="*"> in App.js (Go Back / Go Home buttons) — unknown routes no longer render blank pages.
 - Accounting dashboard audited @390px: already fully responsive, no changes needed.
 - Verified: 13 account cards + 17 distributor cards on phone; desktop shows tables (cards hidden); /distributor-stock now shows 404.
+
+### 2026-07-27 — 📲 PWA support (installable app) ✅ DONE (self-tested)
+- Manifest/icons/iOS meta already existed. Added SAFE service worker `public/pwa-sw.js`: network-first navigations (NEVER caches app bundles — a caching SW previously caused stale-version bugs, see kill-switch /sw.js), precaches only offline.html + 2 icons + manifest; offline fallback page.
+- Registered in src/index.js ONLY for production builds (dev/preview skips → no hot-reload conflicts). Chrome/Android install prompt now eligible after redeploy; iOS Add-to-Home-Screen works via existing apple meta tags.
+- Verified: pwa-sw.js/manifest/offline.html/icons all served 200 with correct content types; SW syntax checked. ⚠️ SW activates only on the PRODUCTION deployment after redeploy.
