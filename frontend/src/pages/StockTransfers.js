@@ -686,6 +686,140 @@ function NewTransferDialog({ open, onClose, onCreated, prefill }) {
   );
 }
 
+function TransferDetailDialog({ transfer, onClose }) {
+  if (!transfer) return null;
+  const t = transfer;
+  const items = t.items || [];
+  const branded = items.filter((it) => it.child_sku_id);
+  const generic = items.filter((it) => !it.child_sku_id);
+  const sumQty = (arr) => arr.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+  const sumUnits = (arr) => arr.reduce((s, it) => s + (Number(it.quantity_units) || 0), 0);
+  const sumValue = (arr) => arr.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.rate) || 0), 0);
+  const totalUnits = sumUnits(items);
+  const totalValue = Number(t.total_value) || sumValue(items);
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="transfer-detail-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
+            <ArrowLeftRight className="h-5 w-5 text-emerald-600" />
+            <span className="font-mono">{t.transfer_number}</span>
+            <DocBadge type={t.zoho_doc_type} />
+            <StatusBadge status={t.zoho_status} error={t.zoho_error} />
+            {t.status === 'reversed' && (
+              <Badge variant="outline" className="text-[10px] bg-rose-50 text-rose-700 border-rose-200"><Undo2 className="h-3 w-3 mr-1" />Reversed</Badge>
+            )}
+          </DialogTitle>
+          <DialogDescription>
+            {fmtDate(t.transfer_date)} · created by {t.created_by_name}
+            {t.zoho_invoice_number && <> · Zoho #{t.zoho_invoice_number}</>}
+            {t.zoho_invoice_url && (
+              <a href={t.zoho_invoice_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 ml-1 text-emerald-700 hover:underline">
+                open <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Route */}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-lg border border-emerald-100 bg-emerald-50/40 p-3 text-sm">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400">Source</p>
+            <p className="font-medium text-slate-800">{t.source_distributor_name}</p>
+            <p className="text-xs text-slate-500">{t.source_location_name}</p>
+            {t.source_gstin && <p className="text-[10px] font-mono text-emerald-700">{t.source_gstin}</p>}
+          </div>
+          <ArrowLeftRight className="h-4 w-4 text-emerald-500" />
+          <div className="text-right">
+            <p className="text-[10px] uppercase tracking-wider text-slate-400">Destination</p>
+            <p className="font-medium text-slate-800">{t.dest_distributor_name}</p>
+            <p className="text-xs text-slate-500">{t.dest_location_name}</p>
+            {t.dest_gstin && <p className="text-[10px] font-mono text-emerald-700">{t.dest_gstin}</p>}
+          </div>
+        </div>
+
+        {/* Items */}
+        <div className="rounded-lg border overflow-hidden">
+          <table className="w-full text-sm" data-testid="transfer-detail-items-table">
+            <thead>
+              <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 border-b">
+                <th className="p-2.5 text-left font-medium">SKU</th>
+                <th className="p-2.5 text-left font-medium">Branding / Child SKU</th>
+                <th className="p-2.5 text-right font-medium">Qty</th>
+                <th className="p-2.5 text-right font-medium">Rate</th>
+                <th className="p-2.5 text-right font-medium">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, idx) => (
+                <tr key={idx} className="border-b last:border-0" data-testid={`transfer-detail-item-${idx}`}>
+                  <td className="p-2.5">
+                    <p className="font-medium text-slate-800">{it.sku_name}</p>
+                    {it.batch_code && <p className="text-[10px] font-mono text-slate-400">{it.batch_code}</p>}
+                  </td>
+                  <td className="p-2.5">
+                    {it.child_sku_id ? (
+                      <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[11px]">
+                        <Tag className="h-3 w-3 mr-1" />{it.child_sku_name}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-slate-400">Generic (unbranded)</span>
+                    )}
+                  </td>
+                  <td className="p-2.5 text-right">
+                    <span className="font-semibold text-slate-800">{it.quantity} {it.packaging_type_name || ''}</span>
+                    {it.quantity_units ? <p className="text-[10px] text-slate-400">{Number(it.quantity_units).toLocaleString('en-IN')} bottles</p> : null}
+                  </td>
+                  <td className="p-2.5 text-right text-slate-600">{it.rate ? `₹${Number(it.rate).toLocaleString('en-IN')}` : '—'}</td>
+                  <td className="p-2.5 text-right text-slate-800">{it.rate ? `₹${(Number(it.quantity) * Number(it.rate)).toLocaleString('en-IN')}` : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-slate-50 border-t font-medium">
+                <td className="p-2.5 text-slate-700" colSpan={2}>Total · {items.length} SKU line{items.length !== 1 ? 's' : ''}</td>
+                <td className="p-2.5 text-right text-slate-800">
+                  {t.total_packages ?? t.total_quantity ?? sumQty(items)}
+                  {totalUnits ? <p className="text-[10px] font-normal text-slate-400">{totalUnits.toLocaleString('en-IN')} bottles</p> : null}
+                </td>
+                <td className="p-2.5" />
+                <td className="p-2.5 text-right text-slate-800">{totalValue ? `₹${totalValue.toLocaleString('en-IN')}` : '—'}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {/* Branding summary */}
+        <div className="grid grid-cols-2 gap-3" data-testid="transfer-detail-branding-summary">
+          <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-indigo-500">Customer-branded (child SKUs)</p>
+            <p className="text-lg font-bold text-indigo-700">{sumQty(branded)} <span className="text-xs font-normal">across {branded.length} line{branded.length !== 1 ? 's' : ''}</span></p>
+            {branded.length > 0 && (
+              <div className="mt-1 space-y-0.5">
+                {branded.map((it, bi) => (
+                  <p key={bi} className="text-[11px] text-indigo-700 truncate">{it.quantity} × {it.child_sku_name}</p>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-slate-400">Generic (unbranded)</p>
+            <p className="text-lg font-bold text-slate-700">{sumQty(generic)} <span className="text-xs font-normal">across {generic.length} line{generic.length !== 1 ? 's' : ''}</span></p>
+          </div>
+        </div>
+
+        {(t.vehicle_number || t.notes) && (
+          <div className="text-xs text-slate-600 space-y-1">
+            {t.vehicle_number && <p className="flex items-center gap-1.5"><Truck className="h-3.5 w-3.5 text-slate-400" /> Vehicle: <b>{t.vehicle_number}</b></p>}
+            {t.notes && <p className="text-slate-500">Notes: {t.notes}</p>}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function EditQtyDialog({ transfer, onClose, onSaved }) {
   const [qtys, setQtys] = useState([]);
   const [reason, setReason] = useState('');
@@ -1089,6 +1223,7 @@ export default function StockTransfers() {
   const canRetro = RETRO_ROLES.includes(user?.role);
   const [editTransfer, setEditTransfer] = useState(null);
   const [shareTransfer, setShareTransfer] = useState(null);
+  const [detailTransfer, setDetailTransfer] = useState(null);
   const [retroTarget, setRetroTarget] = useState(null);
   // ── Stock transfer requests (request → approval → fulfillment) ──
   const [view, setView] = useState(() =>
@@ -1510,7 +1645,16 @@ export default function StockTransfers() {
                 ) : (data.items || []).length === 0 ? (
                   <tr><td colSpan={8} className="p-10 text-center text-slate-500">No stock transfers yet. Click <b>+ New Stock Transfer</b> above to create one.</td></tr>
                 ) : (data.items || []).map((t, i) => (
-                  <tr key={t.id} className={`border-b border-emerald-50 ${i % 2 === 1 ? 'bg-emerald-50/40' : 'bg-white'} hover:bg-emerald-50/60`} data-testid={`transfer-row-${t.id}`}>
+                  <tr
+                    key={t.id}
+                    className={`border-b border-emerald-50 ${i % 2 === 1 ? 'bg-emerald-50/40' : 'bg-white'} hover:bg-emerald-50/60 cursor-pointer`}
+                    onClick={(e) => {
+                      if (e.target.closest('button, a, [role="menu"], [role="menuitem"], [data-radix-popper-content-wrapper]')) return;
+                      setDetailTransfer(t);
+                    }}
+                    title="Click to view transfer details"
+                    data-testid={`transfer-row-${t.id}`}
+                  >
                     <td className="p-3 font-mono text-xs text-emerald-700">{t.transfer_number}</td>
                     <td className="p-3 text-xs text-slate-600">{fmtDate(t.transfer_date)}</td>
                     <td className="p-3 text-xs">
@@ -1654,6 +1798,7 @@ export default function StockTransfers() {
       <NewRequestDialog open={showRequestDialog} onClose={() => setShowRequestDialog(false)} onCreated={loadRequests} />
       <RequestActionDialog action={reqAction} onClose={() => setReqAction(null)} onDone={loadRequests} />
       <EditQtyDialog transfer={editTransfer} onClose={() => setEditTransfer(null)} onSaved={load} />
+      <TransferDetailDialog transfer={detailTransfer} onClose={() => setDetailTransfer(null)} />
       {shareTransfer && (
         <ShareDialog
           documentType="stock_transfer_doc"
