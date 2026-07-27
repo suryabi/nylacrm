@@ -1,0 +1,55 @@
+{
+  "summary": "Tested Issues module (customer_complaints) multi-user/multi-department, close/reopen, no-category, IdleBadge, XLSX import/export. Backend 5/6 pytest pass; frontend desktop + mobile E2E passed end-to-end (create with 2 depts + 2 assignees, list badges, close→reopen, delete, legacy issue detail).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "migration", "issue": "Existing issue CMP-2026-0001 'Leaking bottle cap' has empty departments=[] and assignees=[] arrays. Review request stated it should show departments=['Production'] after migration. Either the migration never ran, or the source doc had no legacy 'department'/'assigned_to' populated. Both list row and detail Manage panel now display 'No departments' / 'Unassigned' for this issue."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_complaints_multi_v2.py",
+    "/app/test_reports/pytest/iter340_complaints.xml"
+  ],
+  "verified_flows": [
+    "POST /api/complaints with departments+assignees arrays returns arrays and mirrors legacy assigned_to/assigned_to_name/department (first entry)",
+    "PUT departments/assignees updates and re-mirrors legacy fields",
+    "PUT status='closed' sets closed_at; PUT status='open' from closed sets reopened_at",
+    "GET /api/complaints?department=X matches array membership",
+    "GET /api/complaints?assigned_to=<id> matches assignees.id; ?assigned_to=unassigned returns empty-assignee docs",
+    "GET /api/complaints/meta/options has no 'categories' key",
+    "GET /api/complaints/export xlsx headers include 'Departments' and 'Assignees', no 'Category'",
+    "GET /api/complaints/import-template headers same (no Category)",
+    "POST /api/complaints/import with Departments='Production, Quality' and Assignees='Alice, Bob' correctly parses both arrays",
+    "Frontend /complaints list: no Category filter, no 'Group by Category', table has Departments (badges), Assignees (comma-joined), Last Update column with data-testid idle-badge-{id}",
+    "New Issue dialog: no Category select; complaint-departments-select multi-select works (Production+Quality); complaint-assignees-select multi-select works (Amit Chopra, Cathy Director)",
+    "Created issue appears in list with both dept badges + both assignee names + 'Updated today'",
+    "Detail header shows priority/status badges, dept badges, 'Updated today' idle badge",
+    "complaint-close-btn → status Closed → button becomes complaint-reopen-btn → click reopens back to Open (button flips back to Close)",
+    "Delete via detail 'Delete' → confirm-delete-complaint removes issue and navigates back to list",
+    "Legacy issue CMP-2026-0001 loads on detail with inline-edit pencils present",
+    "Mobile 390x844: complaints-card-list renders with idle-badge inside each card"
+  ],
+  "action_items": [
+    "Investigate why CMP-2026-0001 has empty departments/assignees arrays. Confirm migration script actually ran on production and copies legacy 'department' → 'departments=[department]' and legacy 'assigned_to*' → 'assignees=[{id,name}]'. If it did run but the source doc had no legacy dept, expected behavior — otherwise re-run migration."
+  ],
+  "critical_code_review_comments": [
+    "customer_complaints.py:539 — status_raw fallback logic is fine but the 'in_progress' normalisation is only applied if the raw value already exists in STATUSES; low priority.",
+    "Import endpoint does not enforce a per-file row cap; a maliciously large xlsx could DOS. Consider cap of ~5000 rows.",
+    "Assignee ids in import are always None (no user lookup by name). This means legacy assigned_to filter by id won't work for imported rows — only by name via search."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_complaints_multi_v2.py"
+  ],
+  "success_rate": {"backend": "83% (5/6)", "frontend": "100% of tested flows"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (token field: session_token)",
+  "seed_data_creation": "Created E2E test issue CMP-2026-0002; deleted at end. Import test created a TEST_import_multi_v2 row; deleted at end.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/test_complaints_multi_v2.py. Only outstanding item is the migration state of CMP-2026-0001 (see backend_issues.minor).",
+  "rca of the issue": "CMP-2026-0001 shows empty departments/assignees. Likely the migration script that was supposed to copy legacy scalar fields into arrays either did not run or the source doc had null legacy fields to begin with. Reproduce: GET /api/complaints?search=CMP-2026-0001 → returns doc with departments=[] department=null assignees=[] assigned_to_name=null. Mitigation: re-run migration copying doc.department into doc.departments (if not empty) and building assignees=[{id:assigned_to, name:assigned_to_name}] when legacy fields are set."
+}

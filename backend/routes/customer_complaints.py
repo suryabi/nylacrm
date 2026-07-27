@@ -41,7 +41,7 @@ _db = _client[os.environ["DB_NAME"]]
 
 STATUSES = ["open", "in_progress", "awaiting_customer", "resolved", "closed"]
 PRIORITIES = ["low", "medium", "high", "urgent"]
-CATEGORIES = ["quality", "packaging", "delivery", "billing", "other"]
+# CATEGORIES removed — category field deprecated (legacy docs may still carry it)
 LINK_TYPES = ["lead", "account", "distributor"]
 DEPARTMENTS = [
     "Admin", "Sales", "Production", "Marketing", "Finance",
@@ -58,6 +58,11 @@ def _now() -> str:
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────
+class AssigneeRef(BaseModel):
+    id: Optional[str] = None
+    name: str
+
+
 class ComplaintCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     details: str = Field("", max_length=5000)
@@ -68,12 +73,10 @@ class ComplaintCreate(BaseModel):
     customer_name: Optional[str] = None
     sku_ids: List[str] = []
     sku_names: List[str] = []
-    category: str = "other"
     priority: str = "medium"
-    department: Optional[str] = None
+    departments: List[str] = []
     city: Optional[str] = None
-    assigned_to: Optional[str] = None
-    assigned_to_name: Optional[str] = None
+    assignees: List[AssigneeRef] = []
 
 
 class ComplaintUpdate(BaseModel):
@@ -86,13 +89,11 @@ class ComplaintUpdate(BaseModel):
     customer_name: Optional[str] = None
     sku_ids: Optional[List[str]] = None
     sku_names: Optional[List[str]] = None
-    category: Optional[str] = None
     priority: Optional[str] = None
     status: Optional[str] = None
-    department: Optional[str] = None
+    departments: Optional[List[str]] = None
     city: Optional[str] = None
-    assigned_to: Optional[str] = None
-    assigned_to_name: Optional[str] = None
+    assignees: Optional[List[AssigneeRef]] = None
 
 
 class CommentCreate(BaseModel):
@@ -130,7 +131,6 @@ async def get_options(current_user: dict = Depends(get_current_user)):
     return {
         "statuses": STATUSES,
         "priorities": PRIORITIES,
-        "categories": CATEGORIES,
         "link_types": LINK_TYPES,
         "departments": DEPARTMENTS,
         "users": users,
@@ -221,7 +221,6 @@ def _build_list_query(
     tenant_id: str,
     status: Optional[str],
     priority: Optional[str],
-    category: Optional[str],
     department: Optional[str],
     city: Optional[str],
     link_type: Optional[str],
@@ -233,26 +232,29 @@ def _build_list_query(
         query["status"] = status
     if priority and priority != "all":
         query["priority"] = priority
-    if category and category != "all":
-        query["category"] = category
-    if department and department != "all":
-        query["department"] = department
     if city and city != "all":
         query["city"] = city
     if link_type and link_type != "all":
         query["link_type"] = link_type
     and_clauses = []
+    if department and department != "all":
+        # departments is an array; also match legacy single `department` field
+        and_clauses.append({"$or": [{"departments": department}, {"department": department}]})
     if assigned_to and assigned_to != "all":
         if assigned_to == "unassigned":
-            and_clauses.append({"$or": [{"assigned_to": None}, {"assigned_to": ""}, {"assigned_to": {"$exists": False}}]})
+            and_clauses.append({"$and": [
+                {"$or": [{"assignees": {"$size": 0}}, {"assignees": None}, {"assignees": {"$exists": False}}]},
+                {"$or": [{"assigned_to": None}, {"assigned_to": ""}, {"assigned_to": {"$exists": False}}]},
+            ]})
         else:
-            query["assigned_to"] = assigned_to
+            and_clauses.append({"$or": [{"assignees.id": assigned_to}, {"assigned_to": assigned_to}]})
     if search:
         and_clauses.append({"$or": [
             {"title": {"$regex": search, "$options": "i"}},
             {"complaint_number": {"$regex": search, "$options": "i"}},
             {"customer_name": {"$regex": search, "$options": "i"}},
             {"sku_names": {"$regex": search, "$options": "i"}},
+            {"departments": {"$regex": search, "$options": "i"}},
             {"department": {"$regex": search, "$options": "i"}},
             {"city": {"$regex": search, "$options": "i"}},
         ]})
@@ -265,7 +267,6 @@ def _build_list_query(
 async def list_complaints(
     status: Optional[str] = None,
     priority: Optional[str] = None,
-    category: Optional[str] = None,
     department: Optional[str] = None,
     city: Optional[str] = None,
     link_type: Optional[str] = None,
@@ -276,7 +277,7 @@ async def list_complaints(
     current_user: dict = Depends(get_current_user),
 ):
     tenant_id = get_current_tenant_id()
-    query = _build_list_query(tenant_id, status, priority, category, department, city, link_type, assigned_to, search)
+    query = _build_list_query(tenant_id, status, priority, department, city, link_type, assigned_to, search)
 
     total = await _db.customer_complaints.count_documents(query)
     skip = (page - 1) * page_size
@@ -314,12 +315,10 @@ async def create_complaint(body: ComplaintCreate, current_user: dict = Depends(g
     tenant_id = get_current_tenant_id()
     if body.link_type and body.link_type not in LINK_TYPES:
         raise HTTPException(status_code=400, detail="Invalid link_type")
-    if body.category not in CATEGORIES:
-        raise HTTPException(status_code=400, detail="Invalid category")
     if body.priority not in PRIORITIES:
         raise HTTPException(status_code=400, detail="Invalid priority")
-    if body.department and body.department not in DEPARTMENTS:
-        raise HTTPException(status_code=400, detail="Invalid department")
+    departments = [d for d in (body.departments or []) if d in DEPARTMENTS]
+    assignees = [{"id": a.id, "name": a.name} for a in (body.assignees or []) if a.name]
 
     now = _now()
     doc = {
@@ -335,13 +334,14 @@ async def create_complaint(body: ComplaintCreate, current_user: dict = Depends(g
         "customer_name": body.customer_name,
         "sku_ids": body.sku_ids or [],
         "sku_names": body.sku_names or [],
-        "category": body.category,
         "priority": body.priority,
         "status": "open",
-        "department": body.department,
+        "departments": departments,
+        "department": departments[0] if departments else None,
         "city": (body.city or "").strip() or None,
-        "assigned_to": body.assigned_to,
-        "assigned_to_name": body.assigned_to_name,
+        "assignees": assignees,
+        "assigned_to": assignees[0]["id"] if assignees else None,
+        "assigned_to_name": assignees[0]["name"] if assignees else None,
         "photos": [],
         "comments": [],
         "created_by": current_user.get("id"),
@@ -358,8 +358,8 @@ async def create_complaint(body: ComplaintCreate, current_user: dict = Depends(g
 # ── Export / Import ──────────────────────────────────────────────────────
 EXPORT_COLUMNS = [
     "Issue Number", "Title", "Details", "Customer", "Linked To",
-    "City", "SKUs", "Category", "Department", "Priority", "Status",
-    "Assigned To", "Created At",
+    "City", "SKUs", "Departments", "Priority", "Status",
+    "Assignees", "Created At",
 ]
 
 
@@ -375,7 +375,7 @@ async def import_template(current_user: dict = Depends(get_current_user)):
     ws.append([
         "(auto)", "Cap leaks on 500ml bottle", "Batch B123 shows visible seepage",
         "Empire Restaurant", "Account", "Bengaluru", "500ml PET",
-        "quality", "Production", "high", "open", "Priya Sharma", "",
+        "Production, Quality", "high", "open", "Priya Sharma, Arjun Rao", "",
     ])
     for i in range(1, len(EXPORT_COLUMNS) + 1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = 22
@@ -389,11 +389,10 @@ async def import_template(current_user: dict = Depends(get_current_user)):
     ins.append(["Linked To", "No", " / ".join(LINK_TYPES) + " — anything else is left blank"])
     ins.append(["City", "No", "Free text"])
     ins.append(["SKUs", "No", "Comma-separated list, e.g. '500ml PET, 1L PET'"])
-    ins.append(["Category", "No", " / ".join(CATEGORIES) + " — invalid → 'other'"])
-    ins.append(["Department", "No", " / ".join(DEPARTMENTS) + " — invalid → left blank"])
+    ins.append(["Departments", "No", "Comma-separated: " + " / ".join(DEPARTMENTS) + " — invalid entries are dropped"])
     ins.append(["Priority", "No", " / ".join(PRIORITIES) + " — invalid → 'medium'"])
     ins.append(["Status", "No", " / ".join(s.replace('_', ' ') for s in STATUSES) + " — invalid → 'open'"])
-    ins.append(["Assigned To", "No", "Free text (name)"])
+    ins.append(["Assignees", "No", "Comma-separated names"])
     ins.append(["Created At", "No", "Ignored — set automatically at import time"])
     for i in range(1, 4):
         ins.column_dimensions[ins.cell(row=1, column=i).column_letter].width = 30
@@ -413,7 +412,6 @@ async def import_template(current_user: dict = Depends(get_current_user)):
 async def export_complaints(
     status: Optional[str] = None,
     priority: Optional[str] = None,
-    category: Optional[str] = None,
     department: Optional[str] = None,
     city: Optional[str] = None,
     link_type: Optional[str] = None,
@@ -423,7 +421,7 @@ async def export_complaints(
 ):
     """Download the currently-filtered issues as an .xlsx spreadsheet."""
     tenant_id = get_current_tenant_id()
-    query = _build_list_query(tenant_id, status, priority, category, department, city, link_type, assigned_to, search)
+    query = _build_list_query(tenant_id, status, priority, department, city, link_type, assigned_to, search)
     docs = await _db.customer_complaints.find(
         query, {"_id": 0, "comments": 0, "photos": 0},
     ).sort("created_at", -1).to_list(10000)
@@ -433,6 +431,8 @@ async def export_complaints(
     ws.title = "Issues"
     ws.append(EXPORT_COLUMNS)
     for d in docs:
+        departments = d.get("departments") or ([d["department"]] if d.get("department") else [])
+        assignees = d.get("assignees") or ([{"name": d["assigned_to_name"]}] if d.get("assigned_to_name") else [])
         ws.append([
             d.get("complaint_number") or "",
             d.get("title") or "",
@@ -441,11 +441,10 @@ async def export_complaints(
             (d.get("link_type") or "").capitalize(),
             d.get("city") or "",
             ", ".join(d.get("sku_names") or []),
-            (d.get("category") or "").capitalize(),
-            d.get("department") or "",
+            ", ".join(departments),
             (d.get("priority") or "").capitalize(),
             (d.get("status") or "").replace("_", " ").title(),
-            d.get("assigned_to_name") or "",
+            ", ".join(a.get("name") or "" for a in assignees),
             d.get("created_at") or "",
         ])
     for i, _ in enumerate(EXPORT_COLUMNS, start=1):
@@ -527,19 +526,21 @@ async def import_complaints(
             errors.append(f"Row {idx}: missing title")
             continue
 
-        category = _match_ci(cell(row, "category"), CATEGORIES) or "other"
         priority = _match_ci(cell(row, "priority"), PRIORITIES) or "medium"
         status = _match_ci(cell(row, "status"), STATUSES) or "open"
         # Also accept "in progress" (with a space) → "in_progress"
         status_raw = cell(row, "status").lower().replace(" ", "_")
         if status_raw in STATUSES:
             status = status_raw
-        department = _match_ci(cell(row, "department"), DEPARTMENTS)  # None if unknown
+        deps_raw = cell(row, "departments", "department")
+        departments = [m for m in (_match_ci(p, DEPARTMENTS) for p in deps_raw.split(",")) if m] if deps_raw else []
         link_type_raw = cell(row, "linked to", "link type", "linked").lower()
         link_type_v = link_type_raw if link_type_raw in LINK_TYPES else None
 
         skus_raw = cell(row, "skus", "sku")
         sku_names = [s.strip() for s in skus_raw.split(",") if s.strip()] if skus_raw else []
+        assignees_raw = cell(row, "assignees", "assigned to", "assigned", "assignee")
+        assignees = [{"id": None, "name": n.strip()} for n in assignees_raw.split(",") if n.strip()] if assignees_raw else []
 
         doc = {
             "id": str(uuid.uuid4()),
@@ -554,13 +555,14 @@ async def import_complaints(
             "customer_name": cell(row, "customer", "customer name") or None,
             "sku_ids": [],
             "sku_names": sku_names,
-            "category": category,
             "priority": priority,
             "status": status,
-            "department": department,
+            "departments": departments,
+            "department": departments[0] if departments else None,
             "city": cell(row, "city") or None,
+            "assignees": assignees,
             "assigned_to": None,
-            "assigned_to_name": cell(row, "assigned to", "assigned", "assignee") or None,
+            "assigned_to_name": assignees[0]["name"] if assignees else None,
             "photos": [],
             "comments": [],
             "created_by": current_user.get("id"),
@@ -598,10 +600,15 @@ async def update_complaint(complaint_id: str, body: ComplaintUpdate, current_use
         raise HTTPException(status_code=400, detail="Invalid status")
     if "priority" in updates and updates["priority"] not in PRIORITIES:
         raise HTTPException(status_code=400, detail="Invalid priority")
-    if "category" in updates and updates["category"] not in CATEGORIES:
-        raise HTTPException(status_code=400, detail="Invalid category")
-    if "department" in updates and updates["department"] and updates["department"] not in DEPARTMENTS:
-        raise HTTPException(status_code=400, detail="Invalid department")
+    if "departments" in updates:
+        deps = [d for d in (updates.get("departments") or []) if d in DEPARTMENTS]
+        updates["departments"] = deps
+        updates["department"] = deps[0] if deps else None
+    if "assignees" in updates:
+        assignees = [a for a in (updates.get("assignees") or []) if a.get("name")]
+        updates["assignees"] = assignees
+        updates["assigned_to"] = assignees[0].get("id") if assignees else None
+        updates["assigned_to_name"] = assignees[0].get("name") if assignees else None
     if "city" in updates:
         c = (updates.get("city") or "").strip() if updates.get("city") is not None else None
         updates["city"] = c or None
@@ -613,6 +620,8 @@ async def update_complaint(complaint_id: str, body: ComplaintUpdate, current_use
         updates["resolved_at"] = now
     if new_status == "closed" and doc.get("status") != "closed":
         updates["closed_at"] = now
+    if new_status == "open" and doc.get("status") in ("closed", "resolved"):
+        updates["reopened_at"] = now
 
     await _db.customer_complaints.update_one(
         {"id": complaint_id, "tenant_id": tenant_id}, {"$set": updates}

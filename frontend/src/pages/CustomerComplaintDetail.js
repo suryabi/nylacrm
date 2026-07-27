@@ -16,9 +16,9 @@ import {
 } from '../components/ui/alert-dialog';
 import {
   ArrowLeft, Loader2, Upload, Trash2, Send, MessageSquare, ImageIcon,
-  Tag, Package, User, Calendar, X, MapPin, Pencil, Check,
+  Package, User, Calendar, X, MapPin, Pencil, Check, RotateCcw, CheckCircle2,
 } from 'lucide-react';
-import { PRIORITY_STYLES, STATUS_STYLES, LABEL } from './CustomerComplaints';
+import { PRIORITY_STYLES, STATUS_STYLES, LABEL, IdleBadge, getDepartments, getAssignees, MultiPick } from './CustomerComplaints';
 import { useTenantConfig } from '../context/TenantConfigContext';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -188,18 +188,39 @@ export default function CustomerComplaintDetail() {
               )}
               <Badge className={PRIORITY_STYLES[complaint.priority]}>{LABEL(complaint.priority)}</Badge>
               <Badge className={STATUS_STYLES[complaint.status]}>{LABEL(complaint.status)}</Badge>
-              {complaint.department && (
-                <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200" data-testid="complaint-department-badge">{complaint.department}</Badge>
-              )}
+              {getDepartments(complaint).map((d) => (
+                <Badge key={d} variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200" data-testid={`complaint-department-badge-${d}`}>{d}</Badge>
+              ))}
+              <IdleBadge row={complaint} prominent />
             </div>
             <p className="text-sm text-muted-foreground mt-0.5">{complaint.complaint_number}</p>
           </div>
         </div>
-        {canDelete && (
-          <Button variant="outline" className="text-destructive border-rose-200" onClick={() => setConfirmDelete(true)} data-testid="complaint-delete-btn">
-            <Trash2 className="h-4 w-4 mr-1.5" /> Delete
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2 justify-end">
+          {canEdit && (complaint.status !== 'closed' ? (
+            <Button
+              variant="outline"
+              className="border-slate-300 text-slate-700"
+              onClick={() => patch({ status: 'closed' })}
+              data-testid="complaint-close-btn"
+            >
+              <CheckCircle2 className="h-4 w-4 mr-1.5" /> Close Issue
+            </Button>
+          ) : (
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => patch({ status: 'open' })}
+              data-testid="complaint-reopen-btn"
+            >
+              <RotateCcw className="h-4 w-4 mr-1.5" /> Reopen Issue
+            </Button>
+          ))}
+          {canDelete && (
+            <Button variant="outline" className="text-destructive border-rose-200" onClick={() => setConfirmDelete(true)} data-testid="complaint-delete-btn">
+              <Trash2 className="h-4 w-4 mr-1.5" /> Delete
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -241,7 +262,6 @@ export default function CustomerComplaintDetail() {
                 <p className="text-sm text-slate-700 whitespace-pre-wrap">{complaint.details || <span className="text-muted-foreground italic">No details provided.</span>}</p>
               )}
               <div className="flex flex-wrap gap-4 text-sm">
-                <Meta icon={Tag} label="Category" value={LABEL(complaint.category)} />
                 {complaint.customer_name && <Meta icon={User} label={LABEL(complaint.link_type || 'Customer')} value={complaint.customer_name} />}
                 {complaint.city && <Meta icon={MapPin} label="City" value={complaint.city} />}
                 <Meta icon={Calendar} label="Created" value={new Date(complaint.created_at).toLocaleDateString()} />
@@ -332,31 +352,48 @@ export default function CustomerComplaintDetail() {
                   <SelectContent>{options.priorities.map((p) => <SelectItem key={p} value={p}>{LABEL(p)}</SelectItem>)}</SelectContent>
                 </Select>
               </Field>
-              <Field label="Department">
-                <Select value={complaint.department || 'none'}
-                  onValueChange={(v) => patch({ department: v === 'none' ? null : v })} disabled={!canEdit}>
-                  <SelectTrigger data-testid="complaint-department-select"><SelectValue placeholder="No department" /></SelectTrigger>
-                  <SelectContent className="max-h-[260px]">
-                    <SelectItem value="none">No department</SelectItem>
-                    {(options.departments || []).map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+              <Field label="Departments">
+                <MultiPick
+                  placeholder="No departments"
+                  options={(options.departments || []).map((d) => ({ value: d, label: d }))}
+                  selected={getDepartments(complaint)}
+                  onChange={(vals) => patch({ departments: vals })}
+                  disabled={!canEdit}
+                  testid="complaint-departments-select"
+                />
+                {getDepartments(complaint).length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {getDepartments(complaint).map((d) => (
+                      <Badge key={d} variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[11px]">{d}</Badge>
+                    ))}
+                  </div>
+                )}
               </Field>
               <Field label="City">
                 <CityEditor value={complaint.city || ''} disabled={!canEdit} onSave={(v) => patch({ city: v || null })} />
               </Field>
-              <Field label="Assigned to">
-                <Select value={complaint.assigned_to || 'unassigned'}
-                  onValueChange={(v) => {
-                    const u = options.users.find((x) => x.id === v);
-                    patch({ assigned_to: v === 'unassigned' ? null : v, assigned_to_name: u ? u.name : null });
-                  }} disabled={!canEdit}>
-                  <SelectTrigger data-testid="complaint-assign-select"><SelectValue placeholder="Unassigned" /></SelectTrigger>
-                  <SelectContent className="max-h-[260px]">
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {options.users.map((u) => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+              <Field label="Assignees">
+                <MultiPick
+                  placeholder="Unassigned"
+                  options={(options.users || []).map((u) => ({ value: u.id, label: u.name }))}
+                  selected={getAssignees(complaint).map((a) => a.id).filter(Boolean)}
+                  onChange={(ids) => {
+                    const assignees = ids.map((uid) => {
+                      const u = (options.users || []).find((x) => x.id === uid);
+                      return { id: uid, name: u ? u.name : uid };
+                    });
+                    patch({ assignees });
+                  }}
+                  disabled={!canEdit}
+                  testid="complaint-assignees-select"
+                />
+                {getAssignees(complaint).length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {getAssignees(complaint).map((a) => (
+                      <Badge key={a.id || a.name} variant="outline" className="bg-slate-50 text-slate-700 border-slate-200 text-[11px]">{a.name}</Badge>
+                    ))}
+                  </div>
+                )}
               </Field>
             </CardContent>
           </Card>

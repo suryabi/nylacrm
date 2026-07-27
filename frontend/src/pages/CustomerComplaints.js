@@ -26,7 +26,7 @@ import {
 import {
   MessageSquareWarning, Plus, Search, Loader2, ChevronLeft, ChevronRight,
   Paperclip, MessageSquare, ChevronsUpDown, Check, X, Layers, ChevronDown,
-  Download, Upload,
+  Download, Upload, Clock,
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -47,6 +47,79 @@ export const STATUS_STYLES = {
 };
 export const LABEL = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
+// ── Multi-value helpers (backwards compatible with legacy single fields) ──
+export const getDepartments = (row) =>
+  (row.departments && row.departments.length ? row.departments : (row.department ? [row.department] : []));
+export const getAssignees = (row) =>
+  (row.assignees && row.assignees.length
+    ? row.assignees
+    : (row.assigned_to_name ? [{ id: row.assigned_to, name: row.assigned_to_name }] : []));
+
+export const daysSinceUpdate = (row) => {
+  const d = new Date(row.updated_at || row.created_at);
+  if (isNaN(d.getTime())) return 0;
+  return Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+};
+
+export const IdleBadge = ({ row, prominent = false }) => {
+  const days = daysSinceUpdate(row);
+  const closed = row.status === 'closed';
+  const cls = closed
+    ? 'bg-slate-100 text-slate-500 border-slate-200'
+    : days >= 7 ? 'bg-rose-50 text-rose-700 border-rose-300'
+    : days >= 3 ? 'bg-amber-50 text-amber-700 border-amber-300'
+    : 'bg-emerald-50 text-emerald-700 border-emerald-300';
+  return (
+    <Badge variant="outline" className={`${cls} ${prominent ? 'text-sm px-2.5 py-1' : 'text-[11px] px-1.5'} font-semibold whitespace-nowrap gap-1`} data-testid={`idle-badge-${row.id}`}>
+      <Clock className={prominent ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
+      {days === 0 ? 'Updated today' : `${days}d since update`}
+    </Badge>
+  );
+};
+
+// ── Generic searchable multi-select (checkbox list in a popover) ──
+export const MultiPick = ({ placeholder, options, selected, onChange, disabled, testid }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" disabled={disabled} className="w-full justify-between font-normal h-9" data-testid={testid}>
+          <span className="truncate text-left">
+            {selected.length === 0 ? placeholder
+              : selected.length <= 2 ? options.filter((o) => selected.includes(o.value)).map((o) => o.label).join(', ')
+              : `${selected.length} selected`}
+          </span>
+          <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[260px]" align="start">
+        <Command>
+          <CommandInput placeholder="Search…" />
+          <CommandList className="max-h-[240px]">
+            <CommandEmpty>No match.</CommandEmpty>
+            <CommandGroup>
+              {options.map((o) => {
+                const checked = selected.includes(o.value);
+                return (
+                  <CommandItem
+                    key={o.value}
+                    value={o.label}
+                    onSelect={() => onChange(checked ? selected.filter((v) => v !== o.value) : [...selected, o.value])}
+                    data-testid={`${testid}-option-${o.value}`}
+                  >
+                    <Check className={`mr-2 h-4 w-4 ${checked ? 'opacity-100 text-rose-600' : 'opacity-0'}`} />
+                    <span className="truncate">{o.label}</span>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 export default function CustomerComplaints() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -55,14 +128,13 @@ export default function CustomerComplaints() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
   const [linkTypeFilter, setLinkTypeFilter] = useState('all');
   const [assignedFilter, setAssignedFilter] = useState('all');
   const [groupBy, setGroupBy] = useState('none');
   const [cities, setCities] = useState([]);
-  const [options, setOptions] = useState({ statuses: [], priorities: [], categories: [], departments: [], link_types: [], users: [] });
+  const [options, setOptions] = useState({ statuses: [], priorities: [], departments: [], link_types: [], users: [] });
   const [showCreate, setShowCreate] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [exporting, setExporting] = useState(false);
@@ -79,7 +151,6 @@ export default function CustomerComplaints() {
       if (search) params.set('search', search);
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (priorityFilter !== 'all') params.set('priority', priorityFilter);
-      if (categoryFilter !== 'all') params.set('category', categoryFilter);
       if (departmentFilter !== 'all') params.set('department', departmentFilter);
       if (cityFilter !== 'all') params.set('city', cityFilter);
       if (linkTypeFilter !== 'all') params.set('link_type', linkTypeFilter);
@@ -91,7 +162,7 @@ export default function CustomerComplaints() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, priorityFilter, categoryFilter, departmentFilter, cityFilter, linkTypeFilter, assignedFilter, grouped]);
+  }, [page, search, statusFilter, priorityFilter, departmentFilter, cityFilter, linkTypeFilter, assignedFilter, grouped]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
   useEffect(() => {
@@ -104,24 +175,30 @@ export default function CustomerComplaints() {
   const resetPage = () => setPage(1);
 
   const clearFilters = () => {
-    setSearch(''); setStatusFilter('all'); setPriorityFilter('all'); setCategoryFilter('all');
+    setSearch(''); setStatusFilter('all'); setPriorityFilter('all');
     setDepartmentFilter('all'); setCityFilter('all'); setLinkTypeFilter('all'); setAssignedFilter('all');
     setGroupBy('none'); setPage(1);
   };
 
-  const activeFilterCount = [statusFilter, priorityFilter, categoryFilter, departmentFilter, cityFilter, linkTypeFilter, assignedFilter]
+  const activeFilterCount = [statusFilter, priorityFilter, departmentFilter, cityFilter, linkTypeFilter, assignedFilter]
     .filter((v) => v !== 'all').length + (search ? 1 : 0);
 
   // Group rows client-side when grouping is active.
-  const groupKeyFor = (row) => {
+  // Department / assignee grouping is multi-valued: a row appears in each of its groups.
+  const groupKeysFor = (row) => {
     switch (groupBy) {
-      case 'department': return row.department || 'Unassigned department';
-      case 'priority': return row.priority || 'unspecified';
-      case 'city': return row.city || 'No city';
-      case 'status': return row.status || 'unspecified';
-      case 'category': return row.category || 'other';
-      case 'assigned_to': return row.assigned_to_name || 'Unassigned';
-      default: return '';
+      case 'department': {
+        const ds = getDepartments(row);
+        return ds.length ? ds : ['Unassigned department'];
+      }
+      case 'assigned_to': {
+        const as = getAssignees(row);
+        return as.length ? as.map((a) => a.name) : ['Unassigned'];
+      }
+      case 'priority': return [row.priority || 'unspecified'];
+      case 'city': return [row.city || 'No city'];
+      case 'status': return [row.status || 'unspecified'];
+      default: return [''];
     }
   };
 
@@ -129,9 +206,10 @@ export default function CustomerComplaints() {
     if (!grouped) return [];
     const map = new Map();
     (data.data || []).forEach((row) => {
-      const k = groupKeyFor(row);
-      if (!map.has(k)) map.set(k, []);
-      map.get(k).push(row);
+      groupKeysFor(row).forEach((k) => {
+        if (!map.has(k)) map.set(k, []);
+        map.get(k).push(row);
+      });
     });
     // Sort groups: by priority order if grouping by priority, otherwise alphabetically.
     const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3, unspecified: 4 };
@@ -148,7 +226,6 @@ export default function CustomerComplaints() {
     if (search) p.set('search', search);
     if (statusFilter !== 'all') p.set('status', statusFilter);
     if (priorityFilter !== 'all') p.set('priority', priorityFilter);
-    if (categoryFilter !== 'all') p.set('category', categoryFilter);
     if (departmentFilter !== 'all') p.set('department', departmentFilter);
     if (cityFilter !== 'all') p.set('city', cityFilter);
     if (linkTypeFilter !== 'all') p.set('link_type', linkTypeFilter);
@@ -291,7 +368,6 @@ export default function CustomerComplaints() {
                   <SelectItem value="priority">Group by Priority</SelectItem>
                   <SelectItem value="city">Group by City</SelectItem>
                   <SelectItem value="status">Group by Status</SelectItem>
-                  <SelectItem value="category">Group by Category</SelectItem>
                   <SelectItem value="assigned_to">Group by Assignee</SelectItem>
                 </SelectContent>
               </Select>
@@ -302,8 +378,6 @@ export default function CustomerComplaints() {
               options={options.statuses} placeholder="Status" testid="filter-status" />
             <FilterSelect value={priorityFilter} onChange={(v) => { setPriorityFilter(v); resetPage(); }}
               options={options.priorities} placeholder="Priority" testid="filter-priority" />
-            <FilterSelect value={categoryFilter} onChange={(v) => { setCategoryFilter(v); resetPage(); }}
-              options={options.categories} placeholder="Category" testid="filter-category" />
             <FilterSelect value={departmentFilter} onChange={(v) => { setDepartmentFilter(v); resetPage(); }}
               options={options.departments} placeholder="Department" testid="filter-department" />
             <FilterSelect value={cityFilter} onChange={(v) => { setCityFilter(v); resetPage(); }}
@@ -402,7 +476,7 @@ export default function CustomerComplaints() {
 }
 
 const formatGroupKey = (groupBy, key) => {
-  if (groupBy === 'priority' || groupBy === 'status' || groupBy === 'category') return LABEL(key);
+  if (groupBy === 'priority' || groupBy === 'status') return LABEL(key);
   return key;
 };
 
@@ -428,9 +502,14 @@ const IssuesTable = ({ rows, onOpen, bulk }) => {
             {c.city ? ` · ${c.city}` : ''}
           </p>
           <div className="flex flex-wrap items-center gap-1.5">
+            <IdleBadge row={c} />
             <Badge className={PRIORITY_STYLES[c.priority]}>{LABEL(c.priority)}</Badge>
-            {c.department && <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{c.department}</Badge>}
-            <span className="text-[11px] text-muted-foreground">{c.assigned_to_name || 'Unassigned'}</span>
+            {getDepartments(c).map((d) => (
+              <Badge key={d} variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{d}</Badge>
+            ))}
+            <span className="text-[11px] text-muted-foreground">
+              {getAssignees(c).length ? getAssignees(c).map((a) => a.name).join(', ') : 'Unassigned'}
+            </span>
             {c.photo_count > 0 && <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground"><Paperclip className="h-3 w-3" />{c.photo_count}</span>}
             {c.comment_count > 0 && <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground"><MessageSquare className="h-3 w-3" />{c.comment_count}</span>}
           </div>
@@ -455,11 +534,11 @@ const IssuesTable = ({ rows, onOpen, bulk }) => {
           <th className="text-left p-3 font-medium">Customer</th>
           <th className="text-left p-3 font-medium">City</th>
           <th className="text-left p-3 font-medium">SKUs</th>
-          <th className="text-center p-3 font-medium">Category</th>
-          <th className="text-center p-3 font-medium">Department</th>
+          <th className="text-center p-3 font-medium">Departments</th>
           <th className="text-center p-3 font-medium">Priority</th>
           <th className="text-center p-3 font-medium">Status</th>
-          <th className="text-left p-3 font-medium">Assigned</th>
+          <th className="text-left p-3 font-medium">Assignees</th>
+          <th className="text-center p-3 font-medium">Last Update</th>
           <th className="text-center p-3 font-medium"></th>
         </tr>
       </thead>
@@ -489,13 +568,23 @@ const IssuesTable = ({ rows, onOpen, bulk }) => {
             <td className="p-3 max-w-[180px]">
               <span className="text-xs text-slate-600 line-clamp-1">{(c.sku_names || []).join(', ') || '-'}</span>
             </td>
-            <td className="p-3 text-center"><span className="text-xs capitalize">{c.category}</span></td>
             <td className="p-3 text-center">
-              {c.department ? <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{c.department}</Badge> : <span className="text-xs text-muted-foreground">-</span>}
+              {getDepartments(c).length ? (
+                <div className="flex flex-wrap gap-1 justify-center">
+                  {getDepartments(c).map((d) => (
+                    <Badge key={d} variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{d}</Badge>
+                  ))}
+                </div>
+              ) : <span className="text-xs text-muted-foreground">-</span>}
             </td>
             <td className="p-3 text-center"><Badge className={PRIORITY_STYLES[c.priority]}>{LABEL(c.priority)}</Badge></td>
             <td className="p-3 text-center"><Badge className={STATUS_STYLES[c.status]}>{LABEL(c.status)}</Badge></td>
-            <td className="p-3 text-xs text-slate-600">{c.assigned_to_name || <span className="text-muted-foreground">Unassigned</span>}</td>
+            <td className="p-3 text-xs text-slate-600">
+              {getAssignees(c).length
+                ? getAssignees(c).map((a) => a.name).join(', ')
+                : <span className="text-muted-foreground">Unassigned</span>}
+            </td>
+            <td className="p-3 text-center"><IdleBadge row={c} /></td>
             <td className="p-3 text-center">
               <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                 {c.photo_count > 0 && <span className="flex items-center gap-0.5"><Paperclip className="h-3 w-3" />{c.photo_count}</span>}
@@ -633,10 +722,9 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
   }, [linkType, cityFilterable]);
   const [skus, setSkus] = useState([]);
   const [selectedSkus, setSelectedSkus] = useState([]); // [{id,name}]
-  const [category, setCategory] = useState('quality');
   const [priority, setPriority] = useState('medium');
-  const [department, setDepartment] = useState('');
-  const [assignedTo, setAssignedTo] = useState('');
+  const [departments, setDepartments] = useState([]);
+  const [assigneeIds, setAssigneeIds] = useState([]);
 
   useEffect(() => {
     axios.get(`${API}/master-skus`, { headers: HEAD() })
@@ -654,18 +742,20 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
     if (!title.trim()) { toast.error('Title is required'); return; }
     setSaving(true);
     try {
-      const assignedUser = options.users?.find((u) => u.id === assignedTo);
+      const assignees = assigneeIds.map((uid) => {
+        const u = (options.users || []).find((x) => x.id === uid);
+        return { id: uid, name: u ? u.name : uid };
+      });
       const payload = {
         title, details, link_type: linkType,
         customer_name: entity?.name || null,
         [`${linkType}_id`]: entity?.id || null,
         sku_ids: selectedSkus.map((s) => s.id),
         sku_names: selectedSkus.map((s) => s.name),
-        category, priority,
-        department: department || null,
+        priority,
+        departments,
         city: city || null,
-        assigned_to: assignedTo || null,
-        assigned_to_name: assignedUser?.name || null,
+        assignees,
       };
       const res = await axios.post(`${API}/complaints`, payload, { headers: HEAD() });
       toast.success('Issue created');
@@ -737,41 +827,46 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Category</Label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger data-testid="complaint-category-select"><SelectValue /></SelectTrigger>
-                <SelectContent>{(options.categories || []).map((c) => <SelectItem key={c} value={c}>{LABEL(c)}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
               <Label>Priority</Label>
               <Select value={priority} onValueChange={setPriority}>
                 <SelectTrigger data-testid="complaint-priority-select"><SelectValue /></SelectTrigger>
                 <SelectContent>{(options.priorities || []).map((p) => <SelectItem key={p} value={p}>{LABEL(p)}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            <div className="space-y-1.5">
+              <Label>Departments</Label>
+              <MultiPick
+                placeholder="No departments"
+                options={(options.departments || []).map((d) => ({ value: d, label: d }))}
+                selected={departments}
+                onChange={setDepartments}
+                testid="complaint-departments-select"
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">
             <Label>Assign to</Label>
-            <Select value={assignedTo || 'unassigned'} onValueChange={(v) => setAssignedTo(v === 'unassigned' ? '' : v)}>
-              <SelectTrigger data-testid="complaint-assign-select"><SelectValue placeholder="Unassigned" /></SelectTrigger>
-              <SelectContent className="max-h-[260px]">
-                <SelectItem value="unassigned">Unassigned</SelectItem>
-                {(options.users || []).map((u) => <SelectItem key={u.id} value={u.id}>{u.name}{u.role ? ` · ${u.role}` : ''}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Department</Label>
-            <Select value={department || 'none'} onValueChange={(v) => setDepartment(v === 'none' ? '' : v)}>
-              <SelectTrigger data-testid="complaint-department-select"><SelectValue placeholder="No department" /></SelectTrigger>
-              <SelectContent className="max-h-[260px]">
-                <SelectItem value="none">No department</SelectItem>
-                {(options.departments || []).map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <MultiPick
+              placeholder="Unassigned"
+              options={(options.users || []).map((u) => ({ value: u.id, label: u.role ? `${u.name} · ${u.role}` : u.name }))}
+              selected={assigneeIds}
+              onChange={setAssigneeIds}
+              testid="complaint-assignees-select"
+            />
+            {assigneeIds.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {assigneeIds.map((uid) => {
+                  const u = (options.users || []).find((x) => x.id === uid);
+                  return (
+                    <span key={uid} className="inline-flex items-center gap-1 text-xs bg-slate-50 text-slate-700 border border-slate-200 rounded-full pl-2 pr-1 py-0.5">
+                      {u ? u.name : uid}
+                      <button onClick={() => setAssigneeIds((p) => p.filter((x) => x !== uid))} className="hover:text-slate-900"><X className="h-3 w-3" /></button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">
