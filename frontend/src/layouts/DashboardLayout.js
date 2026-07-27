@@ -67,7 +67,7 @@ const salesNavigationGroups = [
       { name: 'My Calendar', href: '/personal-calendar', icon: CalendarDays, moduleKey: 'personal_calendar', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin', 'Production Manager', 'Production Engineer', 'QC Manager', 'Distributor', 'Distributor Manager', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
       { name: 'Mail', href: '/mail', icon: Mail, moduleKey: 'mail' },
       { name: 'Status Summary', href: '/status-summary', icon: UsersRound, moduleKey: 'status_summary', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
-      { name: 'Issues', href: '/complaints', icon: MessageSquareWarning, moduleKey: 'customer_complaints', roles: ['CEO', 'Admin', 'System Admin'] },
+      { name: 'Tasks - Internal', href: '/complaints', icon: MessageSquareWarning, moduleKey: 'customer_complaints', roles: ['CEO', 'Admin', 'System Admin'] },
     ]
   },
   {
@@ -136,7 +136,7 @@ const productionNavigationGroups = [
       { name: 'Print Requests', href: '/print-requests', icon: Printer, moduleKey: 'print_requests', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Sample Delivery Requests', href: '/delivery-orders', icon: Package, moduleKey: 'delivery_orders', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Quality Control', href: '/quality-control', icon: ShieldCheck, moduleKey: 'quality_control', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
-      { name: 'Issues', href: '/complaints', icon: MessageSquareWarning, moduleKey: 'customer_complaints', roles: ['CEO', 'Admin', 'System Admin'] },
+      { name: 'Tasks - Internal', href: '/complaints', icon: MessageSquareWarning, moduleKey: 'customer_complaints', roles: ['CEO', 'Admin', 'System Admin'] },
     ]
   },
   {
@@ -309,6 +309,7 @@ const adminNavigationGroups = [
       { name: 'Print Settings', href: '/admin/print-settings', icon: Printer, moduleKey: 'print_request_statuses', roles: ADMIN_ONLY_ROLES },
       { name: 'Business Categories', href: '/master-business-categories', icon: Building, moduleKey: 'business_categories', roles: ADMIN_ONLY_ROLES },
       { name: 'Vendor Types', href: '/admin/vendor-types', icon: Truck, moduleKey: 'vendor_types', roles: ADMIN_ONLY_ROLES },
+      { name: 'Task Categories', href: '/admin/task-categories', icon: Tag, moduleKey: 'task_categories', roles: ADMIN_ONLY_ROLES },
       { name: 'Contact Categories', href: '/master-contact-categories', icon: Users, moduleKey: 'contact_categories', roles: ADMIN_ONLY_ROLES },
       { name: 'Expense Categories', href: '/expense-category-master', icon: Receipt, moduleKey: 'expense_categories', roles: ADMIN_ONLY_ROLES },
       { name: 'COGS Components', href: '/master/cogs-components', icon: Receipt, moduleKey: 'cogs_components', roles: ['CEO', 'Director', 'System Admin'] },

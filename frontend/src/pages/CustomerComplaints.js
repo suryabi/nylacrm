@@ -129,12 +129,13 @@ export default function CustomerComplaints() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
   const [linkTypeFilter, setLinkTypeFilter] = useState('all');
   const [assignedFilter, setAssignedFilter] = useState('all');
   const [groupBy, setGroupBy] = useState('none');
   const [cities, setCities] = useState([]);
-  const [options, setOptions] = useState({ statuses: [], priorities: [], departments: [], link_types: [], users: [] });
+  const [options, setOptions] = useState({ statuses: [], priorities: [], departments: [], categories: [], link_types: [], users: [] });
   const [showCreate, setShowCreate] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [exporting, setExporting] = useState(false);
@@ -152,6 +153,7 @@ export default function CustomerComplaints() {
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (priorityFilter !== 'all') params.set('priority', priorityFilter);
       if (departmentFilter !== 'all') params.set('department', departmentFilter);
+      if (categoryFilter !== 'all') params.set('category', categoryFilter);
       if (cityFilter !== 'all') params.set('city', cityFilter);
       if (linkTypeFilter !== 'all') params.set('link_type', linkTypeFilter);
       if (assignedFilter !== 'all') params.set('assigned_to', assignedFilter);
@@ -162,7 +164,7 @@ export default function CustomerComplaints() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter, priorityFilter, departmentFilter, cityFilter, linkTypeFilter, assignedFilter, grouped]);
+  }, [page, search, statusFilter, priorityFilter, departmentFilter, categoryFilter, cityFilter, linkTypeFilter, assignedFilter, grouped]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
   useEffect(() => {
@@ -176,11 +178,11 @@ export default function CustomerComplaints() {
 
   const clearFilters = () => {
     setSearch(''); setStatusFilter('all'); setPriorityFilter('all');
-    setDepartmentFilter('all'); setCityFilter('all'); setLinkTypeFilter('all'); setAssignedFilter('all');
+    setDepartmentFilter('all'); setCategoryFilter('all'); setCityFilter('all'); setLinkTypeFilter('all'); setAssignedFilter('all');
     setGroupBy('none'); setPage(1);
   };
 
-  const activeFilterCount = [statusFilter, priorityFilter, departmentFilter, cityFilter, linkTypeFilter, assignedFilter]
+  const activeFilterCount = [statusFilter, priorityFilter, departmentFilter, categoryFilter, cityFilter, linkTypeFilter, assignedFilter]
     .filter((v) => v !== 'all').length + (search ? 1 : 0);
 
   // Group rows client-side when grouping is active.
@@ -189,8 +191,9 @@ export default function CustomerComplaints() {
     switch (groupBy) {
       case 'department': {
         const ds = getDepartments(row);
-        return ds.length ? ds : ['No category'];
+        return ds.length ? ds : ['No department'];
       }
+      case 'category': return [row.category || 'No category'];
       case 'assigned_to': {
         const as = getAssignees(row);
         return as.length ? as.map((a) => a.name) : ['Unassigned'];
@@ -227,6 +230,7 @@ export default function CustomerComplaints() {
     if (statusFilter !== 'all') p.set('status', statusFilter);
     if (priorityFilter !== 'all') p.set('priority', priorityFilter);
     if (departmentFilter !== 'all') p.set('department', departmentFilter);
+    if (categoryFilter !== 'all') p.set('category', categoryFilter);
     if (cityFilter !== 'all') p.set('city', cityFilter);
     if (linkTypeFilter !== 'all') p.set('link_type', linkTypeFilter);
     if (assignedFilter !== 'all') p.set('assigned_to', assignedFilter);
@@ -306,8 +310,8 @@ export default function CustomerComplaints() {
             <MessageSquareWarning className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800">Issues</h1>
-            <p className="text-sm text-slate-500">{data.total} issue{data.total === 1 ? '' : 's'} tracked</p>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800">Tasks - Internal</h1>
+            <p className="text-sm text-slate-500">{data.total} task{data.total === 1 ? '' : 's'} tracked</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -339,7 +343,7 @@ export default function CustomerComplaints() {
             Export
           </Button>
           <Button onClick={() => setShowCreate(true)} className="bg-rose-600 hover:bg-rose-700" data-testid="new-complaint-btn">
-            <Plus className="h-4 w-4 mr-2" /> New Issue
+            <Plus className="h-4 w-4 mr-2" /> New Task
           </Button>
         </div>
       </div>
@@ -364,7 +368,8 @@ export default function CustomerComplaints() {
                 <SelectTrigger className="h-9 w-[170px]" data-testid="filter-groupby"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No grouping</SelectItem>
-                  <SelectItem value="department">Group by Category</SelectItem>
+                  <SelectItem value="department">Group by Department</SelectItem>
+                  <SelectItem value="category">Group by Category</SelectItem>
                   <SelectItem value="priority">Group by Priority</SelectItem>
                   <SelectItem value="city">Group by City</SelectItem>
                   <SelectItem value="status">Group by Status</SelectItem>
@@ -379,7 +384,9 @@ export default function CustomerComplaints() {
             <FilterSelect value={priorityFilter} onChange={(v) => { setPriorityFilter(v); resetPage(); }}
               options={options.priorities} placeholder="Priority" testid="filter-priority" />
             <FilterSelect value={departmentFilter} onChange={(v) => { setDepartmentFilter(v); resetPage(); }}
-              options={options.departments} placeholder="Category" testid="filter-department" />
+              options={options.departments} placeholder="Department" testid="filter-department" />
+            <FilterSelect value={categoryFilter} onChange={(v) => { setCategoryFilter(v); resetPage(); }}
+              options={options.categories} placeholder="Category" testid="filter-category" />
             <FilterSelect value={cityFilter} onChange={(v) => { setCityFilter(v); resetPage(); }}
               options={cities} placeholder="City" testid="filter-city" preserveCase />
             <FilterSelect value={linkTypeFilter} onChange={(v) => { setLinkTypeFilter(v); resetPage(); }}
@@ -408,7 +415,7 @@ export default function CustomerComplaints() {
         <Card><CardContent className="py-16 text-center text-muted-foreground">
           <MessageSquareWarning className="h-12 w-12 mx-auto mb-3 opacity-40" />
           <p>No issues found</p>
-          <p className="text-sm">Adjust filters or click "New Issue" to log one.</p>
+          <p className="text-sm">Adjust filters or click "New Task" to log one.</p>
         </CardContent></Card>
       ) : !grouped ? (
         <Card><CardContent className="p-0">
@@ -507,6 +514,7 @@ const IssuesTable = ({ rows, onOpen, bulk }) => {
             {getDepartments(c).map((d) => (
               <Badge key={d} variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{d}</Badge>
             ))}
+            {c.category && <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200">{c.category}</Badge>}
             <span className="text-[11px] text-muted-foreground">
               {getAssignees(c).length ? getAssignees(c).map((a) => a.name).join(', ') : 'Unassigned'}
             </span>
@@ -534,6 +542,7 @@ const IssuesTable = ({ rows, onOpen, bulk }) => {
           <th className="text-left p-3 font-medium">Customer</th>
           <th className="text-left p-3 font-medium">City</th>
           <th className="text-left p-3 font-medium">SKUs</th>
+          <th className="text-center p-3 font-medium">Department</th>
           <th className="text-center p-3 font-medium">Category</th>
           <th className="text-center p-3 font-medium">Priority</th>
           <th className="text-center p-3 font-medium">Status</th>
@@ -576,6 +585,11 @@ const IssuesTable = ({ rows, onOpen, bulk }) => {
                   ))}
                 </div>
               ) : <span className="text-xs text-muted-foreground">-</span>}
+            </td>
+            <td className="p-3 text-center">
+              {c.category
+                ? <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200">{c.category}</Badge>
+                : <span className="text-xs text-muted-foreground">-</span>}
             </td>
             <td className="p-3 text-center"><Badge className={PRIORITY_STYLES[c.priority]}>{LABEL(c.priority)}</Badge></td>
             <td className="p-3 text-center"><Badge className={STATUS_STYLES[c.status]}>{LABEL(c.status)}</Badge></td>
@@ -724,6 +738,7 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
   const [selectedSkus, setSelectedSkus] = useState([]); // [{id,name}]
   const [priority, setPriority] = useState('medium');
   const [departments, setDepartments] = useState([]);
+  const [category, setCategory] = useState('');
   const [assigneeIds, setAssigneeIds] = useState([]);
 
   useEffect(() => {
@@ -754,6 +769,7 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
         sku_names: selectedSkus.map((s) => s.name),
         priority,
         departments,
+        category: category || null,
         city: city || null,
         assignees,
       };
@@ -770,7 +786,7 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" data-testid="create-complaint-dialog">
-        <DialogHeader><DialogTitle>New Issue</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>New Task</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
             <Label>Title *</Label>
@@ -834,15 +850,26 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Category</Label>
+              <Label>Department</Label>
               <MultiPick
-                placeholder="No category"
+                placeholder="No department"
                 options={(options.departments || []).map((d) => ({ value: d, label: d }))}
                 selected={departments}
                 onChange={setDepartments}
                 testid="complaint-departments-select"
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Category</Label>
+            <Select value={category || 'none'} onValueChange={(v) => setCategory(v === 'none' ? '' : v)}>
+              <SelectTrigger data-testid="complaint-category-select"><SelectValue placeholder="No category" /></SelectTrigger>
+              <SelectContent className="max-h-[260px]">
+                <SelectItem value="none">No category</SelectItem>
+                {(options.categories || []).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-1.5">

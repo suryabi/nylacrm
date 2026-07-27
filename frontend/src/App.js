@@ -82,6 +82,7 @@ const AccountPerformance = lazy(() => import('./pages/AccountPerformance'));
 const RevenueAnalytics = lazy(() => import('./pages/RevenueAnalytics'));
 const AccountingMasters = lazy(() => import('./pages/AccountingMasters'));
 const VendorTypes = lazy(() => import('./pages/VendorTypes'));
+const TaskCategories = lazy(() => import('./pages/TaskCategories'));
 const VendorsAccounting = lazy(() => import('./pages/VendorsAccounting'));
 const EmployeesAccounting = lazy(() => import('./pages/EmployeesAccounting'));
 const AccountingTransactions = lazy(() => import('./pages/AccountingTransactions'));
@@ -446,6 +447,7 @@ function AppRouter() {
           <Route path="/accounting/vendors" element={<ProtectedRoute moduleKey="accounting_vendors"><VendorsAccounting /></ProtectedRoute>} />
           <Route path="/accounting/employees" element={<ProtectedRoute moduleKey="accounting_employees"><EmployeesAccounting /></ProtectedRoute>} />
           <Route path="/admin/vendor-types" element={<ProtectedRoute moduleKey="vendor_types"><VendorTypes /></ProtectedRoute>} />
+          <Route path="/admin/task-categories" element={<ProtectedRoute moduleKey="task_categories"><TaskCategories /></ProtectedRoute>} />
           <Route path="/stock-dashboard" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><StockDashboard /></ProtectedRoute>} />
           <Route path="/global-stock-dashboard" element={<ProtectedRoute moduleKey="global_stock_dashboard" appModule="distribution"><GlobalStockDashboard /></ProtectedRoute>} />
           <Route path="/cost-cards" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><CostCards /></ProtectedRoute>} />

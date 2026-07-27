@@ -191,6 +191,9 @@ export default function CustomerComplaintDetail() {
               {getDepartments(complaint).map((d) => (
                 <Badge key={d} variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200" data-testid={`complaint-department-badge-${d}`}>{d}</Badge>
               ))}
+              {complaint.category && (
+                <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200" data-testid="complaint-category-badge">{complaint.category}</Badge>
+              )}
               <IdleBadge row={complaint} prominent />
             </div>
             <p className="text-sm text-muted-foreground mt-0.5">{complaint.complaint_number}</p>
@@ -352,9 +355,9 @@ export default function CustomerComplaintDetail() {
                   <SelectContent>{options.priorities.map((p) => <SelectItem key={p} value={p}>{LABEL(p)}</SelectItem>)}</SelectContent>
                 </Select>
               </Field>
-              <Field label="Category">
+              <Field label="Department">
                 <MultiPick
-                  placeholder="No category"
+                  placeholder="No department"
                   options={(options.departments || []).map((d) => ({ value: d, label: d }))}
                   selected={getDepartments(complaint)}
                   onChange={(vals) => patch({ departments: vals })}
@@ -368,6 +371,19 @@ export default function CustomerComplaintDetail() {
                     ))}
                   </div>
                 )}
+              </Field>
+              <Field label="Category">
+                <Select value={complaint.category || 'none'}
+                  onValueChange={(v) => patch({ category: v === 'none' ? null : v })} disabled={!canEdit}>
+                  <SelectTrigger data-testid="complaint-category-select"><SelectValue placeholder="No category" /></SelectTrigger>
+                  <SelectContent className="max-h-[260px]">
+                    <SelectItem value="none">No category</SelectItem>
+                    {(options.categories || []).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    {complaint.category && !(options.categories || []).includes(complaint.category) && (
+                      <SelectItem value={complaint.category}>{complaint.category}</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
               </Field>
               <Field label="City">
                 <CityEditor value={complaint.city || ''} disabled={!canEdit} onSave={(v) => patch({ city: v || null })} />

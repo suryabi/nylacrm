@@ -70,6 +70,7 @@ from .customer_complaints import router as customer_complaints_router
 from .gamma import router as gamma_router
 from .bulk_admin import router as bulk_admin_router
 from .global_stock_dashboard import router as global_stock_dashboard_router
+from .task_categories import router as task_categories_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -356,6 +357,7 @@ routes_router.include_router(customer_complaints_router, tags=["Customer Complai
 routes_router.include_router(gamma_router, tags=["Gamma Generator"])
 routes_router.include_router(bulk_admin_router, tags=["Admin · Bulk"])
 routes_router.include_router(global_stock_dashboard_router, tags=["Distribution · Global Stock"])
+routes_router.include_router(task_categories_router, tags=["Task Categories"])
 
 # Document Sharing Framework — share invoices / challans / driver bundles via
 # signed links + email (Phase 1). See routes/sharing.py + services/share_service.py

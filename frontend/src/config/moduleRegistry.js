@@ -50,7 +50,7 @@ export const MODULE_REGISTRY = [
       { key: 'meeting_minutes', label: 'Meeting Minutes', description: 'Record meeting notes & action items' },
       { key: 'personal_calendar', label: 'My Calendar', description: 'Personal calendar view' },
       { key: 'mail', label: 'Mail', description: 'Gmail-integrated mailbox' },
-      { key: 'customer_complaints', label: 'Issues', description: 'Issue / complaint tracking module' },
+      { key: 'customer_complaints', label: 'Tasks - Internal', description: 'Internal task / issue tracking module' },
     ],
   },
   {
@@ -201,6 +201,7 @@ export const MODULE_REGISTRY = [
       { key: 'print_request_statuses', label: 'Print Settings', description: 'Print request statuses & settings' },
       { key: 'business_categories', label: 'Business Categories', description: 'Industry categorization' },
       { key: 'vendor_types', label: 'Vendor Types', description: 'Vendor type master' },
+      { key: 'task_categories', label: 'Task Categories', description: 'Task category master for Tasks - Internal' },
       { key: 'contact_categories', label: 'Contact Categories', description: 'Contact type definitions' },
       { key: 'expense_categories', label: 'Expense Categories', description: 'Expense type setup' },
       { key: 'cogs_components', label: 'COGS Components', description: 'COGS component master' },

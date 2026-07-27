@@ -1975,3 +1975,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ### 2026-07-27 — Issues: "Departments" relabelled to "Category" ✅ (screenshot-verified)
 - UI labels only (field remains `departments` array of DEPARTMENTS enum): list column, filter, group-by option, create dialog + detail Manage labels, export/template header 'Category', import accepts category/departments/department headers.
+
+### 2026-07-27 — 🏷 Task Categories master + Issues → "Tasks - Internal" ✅ DONE (backend curls + UI screenshots verified)
+- NEW Admin master: Task Categories (backend routes/task_categories.py, coll `task_categories`, seeded 6 defaults, CRUD admin-roles-gated; frontend pages/TaskCategories.js at /admin/task-categories, moduleKey task_categories, nav under Master Data).
+- Issues module renamed "Tasks - Internal" (nav items x2, page h1, "New Task" button/dialog; route stays /complaints, moduleKey customer_complaints).
+- Column relabel: departments array now shows as "Department" again; NEW single-value `category` field (string) populated from Task Categories — column, filter (filter-category), group-by, create dialog select (complaint-category-select), detail Manage select + header badge; backend filter ?category=, export/import/template have both Department + Category columns.
+- Legacy docs may carry old enum category values (e.g. 'quality') — displayed as-is; detail select tolerates unknown values.
