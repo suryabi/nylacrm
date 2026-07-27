@@ -1981,3 +1981,5 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Issues module renamed "Tasks - Internal" (nav items x2, page h1, "New Task" button/dialog; route stays /complaints, moduleKey customer_complaints).
 - Column relabel: departments array now shows as "Department" again; NEW single-value `category` field (string) populated from Task Categories — column, filter (filter-category), group-by, create dialog select (complaint-category-select), detail Manage select + header badge; backend filter ?category=, export/import/template have both Department + Category columns.
 - Legacy docs may carry old enum category values (e.g. 'quality') — displayed as-is; detail select tolerates unknown values.
+
+### 2026-07-27 — Rename: 'Sample Delivery Requests' → 'Delivery Requests' ✅ (sidebar nav x3 groups + moduleRegistry; page h1 remains 'Stock Delivery Requests')

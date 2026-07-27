@@ -92,7 +92,7 @@ export const MODULE_REGISTRY = [
       { key: 'travel_requests', label: 'Travel Requests', description: 'Travel approval workflow' },
       { key: 'budget_requests', label: 'Budget Requests', description: 'Budget approval workflow' },
       { key: 'expense_management', label: 'Expense Management', description: 'Expense tracking & claims' },
-      { key: 'delivery_orders', label: 'Sample Delivery Requests', description: 'Sample delivery order workflow' },
+      { key: 'delivery_orders', label: 'Delivery Requests', description: 'Delivery request workflow' },
       { key: 'task_management', label: 'Tasks & Requests', description: 'Task assignment & tracking' },
       { key: 'task_milestones', label: 'Task Milestones', description: 'Task milestone management' },
       { key: 'task_labels', label: 'Task Labels', description: 'Task label management' },
