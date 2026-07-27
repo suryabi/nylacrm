@@ -67,7 +67,6 @@ const salesNavigationGroups = [
       { name: 'My Calendar', href: '/personal-calendar', icon: CalendarDays, moduleKey: 'personal_calendar', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin', 'Production Manager', 'Production Engineer', 'QC Manager', 'Distributor', 'Distributor Manager', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
       { name: 'Mail', href: '/mail', icon: Mail, moduleKey: 'mail' },
       { name: 'Status Summary', href: '/status-summary', icon: UsersRound, moduleKey: 'status_summary', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
-      { name: 'Tasks - Internal', href: '/complaints', icon: MessageSquareWarning, moduleKey: 'customer_complaints', roles: ['CEO', 'Admin', 'System Admin'] },
     ]
   },
   {

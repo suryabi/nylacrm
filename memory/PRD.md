@@ -1983,3 +1983,5 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Legacy docs may carry old enum category values (e.g. 'quality') — displayed as-is; detail select tolerates unknown values.
 
 ### 2026-07-27 — Rename: 'Sample Delivery Requests' → 'Delivery Requests' ✅ (sidebar nav x3 groups + moduleRegistry; page h1 remains 'Stock Delivery Requests')
+
+### 2026-07-27 — Nav fix: 'Tasks - Internal' (customer_complaints) removed from SALES sidebar; lives only under PRODUCTION. 'Tasks & Requests' (task_management) untouched everywhere. ✅
