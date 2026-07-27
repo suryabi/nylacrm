@@ -358,7 +358,7 @@ async def create_complaint(body: ComplaintCreate, current_user: dict = Depends(g
 # ── Export / Import ──────────────────────────────────────────────────────
 EXPORT_COLUMNS = [
     "Issue Number", "Title", "Details", "Customer", "Linked To",
-    "City", "SKUs", "Departments", "Priority", "Status",
+    "City", "SKUs", "Category", "Priority", "Status",
     "Assignees", "Created At",
 ]
 
@@ -389,7 +389,7 @@ async def import_template(current_user: dict = Depends(get_current_user)):
     ins.append(["Linked To", "No", " / ".join(LINK_TYPES) + " — anything else is left blank"])
     ins.append(["City", "No", "Free text"])
     ins.append(["SKUs", "No", "Comma-separated list, e.g. '500ml PET, 1L PET'"])
-    ins.append(["Departments", "No", "Comma-separated: " + " / ".join(DEPARTMENTS) + " — invalid entries are dropped"])
+    ins.append(["Category", "No", "Comma-separated: " + " / ".join(DEPARTMENTS) + " — invalid entries are dropped"])
     ins.append(["Priority", "No", " / ".join(PRIORITIES) + " — invalid → 'medium'"])
     ins.append(["Status", "No", " / ".join(s.replace('_', ' ') for s in STATUSES) + " — invalid → 'open'"])
     ins.append(["Assignees", "No", "Comma-separated names"])
@@ -532,7 +532,7 @@ async def import_complaints(
         status_raw = cell(row, "status").lower().replace(" ", "_")
         if status_raw in STATUSES:
             status = status_raw
-        deps_raw = cell(row, "departments", "department")
+        deps_raw = cell(row, "category", "departments", "department")
         departments = [m for m in (_match_ci(p, DEPARTMENTS) for p in deps_raw.split(",")) if m] if deps_raw else []
         link_type_raw = cell(row, "linked to", "link type", "linked").lower()
         link_type_v = link_type_raw if link_type_raw in LINK_TYPES else None

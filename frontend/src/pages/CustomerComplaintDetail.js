@@ -352,9 +352,9 @@ export default function CustomerComplaintDetail() {
                   <SelectContent>{options.priorities.map((p) => <SelectItem key={p} value={p}>{LABEL(p)}</SelectItem>)}</SelectContent>
                 </Select>
               </Field>
-              <Field label="Departments">
+              <Field label="Category">
                 <MultiPick
-                  placeholder="No departments"
+                  placeholder="No category"
                   options={(options.departments || []).map((d) => ({ value: d, label: d }))}
                   selected={getDepartments(complaint)}
                   onChange={(vals) => patch({ departments: vals })}

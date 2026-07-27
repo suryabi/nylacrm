@@ -189,7 +189,7 @@ export default function CustomerComplaints() {
     switch (groupBy) {
       case 'department': {
         const ds = getDepartments(row);
-        return ds.length ? ds : ['Unassigned department'];
+        return ds.length ? ds : ['No category'];
       }
       case 'assigned_to': {
         const as = getAssignees(row);
@@ -364,7 +364,7 @@ export default function CustomerComplaints() {
                 <SelectTrigger className="h-9 w-[170px]" data-testid="filter-groupby"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No grouping</SelectItem>
-                  <SelectItem value="department">Group by Department</SelectItem>
+                  <SelectItem value="department">Group by Category</SelectItem>
                   <SelectItem value="priority">Group by Priority</SelectItem>
                   <SelectItem value="city">Group by City</SelectItem>
                   <SelectItem value="status">Group by Status</SelectItem>
@@ -379,7 +379,7 @@ export default function CustomerComplaints() {
             <FilterSelect value={priorityFilter} onChange={(v) => { setPriorityFilter(v); resetPage(); }}
               options={options.priorities} placeholder="Priority" testid="filter-priority" />
             <FilterSelect value={departmentFilter} onChange={(v) => { setDepartmentFilter(v); resetPage(); }}
-              options={options.departments} placeholder="Department" testid="filter-department" />
+              options={options.departments} placeholder="Category" testid="filter-department" />
             <FilterSelect value={cityFilter} onChange={(v) => { setCityFilter(v); resetPage(); }}
               options={cities} placeholder="City" testid="filter-city" preserveCase />
             <FilterSelect value={linkTypeFilter} onChange={(v) => { setLinkTypeFilter(v); resetPage(); }}
@@ -534,7 +534,7 @@ const IssuesTable = ({ rows, onOpen, bulk }) => {
           <th className="text-left p-3 font-medium">Customer</th>
           <th className="text-left p-3 font-medium">City</th>
           <th className="text-left p-3 font-medium">SKUs</th>
-          <th className="text-center p-3 font-medium">Departments</th>
+          <th className="text-center p-3 font-medium">Category</th>
           <th className="text-center p-3 font-medium">Priority</th>
           <th className="text-center p-3 font-medium">Status</th>
           <th className="text-left p-3 font-medium">Assignees</th>
@@ -834,9 +834,9 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Departments</Label>
+              <Label>Category</Label>
               <MultiPick
-                placeholder="No departments"
+                placeholder="No category"
                 options={(options.departments || []).map((d) => ({ value: d, label: d }))}
                 selected={departments}
                 onChange={setDepartments}
