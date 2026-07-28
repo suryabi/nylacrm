@@ -22,7 +22,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '../ui/command';
-import { Tag, Info, Loader2, MapPin, Building2, Check, X, Package } from 'lucide-react';
+import { Tag, Info, Loader2, MapPin, Building2, Check, X, Package, Minus, Plus } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -126,7 +126,10 @@ export default function RetroCategorizeDialog({
                 <Package className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
                 <div className="text-xs text-slate-600 leading-snug">
                   <span className="font-semibold text-slate-800">{item.sku_name}</span>
-                  <span className="mx-1 text-slate-300">·</span>{item.quantity_units} units
+                  <span className="mx-1 text-slate-300">·</span>
+                  {upp > 1
+                    ? <>{maxPkgs} <span className="text-slate-400">×</span> {item.packaging_type_name || `${upp}-pack`} <span className="text-slate-400">=</span> {item.quantity_units} bottles</>
+                    : <>{item.quantity_units} units</>}
                   {item.batch_code && <><span className="mx-1 text-slate-300">·</span><span className="font-mono">{item.batch_code}</span></>}
                   <span className="mx-1 text-slate-300">·</span><span className="text-slate-500">currently Generic</span>
                 </div>
@@ -210,21 +213,50 @@ export default function RetroCategorizeDialog({
               {/* Quantity */}
               <div className="space-y-1.5">
                 <Label className="text-xs">
-                  Quantity {upp > 1 ? `(${item.packaging_type_name || 'packages'}, max ${maxPkgs})` : `(units, max ${item.quantity_units})`}
+                  Quantity to categorize
+                  <span className="ml-1 text-slate-400 font-normal">
+                    {upp > 1 ? `· in ${item.packaging_type_name || 'packages'} · max ${maxPkgs}` : `· in units · max ${item.quantity_units}`}
+                  </span>
                 </Label>
-                <Input
-                  type="number" min="1" max={maxPkgs}
-                  value={qtyPkgs}
-                  onChange={e => setQtyPkgs(e.target.value)}
-                  data-testid="retro-qty-input"
-                />
-                <div className="flex items-center justify-between text-[11px]">
-                  {upp > 1 && (parseInt(qtyPkgs) || 0) > 0
-                    ? <span className="text-blue-600">{(parseInt(qtyPkgs) || 0) * upp} units</span> : <span />}
-                  {(parseInt(qtyPkgs) || 0) > 0 && (parseInt(qtyPkgs) || 0) < maxPkgs && (
-                    <span className="text-slate-500">Line splits — {(maxPkgs - (parseInt(qtyPkgs) || 0)) * upp} units stay Generic</span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0"
+                    onClick={() => setQtyPkgs(String(Math.max(1, (parseInt(qtyPkgs) || 1) - 1)))}
+                    disabled={(parseInt(qtyPkgs) || 0) <= 1}
+                    data-testid="retro-qty-minus"
+                  >
+                    <Minus className="h-3.5 w-3.5" />
+                  </Button>
+                  <Input
+                    type="number" min="1" max={maxPkgs}
+                    value={qtyPkgs}
+                    onChange={e => setQtyPkgs(e.target.value)}
+                    className="h-9 w-24 text-center font-semibold text-slate-800"
+                    data-testid="retro-qty-input"
+                  />
+                  <Button
+                    type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0"
+                    onClick={() => setQtyPkgs(String(Math.min(maxPkgs, (parseInt(qtyPkgs) || 0) + 1)))}
+                    disabled={(parseInt(qtyPkgs) || 0) >= maxPkgs}
+                    data-testid="retro-qty-plus"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                  {upp > 1 && (parseInt(qtyPkgs) || 0) > 0 && (
+                    <div className="shrink-0 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs text-blue-700" data-testid="retro-units-calc">
+                      {parseInt(qtyPkgs) || 0} <span className="text-blue-400">×</span> {upp} = <b>{(parseInt(qtyPkgs) || 0) * upp} bottles</b>
+                    </div>
                   )}
                 </div>
+                {(parseInt(qtyPkgs) || 0) > 0 && (parseInt(qtyPkgs) || 0) < maxPkgs && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5" data-testid="retro-split-note">
+                    Line splits: {maxPkgs - (parseInt(qtyPkgs) || 0)} {upp > 1 ? (item.packaging_type_name || 'packages') : 'units'}
+                    {upp > 1 ? ` (${(maxPkgs - (parseInt(qtyPkgs) || 0)) * upp} bottles)` : ''} stay Generic.
+                  </p>
+                )}
+                {((parseInt(qtyPkgs) || 0) < 1 || (parseInt(qtyPkgs) || 0) > maxPkgs) && (
+                  <p className="text-[11px] text-rose-600" data-testid="retro-qty-error">Enter a quantity between 1 and {maxPkgs}.</p>
+                )}
               </div>
 
               <div className="flex items-start gap-2 rounded-md border border-violet-200 bg-violet-50/60 px-3 py-2 text-[11px] text-violet-800">

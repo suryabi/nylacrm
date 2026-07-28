@@ -1,0 +1,68 @@
+{
+  "summary": "Verified RetroCategorizeDialog UX fixes on /distributor/stock-transfers for CEO surya.yadavalli. All 3 fixes confirmed via computed styles, DOM assertions and interaction: (1) picker highlight is LIGHT violet with dark readable text, (2) quantity stepper + live calc badge + split note + inline error all render/update correctly and correctly gate the submit button, (3) line summary reads 'N × <packaging> = M bottles' (or 'N units' when upp=1). Regression: row click still opens TransferDetailDialog and ⋯ menu still shows other actions. Categorize submit was NOT clicked (per instructions). Stock Out (deliveries) side was NOT verified — no eligible delivery available in seed; component is shared so single verification suffices.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_fixes": {
+    "fix1_highlight_contrast": {
+      "selector": "[data-testid^=\"retro-child-option-\"][data-selected=\"true\"]",
+      "computed_background": "rgb(237, 233, 254)  /* violet-100, #EDE9FE */",
+      "background_luminance": 0.834,
+      "title_color": "rgb(30, 41, 59)  /* slate-800 */",
+      "sub_text_color": "rgb(71, 85, 105) /* slate-600 */",
+      "aria_selected": "true",
+      "data_selected": "true",
+      "verdict": "PASS - light violet bg with dark readable text (high contrast)"
+    },
+    "fix2_quantity_clarity": {
+      "line_summary_with_packaging": "Nyla – 600 ml / Silver · 20 × Crate - 12 = 240 bottles · currently Generic",
+      "line_summary_units_only": "Nyla – 600 ml / Silver · 10 units · currently Generic (ST-2026-0001, upp=1)",
+      "stepper": "retro-qty-minus / retro-qty-input / retro-qty-plus all present, changes 20→19→20 as expected, clamped to [1,max]",
+      "calc_badge_upp_gt_1": "retro-units-calc shows '20 × 12 = 240 bottles' → '19 × 12 = 228 bottles' live",
+      "calc_badge_upp_eq_1": "hidden as expected on ST-2026-0001 (units mode)",
+      "split_note": "retro-split-note visible when qty<max, text: 'Line splits: 1 Crate - 12 (12 bottles) stay Generic.'",
+      "qty_error_at_0": "retro-qty-error visible, text: 'Enter a quantity between 1 and 20.'",
+      "qty_error_at_999": "retro-qty-error visible, submit disabled",
+      "submit_disabled_states": "disabled when qty=0, qty>max, and when no child selected — as expected",
+      "selected_chip": "retro-selected-child shows child name + account + city; retro-clear-child X reverts to picker; re-selection works",
+      "verdict": "PASS"
+    },
+    "fix3_line_summary_wording": {
+      "verdict": "PASS — 'N × <packaging> = M bottles' with upp>1; 'N units' when upp=1"
+    },
+    "regression_row_click": {
+      "verdict": "PASS — clicking ST-2026-0010 opens transfer-detail-dialog"
+    }
+  },
+  "not_tested": [
+    "Stock Out / Deliveries entry point — no eligible delivery in seed; the RetroCategorizeDialog is a shared component with a single code path, so behaviour identical."
+  ],
+  "seed_data_issue_and_workaround": {
+    "issue": "The seeded child SKU 'test-child-retro-ux' was inserted with customer_account_id = null. Backend /api/retro-categorize/eligible-children filters children by accounts assigned to the destination distributor (rows filtered where r.customer_account_id in assigned_ids). A null account_id can NEVER match, so the picker showed 'No customer-specific child SKU found' for ALL 10 stock transfers — blocking Fix 1 (highlight) verification.",
+    "workaround_applied_by_testing_agent": "Updated child_skus.test-child-retro-ux to customer_account_id='fafad845-4809-4597-ab2d-74b7cabe4412' (account 'Lead Seventeen Test', Hyderabad — already assigned to distributor 'Test' 99fb55dc, which is the destination of ST-2026-0001). This unblocked full UX verification against ST-2026-0001.",
+    "action_for_main_agent": "When re-seeding (or the next agent uses this seed), ensure customer_account_id points to a real customer account that is assigned (account_distributor_assignments) to the destination distributor of at least one 'Nyla – 600 ml / Silver' completed transfer. Otherwise the picker is unreachable via UI."
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Consider fixing the seed script to set customer_account_id on 'test-child-retro-ux' (see seed_data_issue_and_workaround). No code fix in the dialog itself is required — all UX fixes work as designed."
+  ],
+  "critical_code_review_comments": [
+    "RetroCategorizeDialog.jsx: The `useEffect([open, itemKey])` runs on mount when open=true even if itemKey='' — currently guarded by `if (!item) return`, which is fine. Consider adding cleanup for stale axios calls when dialog closes quickly.",
+    "The retro-qty-input uses type=number without step; users can enter decimals which parseInt truncates silently. Consider step=1 and integer coercion in onChange.",
+    "The clear child X button (retro-clear-child) sits inside the selected chip and is reachable even while saving=true — not critical since submit already guards it."
+  ],
+  "updated_files": [],
+  "db_mutations_by_testing_agent": [
+    "child_skus.update_one({id:'test-child-retro-ux'}, {$set:{customer_account_id:'fafad845-4809-4597-ab2d-74b7cabe4412'}}) — needed to make the seeded child visible in the picker for UX verification. Main agent is expected to remove the seed after this iteration; the account link will be gone with it."
+  ],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant Nyla Air Water, CEO). Login stores JWT under localStorage.token.",
+  "seed_data_creation": "None (testing agent only mutated the pre-existing seeded row's customer_account_id — see db_mutations_by_testing_agent).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "RetroCategorizeDialog UX fixes fully verified. If seed 'test-child-retro-ux' is regenerated with null customer_account_id, UI picker will be unreachable — always link the seed to a valid customer_account_id assigned to some completed transfer's destination distributor. Reference transfer used for verification: ST-2026-0001 (dest Test / Hyderabad Warehouse, dist id 99fb55dc-...).",
+  "rca of the issue": "N/A — no bug found in the dialog implementation. The only issue observed was a seed-data flaw (customer_account_id=null on the seeded child SKU) which prevented eligible-children endpoint from returning it under distributor-scoped filtering. Root cause: seed missed setting customer_account_id; the endpoint at /app/backend/routes/retro_categorization.py:210 correctly excludes rows without an assigned account."
+}
