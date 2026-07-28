@@ -1,11 +1,20 @@
 """Global Stock Dashboard — tenant-wide snapshot grouped Warehouse → SKU → Child SKU.
 
-Metrics per node (all reported BOTH in crates and units/bottles):
-  on_hand   — current stock at the warehouse
-              (distributor_stock is stored in CRATES; factory_warehouse_stock in UNITS/bottles)
-  delivered — delivered to customer accounts from that warehouse (delivery status delivered/complete)
-  reserved  — deliveries created but not yet delivered (status draft/confirmed/scheduled)
-  sent      — stock transferred OUT to other warehouses (distributor_stock_transfers, status completed)
+Metrics per node (all reported BOTH in crates and units/bottles) — mirrors the
+per-distributor Stock Dashboard tab:
+  received        — stock received (delivered shipments + inbound transfers +
+                    factory-warehouse stock from production)
+  delivered       — delivered to CUSTOMER accounts (delivery status delivered/complete)
+  reserved        — committed to open Stock Out orders (draft → in-transit)
+  sent            — transferred OUT to other warehouses (stock transfers, completed)
+  empty_bottles   — customer returns: empty/reusable + promotional (recycling)
+  product_returns — customer returns: damaged + expired (unsellable)
+  factory_returns — stock sent back to the factory
+  on_hand         — current physical warehouse stock (Wh. Stock)
+  available       — on_hand − reserved (deliverable right now)
+
+NOTE: customer returns carry no warehouse — they are attributed to the
+distributor's default location.
 """
 from fastapi import APIRouter, Depends
 from typing import Optional
@@ -15,10 +24,13 @@ from core.tenant import get_current_tenant_id
 
 router = APIRouter()
 
-DELIVERED_STATUSES = {"delivered", "complete"}
+DELIVERED_STATUSES = {"delivered", "complete", "completed"}
 RESERVED_STATUSES = {"draft", "confirmed", "scheduled"}
+EMPTY_CATEGORIES = {"empty_reusable", "promotional"}
+PRODUCT_RETURN_CATEGORIES = {"damaged", "expired"}
 
-METRICS = ("on_hand", "delivered", "reserved", "sent")
+METRICS = ("received", "delivered", "reserved", "sent",
+           "empty_bottles", "product_returns", "factory_returns", "on_hand")
 
 
 def _zero() -> dict:
@@ -34,6 +46,33 @@ def _round(v: float) -> float:
     return int(r) if r == int(r) else r
 
 
+def _item_units(item: dict) -> int:
+    """Line item base-unit (bottles) contribution.
+
+    Ground truth is packages × packaging_units when both known; falls back to
+    qty × packaging_units (old model) or qty as-is (loose base units)."""
+    try:
+        qty = int(item.get("quantity") or 0)
+    except Exception:
+        qty = 0
+    try:
+        pu = int(item.get("packaging_units") or 0)
+    except Exception:
+        pu = 0
+    pk = item.get("packages")
+    try:
+        pk = int(pk) if pk not in (None, "") else 0
+    except (TypeError, ValueError):
+        pk = 0
+    if pk > 0 and pu > 1:
+        return pk * pu
+    if pk > 0:
+        return qty
+    if pu > 1:
+        return qty * pu
+    return qty
+
+
 @router.get("/distributor/global-stock-dashboard")
 async def global_stock_dashboard(current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
@@ -41,11 +80,23 @@ async def global_stock_dashboard(current_user: dict = Depends(get_current_user))
     # ── Location / distributor metadata ──────────────────────────────────
     locs = {l["id"]: l for l in await db.distributor_locations.find(
         {"tenant_id": tenant_id},
-        {"_id": 0, "id": 1, "location_name": 1, "city": 1, "distributor_id": 1, "is_factory": 1},
+        {"_id": 0, "id": 1, "location_name": 1, "city": 1, "distributor_id": 1,
+         "is_factory": 1, "is_default": 1, "created_at": 1},
     ).to_list(3000)}
     dists = {d["id"]: d for d in await db.distributors.find(
         {"tenant_id": tenant_id}, {"_id": 0, "id": 1, "distributor_name": 1}
     ).to_list(3000)}
+
+    # distributor_id → default (or first) location, used for flows that are
+    # only distributor-scoped (customer returns).
+    default_loc_by_dist: dict = {}
+    for l in locs.values():
+        did = l.get("distributor_id")
+        if not did:
+            continue
+        cur = default_loc_by_dist.get(did)
+        if cur is None or (l.get("is_default") and not cur.get("is_default")):
+            default_loc_by_dist[did] = l
 
     # ── units-per-crate lookup (bottles per crate, per SKU) ──────────────
     upc: dict = {}
@@ -118,14 +169,39 @@ async def global_stock_dashboard(current_user: dict = Depends(get_current_user))
              sku_name=r.get("sku_name"), child_name=r.get("child_sku_name"),
              warehouse_name=r.get("location_name"))
 
-    # 2. On hand — factory warehouses (UNITS/bottles)
+    # 2. On hand — factory warehouses (UNITS/bottles). Production stock in the
+    #    warehouse also counts as "received" (mirrors distributor dashboard).
     for r in fws_rows:
-        bump(r.get("warehouse_location_id"), r.get("sku_id"), r.get("child_sku_id"),
-             "on_hand", units=r.get("quantity") or 0,
-             sku_name=r.get("sku_name"), child_name=r.get("child_sku_name"),
-             warehouse_name=r.get("warehouse_name"))
+        for metric in ("on_hand", "received"):
+            bump(r.get("warehouse_location_id"), r.get("sku_id"), r.get("child_sku_id"),
+                 metric, units=r.get("quantity") or 0,
+                 sku_name=r.get("sku_name"), child_name=r.get("child_sku_name"),
+                 warehouse_name=r.get("warehouse_name"))
 
-    # 3. Deliveries → delivered / reserved (item quantities are CRATES)
+    # 3. Received — delivered stock-in shipments (per warehouse)
+    shipments = await db.distributor_shipments.find(
+        {"tenant_id": tenant_id, "status": "delivered"},
+        {"_id": 0, "id": 1, "distributor_id": 1, "distributor_location_id": 1},
+    ).to_list(20000)
+    ship_map = {s["id"]: s for s in shipments}
+    if ship_map:
+        sitems = await db.distributor_shipment_items.find(
+            {"tenant_id": tenant_id, "shipment_id": {"$in": list(ship_map.keys())}},
+            {"_id": 0, "shipment_id": 1, "sku_id": 1, "sku_name": 1,
+             "child_sku_id": 1, "child_sku_name": 1,
+             "quantity": 1, "packaging_units": 1, "packages": 1},
+        ).to_list(50000)
+        for it in sitems:
+            s = ship_map.get(it.get("shipment_id"))
+            if not s:
+                continue
+            loc_id = s.get("distributor_location_id") or \
+                (default_loc_by_dist.get(s.get("distributor_id")) or {}).get("id")
+            bump(loc_id, it.get("sku_id"), it.get("child_sku_id"),
+                 "received", units=_item_units(it),
+                 sku_name=it.get("sku_name"), child_name=it.get("child_sku_name"))
+
+    # 4. Deliveries → delivered / reserved (base units via item heuristic)
     deliveries = await db.distributor_deliveries.find(
         {"tenant_id": tenant_id, "status": {"$in": list(DELIVERED_STATUSES | RESERVED_STATUSES)}},
         {"_id": 0, "id": 1, "distributor_location_id": 1, "status": 1},
@@ -135,7 +211,8 @@ async def global_stock_dashboard(current_user: dict = Depends(get_current_user))
         items = await db.distributor_delivery_items.find(
             {"tenant_id": tenant_id, "delivery_id": {"$in": list(del_map.keys())}},
             {"_id": 0, "delivery_id": 1, "sku_id": 1, "sku_name": 1,
-             "child_sku_id": 1, "child_sku_name": 1, "quantity": 1},
+             "child_sku_id": 1, "child_sku_name": 1,
+             "quantity": 1, "packaging_units": 1, "packages": 1},
         ).to_list(50000)
         for it in items:
             d = del_map.get(it.get("delivery_id"))
@@ -143,18 +220,62 @@ async def global_stock_dashboard(current_user: dict = Depends(get_current_user))
                 continue
             metric = "delivered" if d.get("status") in DELIVERED_STATUSES else "reserved"
             bump(d.get("distributor_location_id"), it.get("sku_id"), it.get("child_sku_id"),
-                 metric, crates=it.get("quantity") or 0,
+                 metric, units=_item_units(it),
                  sku_name=it.get("sku_name"), child_name=it.get("child_sku_name"))
 
-    # 4. Outbound transfers → sent (item quantities are CRATES)
+    # 5. Transfers → sent (source) / received (destination). Item quantity is
+    #    packages/crates; units_per_package when stored, else SKU default upc.
     transfers = await db.distributor_stock_transfers.find(
         {"tenant_id": tenant_id, "status": "completed"},
-        {"_id": 0, "source_location_id": 1, "items": 1},
+        {"_id": 0, "source_location_id": 1, "dest_location_id": 1, "items": 1},
     ).to_list(20000)
     for t in transfers:
         for it in (t.get("items") or []):
-            bump(t.get("source_location_id"), it.get("sku_id"), it.get("child_sku_id"),
-                 "sent", crates=it.get("quantity") or 0,
+            sid = it.get("sku_id")
+            qty = it.get("quantity") or 0
+            try:
+                upp = int(it.get("units_per_package") or 0)
+            except Exception:
+                upp = 0
+            units = qty * (upp or sku_upc(sid))
+            bump(t.get("source_location_id"), sid, it.get("child_sku_id"),
+                 "sent", crates=qty, units=units,
+                 sku_name=it.get("sku_name"), child_name=it.get("child_sku_name"))
+            bump(t.get("dest_location_id"), sid, it.get("child_sku_id"),
+                 "received", crates=qty, units=units,
+                 sku_name=it.get("sku_name"), child_name=it.get("child_sku_name"))
+
+    # 6. Customer returns → empty_bottles / product_returns (raw bottles).
+    #    Returns have no warehouse — attributed to distributor default location.
+    customer_returns = await db.customer_returns.find(
+        {"tenant_id": tenant_id, "status": {"$nin": ["cancelled", "draft"]}},
+        {"_id": 0, "distributor_id": 1, "items": 1},
+    ).to_list(20000)
+    for cr in customer_returns:
+        loc = default_loc_by_dist.get(cr.get("distributor_id")) or {}
+        for it in (cr.get("items") or []):
+            cat = it.get("reason_category") or "other"
+            if cat in EMPTY_CATEGORIES:
+                metric = "empty_bottles"
+            elif cat in PRODUCT_RETURN_CATEGORIES:
+                metric = "product_returns"
+            else:
+                continue
+            bump(loc.get("id"), it.get("sku_id"), it.get("child_sku_id"),
+                 metric, units=it.get("quantity") or 0,
+                 sku_name=it.get("sku_name"), child_name=it.get("child_sku_name"))
+
+    # 7. Factory returns (per warehouse; quantities are base units/bottles)
+    factory_returns = await db.distributor_factory_returns.find(
+        {"tenant_id": tenant_id, "status": {"$nin": ["cancelled", "draft"]}},
+        {"_id": 0, "distributor_id": 1, "distributor_location_id": 1, "items": 1},
+    ).to_list(20000)
+    for fr in factory_returns:
+        loc_id = fr.get("distributor_location_id") or \
+            (default_loc_by_dist.get(fr.get("distributor_id")) or {}).get("id")
+        for it in (fr.get("items") or []):
+            bump(loc_id, it.get("sku_id"), it.get("child_sku_id"),
+                 "factory_returns", units=it.get("quantity") or 0,
                  sku_name=it.get("sku_name"), child_name=it.get("child_sku_name"))
 
     # ── Build hierarchy: warehouse → sku → child ─────────────────────────
@@ -162,6 +283,13 @@ async def global_stock_dashboard(current_user: dict = Depends(get_current_user))
         for m in METRICS:
             target[f"{m}_crates"] += node[f"{m}_crates"]
             target[f"{m}_units"] += node[f"{m}_units"]
+
+    def finalize(node: dict):
+        """Round crates + derive available = on_hand − reserved."""
+        for m in METRICS:
+            node[f"{m}_crates"] = _round(node[f"{m}_crates"])
+        node["available_crates"] = _round(node["on_hand_crates"] - node["reserved_crates"])
+        node["available_units"] = node["on_hand_units"] - node["reserved_units"]
 
     warehouses: dict = {}
     for (loc_id, sku_id, child_id), node in agg.items():
@@ -205,23 +333,19 @@ async def global_stock_dashboard(current_user: dict = Depends(get_current_user))
             # a lone "Generic" bucket equals the parent row and adds noise.
             has_real_children = any(c["child_sku_id"] for c in children)
             for c in children:
-                for m in METRICS:
-                    c[f"{m}_crates"] = _round(c[f"{m}_crates"])
+                finalize(c)
             sku["children"] = sorted(
                 children, key=lambda c: -c["on_hand_crates"]
             ) if has_real_children else []
-            for m in METRICS:
-                sku["totals"][f"{m}_crates"] = _round(sku["totals"][f"{m}_crates"])
+            finalize(sku["totals"])
             skus.append(sku)
         skus.sort(key=lambda s: -s["totals"]["on_hand_crates"])
         wh["skus"] = skus
         add_into(grand, wh["totals"])
-        for m in METRICS:
-            wh["totals"][f"{m}_crates"] = _round(wh["totals"][f"{m}_crates"])
+        finalize(wh["totals"])
         out.append(wh)
     out.sort(key=lambda w: -w["totals"]["on_hand_crates"])
-    for m in METRICS:
-        grand[f"{m}_crates"] = _round(grand[f"{m}_crates"])
+    finalize(grand)
 
     return {
         "warehouses": out,

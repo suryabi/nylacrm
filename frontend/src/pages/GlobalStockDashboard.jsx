@@ -7,18 +7,26 @@ import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import {
   Globe, RefreshCw, Search, ChevronDown, ChevronRight, Factory, Warehouse,
-  Boxes, Truck, Clock, PackageCheck, Loader2,
+  Boxes, Truck, Clock, PackageCheck, Loader2, ArrowDownToLine, Recycle,
+  PackageX, Undo2, CheckCircle2,
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
 const METRIC_DEFS = [
-  { key: 'on_hand', label: 'On Hand', icon: Boxes, color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
-  { key: 'delivered', label: 'Delivered', icon: PackageCheck, color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
-  { key: 'reserved', label: 'Reserved', icon: Clock, color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200' },
-  { key: 'sent', label: 'Sent (Transfers)', icon: Truck, color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200' },
+  { key: 'received', label: 'Received', icon: ArrowDownToLine, color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200', tip: 'Stock received: shipments + inbound transfers + production stock' },
+  { key: 'delivered', label: 'Delivered', icon: PackageCheck, color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', tip: 'Delivered to customer accounts (Stock Out orders completed)' },
+  { key: 'reserved', label: 'Reserved', icon: Clock, color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', tip: 'Committed to open Stock Out orders — not available for other orders' },
+  { key: 'sent', label: 'Transfer Out', icon: Truck, color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200', tip: 'Stock transferred OUT to other warehouses (not customer deliveries)' },
+  { key: 'empty_bottles', label: 'Empty Bottles', icon: Recycle, color: 'text-teal-700', bg: 'bg-teal-50 border-teal-200', tip: 'Empty / Reusable + FOC bottles returned for recycling' },
+  { key: 'product_returns', label: 'Product Ret.', icon: PackageX, color: 'text-orange-700', bg: 'bg-orange-50 border-orange-200', tip: 'Damaged + Expired — unsellable product returned by customers' },
+  { key: 'factory_returns', label: 'Factory Ret.', icon: Undo2, color: 'text-violet-700', bg: 'bg-violet-50 border-violet-200', tip: 'Stock sent back to the factory' },
+  { key: 'on_hand', label: 'Wh. Stock', icon: Boxes, color: 'text-cyan-700', bg: 'bg-cyan-50 border-cyan-200', tip: 'Current physical stock at the warehouse' },
+  { key: 'available', label: 'Available', icon: CheckCircle2, color: 'text-indigo-700', bg: 'bg-indigo-50 border-indigo-200', tip: 'Available = Wh. Stock − Reserved (deliverable right now)' },
 ];
+
+const WH_HEADER_KEYS = ['received', 'delivered', 'on_hand', 'available'];
 
 const fmt = (v) => (v == null ? '—' : Number(v).toLocaleString('en-IN'));
 
@@ -102,9 +110,9 @@ export default function GlobalStockDashboard() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {METRIC_DEFS.map(({ key, label, icon: Icon, color, bg }) => (
-          <Card key={key} className={`border ${bg}`} data-testid={`gsd-kpi-${key}`}>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {METRIC_DEFS.map(({ key, label, icon: Icon, color, bg, tip }) => (
+          <Card key={key} className={`border ${bg}`} data-testid={`gsd-kpi-${key}`} title={tip}>
             <CardContent className="pt-4 pb-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -157,9 +165,9 @@ export default function GlobalStockDashboard() {
                   {w.is_factory && <Badge variant="outline" className="bg-slate-50 shrink-0">Factory</Badge>}
                 </div>
                 <div className="hidden md:flex items-center gap-5 shrink-0 text-sm">
-                  {METRIC_DEFS.map(({ key, label, color }) => (
+                  {METRIC_DEFS.filter(({ key }) => WH_HEADER_KEYS.includes(key)).map(({ key, label, color }) => (
                     <div key={key} className="text-right min-w-[72px]">
-                      <p className="text-[10px] uppercase tracking-wider text-slate-400">{label.split(' ')[0]}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-400">{label}</p>
                       <p className={`font-semibold ${color}`}>{fmt(val(w.totals, key))}</p>
                     </div>
                   ))}
@@ -167,15 +175,14 @@ export default function GlobalStockDashboard() {
               </button>
 
               {isOpen && (
-                <CardContent className="pt-0 pb-3 px-3">
-                  <table className="w-full text-sm">
+                <CardContent className="pt-0 pb-3 px-3 overflow-x-auto">
+                  <table className="w-full text-sm min-w-[900px]">
                     <thead>
-                      <tr className="text-[11px] uppercase tracking-wider text-slate-400 border-b">
-                        <th className="text-left py-2 pl-8 font-medium">SKU / Child SKU</th>
-                        <th className="text-right py-2 font-medium">On Hand</th>
-                        <th className="text-right py-2 font-medium">Delivered</th>
-                        <th className="text-right py-2 font-medium">Reserved</th>
-                        <th className="text-right py-2 pr-2 font-medium">Sent</th>
+                      <tr className="text-[11px] uppercase tracking-wider border-b">
+                        <th className="text-left py-2 pl-8 font-medium text-slate-400">SKU / Child SKU</th>
+                        {METRIC_DEFS.map(({ key, label, color, tip }) => (
+                          <th key={key} className={`text-right py-2 font-semibold ${color} ${key === 'available' ? 'pr-2' : ''}`} title={tip}>{label}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -203,10 +210,11 @@ export default function GlobalStockDashboard() {
                                   )}
                                 </span>
                               </td>
-                              <td className="py-2 text-right font-semibold text-emerald-700">{fmt(val(s.totals, 'on_hand'))}</td>
-                              <td className="py-2 text-right text-blue-700">{fmt(val(s.totals, 'delivered'))}</td>
-                              <td className="py-2 text-right text-amber-700">{fmt(val(s.totals, 'reserved'))}</td>
-                              <td className="py-2 pr-2 text-right text-purple-700">{fmt(val(s.totals, 'sent'))}</td>
+                              {METRIC_DEFS.map(({ key, color }) => (
+                                <td key={key} className={`py-2 text-right ${color} ${key === 'available' ? 'pr-2 font-bold' : key === 'on_hand' ? 'font-semibold' : ''}`}>
+                                  {fmt(val(s.totals, key))}
+                                </td>
+                              ))}
                             </tr>
                             {skuOpen && s.children.map((c) => (
                               <tr key={c.child_sku_id || 'generic'} className="border-b last:border-0 bg-muted/20"
@@ -214,10 +222,11 @@ export default function GlobalStockDashboard() {
                                 <td className="py-1.5 pl-12 text-slate-600">
                                   <span className="text-xs">{c.child_sku_name}</span>
                                 </td>
-                                <td className="py-1.5 text-right text-emerald-700 text-xs">{fmt(val(c, 'on_hand'))}</td>
-                                <td className="py-1.5 text-right text-blue-700 text-xs">{fmt(val(c, 'delivered'))}</td>
-                                <td className="py-1.5 text-right text-amber-700 text-xs">{fmt(val(c, 'reserved'))}</td>
-                                <td className="py-1.5 pr-2 text-right text-purple-700 text-xs">{fmt(val(c, 'sent'))}</td>
+                                {METRIC_DEFS.map(({ key, color }) => (
+                                  <td key={key} className={`py-1.5 text-right text-xs ${color} ${key === 'available' ? 'pr-2 font-semibold' : ''}`}>
+                                    {fmt(val(c, key))}
+                                  </td>
+                                ))}
                               </tr>
                             ))}
                           </React.Fragment>
