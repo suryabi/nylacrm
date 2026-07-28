@@ -1994,3 +1994,7 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - NEW: TransferDetailDialog in StockTransfers.js — click any transfer row (transfer-row-{id}, guards clicks on buttons/menus) → popup (transfer-detail-dialog) with: header badges (doc type/zoho/reversed + Zoho # & link), source→destination card w/ GSTINs, items table incl. 'Branding / Child SKU' column (badge or 'Generic (unbranded)') + bottles subtext + rate/value, totals footer, and Customer-branded vs Generic summary cards with per-child breakdown. Verified incl. child SKU rendering (temp DB tag, reverted).
 
 ### 2026-07-27 — Transfer detail Qty display fix ✅ (screenshot-verified): '100 12 Bottle Crate' → '100 × 12 Bottle Crate' (qty bold slate, × grey, packaging name emerald)
+
+### 2026-07-27 — 🎯 RetroCategorizeDialog UX overhaul ✅ DONE (testing_agent iteration_342, 100% frontend)
+- Shared dialog (Stock Transfers + Stock Out/DistributorDetail): (1) light-violet readable option highlight (verified interactively this time); (2) quantity stepper −/+ (retro-qty-minus/plus) + blue live math badge 'N × upp = M bottles' (retro-units-calc) + amber split note (retro-split-note) + inline qty error gating submit; (3) line summary 'N × <packaging> = M bottles'.
+- NOTE: user was testing on PRODUCTION where fixes aren't deployed yet — reminded to redeploy.
