@@ -1998,3 +1998,7 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ### 2026-07-27 — 🎯 RetroCategorizeDialog UX overhaul ✅ DONE (testing_agent iteration_342, 100% frontend)
 - Shared dialog (Stock Transfers + Stock Out/DistributorDetail): (1) light-violet readable option highlight (verified interactively this time); (2) quantity stepper −/+ (retro-qty-minus/plus) + blue live math badge 'N × upp = M bottles' (retro-units-calc) + amber split note (retro-split-note) + inline qty error gating submit; (3) line summary 'N × <packaging> = M bottles'.
 - NOTE: user was testing on PRODUCTION where fixes aren't deployed yet — reminded to redeploy.
+
+### 2026-07-28 — Categorize pop-up issue RESOLVED (root cause: environment)
+- User confirmed they were testing on the PRODUCTION deployment. All RetroCategorizeDialog UX fixes (readable picker highlight, qty steppers, live math badge, split notes) are complete and verified on preview (iteration_342). User instructed to click Deploy to push latest code. No further code changes needed.
+- CMP- → TSK- prefix switch: user explicitly deferred ("No, focus only on the popup issue"). Remains in backlog.
