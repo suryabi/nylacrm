@@ -8,7 +8,7 @@ import { Badge } from '../components/ui/badge';
 import {
   Globe, RefreshCw, Search, ChevronDown, ChevronRight, Factory, Warehouse,
   Boxes, Truck, Clock, PackageCheck, Loader2, ArrowDownToLine, Recycle,
-  PackageX, Undo2, CheckCircle2,
+  PackageX, Undo2, CheckCircle2, FileSpreadsheet,
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -37,6 +37,30 @@ export default function GlobalStockDashboard() {
   const [search, setSearch] = useState('');
   const [openWh, setOpenWh] = useState({});
   const [openSku, setOpenSku] = useState({});
+  const [exporting, setExporting] = useState(false);
+
+  const exportExcel = useCallback(async () => {
+    setExporting(true);
+    try {
+      const res = await axios.get(
+        `${API_URL}/api/distributor/global-stock-dashboard/export?unit=${unit}`,
+        { headers: HEAD(), responseType: 'blob' }
+      );
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `global-stock-${unit}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Excel downloaded');
+    } catch (e) {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+    }
+  }, [unit]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -103,6 +127,11 @@ export default function GlobalStockDashboard() {
               onClick={() => setUnit('units')} data-testid="gsd-unit-units"
             >Units</button>
           </div>
+          <Button variant="outline" size="sm" onClick={exportExcel} disabled={exporting} data-testid="gsd-export-btn">
+            {exporting
+              ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              : <FileSpreadsheet className="h-4 w-4 mr-1.5 text-emerald-600" />} Export
+          </Button>
           <Button variant="outline" size="sm" onClick={fetchData} data-testid="gsd-refresh-btn">
             <RefreshCw className="h-4 w-4 mr-1.5" /> Refresh
           </Button>

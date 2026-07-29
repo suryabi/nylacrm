@@ -16,8 +16,14 @@ per-distributor Stock Dashboard tab:
 NOTE: customer returns carry no warehouse — they are attributed to the
 distributor's default location.
 """
+import io
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from typing import Optional
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
 
 from deps import get_current_user, db
 from core.tenant import get_current_tenant_id
@@ -73,9 +79,7 @@ def _item_units(item: dict) -> int:
     return qty
 
 
-@router.get("/distributor/global-stock-dashboard")
-async def global_stock_dashboard(current_user: dict = Depends(get_current_user)):
-    tenant_id = get_current_tenant_id()
+async def _build_dashboard(tenant_id: str) -> dict:
 
     # ── Location / distributor metadata ──────────────────────────────────
     locs = {l["id"]: l for l in await db.distributor_locations.find(
@@ -353,3 +357,88 @@ async def global_stock_dashboard(current_user: dict = Depends(get_current_user))
         "warehouse_count": len(out),
         "sku_count": len({k[1] for k in agg.keys()}),
     }
+
+
+@router.get("/distributor/global-stock-dashboard")
+async def global_stock_dashboard(current_user: dict = Depends(get_current_user)):
+    return await _build_dashboard(get_current_tenant_id())
+
+
+EXPORT_METRICS = [
+    ("received", "Received"), ("delivered", "Delivered"), ("reserved", "Reserved"),
+    ("sent", "Transfer Out"), ("empty_bottles", "Empty Bottles"),
+    ("product_returns", "Product Ret."), ("factory_returns", "Factory Ret."),
+    ("on_hand", "Wh. Stock"), ("available", "Available"),
+]
+
+
+@router.get("/distributor/global-stock-dashboard/export")
+async def export_global_stock_dashboard(
+    unit: str = "crates",
+    current_user: dict = Depends(get_current_user),
+):
+    """Excel export of the global stock dashboard incl. child SKU drill-down."""
+    tenant_id = get_current_tenant_id()
+    data = await _build_dashboard(tenant_id)
+    suffix = "crates" if unit == "crates" else "units"
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Global Stock ({suffix})"
+
+    headers = ["Warehouse", "Owner", "City", "Type", "SKU", "Child SKU / Branding",
+               "Units per Crate"] + [label for _, label in EXPORT_METRICS]
+    ws.append(headers)
+    head_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = head_fill
+        cell.alignment = Alignment(horizontal="center", wrap_text=True)
+
+    wh_fill = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
+    child_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    bold = Font(bold=True)
+
+    def metric_cells(node):
+        return [node.get(f"{m}_{suffix}", 0) for m, _ in EXPORT_METRICS]
+
+    for w in data["warehouses"]:
+        wh_type = "Factory" if w.get("is_factory") else "Warehouse"
+        row = [w.get("location_name") or "", w.get("owner_name") or "", w.get("city") or "",
+               wh_type, "— WAREHOUSE TOTAL —", "", ""] + metric_cells(w["totals"])
+        ws.append(row)
+        for cell in ws[ws.max_row]:
+            cell.font = bold
+            cell.fill = wh_fill
+        for s in w.get("skus", []):
+            ws.append([w.get("location_name") or "", w.get("owner_name") or "", w.get("city") or "",
+                       wh_type, s.get("sku_name") or "", "", s.get("units_per_crate") or 1]
+                      + metric_cells(s["totals"]))
+            for c in s.get("children", []):
+                ws.append([w.get("location_name") or "", w.get("owner_name") or "", w.get("city") or "",
+                           wh_type, s.get("sku_name") or "",
+                           c.get("child_sku_name") or "Generic / Unbranded",
+                           s.get("units_per_crate") or 1] + metric_cells(c))
+                for cell in ws[ws.max_row]:
+                    cell.fill = child_fill
+
+    g = data["grand_totals"]
+    ws.append(["GRAND TOTAL", "", "", "", "", "", ""] + metric_cells(g))
+    for cell in ws[ws.max_row]:
+        cell.font = Font(bold=True, size=12)
+        cell.fill = PatternFill(start_color="C7D2FE", end_color="C7D2FE", fill_type="solid")
+
+    widths = [24, 20, 14, 11, 26, 26, 13] + [13] * len(EXPORT_METRICS)
+    for i, wd in enumerate(widths, start=1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = wd
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f"global-stock-{suffix}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M')}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
