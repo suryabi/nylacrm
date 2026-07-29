@@ -6,6 +6,17 @@ import AdjustChildQtyDialog from './AdjustChildQtyDialog';
 
 const fmt = (v) => (Number(v) || 0).toLocaleString('en-IN');
 
+const METRIC_COLS = [
+  { key: 'received', label: 'Received', cls: 'text-blue-600' },
+  { key: 'delivered', label: 'Delivered', cls: 'text-emerald-600' },
+  { key: 'reserved', label: 'Reserved', cls: 'text-amber-600', tip: 'Committed to open Stock Out orders — not available for other orders' },
+  { key: 'empty_bottles', label: 'Empty Bottles', cls: 'text-emerald-600', tip: 'Empty / Reusable + FOC units returned for recycling' },
+  { key: 'product_returns', label: 'Product Ret.', cls: 'text-amber-600', tip: 'Damaged + Expired — unsellable product' },
+  { key: 'factory_returns', label: 'Factory Ret.', cls: 'text-purple-600' },
+  { key: 'wh_stock', label: 'Wh. Stock', cls: 'text-teal-600', tip: 'Live classified warehouse stock' },
+  { key: 'available', label: 'Available', cls: 'text-indigo-700 font-bold', tip: 'Available = Wh. Stock − Reserved' },
+];
+
 function LocationChips({ locations = [] }) {
   if (!locations.length) return null;
   return (
@@ -25,42 +36,11 @@ function LocationChips({ locations = [] }) {
   );
 }
 
-function ChildRow({ entry, qty, onAdjust }) {
-  return (
-    <div className="flex items-start justify-between gap-3 px-3 py-2" data-testid={`branded-child-row-${entry.child_sku_id || 'unclassified'}`}>
-      <div className="min-w-0">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-sm text-slate-700 font-medium truncate">{entry.child_sku_name}</span>
-          {entry.child_sku_code && (
-            <span className="font-mono text-[10px] text-slate-400">{entry.child_sku_code}</span>
-          )}
-        </div>
-        <LocationChips locations={entry.locations} />
-      </div>
-      <div className="flex items-center gap-1.5 flex-shrink-0">
-        <span className={`text-sm font-bold tabular-nums ${entry.quantity > 0 ? 'text-slate-800' : 'text-slate-300'}`}>
-          {qty(entry.quantity)}
-        </span>
-        {onAdjust && (entry.locations || []).length > 0 && (
-          <button
-            onClick={onAdjust}
-            title="Adjust quantity"
-            className="p-1 rounded hover:bg-indigo-50 text-slate-300 hover:text-indigo-600 transition-colors"
-            data-testid={`adjust-child-qty-btn-${entry.child_sku_id}`}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /**
  * Branded Stock by Customer — one section per parent SKU with customer
- * branding enabled. Splits live warehouse stock into a Generic bucket and
- * per-customer branded buckets. Used by BOTH the per-distributor Stock
- * Dashboard tab and the global Stock Dashboard page.
+ * branding enabled. Child SKUs (Generic + customer-branded) are rendered in a
+ * TABLE with the same flow columns as the parent Stock-by-SKU table.
+ * Used by BOTH the per-distributor Stock Dashboard tab and the global page.
  */
 export function BrandedStockSections({ sections = [], pkgBySku = {}, viewCrates = false, onChanged }) {
   const [adjust, setAdjust] = useState(null); // { sec, entry }
@@ -71,16 +51,39 @@ export function BrandedStockSections({ sections = [], pkgBySku = {}, viewCrates 
     const b = Number(q) || 0;
     if (viewCrates && pkg && Number(pkg.units) > 1) {
       const n = b / Number(pkg.units);
-      return `${(Number.isInteger(n) ? n : Number(n.toFixed(1))).toLocaleString('en-IN')} ${pkg.name || 'crates'}`;
+      return `${(Number.isInteger(n) ? n : Number(n.toFixed(1))).toLocaleString('en-IN')}`;
     }
-    const baseUnit = (pkg?.baseUnit && pkg.baseUnit !== 'units') ? pkg.baseUnit : (sec.base_unit_name || pkg?.baseUnit || 'units');
-    return `${fmt(b)} ${baseUnit}`;
+    return fmt(b);
+  };
+
+  const unitLabel = (sec) => {
+    const pkg = pkgBySku[sec.sku_id];
+    if (viewCrates && pkg && Number(pkg.units) > 1) return pkg.name || 'crates';
+    return (pkg?.baseUnit && pkg.baseUnit !== 'units') ? pkg.baseUnit : (sec.base_unit_name || pkg?.baseUnit || 'units');
   };
 
   return (
     <div className="space-y-4">
       {sections.map((sec) => {
         const qty = qtyFor(sec);
+        // Flatten: generic rows first, then customer-branded rows.
+        const rows = [
+          ...(sec.generic || []).map((e) => ({ ...e, _branding: 'generic' })),
+          ...(sec.customers || []).flatMap((cust) =>
+            (cust.children || []).map((e) => ({
+              ...e, _branding: 'customer',
+              _customerName: cust.customer_name,
+              _customerId: cust.customer_account_id,
+            }))
+          ),
+        ];
+        const hasMetrics = rows.some((r) => r.metrics);
+        const totals = {};
+        if (hasMetrics) {
+          METRIC_COLS.forEach(({ key }) => {
+            totals[key] = rows.reduce((s, r) => s + (Number(r.metrics?.[key]) || 0), 0);
+          });
+        }
         return (
           <Card key={sec.sku_id} data-testid={`branded-stock-section-${sec.sku_id}`}>
             <CardHeader className="pb-3">
@@ -88,67 +91,108 @@ export function BrandedStockSections({ sections = [], pkgBySku = {}, viewCrates 
                 <Tags className="h-4 w-4 text-indigo-600" />
                 Branded Stock — {sec.sku_name}
                 <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 ml-1" variant="outline">
-                  {qty(sec.total_quantity)} total
+                  {qty(sec.total_quantity)} {unitLabel(sec)} total
+                </Badge>
+                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                  Generic {qty(sec.generic_total)}
+                </Badge>
+                <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                  Customer {qty(sec.customer_total)}
                 </Badge>
               </CardTitle>
               <CardDescription>
-                Generic vs customer-branded classification · live warehouse stock
+                Generic vs customer-branded child SKUs · quantities in {unitLabel(sec)}
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Generic bucket */}
-                <div className="rounded-lg border border-emerald-200 overflow-hidden self-start" data-testid={`branded-generic-${sec.sku_id}`}>
-                  <div className="bg-emerald-50 px-3 py-2 flex items-center justify-between border-b border-emerald-200">
-                    <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wide flex items-center gap-1.5">
-                      <Package className="h-3.5 w-3.5" /> Generic Branding
-                    </span>
-                    <span className="text-xs font-bold text-emerald-800 tabular-nums">{qty(sec.generic_total)}</span>
-                  </div>
-                  {sec.generic.length > 0 ? (
-                    <div className="divide-y divide-slate-100">
-                      {sec.generic.map((e, i) => (
-                        <ChildRow key={e.child_sku_id || `un-${i}`} entry={e} qty={qty} />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-400 italic text-center py-4">No generic stock on hand</p>
-                  )}
-                </div>
-
-                {/* Customer-branded buckets */}
-                <div className="space-y-3" data-testid={`branded-customers-${sec.sku_id}`}>
-                  <div className="flex items-center justify-between px-0.5">
-                    <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wide flex items-center gap-1.5">
-                      <UserRound className="h-3.5 w-3.5" /> Customer Branded
-                    </span>
-                    <span className="text-xs font-bold text-indigo-800 tabular-nums">{qty(sec.customer_total)}</span>
-                  </div>
-                  {sec.customers.length > 0 ? (
-                    sec.customers.map((cust) => (
-                      <div
-                        key={cust.customer_account_id || cust.customer_name}
-                        className="rounded-lg border border-indigo-200 overflow-hidden"
-                        data-testid={`branded-customer-${sec.sku_id}-${cust.customer_account_id || 'unknown'}`}
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" data-testid={`branded-stock-table-${sec.sku_id}`}>
+                  <thead>
+                    <tr className="bg-slate-50 border-y text-xs text-slate-500 uppercase">
+                      <th className="text-left p-3 pl-4">Child SKU</th>
+                      <th className="text-left p-3">Branding</th>
+                      {hasMetrics
+                        ? METRIC_COLS.map(({ key, label, cls, tip }) => (
+                          <th key={key} className="text-right p-3"><span className={cls} title={tip}>{label}</span></th>
+                        ))
+                        : <th className="text-right p-3"><span className="text-teal-600">Wh. Stock</span></th>}
+                      {onChanged && <th className="p-3 w-10" />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.length === 0 && (
+                      <tr><td colSpan={12} className="text-center py-6 text-xs text-slate-400 italic">No child SKU stock on hand</td></tr>
+                    )}
+                    {rows.map((e, i) => (
+                      <tr
+                        key={e.child_sku_id || `un-${i}`}
+                        className={`border-b last:border-0 ${i % 2 === 1 ? 'bg-slate-50/30' : ''}`}
+                        data-testid={`branded-child-row-${e.child_sku_id || 'unclassified'}`}
                       >
-                        <div className="bg-indigo-50 px-3 py-2 flex items-center justify-between border-b border-indigo-200">
-                          <span className="text-xs font-semibold text-indigo-800 truncate">{cust.customer_name}</span>
-                          <span className={`text-xs font-bold tabular-nums ${cust.total_quantity > 0 ? 'text-indigo-800' : 'text-indigo-300'}`}>
-                            {qty(cust.total_quantity)}
-                          </span>
-                        </div>
-                        <div className="divide-y divide-slate-100">
-                          {cust.children.map((e) => (
-                            <ChildRow key={e.child_sku_id} entry={e} qty={qty}
-                              onAdjust={onChanged ? () => setAdjust({ sec, entry: e }) : undefined} />
-                          ))}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-xs text-slate-400 italic text-center py-4">No customer-branded child SKUs</p>
+                        <td className="p-3 pl-4">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-sm text-slate-700 font-medium">{e.child_sku_name}</span>
+                            {e.child_sku_code && <span className="font-mono text-[10px] text-slate-400">{e.child_sku_code}</span>}
+                          </div>
+                          <LocationChips locations={e.locations} />
+                        </td>
+                        <td className="p-3">
+                          {e._branding === 'generic' ? (
+                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                              <Package className="h-2.5 w-2.5 mr-1" /> Generic
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px] max-w-[180px] truncate">
+                              <UserRound className="h-2.5 w-2.5 mr-1 shrink-0" /> {e._customerName}
+                            </Badge>
+                          )}
+                        </td>
+                        {hasMetrics
+                          ? METRIC_COLS.map(({ key, cls }) => {
+                            const v = Number(e.metrics?.[key]) || 0;
+                            return (
+                              <td key={key} className={`p-3 text-right font-medium tabular-nums ${v !== 0 ? cls : 'text-slate-300'}`}
+                                data-testid={`branded-cell-${key}-${e.child_sku_id || 'unclassified'}`}>
+                                {v !== 0 ? qty(v) : '-'}
+                              </td>
+                            );
+                          })
+                          : (
+                            <td className={`p-3 text-right font-medium tabular-nums ${e.quantity > 0 ? 'text-teal-600' : 'text-slate-300'}`}>
+                              {e.quantity > 0 ? qty(e.quantity) : '-'}
+                            </td>
+                          )}
+                        {onChanged && (
+                          <td className="p-3 text-right">
+                            {e._branding === 'customer' && (e.locations || []).length > 0 && (
+                              <button
+                                onClick={() => setAdjust({ sec, entry: e })}
+                                title="Adjust quantity"
+                                className="p-1 rounded hover:bg-indigo-50 text-slate-300 hover:text-indigo-600 transition-colors"
+                                data-testid={`adjust-child-qty-btn-${e.child_sku_id}`}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                  {rows.length > 0 && hasMetrics && (
+                    <tfoot>
+                      <tr className="bg-slate-100 border-t-2 font-semibold text-sm">
+                        <td className="p-3 pl-4" colSpan={2}>Total ({rows.length} child SKUs)</td>
+                        {METRIC_COLS.map(({ key, cls }) => (
+                          <td key={key} className={`p-3 text-right tabular-nums ${cls}`} data-testid={`branded-total-${key}-${sec.sku_id}`}>
+                            {qty(totals[key])}
+                          </td>
+                        ))}
+                        {onChanged && <td />}
+                      </tr>
+                    </tfoot>
                   )}
-                </div>
+                </table>
               </div>
             </CardContent>
           </Card>

@@ -3856,7 +3856,9 @@ async def _branded_allowed_account_ids(tenant_id: str, distributor_id: str):
     return set(ids)
 
 
-async def _build_branded_stock_sections(tenant_id: str, stock_rows: list, allowed_account_ids=None) -> list:
+async def _build_branded_stock_sections(tenant_id: str, stock_rows: list,
+                                         allowed_account_ids=None,
+                                         child_metrics=None) -> list:
     """Branded Stock by Customer sections.
 
     `stock_rows`: live stock rows with keys
@@ -3914,6 +3916,25 @@ async def _build_branded_stock_sections(tenant_id: str, stock_rows: list, allowe
             return 0, []
         return b["quantity"], sorted(b["locations"].values(), key=lambda l: -l["quantity"])
 
+    def _with_metrics(sid, entry):
+        """Attach the parent-table flow columns to a child entry."""
+        if child_metrics is None:
+            return entry
+        m = child_metrics.get((sid, entry.get("child_sku_id") or None)) or {}
+        wh = int(entry.get("quantity") or 0)
+        reserved = int(m.get("reserved") or 0)
+        entry["metrics"] = {
+            "received": int(m.get("received") or 0),
+            "delivered": int(m.get("delivered") or 0),
+            "reserved": reserved,
+            "empty_bottles": int(m.get("empty_bottles") or 0),
+            "product_returns": int(m.get("product_returns") or 0),
+            "factory_returns": int(m.get("factory_returns") or 0),
+            "wh_stock": wh,
+            "available": wh - reserved,
+        }
+        return entry
+
     sections = []
     for sid in branded_parents:
         if sid not in sku_names:
@@ -3925,26 +3946,26 @@ async def _build_branded_stock_sections(tenant_id: str, stock_rows: list, allowe
         generic_entries = []
         un_qty, un_locs = _rows_for(sid, None)
         if un_qty:
-            generic_entries.append({
+            generic_entries.append(_with_metrics(sid, {
                 "child_sku_id": None, "child_sku_name": "Generic (unclassified)",
                 "child_sku_code": None, "quantity": un_qty, "locations": un_locs,
-            })
+            }))
         for c in section_children:
             if c.get("child_type") == "customer":
                 continue
             q, locs = _rows_for(sid, c["id"])
             if q:
-                generic_entries.append({
+                generic_entries.append(_with_metrics(sid, {
                     "child_sku_id": c["id"], "child_sku_name": c.get("child_sku_name"),
                     "child_sku_code": c.get("child_sku_code"), "quantity": q, "locations": locs,
-                })
+                }))
         for (s2, cid), b in tally.items():
             if s2 == sid and cid and cid not in child_by_id:
-                generic_entries.append({
+                generic_entries.append(_with_metrics(sid, {
                     "child_sku_id": cid, "child_sku_name": b.get("child_sku_name") or "Unknown classification",
                     "child_sku_code": None, "quantity": b["quantity"],
                     "locations": sorted(b["locations"].values(), key=lambda l: -l["quantity"]),
-                })
+                }))
         generic_total = sum(e["quantity"] for e in generic_entries)
 
         # Customer buckets — every customer-type child is listed (0 qty
@@ -3967,10 +3988,10 @@ async def _build_branded_stock_sections(tenant_id: str, stock_rows: list, allowe
                 "children": [],
             })
             bucket["total_quantity"] += q
-            bucket["children"].append({
+            bucket["children"].append(_with_metrics(sid, {
                 "child_sku_id": c["id"], "child_sku_name": c.get("child_sku_name"),
                 "child_sku_code": c.get("child_sku_code"), "quantity": q, "locations": locs,
-            })
+            }))
         customers = sorted(cust_buckets.values(),
                            key=lambda b: (-b["total_quantity"], (b["customer_name"] or "").lower()))
         for b in customers:
@@ -9446,7 +9467,7 @@ async def get_stock_dashboard(
     )
     delivery_items = await db.distributor_delivery_items.find(
         {"tenant_id": tenant_id, "delivery_id": {"$in": delivered_delivery_ids}},
-        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1, "packages": 1}
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1, "packages": 1, "child_sku_id": 1}
     ).to_list(50000)
     
     stock_out_by_sku = {}
@@ -9470,7 +9491,7 @@ async def get_stock_dashboard(
     )
     pending_items = await db.distributor_delivery_items.find(
         {"tenant_id": tenant_id, "delivery_id": {"$in": pending_delivery_ids}},
-        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1, "packages": 1}
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1, "packages": 1, "child_sku_id": 1}
     ).to_list(50000)
     stock_pending_out_by_sku = {}
     for di in pending_items:
@@ -9830,9 +9851,43 @@ async def get_stock_dashboard(
             "location_id": fws.get("warehouse_location_id"),
             "location_name": fws.get("warehouse_name"), "is_factory": True,
         })
+    # === Per-child-SKU flow metrics — same columns as the parent SKU table.
+    # Keyed (sku_id, child_sku_id-or-None); None = Generic/unclassified lines.
+    child_metrics: dict = {}
+
+    def _cm(sku_id, child_id):
+        return child_metrics.setdefault((sku_id, child_id or None), {
+            "received": 0, "delivered": 0, "reserved": 0,
+            "empty_bottles": 0, "product_returns": 0, "factory_returns": 0,
+        })
+
+    for si in shipment_items:
+        _cm(si.get('sku_id'), si.get('child_sku_id'))["received"] += _item_crates(si)
+    for fws in fws_docs:
+        q = int(fws.get('quantity') or 0)
+        if q > 0:
+            _cm(fws.get('sku_id'), fws.get('child_sku_id'))["received"] += q
+    for di in delivery_items:
+        _cm(di.get('sku_id'), di.get('child_sku_id'))["delivered"] += _item_crates(di)
+    for di in pending_items:
+        _cm(di.get('sku_id'), di.get('child_sku_id'))["reserved"] += _item_crates(di)
+    for cr in customer_returns:
+        for item in cr.get('items', []):
+            cat = item.get('reason_category', 'other')
+            m = _cm(item.get('sku_id'), item.get('child_sku_id'))
+            q = int(item.get('quantity') or 0)
+            if cat in ('empty_reusable', 'promotional'):
+                m["empty_bottles"] += q
+            elif cat in ('damaged', 'expired'):
+                m["product_returns"] += q
+    for fr in factory_returns:
+        for item in fr.get('items', []):
+            _cm(item.get('sku_id'), item.get('child_sku_id'))["factory_returns"] += int(item.get('quantity') or 0)
+
     branded_stock = await _build_branded_stock_sections(
         tenant_id, live_rows,
         allowed_account_ids=await _branded_allowed_account_ids(tenant_id, distributor_id),
+        child_metrics=child_metrics,
     )
 
     return {
