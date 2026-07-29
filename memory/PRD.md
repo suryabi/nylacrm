@@ -2019,3 +2019,7 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ### 2026-07-29 — Legacy lowercase 'quality' category removed ✅ (curl + DB verified)
 - task_categories.py _seed_defaults sync now also NORMALIZES customer_complaints.category case-insensitively to canonical master names ('quality' → 'Quality') — runs idempotently, so production self-heals after redeploy.
 - CustomerComplaintDetail.js: removed the 'tolerate unknown category' SelectItem — the category dropdown now shows ONLY active master Task Categories.
+
+### 2026-07-29 — 🏷 Branded Stock by Customer: distributor-scoped customer buckets ✅ (curl verified, temp-data test + cleanup)
+- distributors.py: NEW _branded_allowed_account_ids(tenant, dist) → None (no restriction) when distributor owns ≥1 factory warehouse (= master/factory exception), else set of account_ids from account_distributor_assignments (status active). _build_branded_stock_sections(+allowed_account_ids): 0-qty customer buckets skipped for non-associated accounts; buckets HOLDING stock always shown (totals stay truthful). Applied at both call sites: /{id}/stock-dashboard and /dashboard/stock-summary?distributor_id= (tenant-wide summary w/o distributor filter = unrestricted).
+- Verified: factory distributor 'Test' shows full catalogue; non-factory 'New' (0 assignments) shows no 0-qty buckets while generic stock intact.

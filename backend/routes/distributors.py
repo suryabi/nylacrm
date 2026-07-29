@@ -3836,7 +3836,27 @@ async def recalculate_shipment_totals(shipment_id: str, tenant_id: str):
 
 # ============ Stock Dashboard ============
 
-async def _build_branded_stock_sections(tenant_id: str, stock_rows: list) -> list:
+async def _branded_allowed_account_ids(tenant_id: str, distributor_id: str):
+    """Account ids whose branded buckets may show for this distributor.
+
+    Returns None (= no restriction, show ALL customer child SKUs) when the
+    distributor owns a factory / master warehouse — it holds branded stock for
+    every customer before dispatch. Otherwise returns the set of account ids
+    actively assigned to this distributor."""
+    has_factory = await db.distributor_locations.find_one(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "is_factory": True},
+        {"_id": 1},
+    )
+    if has_factory:
+        return None
+    ids = await db.account_distributor_assignments.distinct(
+        "account_id",
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": "active"},
+    )
+    return set(ids)
+
+
+async def _build_branded_stock_sections(tenant_id: str, stock_rows: list, allowed_account_ids=None) -> list:
     """Branded Stock by Customer sections.
 
     `stock_rows`: live stock rows with keys
@@ -3846,7 +3866,12 @@ async def _build_branded_stock_sections(tenant_id: str, stock_rows: list) -> lis
     Returns ONE section per parent SKU that has customer branding enabled
     (≥1 customer-type child SKU) and is present in the given stock scope,
     splitting the live on-hand quantity into a Generic bucket and
-    per-customer branded buckets (each with a per-location breakdown)."""
+    per-customer branded buckets (each with a per-location breakdown).
+
+    `allowed_account_ids`: when not None, zero-quantity customer buckets are
+    only listed for accounts in this set (accounts associated with the
+    selected distributor/warehouse). Buckets holding actual stock are always
+    shown so on-hand totals stay truthful."""
     sku_ids = list({r.get("sku_id") for r in stock_rows if r.get("sku_id")})
     if not sku_ids:
         return []
@@ -3924,11 +3949,16 @@ async def _build_branded_stock_sections(tenant_id: str, stock_rows: list) -> lis
 
         # Customer buckets — every customer-type child is listed (0 qty
         # included) so the report shows the complete branded catalogue.
+        # When a restriction set is given, 0-qty buckets for accounts NOT
+        # associated with the selected distributor are skipped.
         cust_buckets: dict = {}
         for c in section_children:
             if c.get("child_type") != "customer":
                 continue
             q, locs = _rows_for(sid, c["id"])
+            if (allowed_account_ids is not None and q == 0
+                    and c.get("customer_account_id") not in allowed_account_ids):
+                continue
             key = c.get("customer_account_id") or "__unknown__"
             bucket = cust_buckets.setdefault(key, {
                 "customer_account_id": c.get("customer_account_id"),
@@ -4257,7 +4287,11 @@ async def get_stock_dashboard_summary(
         {"tenant_id": tenant_id, "id": {"$in": list({r.get("location_id") for r in unified if r.get("location_id")})}}
     )
 
-    branded_stock = await _build_branded_stock_sections(tenant_id, unified)
+    branded_stock = await _build_branded_stock_sections(
+        tenant_id, unified,
+        allowed_account_ids=(await _branded_allowed_account_ids(tenant_id, distributor_id)
+                             if distributor_id else None),
+    )
 
     return {
         "branded_stock": branded_stock,
@@ -9796,7 +9830,10 @@ async def get_stock_dashboard(
             "location_id": fws.get("warehouse_location_id"),
             "location_name": fws.get("warehouse_name"), "is_factory": True,
         })
-    branded_stock = await _build_branded_stock_sections(tenant_id, live_rows)
+    branded_stock = await _build_branded_stock_sections(
+        tenant_id, live_rows,
+        allowed_account_ids=await _branded_allowed_account_ids(tenant_id, distributor_id),
+    )
 
     return {
         "distributor_id": distributor_id,
