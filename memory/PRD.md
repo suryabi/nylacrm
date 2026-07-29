@@ -2015,3 +2015,7 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ### 2026-07-29 — 🏷 Task Categories master repopulated with 12 business values ✅ (curl verified, preview)
 - task_categories.py: DEFAULT_TASK_CATEGORIES → 12 values (Payment Issue, Customer Issue, Delivery & Logistics, Production Issue, Water Quality, Product Quality, Future Enhancement, Future Product, Process Improvement, Cost Cutting Initiative, Quality, Stock & Inventory). _seed_defaults now IDEMPOTENT SYNC: inserts missing standard values every list call + deletes legacy v1 defaults (Customer Complaint/Internal Task/Quality Check/Improvement/Maintenance/Follow-up) when unused by any task. → Production DB auto-syncs on first Task Categories/options load after redeploy.
 - Tasks - Internal category dropdown already reads master via /api/complaints/meta/options → verified returns the 12.
+
+### 2026-07-29 — Legacy lowercase 'quality' category removed ✅ (curl + DB verified)
+- task_categories.py _seed_defaults sync now also NORMALIZES customer_complaints.category case-insensitively to canonical master names ('quality' → 'Quality') — runs idempotently, so production self-heals after redeploy.
+- CustomerComplaintDetail.js: removed the 'tolerate unknown category' SelectItem — the category dropdown now shows ONLY active master Task Categories.

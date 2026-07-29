@@ -82,6 +82,23 @@ async def _seed_defaults(tenant_id: str, user_id: str):
         } for n in missing]
         await db[COLL].insert_many(docs)
 
+    # Normalize legacy task category casing (e.g. 'quality' → 'Quality')
+    canonical = {n.lower(): n for n in DEFAULT_TASK_CATEGORIES}
+    for m in existing:
+        nm = (m.get("name") or "").strip()
+        if nm:
+            canonical.setdefault(nm.lower(), nm)
+    doc_cats = await db.customer_complaints.distinct("category", {"tenant_id": tenant_id})
+    for c in doc_cats:
+        if not c:
+            continue
+        canon = canonical.get(str(c).strip().lower())
+        if canon and canon != c:
+            await db.customer_complaints.update_many(
+                {"tenant_id": tenant_id, "category": c},
+                {"$set": {"category": canon}},
+            )
+
     for legacy in LEGACY_DEFAULTS:
         if legacy.lower() in existing_names:
             in_use = await db.customer_complaints.find_one(

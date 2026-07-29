@@ -379,9 +379,6 @@ export default function CustomerComplaintDetail() {
                   <SelectContent className="max-h-[260px]">
                     <SelectItem value="none">No category</SelectItem>
                     {(options.categories || []).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    {complaint.category && !(options.categories || []).includes(complaint.category) && (
-                      <SelectItem value={complaint.category}>{complaint.category}</SelectItem>
-                    )}
                   </SelectContent>
                 </Select>
               </Field>
