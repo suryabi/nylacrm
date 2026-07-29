@@ -21,6 +21,22 @@ COLL = "task_categories"
 ADMIN_ROLES = {"CEO", "Director", "System Admin", "Admin", "Vice President", "Head of Business"}
 
 DEFAULT_TASK_CATEGORIES = [
+    "Payment Issue",
+    "Customer Issue",
+    "Delivery & Logistics",
+    "Production Issue",
+    "Water Quality",
+    "Product Quality",
+    "Future Enhancement",
+    "Future Product",
+    "Process Improvement",
+    "Cost Cutting Initiative",
+    "Quality",
+    "Stock & Inventory",
+]
+
+# v1 starter set — replaced by the list above; removed on sync when unused.
+LEGACY_DEFAULTS = [
     "Customer Complaint",
     "Internal Task",
     "Quality Check",
@@ -50,17 +66,33 @@ def _require_admin(user: dict):
 
 
 async def _seed_defaults(tenant_id: str, user_id: str):
-    existing = await db[COLL].count_documents({"tenant_id": tenant_id})
-    if existing:
-        return
+    """Idempotent: ensures the standard category set exists, and drops legacy
+    v1 defaults that are not referenced by any task."""
     now = datetime.now(timezone.utc).isoformat()
-    docs = [{
-        "id": str(uuid.uuid4()), "tenant_id": tenant_id,
-        "name": n, "description": None,
-        "is_active": True, "sort_order": i,
-        "created_at": now, "updated_at": now, "created_by": user_id,
-    } for i, n in enumerate(DEFAULT_TASK_CATEGORIES)]
-    await db[COLL].insert_many(docs)
+    existing = await db[COLL].find({"tenant_id": tenant_id}, {"_id": 0, "name": 1}).to_list(1000)
+    existing_names = {(r.get("name") or "").strip().lower() for r in existing}
+
+    missing = [n for n in DEFAULT_TASK_CATEGORIES if n.lower() not in existing_names]
+    if missing:
+        docs = [{
+            "id": str(uuid.uuid4()), "tenant_id": tenant_id,
+            "name": n, "description": None,
+            "is_active": True, "sort_order": DEFAULT_TASK_CATEGORIES.index(n),
+            "created_at": now, "updated_at": now, "created_by": user_id,
+        } for n in missing]
+        await db[COLL].insert_many(docs)
+
+    for legacy in LEGACY_DEFAULTS:
+        if legacy.lower() in existing_names:
+            in_use = await db.customer_complaints.find_one(
+                {"tenant_id": tenant_id, "category": {"$regex": f"^{legacy}$", "$options": "i"}},
+                {"_id": 1},
+            )
+            if not in_use:
+                await db[COLL].delete_one({
+                    "tenant_id": tenant_id,
+                    "name": {"$regex": f"^{legacy}$", "$options": "i"},
+                })
 
 
 @router.get("")

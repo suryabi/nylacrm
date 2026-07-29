@@ -2011,3 +2011,7 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ### 2026-07-29 — 📥 Global Stock Dashboard Excel export ✅ (curl + E2E download verified)
 - Backend: aggregation refactored into _build_dashboard(); NEW GET /api/distributor/global-stock-dashboard/export?unit=crates|units → styled .xlsx (openpyxl): dark header, green warehouse-total rows, indented child-SKU drill-down rows (grey fill), GRAND TOTAL row, frozen header. Columns: Warehouse/Owner/City/Type/SKU/Child SKU/Units-per-Crate + all 9 metrics in chosen unit.
 - Frontend: Export button (gsd-export-btn) next to Refresh, honors current Crates/Units toggle, blob download w/ auth header + loading spinner.
+
+### 2026-07-29 — 🏷 Task Categories master repopulated with 12 business values ✅ (curl verified, preview)
+- task_categories.py: DEFAULT_TASK_CATEGORIES → 12 values (Payment Issue, Customer Issue, Delivery & Logistics, Production Issue, Water Quality, Product Quality, Future Enhancement, Future Product, Process Improvement, Cost Cutting Initiative, Quality, Stock & Inventory). _seed_defaults now IDEMPOTENT SYNC: inserts missing standard values every list call + deletes legacy v1 defaults (Customer Complaint/Internal Task/Quality Check/Improvement/Maintenance/Follow-up) when unused by any task. → Production DB auto-syncs on first Task Categories/options load after redeploy.
+- Tasks - Internal category dropdown already reads master via /api/complaints/meta/options → verified returns the 12.
