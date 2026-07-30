@@ -5979,7 +5979,7 @@ async def _deduct_stock_with_spill(coll, stock_key: dict, qty: int, now: str):
     $inc on the primary row) applies so the NET on-hand stays correct.
     Returns (matched_primary: bool, leftover_units: int)."""
     remaining = int(qty or 0)
-    primary = await coll.find(stock_key, {"quantity": 1}).to_list(50)
+    primary = await coll.find(stock_key, {"quantity": 1, "created_at": 1}).sort("created_at", 1).to_list(50)
     matched_primary = len(primary) > 0
     for r in primary:
         if remaining <= 0:
@@ -6098,9 +6098,15 @@ async def complete_delivery(
                 "sku_id": item.get('sku_id'),
                 "child_sku_id": child_key,
             }
-            # Tracked batches deduct from the specific batch row; legacy aggregate
-            # rows (no batch_id stored) match `{"$in": [None]}`.
-            stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
+            # Only pin the batch when the delivery line explicitly carries one.
+            # Lines without a batch deduct FIFO across ALL rows of this
+            # (warehouse, SKU, classification) — batch-tracked rows included.
+            # (Previously `batch_id: {"$in": [None]}` was forced here, which
+            # could never match branded rows that inherited a batch_id from
+            # retro-categorized Stock In — completion then failed with
+            # "no on-hand row" despite the stock being on hand.)
+            if batch_id:
+                stock_key["batch_id"] = batch_id
 
         matched_primary, leftover = await _deduct_stock_with_spill(stock_coll, stock_key, qty, now)
         if not matched_primary or leftover:
