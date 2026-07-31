@@ -51,10 +51,16 @@ function LocChip({ loc }) {
   );
 }
 
-function MassBalanceCard({ balance }) {
+function MassBalanceCard({ balance, bpc }) {
   if (!balance) return null;
   const drift = balance.drift || 0;
   const ok = Math.abs(drift) < 1;
+  const crates = (bottles) => {
+    const n = Number(bpc) || 0;
+    if (n <= 1) return null;
+    const c = (Number(bottles) || 0) / n;
+    return Number.isInteger(c) ? c.toLocaleString('en-IN') : c.toLocaleString('en-IN', { maximumFractionDigits: 1 });
+  };
   return (
     <Card
       data-testid="mass-balance-card"
@@ -88,6 +94,9 @@ function MassBalanceCard({ balance }) {
           <div key={label} className="rounded-lg border border-slate-200/70 dark:border-slate-700/70 px-3 py-2 bg-white/70 dark:bg-slate-900/50">
             <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
             <div className={`text-lg font-semibold tabular-nums ${cls}`}>{fmtNum(val || 0)}</div>
+            <div className="text-[10px] text-muted-foreground tabular-nums" data-testid={`mass-balance-crates-${label}`}>
+              bottles{crates(val) != null && <> · <span className="font-medium">{crates(val)} crates</span></>}
+            </div>
           </div>
         ))}
       </div>
@@ -203,7 +212,7 @@ function GenealogyDetail({ batchId, onBack }) {
       </Card>
 
       {/* Mass balance */}
-      <MassBalanceCard balance={mass_balance} />
+      <MassBalanceCard balance={mass_balance} bpc={batch.bottles_per_crate} />
 
       {/* Two columns: Timeline + Resting */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

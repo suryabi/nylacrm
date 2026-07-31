@@ -2055,3 +2055,6 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - ROOT CAUSE: transfer items store quantity in PACKAGES (crates) w/ units_per_package + persisted quantity_units (bottles); genealogy summed raw quantity → 100 crates displayed "100 bottles", corrupting timeline + mass balance.
 - FIX (admin_batch_genealogy.py): stock_transfer events + reconcile-batch-stock now use quantity_units (fallback quantity × units_per_package). Event note shows packaging breakdown ("100 Crate × 12"). Mass-balance factory resting derivation now also accounts for COMPLETED stock transfers in/out of factory warehouses AND completed direct factory→account deliveries (both previously ignored → resting/drift wrong).
 - Verified: ST-2026-0009 (5 crates ×12) now shows qty=60, note '5 Crate × 12'.
+
+### 2026-07-31 — Mass Balance cards show crates alongside bottles ✅ (screenshot verified)
+- BatchGenealogy.js MassBalanceCard(+bpc from batch.bottles_per_crate): each card shows sub-line "bottles · N crates" (1-decimal when fractional; hidden when bpc ≤ 1/unknown).
