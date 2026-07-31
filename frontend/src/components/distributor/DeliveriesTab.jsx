@@ -122,6 +122,7 @@ export default function DeliveriesTab({
   // distributor warehouse doesn't track batches.
   sourceTracksBatches = false,
   batchesBySku = {},
+  brandedHintsBySku = {},
   // Phase 3 fulfilment classification — per-classification stock at the source
   // ({sku_id: [{child_sku_id, child_sku_name, quantity}]}) + child SKU metadata
   // ({id: {child_type, customer_account_id, ...}}) for customer matching.
@@ -1356,6 +1357,16 @@ export default function DeliveriesTab({
                                         </button>
                                       );
                                     })}
+                                  </div>
+                                )}
+                                {(brandedHintsBySku[item.sku_id] || []).length > 0 && (
+                                  <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 space-y-1" data-testid={`delivery-branded-hints-${item.id}`}>
+                                    {(brandedHintsBySku[item.sku_id] || []).map((h, hi) => (
+                                      <div key={hi} className="flex items-start gap-2 text-xs text-amber-800">
+                                        <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-amber-600" />
+                                        <span><span className="font-semibold">Branded stock:</span> {h.message}</span>
+                                      </div>
+                                    ))}
                                   </div>
                                 )}
                               </div>

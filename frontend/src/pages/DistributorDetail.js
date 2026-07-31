@@ -218,6 +218,7 @@ export default function DistributorDetail() {
   // Populated on-demand whenever a tracked source + an item's sku_id is set.
   const [shipmentBatchesBySku, setShipmentBatchesBySku] = useState({});
   const [deliveryBatchesBySku, setDeliveryBatchesBySku] = useState({});
+  const [deliveryBrandedHintsBySku, setDeliveryBrandedHintsBySku] = useState({});
   // Phase 3 fulfilment classification — per-classification stock at the
   // selected Stock Out source + metadata for every child SKU (customer match).
   const [deliveryChildStockBySku, setDeliveryChildStockBySku] = useState({});
@@ -617,6 +618,7 @@ export default function DistributorDetail() {
   // previous account's batches.
   useEffect(() => {
     setDeliveryBatchesBySku({});
+    setDeliveryBrandedHintsBySku({});
   }, [deliveryForm.distributor_location_id, deliveryForm.account_id]);
   // Phase 3: per-classification stock at the Stock Out source (Generic vs
   // customer-branded child rows) + child SKU metadata for customer matching.
@@ -670,8 +672,10 @@ export default function DistributorDetail() {
         { headers: { Authorization: `Bearer ${token}` } }
       ).then(res => {
         setDeliveryBatchesBySku(prev => ({ ...prev, [sid]: res.data.batches || [] }));
+        setDeliveryBrandedHintsBySku(prev => ({ ...prev, [sid]: res.data.branded_hints || [] }));
       }).catch(() => {
         setDeliveryBatchesBySku(prev => ({ ...prev, [sid]: [] }));
+        setDeliveryBrandedHintsBySku(prev => ({ ...prev, [sid]: [] }));
       });
     });
   }, [deliveryForm.distributor_location_id, deliveryForm.account_id, deliveryItems, sourceDistributorTracksBatches]);  // eslint-disable-line react-hooks/exhaustive-deps
@@ -3096,6 +3100,7 @@ export default function DistributorDetail() {
             token={token}
             sourceTracksBatches={sourceDistributorTracksBatches}
             batchesBySku={deliveryBatchesBySku}
+            brandedHintsBySku={deliveryBrandedHintsBySku}
             childStockBySku={deliveryChildStockBySku}
             childSkuMeta={childSkuMeta}
           />

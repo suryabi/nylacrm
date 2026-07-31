@@ -664,7 +664,64 @@ async def list_batches_available(
         })
     # FIFO — oldest first
     out.sort(key=lambda r: (r.get("received_at") or "9999"))
-    return {"track_batches": track_batches, "batches": out}
+
+    # ── Self-diagnosis: when delivering to an account, explain WHY branded
+    # stock the user expects is not offered (wrong warehouse, different SKU,
+    # fully reserved, or simply no stock row). Rendered as a hint in the UI.
+    branded_hints = []
+    if account_id:
+        acct_children = await db.child_skus.find(
+            {"tenant_id": tenant_id, "child_type": "customer",
+             "customer_account_id": {"$in": list(acct_refs)}},
+            {"_id": 0, "id": 1, "child_sku_name": 1, "parent_sku_id": 1},
+        ).to_list(500)
+        ch_ids = [c["id"] for c in acct_children]
+        if ch_ids:
+            shown = {b.get("child_sku_id") for b in out if b.get("child_sku_id")}
+            fws_rows = await db.factory_warehouse_stock.find(
+                {"tenant_id": tenant_id, "child_sku_id": {"$in": ch_ids}, "quantity": {"$gt": 0}},
+                {"_id": 0, "warehouse_location_id": 1, "warehouse_name": 1, "sku_id": 1,
+                 "sku_name": 1, "child_sku_id": 1, "child_sku_name": 1, "quantity": 1},
+            ).to_list(1000)
+            ds_rows = await db.distributor_stock.find(
+                {"tenant_id": tenant_id, "child_sku_id": {"$in": ch_ids}, "quantity": {"$gt": 0}},
+                {"_id": 0, "distributor_location_id": 1, "location_name": 1, "sku_id": 1,
+                 "sku_name": 1, "child_sku_id": 1, "child_sku_name": 1, "quantity": 1},
+            ).to_list(1000)
+            loc_ids = list({r.get("warehouse_location_id") or r.get("distributor_location_id")
+                            for r in fws_rows + ds_rows})
+            loc_names = {l["id"]: l.get("location_name") for l in await db.distributor_locations.find(
+                {"id": {"$in": loc_ids}}, {"_id": 0, "id": 1, "location_name": 1}).to_list(300)}
+            for r in fws_rows + ds_rows:
+                rl = r.get("warehouse_location_id") or r.get("distributor_location_id")
+                cname = r.get("child_sku_name") or "branded stock"
+                if rl == location_id and r.get("sku_id") == sku_id:
+                    if r.get("child_sku_id") in shown:
+                        continue  # already offered as a batch card
+                    branded_hints.append({
+                        "reason": "fully_reserved",
+                        "message": f"{r['quantity']} units of '{cname}' are at this warehouse but fully reserved by open orders.",
+                    })
+                elif rl == location_id:
+                    branded_hints.append({
+                        "reason": "different_sku",
+                        "message": f"{r['quantity']} units of '{cname}' are at this warehouse under SKU '{r.get('sku_name')}' — select that SKU to deliver it.",
+                    })
+                else:
+                    wh_name = loc_names.get(rl) or r.get("warehouse_name") or r.get("location_name") or "another warehouse"
+                    branded_hints.append({
+                        "reason": "different_warehouse",
+                        "message": f"{r['quantity']} units of '{cname}' are at '{wh_name}' — switch From Location to deliver it.",
+                    })
+            if not fws_rows and not ds_rows:
+                this_parent_children = [c for c in acct_children if c.get("parent_sku_id") == sku_id]
+                if this_parent_children:
+                    names = ", ".join(f"'{c['child_sku_name']}'" for c in this_parent_children[:3])
+                    branded_hints.append({
+                        "reason": "no_stock_rows",
+                        "message": f"No branded stock on hand anywhere for {names} — the classification transfer may not have been recorded.",
+                    })
+    return {"track_batches": track_batches, "batches": out, "branded_hints": branded_hints}
 
 
 @router.get("/production-batches")
