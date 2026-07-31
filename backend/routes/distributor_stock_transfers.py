@@ -140,12 +140,19 @@ _RESERVED_DELIVERY_STATUSES = [
 
 
 async def _reserved_qty_by_batch(tenant_id: str, location_id: str, sku_id: str) -> dict:
-    """Reserved (committed) quantity per `batch_id` for a SKU at a source
-    location, summed across ALL open Stock Out / Promotional Stock-Out orders
-    (regular + promo share the `distributor_deliveries` pipeline). Reservation
-    is derived purely from the open deliveries themselves, so completing /
-    cancelling / reversing an order releases its stock automatically.
-    Returns `{batch_id|None: reserved_qty}`."""
+    """Reserved (committed) quantity per `(batch_id, child_sku_id)` for a SKU
+    at a source location, summed across ALL open Stock Out / Promotional
+    Stock-Out orders (regular + promo share the `distributor_deliveries`
+    pipeline). Reservation is derived purely from the open deliveries
+    themselves, so completing / cancelling / reversing an order releases its
+    stock automatically.
+
+    Classification-aware: an order line reserves EXACTLY the classification it
+    carries (child-tagged lines reserve that child's row; unclassified lines
+    reserve Generic rows only) — mirroring how completion deducts stock. This
+    stops generic/other-customer reservations from swallowing a customer's
+    branded stock in the batch picker.
+    Returns `{(batch_id|None, child_sku_id|None): reserved_qty}`."""
     open_ids = await db.distributor_deliveries.distinct(
         "id",
         {
@@ -159,9 +166,9 @@ async def _reserved_qty_by_batch(tenant_id: str, location_id: str, sku_id: str) 
     reserved: dict = {}
     async for it in db.distributor_delivery_items.find(
         {"tenant_id": tenant_id, "delivery_id": {"$in": open_ids}, "sku_id": sku_id},
-        {"_id": 0, "batch_id": 1, "quantity": 1},
+        {"_id": 0, "batch_id": 1, "child_sku_id": 1, "quantity": 1},
     ):
-        key = it.get("batch_id")
+        key = (it.get("batch_id") or None, it.get("child_sku_id") or None)
         reserved[key] = reserved.get(key, 0) + int(it.get("quantity") or 0)
     return reserved
 
@@ -636,20 +643,29 @@ async def list_batches_available(
                 allowed_children.add(c.get("id"))
         rows = [r for r in rows if (not r.get("child_sku_id")) or r.get("child_sku_id") in allowed_children]
 
-    # Rows are (batch, classification) grained. Reservations are batch-level
-    # (open deliveries don't carry a child classification yet), so distribute
-    # each batch's reserved qty across its rows — Generic rows first.
+    # Rows are (batch, classification) grained and reservations are too:
+    # each row absorbs ONLY the reservations carrying its exact
+    # (batch, classification) — generic/other-customer reservations can no
+    # longer swallow a customer's branded stock. Reservations tagged with a
+    # child that no longer has a matching stock row fall back onto the
+    # batch's Generic row (conservative).
     rows.sort(key=lambda r: (r.get("batch_id") or "", 0 if not r.get("child_sku_id") else 1))
     reserved_left = dict(reserved_by_batch)
+    row_keys = {(r.get("batch_id") or None, r.get("child_sku_id") or None) for r in rows}
+    for (b, c), q in list(reserved_left.items()):
+        if c and (b, c) not in row_keys and q > 0:
+            reserved_left[(b, None)] = reserved_left.get((b, None), 0) + q
+            reserved_left[(b, c)] = 0
     out = []
     for r in rows:
         on_hand = int(r.get("quantity") or 0)
-        pool = reserved_left.get(r.get("batch_id"), 0)
+        rkey = (r.get("batch_id") or None, r.get("child_sku_id") or None)
+        pool = reserved_left.get(rkey, 0)
         reserved = min(on_hand, pool)
-        reserved_left[r.get("batch_id")] = pool - reserved
+        reserved_left[rkey] = pool - reserved
         available = on_hand - reserved
         if available <= 0:
-            # Fully reserved — nothing left to allocate from this batch.
+            # Fully reserved — nothing left to allocate from this row.
             continue
         out.append({
             "batch_id": r.get("batch_id"),
