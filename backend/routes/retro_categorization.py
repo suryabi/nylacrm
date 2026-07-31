@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from database import db, get_tenant_db
 from core.tenant import get_current_tenant_id
 from deps import get_current_user
-from .branding_entries import _next_entry_number, _load_location, _stock_coll_and_base
+from .branding_entries import _next_entry_number, _load_location, _stock_coll_and_base, account_ref_set
 
 router = APIRouter()
 
@@ -51,7 +51,7 @@ async def _resolve_customer_child(tenant_id: str, child_sku_id: str, sku_id: str
         raise HTTPException(400, f"Child SKU '{child.get('child_sku_name')}' is inactive.")
     if child.get("child_type") != "customer":
         raise HTTPException(400, "Only customer-specific child SKUs can be used for retrospective categorization.")
-    if account_id and child.get("customer_account_id") != account_id:
+    if account_id and child.get("customer_account_id") not in await account_ref_set(tenant_id, account_id):
         raise HTTPException(
             400,
             f"Child SKU '{child.get('child_sku_name')}' is branded for a different customer than this delivery's account.",
@@ -179,7 +179,8 @@ async def eligible_children(
     q = {"tenant_id": tenant_id, "parent_sku_id": sku_id, "child_type": "customer",
          "is_active": {"$ne": False}}
     if account_id:
-        q["customer_account_id"] = account_id
+        refs = await account_ref_set(tenant_id, account_id)
+        q["customer_account_id"] = {"$in": list(refs)}
     rows = await db.child_skus.find(
         q, {"_id": 0, "id": 1, "child_sku_name": 1, "child_sku_code": 1,
             "customer_account_id": 1, "customer_account_name": 1},

@@ -203,7 +203,7 @@ async def create_child_sku(payload: ChildSkuCreate, current_user: dict = Depends
         "child_sku_name": name,
         "child_sku_code": code,
         "child_type": payload.child_type,
-        "customer_account_id": payload.customer_account_id if payload.child_type == "customer" else None,
+        "customer_account_id": (account.get("id") if account else None) if payload.child_type == "customer" else None,
         "customer_account_name": customer_name,
         "branding_type": payload.branding_type,
         "label_version": payload.label_version,
@@ -255,6 +255,7 @@ async def update_child_sku(child_id: str, payload: ChildSkuUpdate, current_user:
             )
         parent = await _get_parent(existing["parent_sku_id"])
         account = await _ensure_account_linked_to_parent(tdb, update["customer_account_id"], parent)
+        update["customer_account_id"] = account.get("id")
         update["customer_account_name"] = account.get("account_name")
 
     update["updated_at"] = _now_iso()

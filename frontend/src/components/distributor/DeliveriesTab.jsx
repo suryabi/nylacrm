@@ -138,7 +138,11 @@ export default function DeliveriesTab({
     const meta = childSkuMeta[childId];
     if (!meta) return true; // metadata not loaded — backend still validates
     if (meta.child_type !== 'customer') return true;
-    return meta.customer_account_id === (selectedDeliveryAccount?.id || selectedDeliveryAccount?.account_id);
+    // Match against every identifier the child may reference: account UUID,
+    // business code, or the source lead id (pre-conversion children).
+    const acct = selectedDeliveryAccount || {};
+    const refs = [acct.id, acct.account_id, acct.lead_id].filter(Boolean);
+    return refs.includes(meta.customer_account_id);
   };
 
   // Deletion history (audit) viewer

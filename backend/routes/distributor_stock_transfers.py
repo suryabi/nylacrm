@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field
 from database import db
 from core.tenant import get_current_tenant_id
 from deps import get_current_user
+from .branding_entries import account_ref_set
 from services.zoho_service import (
     create_delivery_challan_for_stock_transfer,
     create_invoice_for_stock_transfer,
@@ -621,6 +622,7 @@ async def list_batches_available(
     # customers' branded stock into the picker on production.
     allowed_children = None
     if account_id:
+        acct_refs = await account_ref_set(tenant_id, account_id)
         child_docs = await db.child_skus.find(
             {"tenant_id": tenant_id, "parent_sku_id": sku_id},
             {"_id": 0, "id": 1, "child_type": 1, "customer_account_id": 1},
@@ -630,7 +632,7 @@ async def list_batches_available(
             if c.get("child_type") != "customer":
                 # Generic-type children are deliverable to anyone.
                 allowed_children.add(c.get("id"))
-            elif c.get("customer_account_id") == account_id:
+            elif c.get("customer_account_id") in acct_refs:
                 allowed_children.add(c.get("id"))
         rows = [r for r in rows if (not r.get("child_sku_id")) or r.get("child_sku_id") in allowed_children]
 
@@ -742,6 +744,7 @@ async def get_location_stock(
     # customer-branded rows whose child SKU is NOT branded for this account.
     # See /batches-available for the same guard.
     if account_id:
+        acct_refs = await account_ref_set(tenant_id, account_id)
         child_ids = list({r.get("child_sku_id") for r in rows if r.get("child_sku_id")})
         allowed = set()
         if child_ids:
@@ -752,7 +755,7 @@ async def get_location_stock(
             for c in child_docs:
                 if c.get("child_type") != "customer":
                     allowed.add(c.get("id"))
-                elif c.get("customer_account_id") == account_id:
+                elif c.get("customer_account_id") in acct_refs:
                     allowed.add(c.get("id"))
         rows = [r for r in rows if (not r.get("child_sku_id")) or r.get("child_sku_id") in allowed]
     # Aggregate per SKU (backward-compatible shape) + per (SKU, classification)

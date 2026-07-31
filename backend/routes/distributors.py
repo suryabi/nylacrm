@@ -5180,15 +5180,18 @@ async def create_delivery(
                 )
             if c.get("is_active") is False:
                 raise HTTPException(status_code=400, detail=f"Child SKU '{c.get('child_sku_name')}' is inactive")
-            if c.get("child_type") == "customer" and c.get("customer_account_id") != data.account_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        f"'{c.get('child_sku_name')}' is branded for "
-                        f"'{c.get('customer_account_name') or 'another customer'}' — it cannot be "
-                        f"delivered to '{account.get('account_name') or account.get('company') or 'this account'}'."
-                    ),
-                )
+            if c.get("child_type") == "customer":
+                from .branding_entries import account_ref_set
+                acct_refs = await account_ref_set(tenant_id, data.account_id)
+                if c.get("customer_account_id") not in acct_refs:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"'{c.get('child_sku_name')}' is branded for "
+                            f"'{c.get('customer_account_name') or 'another customer'}' — it cannot be "
+                            f"delivered to '{account.get('account_name') or account.get('company') or 'this account'}'."
+                        ),
+                    )
             item.child_sku_name = c.get("child_sku_name")
 
     # Aggregate per (sku_id, batch_id, classification) so multi-line deliveries

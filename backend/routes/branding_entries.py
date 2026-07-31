@@ -77,6 +77,23 @@ def _stock_coll_and_base(loc: dict, tenant_id: str):
     }
 
 
+async def account_ref_set(tenant_id: str, account_id) -> set:
+    """All identifiers that may reference an account on a child SKU:
+    its UUID `id`, its business code `account_id`, and the source `lead_id`
+    (children created before a lead→account conversion keep the lead's id).
+    Makes branded-stock account matching resilient to reference drift."""
+    if not account_id:
+        return set()
+    acc = await db.accounts.find_one(
+        {"tenant_id": tenant_id, "$or": [{"id": account_id}, {"account_id": account_id}]},
+        {"_id": 0, "id": 1, "account_id": 1, "lead_id": 1},
+    )
+    refs = {account_id}
+    if acc:
+        refs |= {v for v in (acc.get("id"), acc.get("account_id"), acc.get("lead_id")) if v}
+    return refs
+
+
 async def _resolve_child(tdb, child_sku_id: str, sku_id: str) -> dict:
     child = await tdb.child_skus.find_one({"id": child_sku_id}, {"_id": 0})
     if not child:
