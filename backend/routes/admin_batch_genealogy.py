@@ -292,7 +292,8 @@ async def reconcile_batch_stock(
         for it in x.get("items") or []:
             if it.get("batch_id") != batch_id:
                 continue
-            units = int(it.get("quantity_units") or it.get("quantity") or 0)
+            units = int(it.get("quantity_units") or 0) or (
+                int(it.get("quantity") or 0) * int(it.get("units_per_package") or 1))
             if x.get("source_location_id"):
                 out_by_wh[x["source_location_id"]] = out_by_wh.get(x["source_location_id"], 0) + units
             if x.get("dest_location_id"):
@@ -560,13 +561,21 @@ async def get_batch_genealogy(
             },
         })
 
-    # 4. Stock Transfer events
+    # 4. Stock Transfer events — item `quantity` is in PACKAGES (crates /
+    #    cartons); convert to bottles via the persisted `quantity_units`
+    #    (fallback: quantity × units_per_package).
     for t in transfer_docs:
+        batch_items = [it for it in (t.get("items") or []) if it.get("batch_id") == batch_id]
         qty = sum(
-            (it.get("quantity") or 0)
-            for it in (t.get("items") or [])
-            if it.get("batch_id") == batch_id
+            int(it.get("quantity_units") or 0)
+            or (int(it.get("quantity") or 0) * int(it.get("units_per_package") or 1))
+            for it in batch_items
         )
+        pkg_bits = [
+            f"{it.get('quantity')} {it.get('packaging_type_name') or 'pkg'} × {it.get('units_per_package')}"
+            for it in batch_items
+            if int(it.get("units_per_package") or 0) > 1 and int(it.get("quantity") or 0) > 0
+        ]
         events.append({
             "type": "stock_transfer",
             "at": t.get("created_at"),
@@ -574,6 +583,7 @@ async def get_batch_genealogy(
             "from": _loc(t.get("source_location_id")),
             "to": _loc(t.get("dest_location_id")),
             "status": t.get("status"),
+            "note": ", ".join(pkg_bits) or None,
             "ref": {
                 "kind": "stock_transfer",
                 "id": t.get("id"),
@@ -626,6 +636,34 @@ async def get_batch_genealogy(
         wid = s.get("source_warehouse_id")
         if wid:
             factory_out_by_loc[wid] = factory_out_by_loc.get(wid, 0) + (it.get("quantity") or 0)
+
+    # Completed stock transfers move batch stock between warehouses. Factory
+    # sides adjust the DERIVED factory resting; non-factory sides are already
+    # covered by the direct `distributor_stock` read below.
+    for t in transfer_docs:
+        if (t.get("status") or "") != "completed":
+            continue
+        tqty = sum(
+            int(it.get("quantity_units") or 0)
+            or (int(it.get("quantity") or 0) * int(it.get("units_per_package") or 1))
+            for it in (t.get("items") or [])
+            if it.get("batch_id") == batch_id
+        )
+        if not tqty:
+            continue
+        src, dst = t.get("source_location_id"), t.get("dest_location_id")
+        if src and (locs.get(src) or {}).get("is_factory"):
+            factory_out_by_loc[src] = factory_out_by_loc.get(src, 0) + tqty
+        if dst and (locs.get(dst) or {}).get("is_factory"):
+            factory_in_by_loc[dst] = factory_in_by_loc.get(dst, 0) + tqty
+
+    # Completed direct factory→account deliveries also deduct factory stock.
+    for did, dqty in qty_by_delivery.items():
+        d = out_deliveries.get(did, {})
+        if (d.get("status") or "") in ("complete", "completed", "delivered"):
+            wid = d.get("distributor_location_id")
+            if wid and (locs.get(wid) or {}).get("is_factory"):
+                factory_out_by_loc[wid] = factory_out_by_loc.get(wid, 0) + dqty
 
     resting: list = []
     for wid, qty_in in factory_in_by_loc.items():
