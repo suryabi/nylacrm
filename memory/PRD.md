@@ -2058,3 +2058,10 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ### 2026-07-31 — Mass Balance cards show crates alongside bottles ✅ (screenshot verified)
 - BatchGenealogy.js MassBalanceCard(+bpc from batch.bottles_per_crate): each card shows sub-line "bottles · N crates" (1-decimal when fractional; hidden when bpc ≤ 1/unknown).
+
+### 2026-08-01 — 🐛 FIX: Role-permission matrix not honored for workspace/module access ✅ (E2E verified w/ temp custom-role user)
+- ROOT CAUSE: top-level workspace switcher (Sales/Production/Distribution/Marketing/Accounting/Admin) gated ONLY by department + hardcoded roles (ADMIN_ROLES=['CEO','Director'], ADMIN_CONTEXT_ROLES) in AppContextContext.canAccessModule — the Tenant Settings role-permission matrix (roles.permissions, keys match moduleRegistry) was never consulted → custom roles like "Vice President - Operations" couldn't see Distribution despite matrix grants. (Sidebar canSeeItem in DashboardLayout already honored matrix; ProtectedRoute appModule used same broken canAccess*.)
+- FIX (AppContextContext.js): consumes useTenantConfig().rolePermissions; NEW WORKSPACE_GROUPS map (workspace → moduleRegistry group keys; sales covers 7 groups, admin covers fleet/product_sku/master_data/ai_knowledge/finance_audit/settings_integrations); matrixGrantsWorkspace() = any view:true in the workspace's groups; canAccessModule falls through dept checks to matrix; admin/accounting also extended; context-restore effect re-runs on rolePermissions load.
+- NOTE: backend create_role fills unspecified modules with view:true defaults — switcher reflects stored matrix faithfully; admins control via Tenant Settings matrix.
+- ⚠ LEARNING: parallel search_replace on the SAME file can drop one edit silently — verify both applied.
+- E2E: temp role 'VP Operations Test' (dept Sales only) → Distribution appeared in switcher, /distributors loaded w/ matrix-gated sidebar. Temp role+user deleted after test.
