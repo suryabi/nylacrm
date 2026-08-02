@@ -1,0 +1,40 @@
+{
+  "summary": "Verified Credit-Notes-Available reminder popup in Record Delivery flow (DeliveriesTab.jsx) for distributor Main → Toopa Ice-creamery. Popup gating, testids, checkbox toggle → total line + apply-btn enable, Proceed-Without and Apply-Selected buttons all work correctly. Regression case (account with no credit notes) also passes — no reminder shown, submit proceeds directly. Actual delivery creation is blocked by a pre-existing backend config issue (margin matrix missing for city 'Hyderabad') unrelated to this feature — it prevented producing a persisted delivery for either Path A or Path B, but the reminder-popup behavior itself is fully validated.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/distributors/{id}/deliveries (create-delivery)", "issue": "Returns 400 'Margin matrix not configured for city Hyderabad. Please configure margins for: Nyla – 600 ml / Silver' for account Toopa Ice-creamery + SKU Nyla-600ml-Silver. Same 400 for Citadel account. This blocks completing an end-to-end delivery creation in the test environment, but is pre-existing config/seed data — not caused by the credit-reminder feature."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional / not the feature under test) Seed a margin matrix row for city 'Hyderabad' for SKU 'Nyla – 600 ml / Silver' so end-to-end delivery creation succeeds and Path A/B outcomes (delivery appearing in list + credit-note balance dropping) can be verified in this preview env."
+  ],
+  "critical_code_review_comments": [
+    "DeliveriesTab.jsx is 2886 lines — should be split into smaller modules (delivery dialog, credit-notes section, promo challan section, filters, list) for maintainability.",
+    "handleCreateDeliveryWithCredits gating logic (line ~682) correctly filters by balance_amount > 0 — good.",
+    "Apply button uses totalCreditToApply<=0 for disable (line 1950) which correctly protects against zero-amount rows.",
+    "Proceed Without Applying clears selectedCreditNotes before submit — correct."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (backend testing skipped per request)", "frontend": "100% for credit-reminder popup behaviors; end-to-end delivery persistence blocked by unrelated margin-matrix config"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None — no deliveries were successfully created because backend rejected due to margin-matrix config. CN-2026-0003 balance remains at ₹10.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Credit-reminder popup feature works. If retesting end-to-end persistence, first seed a margin matrix for city Hyderabad + SKU 'Nyla – 600 ml / Silver' (both configured accounts for distributor Main are in Hyderabad). Available account with credit note: Toopa Ice-creamery (id 81263309-2118-4d51-b1d9-fe9549da07b7), CN id 70d8e596-d297-4427-9385-aa56d535c9d7 (CN-2026-0003, ₹10). Account without credit: Citadel Hotels & Conventions By Vinnca (id 1048f099-662d-4e69-b2ec-7463e43c6685). Distributor id b8876367-df64-4c55-a382-d5eb3b4b2380. Testids validated: create-delivery-btn, save-delivery-btn, credit-reminder-dialog, credit-reminder-row-{id}, credit-reminder-checkbox-{id}, credit-reminder-total, credit-reminder-apply-btn, credit-reminder-proceed-without-btn.",
+  "rca_of_the_issue": "N/A for credit-reminder feature — it works. The pre-existing 400 on delivery creation traces to missing entries in the margin_matrix collection for city='Hyderabad' + affected SKUs. Server-side validator gates delivery creation on presence of a margin row keyed by account city + SKU; missing seed row → 400 with the observed message.",
+  "verified_paths": {
+    "popup_gating": "PASS — popup appears when Toopa selected + no credit checked; does NOT appear for Citadel (no CN).",
+    "popup_contents": "PASS — CN-2026-0003 row + checkbox render with correct testids; Apply button initially disabled.",
+    "checkbox_toggle": "PASS — after check: credit-reminder-total shows 'Credit to apply: ₹10.00 — net billing becomes ₹1,778.00'; apply btn enabled.",
+    "proceed_without_applying": "PASS at UI level — popup closes, submit fires (400 from backend margin issue, not from feature).",
+    "apply_selected_and_record": "PASS at UI level — popup closes, submit fires with credit note payload (400 from same backend margin issue).",
+    "regression_no_credits": "PASS — Citadel account: no credit-notes-available-badge; clicking Record Delivery goes straight to submit, no reminder popup."
+  }
+}

@@ -488,6 +488,8 @@ export default function DeliveriesTab({
   const [availableDebitNotes, setAvailableDebitNotes] = useState([]);
   const [loadingDebitNotes, setLoadingDebitNotes] = useState(false);
   const [selectedDebitNotes, setSelectedDebitNotes] = useState({}); // {debit_note_id: amount_to_apply}
+  // Reminder popup: credits available but none selected on Record Delivery
+  const [showCreditReminder, setShowCreditReminder] = useState(false);
   
   const totalPages = Math.ceil((deliveriesTotal || 0) / (deliveriesPageSize || 20));
 
@@ -597,6 +599,7 @@ export default function DeliveriesTab({
     if (!showDeliveryDialog) {
       setSelectedCreditNotes({});
       setSelectedDebitNotes({});
+      setShowCreditReminder(false);
     }
   }, [showDeliveryDialog]);
   
@@ -656,9 +659,9 @@ export default function DeliveriesTab({
   };
   
   // Custom handler that wraps the original handleCreateDelivery
-  const handleCreateDeliveryWithCredits = async () => {
+  const submitDeliveryWithNotes = async ({ skipCredits = false } = {}) => {
     // Prepare credit notes for submission
-    const creditNotesToApply = Object.entries(selectedCreditNotes)
+    const creditNotesToApply = skipCredits ? [] : Object.entries(selectedCreditNotes)
       .filter(([_, amount]) => amount > 0)
       .map(([credit_note_id, amount_to_apply]) => ({
         credit_note_id,
@@ -674,6 +677,17 @@ export default function DeliveriesTab({
     
     // Pass credit + debit notes to the parent handler
     await handleCreateDelivery(creditNotesToApply, debitNotesToApply);
+  };
+
+  const handleCreateDeliveryWithCredits = async () => {
+    // Reminder: customer has usable credit notes but none selected —
+    // confirm before recording so credits aren't accidentally missed.
+    const usableCredits = availableCreditNotes.filter(cn => (cn.balance_amount || 0) > 0);
+    if (usableCredits.length > 0 && Object.keys(selectedCreditNotes).length === 0) {
+      setShowCreditReminder(true);
+      return;
+    }
+    await submitDeliveryWithNotes();
   };
 
   // Handle debit note selection toggle
@@ -1873,6 +1887,78 @@ export default function DeliveriesTab({
             </DialogContent>
           </Dialog>
         )}
+        {/* Credit-note reminder: shown when Record Delivery is clicked with
+            usable credit notes available but none selected */}
+        <Dialog open={showCreditReminder} onOpenChange={setShowCreditReminder}>
+          <DialogContent className="sm:max-w-lg" data-testid="credit-reminder-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-amber-500" />
+                Credit Notes Available
+              </DialogTitle>
+              <DialogDescription>
+                {selectedDeliveryAccount?.account_name || 'This customer'} has unused credit notes.
+                Select any to apply to this delivery, or proceed without applying.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-64 overflow-y-auto rounded-lg border divide-y">
+              {availableCreditNotes.filter(cn => (cn.balance_amount || 0) > 0).map((cn) => {
+                const isSelected = selectedCreditNotes[cn.id] !== undefined;
+                return (
+                  <label
+                    key={cn.id}
+                    htmlFor={`remind-cn-${cn.id}`}
+                    className={`flex items-center gap-3 p-3 cursor-pointer transition-colors ${isSelected ? 'bg-emerald-50/60' : 'hover:bg-muted/30'}`}
+                    data-testid={`credit-reminder-row-${cn.id}`}
+                  >
+                    <Checkbox
+                      id={`remind-cn-${cn.id}`}
+                      checked={isSelected}
+                      onCheckedChange={(checked) => handleCreditNoteToggle(cn, checked)}
+                      data-testid={`credit-reminder-checkbox-${cn.id}`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{cn.credit_note_number}</div>
+                      {cn.reason && <div className="text-xs text-muted-foreground truncate">{cn.reason}</div>}
+                    </div>
+                    <div className="text-sm font-semibold text-emerald-700 tabular-nums shrink-0">
+                      ₹{fmtINR(cn.balance_amount)}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+            {totalCreditToApply > 0 && (
+              <div className="text-sm text-emerald-700 font-medium" data-testid="credit-reminder-total">
+                Credit to apply: ₹{fmtINR(totalCreditToApply)} — net billing becomes ₹{fmtINR(netBillingAmount)}
+              </div>
+            )}
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                disabled={savingDelivery}
+                onClick={async () => {
+                  setShowCreditReminder(false);
+                  setSelectedCreditNotes({});
+                  await submitDeliveryWithNotes({ skipCredits: true });
+                }}
+                data-testid="credit-reminder-proceed-without-btn"
+              >
+                Proceed Without Applying
+              </Button>
+              <Button
+                disabled={savingDelivery || totalCreditToApply <= 0}
+                onClick={async () => {
+                  setShowCreditReminder(false);
+                  await submitDeliveryWithNotes();
+                }}
+                data-testid="credit-reminder-apply-btn"
+              >
+                {savingDelivery ? 'Creating...' : 'Apply Selected & Record'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
           </div>
         </div>
       </CardHeader>
