@@ -2065,3 +2065,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - NOTE: backend create_role fills unspecified modules with view:true defaults — switcher reflects stored matrix faithfully; admins control via Tenant Settings matrix.
 - ⚠ LEARNING: parallel search_replace on the SAME file can drop one edit silently — verify both applied.
 - E2E: temp role 'VP Operations Test' (dept Sales only) → Distribution appeared in switcher, /distributors loaded w/ matrix-gated sidebar. Temp role+user deleted after test.
+
+### 2026-08-02 — ✅ Credit-note reminder on Record Delivery (testing_agent iteration_343 PASSED)
+- DeliveriesTab.jsx: handleCreateDeliveryWithCredits → if account has credit notes w/ balance>0 and none selected → 'Credit Notes Available' dialog (credit-reminder-dialog) listing notes w/ checkboxes (shared selectedCreditNotes state), total line, 'Apply Selected & Record' (disabled until selection) + 'Proceed Without Applying' (submits w/ skipCredits). Reset on dialog close. submitDeliveryWithNotes({skipCredits}) extracted.
+- testing_agent iteration_343: popup gating, toggle→total+enable, both buttons, regression (no-credit account submits directly) ALL PASS. Delivery persistence blocked only by PRE-EXISTING preview data issue: margin matrix missing for city 'Hyderabad' (unrelated).
+
+### 2026-08-02 — ✅ RBAC gate on 'New Return' button (screenshot verified)
+- ReturnsTab.jsx: canCreateReturn = role has configured matrix ? hasActionPermission('customer_returns','create') : legacy canManage fallback. Matrix is authoritative when present (grants custom roles / denies listed roles). Admin roles short-circuit true in hasActionPermission.
+- Verified: temp role w/ distributors.view=true + customer_returns.create=false → Returns tab loads, NO create-return-btn; admin sees it. NOTE: create_role API defaults unspecified modules to view:false for this payload shape — page-level guard (Access Denied) correctly blocked distributor page until distributors.view granted. Temp role+user deleted.

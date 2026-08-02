@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useTenantConfig } from '../../context/TenantConfigContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -39,6 +40,13 @@ const STATUS_BADGES = {
 };
 
 export default function ReturnsTab({ distributorId, accounts = [], skus = [], canManage = false, canDelete = false }) {
+  const { rolePermissions, hasActionPermission } = useTenantConfig();
+  // RBAC (Tenant Settings role matrix): when the user's role has a configured
+  // matrix, `customer_returns.create` fully controls the New Return button
+  // (grant shows it even for custom roles; deny hides it). Roles without a
+  // matrix fall back to the legacy canManage gate.
+  const roleHasMatrix = rolePermissions && Object.keys(rolePermissions).length > 0;
+  const canCreateReturn = roleHasMatrix ? hasActionPermission('customer_returns', 'create') : canManage;
   const { token, user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [returns, setReturns] = useState([]);
@@ -494,7 +502,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
-            {canManage && (
+            {canCreateReturn && (
               <Button size="sm" onClick={() => setShowCreateDialog(true)} data-testid="create-return-btn">
                 <Plus className="h-4 w-4 mr-2" />
                 New Return
