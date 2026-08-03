@@ -1281,7 +1281,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                 <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
                   Close
                 </Button>
-                {canManage && selectedReturn.status === 'draft' && (
+                {canCreateReturn && selectedReturn.status === 'draft' && (
                   <>
                     <Button variant="outline" className="text-destructive" onClick={() => cancelReturn(selectedReturn.id)}>
                       <X className="h-4 w-4 mr-2" />

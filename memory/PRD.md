@@ -2073,3 +2073,7 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ### 2026-08-02 — ✅ RBAC gate on 'New Return' button (screenshot verified)
 - ReturnsTab.jsx: canCreateReturn = role has configured matrix ? hasActionPermission('customer_returns','create') : legacy canManage fallback. Matrix is authoritative when present (grants custom roles / denies listed roles). Admin roles short-circuit true in hasActionPermission.
 - Verified: temp role w/ distributors.view=true + customer_returns.create=false → Returns tab loads, NO create-return-btn; admin sees it. NOTE: create_role API defaults unspecified modules to view:false for this payload shape — page-level guard (Access Denied) correctly blocked distributor page until distributors.view granted. Temp role+user deleted.
+
+### 2026-08-02 — Create Credit/Debit Note available to anyone who can enter returns ✅
+- ReturnsTab.jsx detail dialog footer (~1284): gate switched canManage → canCreateReturn (matrix customer_returns.create when configured, legacy canManage fallback). Cancel Return + Create Note buttons now follow the same rule as New Return. Backend /returns/{id}/approve has no role restriction (auth only).
+- ENV NOTE: preview frontend hit ENOSPC (inotify max_user_watches=12288, sysctl denied) → added CHOKIDAR_USEPOLLING=true + WATCHPACK_POLLING=true to frontend/.env; frontend recovered (RUNNING, 200).
