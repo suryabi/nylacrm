@@ -2077,3 +2077,8 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ### 2026-08-02 — Create Credit/Debit Note available to anyone who can enter returns ✅
 - ReturnsTab.jsx detail dialog footer (~1284): gate switched canManage → canCreateReturn (matrix customer_returns.create when configured, legacy canManage fallback). Cancel Return + Create Note buttons now follow the same rule as New Return. Backend /returns/{id}/approve has no role restriction (auth only).
 - ENV NOTE: preview frontend hit ENOSPC (inotify max_user_watches=12288, sysctl denied) → added CHOKIDAR_USEPOLLING=true + WATCHPACK_POLLING=true to frontend/.env; frontend recovered (RUNNING, 200).
+
+### 2026-08-03 — 🔒 Only ACTIVATED accounts assignable to distributors ✅ (curl verified both layers)
+- distributors.py search-assignable-accounts: query now requires status:"active" → non-activated accounts never appear in the assignment picker.
+- distributors.py create assignment: server-side guard → 400 "Account 'X' is not activated (status: …). Activate the account before assigning" when account.status != active.
+- Verified w/ temp status flip (Toopa → pending_activation): search returned empty; direct POST rejected 400; status restored.

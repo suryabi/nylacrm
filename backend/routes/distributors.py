@@ -1799,6 +1799,17 @@ async def create_account_assignment(
     account = await db.accounts.find_one({"id": data.account_id, "tenant_id": tenant_id})
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
+
+    # Only ACTIVATED accounts may be assigned to distributors
+    if (account.get('status') or '').lower() != 'active':
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Account '{account.get('account_name') or account.get('company') or data.account_id}' is not "
+                f"activated (status: {account.get('status') or 'unknown'}). Activate the account before assigning "
+                "it to a distributor."
+            ),
+        )
     
     # Validate account's city matches servicing city (alias-aware: Bangalore <-> Bengaluru, etc.)
     account_city = account.get('city', '')
@@ -2120,9 +2131,11 @@ async def search_assignable_accounts_for_distributor(
     # Build case-insensitive city match
     city_regex_list = [{"city": {"$regex": f"^{c}$", "$options": "i"}} for c in expanded_cities]
 
-    # Search accounts only in covered cities (alias-aware)
+    # Search accounts only in covered cities (alias-aware); ONLY activated
+    # accounts are assignable to distributors.
     query = {
         "tenant_id": tenant_id,
+        "status": "active",
         "$and": [
             {"$or": city_regex_list},
             {"$or": [
