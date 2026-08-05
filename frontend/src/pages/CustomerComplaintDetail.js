@@ -18,7 +18,7 @@ import {
   ArrowLeft, Loader2, Upload, Trash2, Send, MessageSquare, ImageIcon,
   Package, User, Calendar, X, MapPin, Pencil, Check, RotateCcw, CheckCircle2,
 } from 'lucide-react';
-import { PRIORITY_STYLES, STATUS_STYLES, LABEL, IdleBadge, getDepartments, getAssignees, MultiPick } from './CustomerComplaints';
+import { PRIORITY_STYLES, STATUS_STYLES, LABEL, IdleBadge, DueBadge, fmtDueDate, getDepartments, getAssignees, MultiPick } from './CustomerComplaints';
 import { useTenantConfig } from '../context/TenantConfigContext';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -195,6 +195,7 @@ export default function CustomerComplaintDetail() {
                 <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200" data-testid="complaint-category-badge">{complaint.category}</Badge>
               )}
               <IdleBadge row={complaint} prominent />
+              <DueBadge row={complaint} prominent />
             </div>
             <p className="text-sm text-muted-foreground mt-0.5">{complaint.complaint_number}</p>
           </div>
@@ -354,6 +355,38 @@ export default function CustomerComplaintDetail() {
                   <SelectTrigger data-testid="complaint-priority-select"><SelectValue /></SelectTrigger>
                   <SelectContent>{options.priorities.map((p) => <SelectItem key={p} value={p}>{LABEL(p)}</SelectItem>)}</SelectContent>
                 </Select>
+              </Field>
+              <Field label="Due Date">
+                <Input
+                  type="date"
+                  value={complaint.due_date || ''}
+                  onChange={(e) => { const v = e.target.value || null; if (v !== (complaint.due_date || null)) patch({ due_date: v }); }}
+                  disabled={!canEdit}
+                  data-testid="complaint-due-date-input"
+                />
+                {(complaint.due_date_change_count || 0) > 0 && (
+                  <div className="pt-1 space-y-1" data-testid="due-date-slip-info">
+                    <p className="text-xs font-medium text-amber-700">
+                      Rescheduled {complaint.due_date_change_count}×
+                      {(complaint.due_date_slip_days || 0) !== 0 && (
+                        <> · deadline {complaint.due_date_slip_days > 0
+                          ? `slipped ${complaint.due_date_slip_days} day${complaint.due_date_slip_days === 1 ? '' : 's'}`
+                          : `pulled in ${Math.abs(complaint.due_date_slip_days)} day${complaint.due_date_slip_days === -1 ? '' : 's'}`}</>
+                      )}
+                    </p>
+                    {complaint.original_due_date && complaint.original_due_date !== complaint.due_date && (
+                      <p className="text-[11px] text-muted-foreground">Original due date: {fmtDueDate(complaint.original_due_date)}</p>
+                    )}
+                    <div className="space-y-0.5">
+                      {[...(complaint.due_date_history || [])].reverse().map((h, i) => (
+                        <p key={i} className="text-[11px] text-slate-500" data-testid={`due-date-history-${i}`}>
+                          {fmtDueDate(h.from)} → {fmtDueDate(h.to)}
+                          {h.changed_by_name ? ` · ${h.changed_by_name}` : ''} · {new Date(h.changed_at).toLocaleDateString()}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </Field>
               <Field label="Department">
                 <MultiPick

@@ -21,7 +21,7 @@ Routes (mounted under /api/complaints)
 import io
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
@@ -78,6 +78,7 @@ class ComplaintCreate(BaseModel):
     category: Optional[str] = None
     city: Optional[str] = None
     assignees: List[AssigneeRef] = []
+    due_date: Optional[str] = None
 
 
 class ComplaintUpdate(BaseModel):
@@ -96,6 +97,7 @@ class ComplaintUpdate(BaseModel):
     category: Optional[str] = None
     city: Optional[str] = None
     assignees: Optional[List[AssigneeRef]] = None
+    due_date: Optional[str] = None
 
 
 class CommentCreate(BaseModel):
@@ -111,6 +113,17 @@ async def _next_complaint_number(tenant_id: str) -> str:
         "complaint_number": {"$regex": f"^{prefix}"},
     })
     return f"{prefix}{count + 1:04d}"
+
+
+def _clean_date(v) -> Optional[str]:
+    s = (v or "").strip()[:10]
+    if not s:
+        return None
+    try:
+        date.fromisoformat(s)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid due_date — expected YYYY-MM-DD")
+    return s
 
 
 def _public(doc: dict) -> dict:
@@ -353,6 +366,11 @@ async def create_complaint(body: ComplaintCreate, current_user: dict = Depends(g
         "assignees": assignees,
         "assigned_to": assignees[0]["id"] if assignees else None,
         "assigned_to_name": assignees[0]["name"] if assignees else None,
+        "due_date": _clean_date(body.due_date),
+        "original_due_date": _clean_date(body.due_date),
+        "due_date_history": [],
+        "due_date_change_count": 0,
+        "due_date_slip_days": 0,
         "photos": [],
         "comments": [],
         "created_by": current_user.get("id"),
@@ -631,6 +649,33 @@ async def update_complaint(complaint_id: str, body: ComplaintUpdate, current_use
     if "city" in updates:
         c = (updates.get("city") or "").strip() if updates.get("city") is not None else None
         updates["city"] = c or None
+    if "due_date" in updates:
+        new_dd = _clean_date(updates.get("due_date"))
+        updates["due_date"] = new_dd
+        old_dd = doc.get("due_date")
+        if new_dd != old_dd:
+            if old_dd is None:
+                # First time a due date is set — this becomes the baseline.
+                if not doc.get("original_due_date"):
+                    updates["original_due_date"] = new_dd
+            else:
+                history = list(doc.get("due_date_history") or [])
+                history.append({
+                    "from": old_dd,
+                    "to": new_dd,
+                    "changed_at": _now(),
+                    "changed_by": current_user.get("id"),
+                    "changed_by_name": current_user.get("name"),
+                })
+                updates["due_date_history"] = history
+                updates["due_date_change_count"] = len(history)
+                base = doc.get("original_due_date") or old_dd
+                if not doc.get("original_due_date"):
+                    updates["original_due_date"] = base
+                slip = 0
+                if new_dd:
+                    slip = (date.fromisoformat(new_dd) - date.fromisoformat(base)).days
+                updates["due_date_slip_days"] = slip
 
     now = _now()
     updates["updated_at"] = now

@@ -26,7 +26,7 @@ import {
 import {
   MessageSquareWarning, Plus, Search, Loader2, ChevronLeft, ChevronRight,
   Paperclip, MessageSquare, ChevronsUpDown, Check, X, Layers, ChevronDown,
-  Download, Upload, Clock,
+  Download, Upload, Clock, CalendarClock,
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -74,6 +74,39 @@ export const IdleBadge = ({ row, prominent = false }) => {
       <Clock className={prominent ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
       {days === 0 ? 'Updated today' : `${days}d since update`}
     </Badge>
+  );
+};
+
+// ── Due date helpers ──
+export const fmtDueDate = (d) => {
+  if (!d) return '';
+  const dt = new Date(`${d}T00:00:00`);
+  return isNaN(dt.getTime()) ? d : dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+export const isOverdue = (row) =>
+  !!row.due_date && !['resolved', 'closed'].includes(row.status) && row.due_date < new Date().toISOString().slice(0, 10);
+
+export const DueBadge = ({ row, prominent = false }) => {
+  if (!row.due_date) return null;
+  const overdue = isOverdue(row);
+  const changes = row.due_date_change_count || 0;
+  const slip = row.due_date_slip_days || 0;
+  const cls = overdue
+    ? 'bg-rose-50 text-rose-700 border-rose-300'
+    : 'bg-sky-50 text-sky-700 border-sky-300';
+  return (
+    <span className="inline-flex items-center gap-1 flex-wrap">
+      <Badge variant="outline" className={`${cls} ${prominent ? 'text-sm px-2.5 py-1' : 'text-[11px] px-1.5'} font-semibold whitespace-nowrap gap-1`} data-testid={`due-badge-${row.id}`}>
+        <CalendarClock className={prominent ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
+        {overdue ? 'Overdue · ' : 'Due '}{fmtDueDate(row.due_date)}
+      </Badge>
+      {changes > 0 && (
+        <Badge variant="outline" className={`bg-amber-50 text-amber-700 border-amber-300 ${prominent ? 'text-sm px-2.5 py-1' : 'text-[11px] px-1.5'} font-semibold whitespace-nowrap`} data-testid={`due-slip-badge-${row.id}`}>
+          Rescheduled {changes}× · {slip > 0 ? `slipped ${slip}d` : slip < 0 ? `pulled in ${Math.abs(slip)}d` : 'no slip'}
+        </Badge>
+      )}
+    </span>
   );
 };
 
@@ -510,6 +543,7 @@ const IssuesTable = ({ rows, onOpen, bulk }) => {
           </p>
           <div className="flex flex-wrap items-center gap-1.5">
             <IdleBadge row={c} />
+            <DueBadge row={c} />
             <Badge className={PRIORITY_STYLES[c.priority]}>{LABEL(c.priority)}</Badge>
             {getDepartments(c).map((d) => (
               <Badge key={d} variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">{d}</Badge>
@@ -546,6 +580,7 @@ const IssuesTable = ({ rows, onOpen, bulk }) => {
           <th className="text-center p-3 font-medium">Category</th>
           <th className="text-center p-3 font-medium">Priority</th>
           <th className="text-center p-3 font-medium">Status</th>
+          <th className="text-center p-3 font-medium">Due</th>
           <th className="text-left p-3 font-medium">Assignees</th>
           <th className="text-center p-3 font-medium">Last Update</th>
           <th className="text-center p-3 font-medium"></th>
@@ -739,6 +774,7 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
   const [priority, setPriority] = useState('medium');
   const [departments, setDepartments] = useState([]);
   const [category, setCategory] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const [assigneeIds, setAssigneeIds] = useState([]);
 
   useEffect(() => {
@@ -772,6 +808,7 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
         category: category || null,
         city: city || null,
         assignees,
+        due_date: dueDate || null,
       };
       const res = await axios.post(`${API}/complaints`, payload, { headers: HEAD() });
       toast.success('Issue created');
@@ -861,15 +898,21 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Category</Label>
-            <Select value={category || 'none'} onValueChange={(v) => setCategory(v === 'none' ? '' : v)}>
-              <SelectTrigger data-testid="complaint-category-select"><SelectValue placeholder="No category" /></SelectTrigger>
-              <SelectContent className="max-h-[260px]">
-                <SelectItem value="none">No category</SelectItem>
-                {(options.categories || []).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Category</Label>
+              <Select value={category || 'none'} onValueChange={(v) => setCategory(v === 'none' ? '' : v)}>
+                <SelectTrigger data-testid="complaint-category-select"><SelectValue placeholder="No category" /></SelectTrigger>
+                <SelectContent className="max-h-[260px]">
+                  <SelectItem value="none">No category</SelectItem>
+                  {(options.categories || []).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Due Date</Label>
+              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} data-testid="complaint-due-date-input" />
+            </div>
           </div>
 
           <div className="space-y-1.5">
