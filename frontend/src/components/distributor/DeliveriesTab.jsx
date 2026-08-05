@@ -229,6 +229,31 @@ export default function DeliveriesTab({
     if (showFactoryDialog) fetchAvailableStock();
   }, [showFactoryDialog, fetchAvailableStock]);
 
+  // Dropdown list = margin-matrix SKUs ∪ SKUs with live available stock, so
+  // stock received outside the margin matrix can still be returned to factory.
+  const factoryReturnSkus = useMemo(() => {
+    const merged = [...marginSkus];
+    const seen = new Set(marginSkus.map(s => s.id));
+    Object.values(availableStock).forEach(s => {
+      if (!seen.has(s.sku_id) && (s.warehouse_available > 0 || s.customer_pending_factory > 0)) {
+        seen.add(s.sku_id);
+        merged.push({ id: s.sku_id, sku_name: s.sku_name });
+      }
+    });
+    return merged.sort((a, b) => (a.sku_name || '').localeCompare(b.sku_name || ''));
+  }, [marginSkus, availableStock]);
+
+  // Format bottles as whole crates + leftover bottles (e.g. "5 crates + 2 bottles (62 bottles)")
+  const formatCratesBottles = useCallback((units, upc) => {
+    const u = Number(units) || 0;
+    const n = Number(upc) || 1;
+    if (n <= 1) return `${u} bottles`;
+    const crates = Math.floor(u / n);
+    const rem = u % n;
+    const cratePart = rem > 0 ? `${crates} crates + ${rem} bottles` : `${crates} crates`;
+    return `${cratePart} (${u} bottles)`;
+  }, []);
+
   // Helper: compute the cap for a given SKU based on selected source
   const skuCap = useCallback((skuId) => {
     const s = availableStock[skuId];
@@ -2674,11 +2699,13 @@ export default function DeliveriesTab({
                                 data-testid={`factory-sku-select-${idx}`}
                               >
                                 <option value="">Select SKU</option>
-                                {marginSkus.map(sku => {
+                                {factoryReturnSkus.map(sku => {
                                   const skuStock = availableStock[sku.id];
-                                  const availLabel = skuStock
-                                    ? ` — Available: ${factoryForm.source === 'customer_return' ? skuStock.customer_pending_factory : skuStock.warehouse_available}`
-                                    : ' — Available: 0';
+                                  const availUnits = skuStock
+                                    ? (factoryForm.source === 'customer_return' ? skuStock.customer_pending_factory : skuStock.warehouse_available)
+                                    : 0;
+                                  const upcN = Number(skuStock?.units_per_crate) || 1;
+                                  const availLabel = ` — Available: ${formatCratesBottles(availUnits, upcN)}`;
                                   return (
                                     <option key={sku.id} value={sku.id}>
                                       {sku.sku_name}{sku.transfer_price ? ` (TP: ₹${sku.transfer_price})` : ''}{availLabel}
@@ -2708,9 +2735,13 @@ export default function DeliveriesTab({
                             </div>
                             {item.sku_id && (
                               <p className={`text-xs pl-1 ${overLimit ? 'text-red-600 font-medium' : 'text-muted-foreground'}`} data-testid={`factory-qty-hint-${idx}`}>
-                                {overLimit
-                                  ? `Exceeds available ${factoryForm.source === 'customer_return' ? 'customer-return' : 'warehouse'} stock (${cap}). Reduce quantity.`
-                                  : `Max ${cap} available at this distributor (${factoryForm.source === 'customer_return' ? 'pending customer returns' : 'warehouse stock'}).`}
+                                {(() => {
+                                  const upcN = Number(availableStock[item.sku_id]?.units_per_crate) || 1;
+                                  const capLabel = formatCratesBottles(cap || 0, upcN);
+                                  return overLimit
+                                    ? `Exceeds available ${factoryForm.source === 'customer_return' ? 'customer-return' : 'warehouse'} stock — max ${capLabel}. Reduce quantity.`
+                                    : `Max ${capLabel} available at this distributor (${factoryForm.source === 'customer_return' ? 'pending customer returns' : 'warehouse stock'}). Quantity is in bottles.`;
+                                })()}
                               </p>
                             )}
                           </div>

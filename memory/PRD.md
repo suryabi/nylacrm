@@ -2088,3 +2088,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - models/role.py: label → "Tasks - Internal"; NEW task_categories module (DEFAULT_MODULE_PERMISSIONS all-false + Operations category + label "Task Categories (Tasks - Internal)").
 - AppContextContext.js: NEW WORKSPACE_EXTRA_KEYS {production: [customer_complaints, task_categories]} — grant unlocks Production workspace (nav item lives there while registry key is in sales_ops group).
 - Verified: temp role w/ only customer_complaints grant → Production workspace + sidebar "Tasks - Internal" + /complaints page loads incl. New Task. Temp role+user deleted.
+
+## 2026-08-05 — Factory Return (Stock Out Distributor → Factory) availability fix
+**User report (production)**: All available stock showed 0 in the Stock Out → Factory Return dialog; wanted availability shown in crates (SKU default packaging) AND bottles.
+**Root causes (2)**:
+1. Backend `factory_returns.py` `GET /{distributor_id}/available-stock` derived availability from shipment history only — missed stock from production/stock transfers → zeros. Rewritten (`compute_available_stock_at_distributor`) to use live stock rows (`distributor_stock` + `factory_warehouse_stock` for the distributor's locations), minus draft warehouse factory-returns (confirmed ones already deducted live rows), plus customer-return pending quantities. Response now includes `units_per_crate` (from stock rows `bottles_per_crate`, falling back to master SKU `bottles_per_crate` / default `packaging_config`).
+2. Frontend `DeliveriesTab.jsx` SKU dropdown listed only margin-matrix SKUs — SKUs with real stock but no margin row (e.g. 600ml Silver with 1,434 bottles) were invisible. Now `factoryReturnSkus` = margin SKUs ∪ any SKU with live available stock.
+**Display**: `formatCratesBottles` helper — whole crates + leftover bottles + total, e.g. "119 crates + 6 bottles (1434 bottles)"; same format in the per-item max hint ("Quantity is in bottles."). SKUs whose default packaging is Bottle (upc=1) show bottles only.
+**Verified**: curl on 2 distributors (nonzero wh qty + upc) + screenshot E2E on preview (dialog options + hint correct). NOT yet in production — user must redeploy.

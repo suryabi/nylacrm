@@ -74,53 +74,46 @@ async def compute_available_stock_at_distributor(tenant_id: str, distributor_id:
     Returns per-SKU available stock at the distributor for factory returns.
 
     available[sku_id] = {
-        sku_id, sku_name,
-        warehouse_available: shipped_in - delivered_out - factory_returned(source=warehouse),
+        sku_id, sku_name, units_per_crate,
+        warehouse_available: LIVE on-hand stock across the distributor's
+            warehouses (distributor_stock + factory_warehouse_stock) — covers
+            every inflow path (shipments, stock transfers, production),
         customer_pending_factory: customer_returned - factory_returned(source=customer_return),
         total_available: warehouse_available + customer_pending_factory
     }
+    Quantities are base units (bottles); units_per_crate lets the UI show the
+    crate equivalent per the SKU's default packaging.
     """
-    # 1. STOCK IN: delivered shipments
-    delivered_shipment_ids = await db.distributor_shipments.distinct(
-        "id",
-        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": "delivered"}
-    )
-    shipment_items = await db.distributor_shipment_items.find(
-        {"tenant_id": tenant_id, "shipment_id": {"$in": delivered_shipment_ids}},
-        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
-    ).to_list(50000)
-
     stock = {}  # sku_id -> dict
-    for si in shipment_items:
-        sid = si.get('sku_id', '')
-        if not sid:
-            continue
-        if sid not in stock:
-            stock[sid] = {"sku_id": sid, "sku_name": si.get('sku_name', 'Unknown'),
-                          "shipped_in": 0, "delivered_out": 0,
-                          "factory_returned_warehouse": 0, "factory_returned_customer": 0,
-                          "customer_returned": 0}
-        stock[sid]["shipped_in"] += si.get('quantity', 0) or 0
 
-    # 2. STOCK OUT: deliveries to customers
-    delivered_delivery_ids = await db.distributor_deliveries.distinct(
-        "id",
-        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": {"$in": ["delivered", "completed", "complete"]}}
-    )
-    delivery_items = await db.distributor_delivery_items.find(
-        {"tenant_id": tenant_id, "delivery_id": {"$in": delivered_delivery_ids}},
-        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
-    ).to_list(50000)
-    for di in delivery_items:
-        sid = di.get('sku_id', '')
-        if not sid:
-            continue
+    def _node(sid, name):
         if sid not in stock:
-            stock[sid] = {"sku_id": sid, "sku_name": di.get('sku_name', 'Unknown'),
-                          "shipped_in": 0, "delivered_out": 0,
+            stock[sid] = {"sku_id": sid, "sku_name": name or 'Unknown',
+                          "live_on_hand": 0,
                           "factory_returned_warehouse": 0, "factory_returned_customer": 0,
                           "customer_returned": 0}
-        stock[sid]["delivered_out"] += di.get('quantity', 0) or 0
+        return stock[sid]
+
+    # 1. LIVE warehouse stock — every row the delivery pipeline deducts from.
+    upc: dict = {}
+    loc_ids = await db.distributor_locations.distinct(
+        "id", {"tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    async for r in db.distributor_stock.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "quantity": {"$gt": 0}},
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1},
+    ):
+        if r.get("sku_id"):
+            _node(r["sku_id"], r.get("sku_name"))["live_on_hand"] += r.get("quantity") or 0
+    if loc_ids:
+        async for r in db.factory_warehouse_stock.find(
+            {"tenant_id": tenant_id, "warehouse_location_id": {"$in": loc_ids}, "quantity": {"$gt": 0}},
+            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "bottles_per_crate": 1},
+        ):
+            if r.get("sku_id"):
+                _node(r["sku_id"], r.get("sku_name"))["live_on_hand"] += r.get("quantity") or 0
+                if r.get("bottles_per_crate") and r["sku_id"] not in upc:
+                    upc[r["sku_id"]] = int(r["bottles_per_crate"])
 
     # 3. CUSTOMER RETURNS (returned to distributor)
     cust_returns = await db.customer_returns.find(
@@ -136,12 +129,7 @@ async def compute_available_stock_at_distributor(tenant_id: str, distributor_id:
             sid = item.get('sku_id', '')
             if not sid:
                 continue
-            if sid not in stock:
-                stock[sid] = {"sku_id": sid, "sku_name": item.get('sku_name', 'Unknown'),
-                              "shipped_in": 0, "delivered_out": 0,
-                              "factory_returned_warehouse": 0, "factory_returned_customer": 0,
-                              "customer_returned": 0}
-            stock[sid]["customer_returned"] += item.get('quantity', 0) or 0
+            _node(sid, item.get('sku_name'))["customer_returned"] += item.get('quantity', 0) or 0
 
     # 4. FACTORY RETURNS (split by source)
     fr_docs = await db.distributor_factory_returns.find(
@@ -150,7 +138,7 @@ async def compute_available_stock_at_distributor(tenant_id: str, distributor_id:
             "distributor_id": distributor_id,
             "status": {"$nin": ["cancelled"]}
         },
-        {"_id": 0, "items": 1, "source": 1}
+        {"_id": 0, "items": 1, "source": 1, "status": 1}
     ).to_list(10000)
     for fr in fr_docs:
         src = fr.get('source', 'warehouse')
@@ -158,25 +146,45 @@ async def compute_available_stock_at_distributor(tenant_id: str, distributor_id:
             sid = item.get('sku_id', '')
             if not sid:
                 continue
-            if sid not in stock:
-                stock[sid] = {"sku_id": sid, "sku_name": item.get('sku_name', 'Unknown'),
-                              "shipped_in": 0, "delivered_out": 0,
-                              "factory_returned_warehouse": 0, "factory_returned_customer": 0,
-                              "customer_returned": 0}
             qty = item.get('quantity', 0) or 0
             if src == "customer_return":
-                stock[sid]["factory_returned_customer"] += qty
-            else:
-                stock[sid]["factory_returned_warehouse"] += qty
+                _node(sid, item.get('sku_name'))["factory_returned_customer"] += qty
+            elif fr.get('status') == 'draft':
+                # Draft warehouse returns haven't deducted stock yet — treat
+                # their quantity as committed (confirmed/received already
+                # reflect in the live stock rows).
+                _node(sid, item.get('sku_name'))["factory_returned_warehouse"] += qty
+
+    # Fill units-per-crate from master SKUs for anything still unknown
+    missing_upc = [sid for sid in stock.keys() if sid not in upc]
+    if missing_upc:
+        async for ms in db.master_skus.find(
+            {"id": {"$in": missing_upc}},
+            {"_id": 0, "id": 1, "bottles_per_crate": 1, "packaging_config": 1},
+        ):
+            bpc = ms.get("bottles_per_crate")
+            if not bpc:
+                pc = (ms.get("packaging_config") or {}).get("production") or []
+                default = next((p for p in pc if p.get("is_default")), None)
+                if default:
+                    bpc = default.get("units") or default.get("units_per_package")
+            try:
+                if bpc and int(bpc) > 0:
+                    upc[ms["id"]] = int(bpc)
+            except Exception:
+                pass
 
     # Compute derived availability
     out = {}
     for sid, s in stock.items():
-        warehouse_available = max(0, s["shipped_in"] - s["delivered_out"] - s["factory_returned_warehouse"])
+        # Confirmed/received returns already deducted the live rows; draft
+        # warehouse returns are subtracted as committed quantity.
+        warehouse_available = max(0, s["live_on_hand"] - s["factory_returned_warehouse"])
         customer_pending_factory = max(0, s["customer_returned"] - s["factory_returned_customer"])
         out[sid] = {
             "sku_id": sid,
             "sku_name": s["sku_name"],
+            "units_per_crate": upc.get(sid) or 1,
             "warehouse_available": warehouse_available,
             "customer_pending_factory": customer_pending_factory,
             "total_available": warehouse_available + customer_pending_factory,
