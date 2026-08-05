@@ -19,6 +19,7 @@ import {
 } from '@phosphor-icons/react';
 import { Plus, Search, Phone, RefreshCw, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import axios from 'axios';
+import { getTerm } from '../context/TenantConfigContext';
 import BulkDeleteBar from '../components/admin/BulkDeleteBar';
 import { useBulkSelect } from '../hooks/useBulkSelect';
 
@@ -346,7 +347,7 @@ export default function DistributorList() {
     <div className="p-6 lg:p-8 space-y-8 max-w-[1600px] mx-auto" data-testid="distributor-list-page">
       <Breadcrumbs items={[
         { label: 'Distribution' },
-        { label: 'Distributors' },
+        { label: getTerm('distributor', { plural: true }) },
       ]} />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -355,7 +356,7 @@ export default function DistributorList() {
             <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-100">
               <Truck className="h-7 w-7 text-emerald-700" weight="duotone" />
             </div>
-            Distributors
+            {getTerm('distributor', { plural: true })}
           </h1>
           <p className="text-slate-500 mt-1.5 ml-14" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
             Manage your distribution partners and their coverage
@@ -370,12 +371,12 @@ export default function DistributorList() {
                 data-testid="create-distributor-btn"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add Distributor
+                Add {getTerm('distributor')}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl">
               <DialogHeader>
-                <DialogTitle style={{ fontFamily: 'Manrope, sans-serif' }}>Add New Distributor</DialogTitle>
+                <DialogTitle style={{ fontFamily: 'Manrope, sans-serif' }}>Add New {getTerm('distributor')}</DialogTitle>
                 <DialogDescription>Create a new distributor profile. You can add coverage and locations later.</DialogDescription>
               </DialogHeader>
               
@@ -542,7 +543,7 @@ export default function DistributorList() {
       {/* KPI Tiles */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <KPITile
-          title="Total Distributors"
+          title={`Total ${getTerm('distributor', { plural: true })}`}
           value={summary.total || 0}
           subtitle="All partners"
           icon={Truck}
@@ -620,7 +621,7 @@ export default function DistributorList() {
       <div className="bg-white rounded-xl border border-emerald-100/60 shadow-[0_2px_8px_rgba(6,95,70,0.04)] overflow-hidden">
         <div className="p-5 border-b border-emerald-50 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-800" style={{ fontFamily: 'Manrope, sans-serif' }}>
-            Distributors
+            {getTerm('distributor', { plural: true })}
             <span className="ml-2 text-sm font-normal text-slate-500">({total})</span>
           </h2>
           <div className="flex items-center gap-3">
@@ -708,7 +709,7 @@ export default function DistributorList() {
                         data-testid="distributors-select-all"
                       />
                     </th>
-                    <SortableHeader label="Distributor" sortKey="distributor_name" currentSort={sort} onSort={handleSort} />
+                    <SortableHeader label={getTerm('distributor')} sortKey="distributor_name" currentSort={sort} onSort={handleSort} />
                     <SortableHeader label="Code" sortKey="distributor_code" currentSort={sort} onSort={handleSort} />
                     <th className="text-left p-4 font-semibold text-emerald-800/70 uppercase tracking-wider text-xs" style={{ fontFamily: 'IBM Plex Sans, sans-serif' }}>
                       Primary Contact

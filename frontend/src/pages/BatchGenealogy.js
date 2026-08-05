@@ -11,6 +11,7 @@ import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+import { getTerm } from '../context/TenantConfigContext';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Batch Genealogy — full lineage of a production batch.
@@ -95,7 +96,7 @@ function MassBalanceCard({ balance, bpc }) {
             <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
             <div className={`text-lg font-semibold tabular-nums ${cls}`}>{fmtNum(val || 0)}</div>
             <div className="text-[10px] text-muted-foreground tabular-nums" data-testid={`mass-balance-crates-${label}`}>
-              bottles{crates(val) != null && <> · <span className="font-medium">{crates(val)} crates</span></>}
+              {getTerm('unit', { plural: true, lower: true })}{crates(val) != null && <> · <span className="font-medium">{crates(val)} {getTerm('package', { plural: true, lower: true })}</span></>}
             </div>
           </div>
         ))}
@@ -134,7 +135,7 @@ function TimelineRow({ ev, isLast }) {
             </>
           )}
           {ev.to && <LocChip loc={ev.to} />}
-          <span className="ml-auto font-semibold text-base tabular-nums">{fmtNum(ev.qty)} <span className="text-xs text-muted-foreground font-normal">bottles</span></span>
+          <span className="ml-auto font-semibold text-base tabular-nums">{fmtNum(ev.qty)} <span className="text-xs text-muted-foreground font-normal">{getTerm('unit', { plural: true, lower: true })}</span></span>
         </div>
         {(ev.ref?.code || ev.ref?.distributor || ev.note || ev.by) && (
           <div className="mt-1.5 text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5">
@@ -205,7 +206,7 @@ function GenealogyDetail({ batchId, onBack }) {
           <div className="flex gap-2 flex-wrap">
             <Badge variant="outline" className="text-xs">{batch.status}</Badge>
             {batch.total_crates ? (
-              <Badge variant="outline" className="text-xs">{batch.total_crates} crates × {batch.bottles_per_crate}</Badge>
+              <Badge variant="outline" className="text-xs">{batch.total_crates} {getTerm('package', { plural: true, lower: true })} × {batch.bottles_per_crate}</Badge>
             ) : null}
           </div>
         </div>
@@ -238,7 +239,7 @@ function GenealogyDetail({ batchId, onBack }) {
             <PackageCheck className="h-4 w-4" /> Resting Stock
           </h3>
           {resting_stock.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-6">No bottles from this batch are currently in stock.</div>
+            <div className="text-sm text-muted-foreground py-6">No {getTerm('unit', { plural: true, lower: true })} from this batch are currently in stock.</div>
           ) : (
             <ul className="space-y-2.5">
               {resting_stock.map((r, i) => (

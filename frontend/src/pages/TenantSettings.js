@@ -17,8 +17,9 @@ import {
   Globe, Clock, DollarSign, Calendar, RefreshCw, MapPin,
   Users, Kanban, Target, CalendarDays, Contact, Plane, Wallet, FolderOpen,
   Wrench, Boxes, ShieldCheck, Box, Landmark, Phone, Mail, FileText,
-  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw, ClipboardList, BookOpen, Sparkles, BarChart3, PenLine
+  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw, ClipboardList, BookOpen, Sparkles, BarChart3, PenLine, Languages
 } from 'lucide-react';
+import TerminologyEditor from '../components/settings/TerminologyEditor';
 import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
 import InvoiceRelinkTool from '../components/InvoiceRelinkTool';
@@ -591,7 +592,7 @@ export default function TenantSettings() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-8 lg:w-[960px]">
+        <TabsList className="grid w-full grid-cols-9 lg:w-[1080px]">
           <TabsTrigger value="company" className="flex items-center gap-2" data-testid="tab-company">
             <Building2 className="h-4 w-4" />
             Company
@@ -599,6 +600,10 @@ export default function TenantSettings() {
           <TabsTrigger value="branding" className="flex items-center gap-2" data-testid="tab-branding">
             <Palette className="h-4 w-4" />
             Branding
+          </TabsTrigger>
+          <TabsTrigger value="terminology" className="flex items-center gap-2" data-testid="tab-terminology">
+            <Languages className="h-4 w-4" />
+            Terminology
           </TabsTrigger>
           <TabsTrigger value="modules" className="flex items-center gap-2" data-testid="tab-modules">
             <Puzzle className="h-4 w-4" />
@@ -1189,6 +1194,10 @@ export default function TenantSettings() {
         </TabsContent>
 
         {/* Branding Tab */}
+        <TabsContent value="terminology" className="space-y-6">
+          <TerminologyEditor />
+        </TabsContent>
+
         <TabsContent value="branding" className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>

@@ -16,6 +16,7 @@ import PromoDispatchSection from './PromoDispatchSection';
 import { groupByDateDesc } from '../../utils/dateGrouping';
 import { Calendar as DatePicker } from '../ui/calendar';
 import { toast } from 'sonner';
+import { getTerm } from '../../context/TenantConfigContext';
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' },
@@ -247,11 +248,13 @@ export default function DeliveriesTab({
   const formatCratesBottles = useCallback((units, upc) => {
     const u = Number(units) || 0;
     const n = Number(upc) || 1;
-    if (n <= 1) return `${u} bottles`;
+    const unitW = getTerm('unit', { plural: true, lower: true });
+    const pkgW = getTerm('package', { plural: true, lower: true });
+    if (n <= 1) return `${u} ${unitW}`;
     const crates = Math.floor(u / n);
     const rem = u % n;
-    const cratePart = rem > 0 ? `${crates} crates + ${rem} bottles` : `${crates} crates`;
-    return `${cratePart} (${u} bottles)`;
+    const cratePart = rem > 0 ? `${crates} ${pkgW} + ${rem} ${unitW}` : `${crates} ${pkgW}`;
+    return `${cratePart} (${u} ${unitW})`;
   }, []);
 
   // Helper: compute the cap for a given SKU based on selected source
@@ -2740,7 +2743,7 @@ export default function DeliveriesTab({
                                   const capLabel = formatCratesBottles(cap || 0, upcN);
                                   return overLimit
                                     ? `Exceeds available ${factoryForm.source === 'customer_return' ? 'customer-return' : 'warehouse'} stock — max ${capLabel}. Reduce quantity.`
-                                    : `Max ${capLabel} available at this distributor (${factoryForm.source === 'customer_return' ? 'pending customer returns' : 'warehouse stock'}). Quantity is in bottles.`;
+                                    : `Max ${capLabel} available at this distributor (${factoryForm.source === 'customer_return' ? 'pending customer returns' : 'warehouse stock'}). Quantity is in ${getTerm('unit', { plural: true, lower: true })}.`;
                                 })()}
                               </p>
                             )}

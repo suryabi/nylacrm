@@ -248,6 +248,33 @@ async def get_current_tenant_config(
     return tenant
 
 
+@router.put("/current/terminology")
+async def update_current_tenant_terminology(
+    terminology: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update tenant terminology overrides (Tenant Admin). Keys: unit, package, distributor, factory, sku."""
+    if not is_tenant_admin(current_user):
+        raise HTTPException(status_code=403, detail="Tenant Admin access required")
+
+    ALLOWED_TERM_KEYS = {"unit", "package", "distributor", "factory", "sku"}
+    clean = {}
+    for key, val in (terminology or {}).items():
+        if key not in ALLOWED_TERM_KEYS or not isinstance(val, dict):
+            continue
+        singular = str(val.get("singular") or "").strip()[:40]
+        plural = str(val.get("plural") or "").strip()[:40]
+        if singular and plural:
+            clean[key] = {"singular": singular, "plural": plural}
+
+    tenant_id = get_current_tenant_id()
+    await db.tenants.update_one(
+        {'tenant_id': tenant_id},
+        {'$set': {'terminology': clean, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"success": True, "terminology": clean}
+
+
 @router.put("/current/branding")
 async def update_current_tenant_branding(
     branding: TenantBranding,

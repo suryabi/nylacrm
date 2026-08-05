@@ -5,6 +5,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
+import { getTerm } from '../context/TenantConfigContext';
 import {
   Globe, RefreshCw, Search, ChevronDown, ChevronRight, Factory, Warehouse,
   Boxes, Truck, Clock, PackageCheck, Loader2, ArrowDownToLine, Recycle,
@@ -112,7 +113,7 @@ export default function GlobalStockDashboard() {
             <Globe className="h-6 w-6 text-emerald-600" /> Global Stock Dashboard
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            All warehouses → SKU → child SKU · quantities in {unit === 'crates' ? 'crates' : 'units (bottles)'}
+            All warehouses → SKU → child SKU · quantities in {unit === 'crates' ? getTerm('package', { plural: true, lower: true }) : `units (${getTerm('unit', { plural: true, lower: true })})`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -121,7 +122,7 @@ export default function GlobalStockDashboard() {
             <button
               className={`px-3.5 py-1.5 text-sm font-medium transition-colors ${unit === 'crates' ? 'bg-emerald-600 text-white' : 'bg-background hover:bg-muted'}`}
               onClick={() => setUnit('crates')} data-testid="gsd-unit-crates"
-            >Crates</button>
+            >{getTerm('package', { plural: true })}</button>
             <button
               className={`px-3.5 py-1.5 text-sm font-medium transition-colors ${unit === 'units' ? 'bg-emerald-600 text-white' : 'bg-background hover:bg-muted'}`}
               onClick={() => setUnit('units')} data-testid="gsd-unit-units"

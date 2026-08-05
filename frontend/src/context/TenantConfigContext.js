@@ -7,6 +7,27 @@ const TenantConfigContext = createContext();
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
+// Tenant terminology — industry-specific names for core domain concepts.
+// Overridden per tenant via Tenant Settings → Terminology.
+export const DEFAULT_TERMINOLOGY = {
+  unit: { singular: 'Bottle', plural: 'Bottles' },
+  package: { singular: 'Crate', plural: 'Crates' },
+  distributor: { singular: 'Distributor', plural: 'Distributors' },
+  factory: { singular: 'Factory', plural: 'Factories' },
+  sku: { singular: 'SKU', plural: 'SKUs' },
+};
+
+// Module-level cache so plain helpers (non-hooks) can read the active terms.
+// Set by the provider whenever tenant config loads. Pages render behind the
+// config loading gate, so this is populated before they mount.
+let _activeTerminology = DEFAULT_TERMINOLOGY;
+export const getTerm = (key, opts = {}) => {
+  const t = _activeTerminology[key] || DEFAULT_TERMINOLOGY[key] || { singular: key, plural: key };
+  let out = opts.plural ? t.plural : t.singular;
+  if (opts.lower) out = out.toLowerCase();
+  return out;
+};
+
 // Default branding values
 const DEFAULT_BRANDING = {
   app_name: 'Sales CRM',
@@ -501,6 +522,29 @@ export const TenantConfigProvider = ({ children }) => {
     };
   }, [tenantConfig]);
 
+  // Terminology: tenant overrides merged over defaults.
+  // term('unit') → 'Bottle'; term('unit', {plural:true, lower:true}) → 'bottles'
+  const terminology = React.useMemo(() => {
+    const overrides = tenantConfig?.terminology || {};
+    const merged = {};
+    Object.entries(DEFAULT_TERMINOLOGY).forEach(([k, v]) => {
+      merged[k] = {
+        singular: overrides[k]?.singular || v.singular,
+        plural: overrides[k]?.plural || v.plural,
+      };
+    });
+    return merged;
+  }, [tenantConfig]);
+
+  useEffect(() => { _activeTerminology = terminology; }, [terminology]);
+
+  const term = useCallback((key, opts = {}) => {
+    const t = terminology[key] || DEFAULT_TERMINOLOGY[key] || { singular: key, plural: key };
+    let out = opts.plural ? t.plural : t.singular;
+    if (opts.lower) out = out.toLowerCase();
+    return out;
+  }, [terminology]);
+
   return (
     <TenantConfigContext.Provider value={{
       tenantConfig,
@@ -510,6 +554,8 @@ export const TenantConfigProvider = ({ children }) => {
       rolePermissions,
       industry,
       loading,
+      terminology,
+      term,
       isModuleEnabled,
       hasRolePermission,
       hasActionPermission,

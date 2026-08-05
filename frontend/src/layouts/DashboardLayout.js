@@ -348,9 +348,14 @@ export default function DashboardLayout({ children }) {
   const { currentContext, switchContext, canAccessMultipleModules, getAccessibleModules, modules, isDistributorUser, getDistributorId } = useAppContext();
   const { theme, toggleTheme } = useTheme();
   const { navigateTo } = useNavigation();
-  const { isModuleEnabled, hasRolePermission, rolePermissions, branding } = useTenantConfig();
+  const { isModuleEnabled, hasRolePermission, rolePermissions, branding, term } = useTenantConfig();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Apply tenant terminology to sidebar labels (e.g. Distributors → Dealers).
+  const navLabel = (name) => (name || '')
+    .replace(/\bDistributors\b/g, term('distributor', { plural: true }))
+    .replace(/\bDistributor\b/g, term('distributor'));
   
   // Get branding values with fallbacks
   const logoUrl = branding?.logo_url || null;
@@ -602,7 +607,7 @@ export default function DashboardLayout({ children }) {
                             >
                               <span className="flex items-center gap-3">
                                 <Icon className="h-4 w-4" />
-                                {item.name}
+                                {navLabel(item.name)}
                               </span>
                               {dashboardOpen ? (
                                 <ChevronDown className="h-4 w-4" />
