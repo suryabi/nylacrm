@@ -156,6 +156,18 @@ export default function Login() {
       if (userData) {
         // Small delay to ensure state is synced before redirect
         await new Promise(resolve => setTimeout(resolve, 100));
+        // First-login onboarding: admins of freshly created workspaces go to the wizard.
+        if ((userData.role || '').toLowerCase() === 'admin') {
+          try {
+            const ob = await axios.get(`${API_URL}/api/tenants/onboarding/status`, {
+              headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': selectedTenant },
+            });
+            if (ob.data && ob.data.completed === false) {
+              navigate('/onboarding', { replace: true });
+              return;
+            }
+          } catch (e) { /* fall through to normal landing */ }
+        }
         // Use navigate with replace to prevent back button issues
         navigate(landingRouteFor(userData), { replace: true });
       } else {

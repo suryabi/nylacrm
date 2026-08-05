@@ -2,12 +2,13 @@
 Tenant Registration Routes - Self-service tenant onboarding
 Handles: tenant registration, subdomain availability, email verification
 """
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Optional, List
 import uuid
 import re
 import os
+import secrets
 import logging
 
 from database import db
@@ -17,7 +18,9 @@ from models.tenant import (
 )
 from models.user import User
 from models.role import get_default_roles
-from deps import hash_password
+from deps import hash_password, get_current_user
+from core.tenant import get_current_tenant_id
+from pydantic import BaseModel, Field
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -132,6 +135,7 @@ async def register_tenant(registration: TenantRegistration, background_tasks: Ba
     tenant_doc = tenant.model_dump()
     tenant_doc['created_at'] = tenant_doc['created_at'].isoformat()
     tenant_doc['updated_at'] = tenant_doc['updated_at'].isoformat()
+    tenant_doc['onboarding_completed'] = False
     
     await db.tenants.insert_one(tenant_doc)
     await db.users.insert_one(admin_user)
@@ -237,6 +241,115 @@ async def verify_email(token: str):
     )
     
     return {"success": True, "message": "Email verified successfully"}
+
+
+# ── Onboarding wizard ────────────────────────────────────────────────────
+_ONBOARDING_ADMIN_ROLES = {"admin", "ceo", "system admin", "director", "owner"}
+
+CURRENCY_SYMBOLS = {
+    "INR": "₹", "USD": "$", "EUR": "€", "GBP": "£",
+    "AED": "د.إ", "SGD": "S$", "AUD": "A$", "CAD": "C$",
+}
+
+
+class OnboardingInvite(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    email: str
+    role: str = "User"
+
+
+class OnboardingComplete(BaseModel):
+    industry: Optional[str] = None
+    company_size: Optional[str] = None
+    currency: Optional[str] = None
+    modules: dict = {}
+    invites: List[OnboardingInvite] = []
+
+
+def _require_tenant_admin(user: dict, tenant: dict):
+    if (user.get("role") or "").strip().lower() in _ONBOARDING_ADMIN_ROLES:
+        return
+    if tenant.get("owner_id") and user.get("id") == tenant["owner_id"]:
+        return
+    raise HTTPException(status_code=403, detail="Only workspace admins can run onboarding")
+
+
+@router.get("/onboarding/status")
+async def onboarding_status(current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tenant = await db.tenants.find_one(
+        {"tenant_id": tenant_id},
+        {"_id": 0, "name": 1, "onboarding_completed": 1, "industry_label": 1,
+         "company_size": 1, "settings": 1, "is_trial": 1, "trial_ends_at": 1},
+    )
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return {
+        # Legacy tenants (no flag) are treated as already onboarded.
+        "completed": tenant.get("onboarding_completed", True),
+        "company_name": tenant.get("name"),
+        "industry": tenant.get("industry_label"),
+        "company_size": tenant.get("company_size"),
+        "currency": (tenant.get("settings") or {}).get("currency", "INR"),
+        "is_trial": tenant.get("is_trial", False),
+        "trial_ends_at": tenant.get("trial_ends_at"),
+    }
+
+
+@router.post("/onboarding/complete")
+async def onboarding_complete(body: OnboardingComplete, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tenant = await db.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    _require_tenant_admin(current_user, tenant)
+
+    now = datetime.now(timezone.utc).isoformat()
+    updates = {"onboarding_completed": True, "updated_at": now}
+    if body.industry:
+        updates["industry_label"] = body.industry.strip()[:100]
+    if body.company_size:
+        updates["company_size"] = body.company_size.strip()[:50]
+    if body.currency:
+        cur = body.currency.strip().upper()[:5]
+        updates["settings.currency"] = cur
+        updates["settings.currency_symbol"] = CURRENCY_SYMBOLS.get(cur, cur)
+    for key, enabled in (body.modules or {}).items():
+        if isinstance(key, str) and re.match(r"^[a-z][a-z0-9_]{0,60}$", key) and isinstance(enabled, bool):
+            updates[f"modules.{key}"] = enabled
+
+    await db.tenants.update_one({"tenant_id": tenant_id}, {"$set": updates})
+
+    # Invite team members — created with a temp password + forced change on first login.
+    created, skipped = [], []
+    for inv in body.invites or []:
+        email = inv.email.lower().strip()
+        if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
+            skipped.append({"email": inv.email, "reason": "Invalid email"})
+            continue
+        if await db.users.find_one({"email": email}, {"_id": 0, "id": 1}):
+            skipped.append({"email": email, "reason": "Email already registered"})
+            continue
+        temp_password = secrets.token_urlsafe(8)
+        await db.users.insert_one({
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "email": email,
+            "name": inv.name.strip(),
+            "password": hash_password(temp_password),
+            "role": (inv.role or "User").strip() or "User",
+            "is_active": True,
+            "force_password_change": True,
+            "phone": "",
+            "territory_id": None,
+            "reports_to": None,
+            "created_at": now,
+            "updated_at": now,
+        })
+        created.append({"name": inv.name.strip(), "email": email, "role": inv.role, "temp_password": temp_password})
+
+    logger.info(f"Onboarding completed for tenant {tenant_id}: {len(created)} invited, {len(skipped)} skipped")
+    return {"success": True, "invited": created, "skipped": skipped}
 
 
 @router.get("/list")

@@ -34,6 +34,7 @@ export default function FaceIdSetupPrompt() {
 
   useEffect(() => {
     if (!user) return;
+    if (window.location.pathname.startsWith('/onboarding')) return; // don't interrupt the setup wizard
     (async () => {
       try {
         const { data } = await axios.get(`${API_URL}/auth/face/status`, {

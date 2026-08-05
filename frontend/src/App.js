@@ -10,6 +10,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 import SplashScreen from './pages/SplashScreen';
 import Login from './pages/Login';
 import RegisterTenant from './pages/RegisterTenant';
+import OnboardingWizard from './pages/OnboardingWizard';
 import AuthCallback from './components/AuthCallback';
 import GoogleAuthCallback from './pages/GoogleAuthCallback';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -326,6 +327,7 @@ function AppRouter() {
           <Route path="/" element={<SplashScreen />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<RegisterTenant />} />
+          <Route path="/onboarding" element={<OnboardingWizard />} />
           <Route path="/auth/callback" element={<GoogleAuthCallback />} />
 
           {/* Public, no-login contact share card */}
