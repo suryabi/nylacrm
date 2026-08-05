@@ -2082,3 +2082,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - distributors.py search-assignable-accounts: query now requires status:"active" → non-activated accounts never appear in the assignment picker.
 - distributors.py create assignment: server-side guard → 400 "Account 'X' is not activated (status: …). Activate the account before assigning" when account.status != active.
 - Verified w/ temp status flip (Toopa → pending_activation): search returned empty; direct POST rejected 400; status restored.
+
+### 2026-08-05 — 🔐 Tasks - Internal now RBAC-controlled & findable in role matrix ✅ (E2E verified w/ temp role)
+- ROOT CAUSE: customer_complaints existed in role matrix but still LABELED "Issues" (models/role.py MODULE_LABELS) → user couldn't find it to assign.
+- models/role.py: label → "Tasks - Internal"; NEW task_categories module (DEFAULT_MODULE_PERMISSIONS all-false + Operations category + label "Task Categories (Tasks - Internal)").
+- AppContextContext.js: NEW WORKSPACE_EXTRA_KEYS {production: [customer_complaints, task_categories]} — grant unlocks Production workspace (nav item lives there while registry key is in sales_ops group).
+- Verified: temp role w/ only customer_complaints grant → Production workspace + sidebar "Tasks - Internal" + /complaints page loads incl. New Task. Temp role+user deleted.

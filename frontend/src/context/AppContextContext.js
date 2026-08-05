@@ -22,6 +22,12 @@ const WORKSPACE_GROUPS = {
   admin: ['fleet', 'product_sku', 'master_data', 'ai_knowledge', 'finance_audit', 'settings_integrations'],
 };
 
+// Module keys whose nav items live in a workspace outside their registry
+// group (e.g. Tasks - Internal renders in the Production sidebar).
+const WORKSPACE_EXTRA_KEYS = {
+  production: ['customer_complaints', 'task_categories'],
+};
+
 // Module definitions
 const MODULES = {
   sales: { id: 'sales', label: 'Sales', icon: 'Store', defaultRoute: '/home' },
@@ -42,6 +48,7 @@ export function AppContextProvider({ children }) {
   // like "Vice President - Operations" gain access without department edits.
   const matrixGrantsWorkspace = (moduleId) => {
     if (!rolePermissions || Object.keys(rolePermissions).length === 0) return false;
+    if ((WORKSPACE_EXTRA_KEYS[moduleId] || []).some((k) => rolePermissions[k]?.view === true)) return true;
     const groups = WORKSPACE_GROUPS[moduleId] || [];
     return MODULE_REGISTRY
       .filter((g) => groups.includes(g.key))
