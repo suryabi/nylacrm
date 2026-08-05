@@ -74,7 +74,12 @@ async def login(credentials: UserLogin, request: Request, response: Response):
     
     if not user_doc.get('is_active', True):
         raise HTTPException(status_code=401, detail='Account is inactive')
-    
+
+    # Workspace suspension: a disabled tenant cannot accept new logins (platform admin control)
+    tenant_doc = await db.tenants.find_one({'tenant_id': get_current_tenant_id()}, {'_id': 0, 'is_active': 1})
+    if tenant_doc and tenant_doc.get('is_active') is False:
+        raise HTTPException(status_code=403, detail='This workspace has been suspended. Contact support.')
+
     await clear_login_failures(credentials.email, login_ip)
     
     session_token = str(uuid.uuid4())

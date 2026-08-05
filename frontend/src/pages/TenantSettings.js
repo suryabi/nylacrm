@@ -584,7 +584,10 @@ export default function TenantSettings() {
             Customize company profile, branding, modules, and settings
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <Button variant="outline" size="sm" onClick={() => window.location.href = '/billing'} data-testid="open-billing-btn">
+            <DollarSign className="h-4 w-4 mr-1.5" /> Billing &amp; Plan
+          </Button>
           <Building2 className="h-4 w-4" />
           <span>{tenantConfig?.name || 'Current Tenant'}</span>
         </div>

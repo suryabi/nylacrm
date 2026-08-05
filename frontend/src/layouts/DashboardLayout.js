@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useAppContext } from '../context/AppContextContext';
@@ -8,6 +9,8 @@ import { useTenantConfig } from '../context/TenantConfigContext';
 import { Button } from '../components/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 import AIAssistant from '../components/ai/AIAssistant';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL;
 import NotificationBell from '../components/NotificationBell';
 import FacilitySwitcher from '../components/distributor/FacilitySwitcher';
 import FaceIdSetupPrompt from '../components/auth/FaceIdSetupPrompt';
@@ -20,9 +23,6 @@ import {
   Kanban, Wrench, Box, ShieldCheck, Boxes, TabletSmartphone, Radio,
   Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Bell, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus, PanelLeftClose, PanelLeftOpen, Printer, Mail, Share2, MessageSquareWarning, RotateCcw, TrendingUp, Banknote, Globe2
 } from 'lucide-react';
-
-// Platform Admin emails
-const PLATFORM_ADMIN_EMAILS = ['surya.yadavalli@gmail.com', 'surya.yadavalli@nylaairwater.earth'];
 
 const NYLA_LOGO = null;
 
@@ -382,6 +382,15 @@ export default function DashboardLayout({ children }) {
   );
   const [collapsedGroups, setCollapsedGroups] = useState({});
 
+  // Platform admin check for the console entry (server-side verified)
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  useEffect(() => {
+    if (!user) return;
+    axios.get(`${API_URL}/api/platform-admin/me`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    }).then((r) => setIsPlatformAdmin(!!r.data.is_platform_admin)).catch(() => {});
+  }, [user]);
+
   // Redirect Distributor users to their welcome dashboard (or keep them inside their own scope)
   useEffect(() => {
     if (isDistributorUser && getDistributorId) {
@@ -487,8 +496,7 @@ export default function DashboardLayout({ children }) {
     location.pathname === '/sku-performance' || location.pathname === '/resource-performance' ||
     location.pathname === '/account-performance';
 
-  // Check if user is platform admin
-  const isPlatformAdmin = user && PLATFORM_ADMIN_EMAILS.includes(user.email?.toLowerCase());
+  // Check if user is platform admin — server-verified via /platform-admin/me (state above)
 
   // Filter navigation groups using the same canSeeItem precedence
   // (module enabled → explicit permission entry → hardcoded role fallback).

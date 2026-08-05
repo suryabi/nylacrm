@@ -21,9 +21,6 @@ import ModuleMatrix from '../components/admin/ModuleMatrix';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
-// Platform Admin emails
-const PLATFORM_ADMIN_EMAILS = ['surya.yadavalli@gmail.com', 'surya.yadavalli@nylaairwater.earth'];
-
 export default function PlatformAdmin() {
   const { user, token } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -38,8 +35,13 @@ export default function PlatformAdmin() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
-  // Check if current user is platform admin
-  const isPlatformAdmin = user && PLATFORM_ADMIN_EMAILS.includes(user.email?.toLowerCase());
+  // Server-side platform admin check (PLATFORM_ADMIN_EMAILS env on backend)
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(null);
+  useEffect(() => {
+    axios.get(`${API_URL}/api/platform-admin/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => setIsPlatformAdmin(!!r.data.is_platform_admin))
+      .catch(() => setIsPlatformAdmin(false));
+  }, [token]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -184,6 +186,14 @@ export default function PlatformAdmin() {
     }
   };
 
+  if (isPlatformAdmin === null) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <RefreshCw className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   if (!isPlatformAdmin) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -219,7 +229,7 @@ export default function PlatformAdmin() {
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
@@ -261,6 +271,29 @@ export default function PlatformAdmin() {
                   <p className="text-3xl font-bold">{stats.total_users}</p>
                 </div>
                 <Users className="w-10 h-10 text-primary/20" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Paying</p>
+                  <p className="text-3xl font-bold text-emerald-600" data-testid="platform-paying-tenants">{stats.paying_tenants ?? 0}</p>
+                </div>
+                <Crown className="w-10 h-10 text-emerald-200" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Revenue</p>
+                  <p className="text-3xl font-bold text-emerald-600" data-testid="platform-revenue">${stats.total_revenue ?? 0}</p>
+                  <p className="text-[10px] text-muted-foreground">{stats.paid_transactions ?? 0} payments</p>
+                </div>
+                <TrendingUp className="w-10 h-10 text-emerald-200" />
               </div>
             </CardContent>
           </Card>
@@ -319,6 +352,9 @@ export default function PlatformAdmin() {
                       <p className="text-xs text-muted-foreground truncate">{tenant.tenant_id}</p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {tenant.subscription_status === 'active' && (
+                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Pro</Badge>
+                      )}
                       {tenant.is_trial && (
                         <Badge variant="outline" className="text-amber-600 border-amber-300">Trial</Badge>
                       )}

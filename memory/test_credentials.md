@@ -60,3 +60,7 @@
 - Device flag: localStorage 'face_enrolled_device'='1' shows the "Sign in with Face ID" button on /login
 - Device token: localStorage 'face_device_token' (auto-generated)
 - Backend test: POST /api/auth/face/login {descriptor:[128 floats], device_token} with X-Tenant-ID header
+
+## Billing demo tenant (SaaS Phase 3)
+- Tenant: billing-test | Login: admin@billing-test.com / billingtest123 (X-Tenant-ID: billing-test)
+- Has an active paid "pro" subscription ($10, 1 seat) — used to demo Platform Admin revenue metrics. Stripe test mode (sk_test_emergent), card 4242 4242 4242 4242.

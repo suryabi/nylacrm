@@ -11,6 +11,9 @@ import SplashScreen from './pages/SplashScreen';
 import Login from './pages/Login';
 import RegisterTenant from './pages/RegisterTenant';
 import OnboardingWizard from './pages/OnboardingWizard';
+import Billing from './pages/Billing';
+import PaymentSuccess from './pages/PaymentSuccess';
+import PaymentCancel from './pages/PaymentCancel';
 import AuthCallback from './components/AuthCallback';
 import GoogleAuthCallback from './pages/GoogleAuthCallback';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -177,7 +180,7 @@ function ActivityTrackerWrapper({ children }) {
 
 function ProtectedRoute({ children, moduleKey, appModule }) {
   const { user, loading } = useAuth();
-  const { isModuleEnabled, hasRolePermission, loading: configLoading } = useTenantConfig();
+  const { isModuleEnabled, hasRolePermission, loading: configLoading, tenantConfig } = useTenantConfig();
   const { canAccessSales, canAccessProduction, canAccessDistribution, canAccessMarketing } = useAppContext();
   const location = useLocation();
 
@@ -187,6 +190,44 @@ function ProtectedRoute({ children, moduleKey, appModule }) {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // SaaS trial enforcement — expired trials (without an active subscription)
+  // see a lock screen everywhere except the Billing page. Legacy tenants
+  // (created before self-serve signup, no onboarding_completed field) are exempt.
+  const trialExpired = tenantConfig?.onboarding_completed !== undefined &&
+    tenantConfig?.is_trial &&
+    tenantConfig?.trial_ends_at &&
+    new Date(tenantConfig.trial_ends_at) < new Date() &&
+    tenantConfig?.subscription_status !== 'active';
+  if (trialExpired && location.pathname !== '/billing') {
+    const isAdmin = ['admin', 'ceo', 'system admin', 'director', 'owner'].includes((user?.role || '').toLowerCase());
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary/20 p-4">
+        <div className="text-center p-8 max-w-md bg-card border rounded-xl shadow-sm" data-testid="trial-expired-lock">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
+            <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-foreground mb-2">Your free trial has ended</h2>
+          <p className="text-muted-foreground mb-5">
+            {isAdmin
+              ? 'Upgrade to the Pro plan to keep using your workspace — simple per-user pricing.'
+              : 'Please ask your workspace admin to upgrade the subscription.'}
+          </p>
+          {isAdmin && (
+            <button
+              onClick={() => { window.location.href = '/billing'; }}
+              className="px-5 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium"
+              data-testid="trial-expired-upgrade-btn"
+            >
+              View plans &amp; upgrade
+            </button>
+          )}
+        </div>
+      </div>
+    );
   }
 
   // Check if module is enabled at tenant level (if moduleKey is provided)
@@ -328,6 +369,9 @@ function AppRouter() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<RegisterTenant />} />
           <Route path="/onboarding" element={<OnboardingWizard />} />
+          <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
+          <Route path="/payment/success" element={<PaymentSuccess />} />
+          <Route path="/payment/cancel" element={<PaymentCancel />} />
           <Route path="/auth/callback" element={<GoogleAuthCallback />} />
 
           {/* Public, no-login contact share card */}

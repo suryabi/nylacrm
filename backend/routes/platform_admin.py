@@ -79,6 +79,11 @@ async def list_all_tenants(
             "is_trial": 1,
             "trial_ends_at": 1,
             "subscription_plan": 1,
+            "subscription_status": 1,
+            "subscription_valid_until": 1,
+            "subscription_seats": 1,
+            "onboarding_completed": 1,
+            "industry_label": 1,
             "registered_email": 1,
             "email_verified": 1,
             "created_at": 1,
@@ -193,6 +198,15 @@ async def toggle_tenant_status(
             'updated_at': datetime.now(timezone.utc).isoformat()
         }}
     )
+
+    if not new_status:
+        # Suspension takes effect immediately: revoke all live sessions for this tenant's users
+        user_ids = [u["id"] async for u in db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1})]
+        revoked = await db.user_sessions.delete_many({"$or": [
+            {"tenant_id": tenant_id},
+            {"user_id": {"$in": user_ids}},
+        ]})
+        logger.info(f"Revoked {revoked.deleted_count} sessions for suspended tenant {tenant_id}")
     
     logger.info(f"Platform Admin {current_user['email']} {'enabled' if new_status else 'disabled'} tenant {tenant_id}")
     
@@ -306,7 +320,16 @@ async def get_platform_stats(
     plans = await db.tenants.aggregate([
         {"$group": {"_id": "$subscription_plan", "count": {"$sum": 1}}}
     ]).to_list(10)
-    
+
+    # Billing metrics from Stripe transactions
+    paying_tenants = await db.tenants.count_documents({"subscription_status": "active"})
+    rev = await db.payment_transactions.aggregate([
+        {"$match": {"payment_status": "paid"}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}, "count": {"$sum": 1}}}
+    ]).to_list(1)
+    total_revenue = round(rev[0]["total"], 2) if rev else 0.0
+    paid_txn_count = rev[0]["count"] if rev else 0
+
     return {
         "total_tenants": total_tenants,
         "active_tenants": active_tenants,
@@ -315,8 +338,17 @@ async def get_platform_stats(
         "new_tenants_30d": new_tenants,
         "total_users": total_users,
         "total_leads": total_leads,
+        "paying_tenants": paying_tenants,
+        "total_revenue": total_revenue,
+        "paid_transactions": paid_txn_count,
         "subscription_breakdown": {p["_id"] or "unknown": p["count"] for p in plans}
     }
+
+
+@router.get("/me")
+async def platform_admin_me(current_user: dict = Depends(get_current_user)):
+    """Lightweight check used by the frontend to show/hide the console entry."""
+    return {"is_platform_admin": is_platform_admin(current_user)}
 
 
 @router.delete("/tenants/{tenant_id}")
@@ -353,63 +385,4 @@ async def delete_tenant(
     return {
         "message": f"Tenant {tenant_id} and all data deleted",
         "deleted_counts": deleted_counts
-    }
-
-
-
-@router.post("/migrate-users-tenant")
-async def migrate_users_to_tenant(
-    request: Request,
-    default_tenant: str = "nyla-air-water"
-):
-    """
-    Migration endpoint: Add tenant_id to all users that don't have one.
-    This is a PUBLIC endpoint for one-time migration - should be removed after use.
-    """
-    body = await request.json()
-    secret = body.get('secret')
-    
-    # Simple secret to prevent unauthorized access
-    if secret != 'migrate-nyla-2026':
-        raise HTTPException(status_code=403, detail="Invalid secret")
-    
-    # Find all users without tenant_id
-    users_without_tenant = await db.users.count_documents({'tenant_id': {'$exists': False}})
-    
-    if users_without_tenant == 0:
-        return {"message": "All users already have tenant_id", "migrated": 0}
-    
-    # Update all users without tenant_id
-    result = await db.users.update_many(
-        {'tenant_id': {'$exists': False}},
-        {'$set': {'tenant_id': default_tenant}}
-    )
-    
-    logger.info(f"Migrated {result.modified_count} users to tenant {default_tenant}")
-    
-    return {
-        "message": f"Migration complete",
-        "migrated": result.modified_count,
-        "tenant_id": default_tenant
-    }
-
-
-@router.get("/check-user-tenant/{email}")
-async def check_user_tenant(email: str):
-    """
-    Debug endpoint: Check if a user exists and their tenant_id.
-    PUBLIC endpoint for debugging - remove after use.
-    """
-    user = await db.users.find_one(
-        {'email': {'$regex': f'^{email}$', '$options': 'i'}},
-        {'_id': 0, 'email': 1, 'tenant_id': 1, 'name': 1, 'role': 1}
-    )
-    
-    if not user:
-        return {"found": False, "message": f"No user found with email {email}"}
-    
-    return {
-        "found": True,
-        "user": user,
-        "has_tenant_id": 'tenant_id' in user and user['tenant_id'] is not None
     }

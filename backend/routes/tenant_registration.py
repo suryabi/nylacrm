@@ -353,7 +353,11 @@ async def onboarding_complete(body: OnboardingComplete, current_user: dict = Dep
 
 
 @router.get("/list")
-async def list_all_tenants():
+async def list_all_tenants(current_user: dict = Depends(get_current_user)):
+    """List tenants (restricted to platform admins)."""
+    from .platform_admin import is_platform_admin
+    if not is_platform_admin(current_user):
+        raise HTTPException(status_code=403, detail="Platform Admin access required")
     """
     List all tenants (for platform admin or debugging).
     In production, this should be protected.

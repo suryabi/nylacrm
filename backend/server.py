@@ -3408,7 +3408,13 @@ async def login(credentials: UserLogin, request: Request, response: Response):
     
     if not user_doc.get('is_active', True):
         raise HTTPException(status_code=401, detail='Account is inactive')
-    
+
+    # Workspace suspension: a disabled tenant cannot accept new logins (platform admin control)
+    if user_doc.get('tenant_id'):
+        _tenant = await db.tenants.find_one({'tenant_id': user_doc['tenant_id']}, {'_id': 0, 'is_active': 1})
+        if _tenant and _tenant.get('is_active') is False:
+            raise HTTPException(status_code=403, detail='This workspace has been suspended. Contact support.')
+
     await clear_login_failures(credentials.email, login_ip)
     
     # Create session token (same as Google OAuth flow)
