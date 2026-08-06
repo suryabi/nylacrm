@@ -4,8 +4,12 @@ import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Loader2, Languages, RotateCcw } from 'lucide-react';
+import { Loader2, Languages, RotateCcw, Wand2 } from 'lucide-react';
 import { useTenantConfig, DEFAULT_TERMINOLOGY } from '../../context/TenantConfigContext';
+import { TERMINOLOGY_PRESETS } from '../../config/terminologyPresets';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../ui/select';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -71,6 +75,16 @@ export const TerminologyEditor = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
+        <div className="flex items-center gap-2 rounded-lg border bg-slate-50 p-3">
+          <Wand2 className="h-4 w-4 text-primary shrink-0" />
+          <span className="text-sm font-medium whitespace-nowrap">Industry preset:</span>
+          <Select onValueChange={(v) => setValues(JSON.parse(JSON.stringify(TERMINOLOGY_PRESETS[v])))}>
+            <SelectTrigger className="h-9 flex-1" data-testid="term-preset-select"><SelectValue placeholder="Apply a one-click term set…" /></SelectTrigger>
+            <SelectContent>
+              {Object.keys(TERMINOLOGY_PRESETS).map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="hidden sm:grid grid-cols-[1.4fr_1fr_1fr] gap-3 text-xs font-semibold uppercase tracking-wider text-slate-500 px-1">
           <span>Concept</span><span>Singular</span><span>Plural</span>
         </div>

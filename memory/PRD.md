@@ -2137,3 +2137,10 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 **Suspension enforcement** (integration_expert playbook): the ACTIVE login route is in `server.py` (~line 3398, NOT routes/auth.py which also got the check but is shadowed) — suspended tenant (is_active=false) login → 403 "workspace has been suspended"; toggle-status disable also deletes user_sessions (matched by tenant users' ids — session docs from server.py login have NO tenant_id field!) so live sessions die instantly (verified 401).
 **Security tightening**: removed public /migrate-users-tenant + /check-user-tenant endpoints; GET /api/tenants/list now requires platform admin (verified 401 unauth; frontend has no usages).
 **Verified**: curl (me/stats/suspend 403/session revoke 401/re-enable 200, removed endpoints 404) + console screenshot (12 tenants, revenue $10, Pro badge). Gotchas hit: duplicate `Crown` import & pre-existing `isPlatformAdmin` const in DashboardLayout caused compile errors — consolidated.
+
+## 2026-08-06 — Terminology presets in onboarding + settings
+- `frontend/src/config/terminologyPresets.js`: TERMINOLOGY_PRESETS for 9 industries (F&B, FMCG, Pharma, Apparel, Manufacturing, Wholesale, Retail, Agriculture, Services) covering the 5 term keys. 'Apparel' added to wizard INDUSTRIES list (was missing).
+- Onboarding wizard step 1: selecting an industry shows a preset panel (checkbox "Use X terminology", default ON, chips previewing all 5 terms); payload sends `terminology` → backend onboarding/complete sanitizes (same ALLOWED_TERM_KEYS validation) and stores tenant.terminology.
+- TerminologyEditor (Tenant Settings): "Industry preset" select prefills the singular/plural inputs (explicit Save still required).
+- Verified: full wizard E2E (Apparel → tenant.terminology stored with Piece/Carton/Dealer/Workshop/Style) + settings preset prefill screenshot (Pharma → Strip/Stockist, not saved). Test tenant threadly deleted.
+- Recurring gotcha: JSX block edits in parallel batches got silently lost twice more (wizard preset panel, App.js import) — always grep-verify after batched edits to the same file.

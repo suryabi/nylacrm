@@ -17,12 +17,15 @@ import {
   ArrowRight, ArrowLeft, CheckCircle, Copy, Plus, Trash2, Rocket,
 } from 'lucide-react';
 import { MODULE_REGISTRY, ALL_MODULE_KEYS } from '../config/moduleRegistry';
+import { TERMINOLOGY_PRESETS } from '../config/terminologyPresets';
+
+const TERM_LABELS = { unit: 'Sales unit', package: 'Bulk package', distributor: 'Channel partner', factory: 'Production site', sku: 'Product variant' };
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
 const INDUSTRIES = [
-  'Food & Beverage', 'FMCG / Consumer Goods', 'Pharmaceuticals', 'Manufacturing',
+  'Food & Beverage', 'FMCG / Consumer Goods', 'Pharmaceuticals', 'Apparel', 'Manufacturing',
   'Wholesale & Distribution', 'Retail', 'Agriculture', 'Services', 'Other',
 ];
 const COMPANY_SIZES = ['1-10', '11-50', '51-200', '200+'];
@@ -82,6 +85,9 @@ export default function OnboardingWizard() {
   const [templateId, setTemplateId] = useState('sales');
   const [modules, setModules] = useState(() => modulesForTemplate(TEMPLATES[0]));
   const [invites, setInvites] = useState([]);
+  const [useIndustryTerms, setUseIndustryTerms] = useState(true);
+
+  const industryPreset = TERMINOLOGY_PRESETS[industry] || null;
 
   useEffect(() => {
     axios.get(`${API}/tenants/onboarding/status`, { headers: HEAD() })
@@ -120,6 +126,7 @@ export default function OnboardingWizard() {
         currency,
         modules,
         invites: validInvites,
+        terminology: (useIndustryTerms && industryPreset) ? industryPreset : {},
       }, { headers: HEAD() });
       setResult(res.data);
     } catch (e) {
@@ -204,6 +211,22 @@ export default function OnboardingWizard() {
               <SelectContent>{INDUSTRIES.map((i) => <SelectItem key={i} value={i}>{i}</SelectItem>)}</SelectContent>
             </Select>
           </div>
+          {industryPreset && (
+            <div className="rounded-lg border bg-slate-50 p-3 space-y-2" data-testid="onboarding-terms-preset">
+              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                <Checkbox checked={useIndustryTerms} onCheckedChange={(v) => setUseIndustryTerms(!!v)} data-testid="onboarding-terms-checkbox" />
+                Use {industry} terminology across the app
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(industryPreset).map(([k, v]) => (
+                  <Badge key={k} variant="outline" className="bg-white text-slate-700 font-normal text-[11px]" data-testid={`preset-term-${k}`}>
+                    <span className="text-muted-foreground mr-1">{TERM_LABELS[k]}:</span> {v.singular} / {v.plural}
+                  </Badge>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">You can fine-tune these anytime in Tenant Settings → Terminology.</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Company size</Label>

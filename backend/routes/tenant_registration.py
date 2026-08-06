@@ -264,6 +264,7 @@ class OnboardingComplete(BaseModel):
     currency: Optional[str] = None
     modules: dict = {}
     invites: List[OnboardingInvite] = []
+    terminology: dict = {}
 
 
 def _require_tenant_admin(user: dict, tenant: dict):
@@ -317,6 +318,19 @@ async def onboarding_complete(body: OnboardingComplete, current_user: dict = Dep
     for key, enabled in (body.modules or {}).items():
         if isinstance(key, str) and re.match(r"^[a-z][a-z0-9_]{0,60}$", key) and isinstance(enabled, bool):
             updates[f"modules.{key}"] = enabled
+
+    # Industry terminology preset (same allowed keys/validation as the tenant-admin endpoint)
+    ALLOWED_TERM_KEYS = {"unit", "package", "distributor", "factory", "sku"}
+    clean_terms = {}
+    for key, val in (body.terminology or {}).items():
+        if key not in ALLOWED_TERM_KEYS or not isinstance(val, dict):
+            continue
+        singular = str(val.get("singular") or "").strip()[:40]
+        plural = str(val.get("plural") or "").strip()[:40]
+        if singular and plural:
+            clean_terms[key] = {"singular": singular, "plural": plural}
+    if clean_terms:
+        updates["terminology"] = clean_terms
 
     await db.tenants.update_one({"tenant_id": tenant_id}, {"$set": updates})
 
