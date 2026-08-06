@@ -11,7 +11,7 @@ from core.tenant import get_current_tenant_id
 from database import db
 import uuid
 import io
-from utils.excel_branding import apply_brand_font
+from utils.excel_branding import brand_workbook
 
 router = APIRouter()
 
@@ -721,7 +721,7 @@ def _build_workbook(rows=None, is_template=False):
 
 def _wb_to_response(wb, filename):
     buf = io.BytesIO()
-    apply_brand_font(wb)
+    brand_workbook(wb)
     wb.save(buf)
     buf.seek(0)
     return StreamingResponse(

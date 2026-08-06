@@ -2216,3 +2216,9 @@ Test tenant sales-only deleted.
 - New utils/excel_branding.py apply_brand_font(wb): sets font name "Helvetica" on every cell preserving bold/size/color. Wired before all 9 wb.save() sites: accounting_transactions, customer_complaints (x2), distributor_stock_transfers, distributors (x2), global_stock_dashboard, invoices, marketing.
 - Other reportlab PDFs (server.py stamp, production_qc, delivery schedules) already use base-14 Helvetica — untouched.
 - Verified: e2e global-stock export → all cell fonts "Helvetica"; PDF smoke build with HelveticaBrand + ₹ OK; py_compile all touched files; backend restarted clean.
+
+## 2026-08-06 — Branded logo header on exports
+- excel_branding.py extended: brand_workbook(wb) = add_brand_header (insert 4 rows/sheet: kingfisher logo image A1, "Nyla Air Water" bold B2, tagline B3; freeze_panes auto-shifted) + apply_brand_font. All 9 export sites now call brand_workbook(wb).
+- Logo copied to /app/backend/assets/nyla-logo.png.
+- pdf_generator.fetch_logo_image: falls back to bundled Nyla logo when tenant branding.logo_url missing/unfetchable; 3 call sites now always call it → debit/credit note PDFs always show logo.
+- Verified e2e: global-stock, invoices, complaints exports each contain 1 image + header text + Helvetica fonts, freeze panes correct (A6); PDF fallback returns 50x50 Image.

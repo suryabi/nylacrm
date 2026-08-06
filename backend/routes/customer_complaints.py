@@ -33,7 +33,7 @@ from pydantic import BaseModel, Field
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from services.object_storage import build_path, guess_content_type, put_object, get_object
-from utils.excel_branding import apply_brand_font
+from utils.excel_branding import brand_workbook
 
 router = APIRouter(prefix="/complaints", tags=["Customer Complaints"])
 
@@ -430,7 +430,7 @@ async def import_template(current_user: dict = Depends(get_current_user)):
     ins.column_dimensions["C"].width = 60
 
     buf = io.BytesIO()
-    apply_brand_font(wb)
+    brand_workbook(wb)
     wb.save(buf)
     buf.seek(0)
     return StreamingResponse(
@@ -485,7 +485,7 @@ async def export_complaints(
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = 22
 
     buf = io.BytesIO()
-    apply_brand_font(wb)
+    brand_workbook(wb)
     wb.save(buf)
     buf.seek(0)
     fname = f"issues-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M')}.xlsx"

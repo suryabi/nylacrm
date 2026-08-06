@@ -94,23 +94,30 @@ def build_maps_qr(address_text: str = None, lat=None, lng=None, maps_link: str =
 
 
 
+_LOCAL_BRAND_LOGO = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "nyla-logo.png")
+
+
 def fetch_logo_image(logo_url: str, max_width: float = 60, max_height: float = 40) -> Image:
     """
     Fetch and return a ReportLab Image from a URL.
-    Returns None if the URL is invalid or fetch fails.
+    Falls back to the bundled Nyla brand logo when no URL is set or fetch fails.
+    Returns None only if no logo source is available at all.
     """
-    if not logo_url:
-        return None
-    
-    try:
-        response = requests.get(logo_url, timeout=10)
-        response.raise_for_status()
-        img_data = BytesIO(response.content)
-        img = Image(img_data, width=max_width, height=max_height)
-        return img
-    except Exception as e:
-        logger.warning(f"Failed to fetch logo from {logo_url}: {e}")
-        return None
+    if logo_url:
+        try:
+            response = requests.get(logo_url, timeout=10)
+            response.raise_for_status()
+            img_data = BytesIO(response.content)
+            return Image(img_data, width=max_width, height=max_height)
+        except Exception as e:
+            logger.warning(f"Failed to fetch logo from {logo_url}: {e}")
+    if os.path.exists(_LOCAL_BRAND_LOGO):
+        try:
+            side = min(max_width, max_height)
+            return Image(_LOCAL_BRAND_LOGO, width=side, height=side)
+        except Exception as e:
+            logger.warning(f"Failed to load local brand logo: {e}")
+    return None
 
 
 def generate_debit_credit_note_pdf(
@@ -238,7 +245,7 @@ def generate_debit_credit_note_pdf(
     
     # Try to get logo
     logo_url = branding.get('logo_url') if branding else None
-    company_logo = fetch_logo_image(logo_url, max_width=80, max_height=50) if logo_url else None
+    company_logo = fetch_logo_image(logo_url, max_width=80, max_height=50)
     
     # Header row with logo and company info
     if company_logo:
@@ -590,7 +597,7 @@ def generate_customer_invoice_pdf(
     
     # Try to get logo
     logo_url = branding.get('logo_url') if branding else None
-    company_logo = fetch_logo_image(logo_url, max_width=80, max_height=50) if logo_url else None
+    company_logo = fetch_logo_image(logo_url, max_width=80, max_height=50)
     
     # Header row with logo and company info
     if company_logo:
@@ -943,7 +950,7 @@ def generate_delivery_challan_pdf(
     company_addr_str = ', '.join(addr_parts) if addr_parts else 'Address not configured'
 
     logo_url = branding.get('logo_url') if branding else None
-    company_logo = fetch_logo_image(logo_url, max_width=80, max_height=50) if logo_url else None
+    company_logo = fetch_logo_image(logo_url, max_width=80, max_height=50)
     header_left = company_logo or Paragraph(f"<b>{company_name}</b>", ParagraphStyle('CN', parent=styles['Normal'], fontSize=14, fontName=_BOLD_FONT))
     company_info_text = f"""
     <b>{company_name}</b><br/>

@@ -25,7 +25,7 @@ from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from services import zoho_service
 from services.object_storage import put_object, get_object, build_path, guess_content_type
-from utils.excel_branding import apply_brand_font
+from utils.excel_branding import brand_workbook
 
 ALLOWED_PROOF_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "application/pdf"}
 
@@ -1489,7 +1489,7 @@ async def export_transactions(
         for i, h in enumerate(headers, 1):
             ws.column_dimensions[chr(64 + i) if i <= 26 else "A" + chr(64 + i - 26)].width = max(12, min(40, len(h) + 4))
         out = io.BytesIO()
-        apply_brand_font(wb)
+        brand_workbook(wb)
         wb.save(out)
         out.seek(0)
         return StreamingResponse(out, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
