@@ -44,8 +44,7 @@ export default function Landing() {
   if (!loading && user) return <Navigate to="/home" replace />;
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F]" style={{ fontFamily: "'Inter', -apple-system, sans-serif" }} data-testid="landing-page">
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F]" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif" }} data-testid="landing-page">
 
       {/* Header */}
       <header className="fixed top-0 inset-x-0 z-50 backdrop-blur-xl bg-[#F5F5F7]/80 border-b border-black/5">

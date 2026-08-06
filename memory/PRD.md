@@ -2203,3 +2203,8 @@ Test tenant sales-only deleted.
 - Verified landing & login at 390px: no horizontal overflow, sections stack cleanly, header nav hidden on mobile, form fully usable.
 - Login tweaks: logo above "Welcome Back" now links to / (login-logo-home-link); email/password inputs use text-base (16px) to prevent iOS focus auto-zoom.
 - Verified on mobile viewport: logo tap → landing; full sign-in → /home.
+
+## 2026-08-06 — Brand font: Helvetica site-wide
+- index.css: single @import Arimo (metric-compatible Helvetica fallback for Windows/Android); universal rule `*, *::before, *::after { font-family: 'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif !important; }` overrides all inline fontFamily usages (IBM Plex/Manrope/Cabinet Grotesk/etc. across components) without editing each file. body/h1-h6/.font-heading/.font-body/.font-mono all set to the stack.
+- index.html: old Google fonts link (Manrope/Outfit/IBM Plex/JetBrains) replaced with Arimo. Landing.js/Login.js Inter links + inline styles removed → Helvetica stack.
+- Verified computed fontFamily on landing h1, login title, and dashboard body = Helvetica stack; layouts intact.

@@ -248,8 +248,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex text-[#1D1D1F]" style={{ fontFamily: "'Inter', -apple-system, sans-serif" }} data-testid="login-page">
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <div className="min-h-screen flex text-[#1D1D1F]" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif" }} data-testid="login-page">
       {/* Left side - Nyla brand panel */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-[#F5F5F7]">
         <img src="/landing/hero.jpg" alt="Crystal-clear water droplet" className="absolute inset-0 w-full h-full object-cover" />

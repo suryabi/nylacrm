@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Arimo:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -89,25 +89,29 @@
     * {
         @apply border-border;
     }
+    /* Brand font: Helvetica everywhere (Arimo = metric-compatible web fallback) */
+    *, *::before, *::after {
+        font-family: 'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif !important;
+    }
     body {
         @apply bg-background text-foreground antialiased;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-family: 'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif;
     }
     h1, h2, h3, h4, h5, h6 {
-        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-family: 'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif;
         @apply font-semibold tracking-tight;
     }
     .font-heading {
-        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-family: 'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif;
     }
     .font-subheading {
-        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-family: 'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif;
     }
     .font-body {
-        font-family: 'Inter', sans-serif;
+        font-family: 'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif;
     }
     .font-mono {
-        font-family: 'SF Mono', 'Fira Code', monospace;
+        font-family: 'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif;
     }
 }
 
