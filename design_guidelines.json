@@ -1,65 +1,109 @@
 {
-  "theme": "Crisp Light & High-Contrast (Swiss B2B)",
+  "theme": "light",
+  "archetype": "Swiss & High-Contrast (Authority, Clarity, Truth)",
   "typography": {
-    "headings": "Plus Jakarta Sans (font-heading), font-semibold, tracking-tight",
-    "body": "Inter (font-body), leading-relaxed",
-    "currency_and_data": "Use 'font-mono' (SF Mono) OR add 'tabular-nums' class to all numbers, amounts, and dates for vertical alignment.",
-    "hierarchy": {
-      "h1": "text-3xl md:text-4xl tracking-tight text-foreground",
-      "h2": "text-xl md:text-2xl font-semibold tracking-tight",
-      "h3": "text-lg font-medium text-foreground",
-      "label": "text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground"
-    }
+    "headings": {
+      "fontFamily": "'Outfit', sans-serif",
+      "weights": ["400", "700", "900"],
+      "usage": "Use tight letter spacing (tracking-tight). Do not default to bold, mix weights."
+    },
+    "body": {
+      "fontFamily": "'IBM Plex Sans', sans-serif",
+      "weights": ["400", "500", "600"],
+      "usage": "Loose line-height (leading-relaxed) for readability."
+    },
+    "google_fonts_url": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Outfit:wght@400;700;900&display=swap"
   },
   "colors": {
-    "money_in": "hsl(var(--primary)) or emerald-600 - Use for Revenue/Credit",
-    "money_out": "hsl(var(--destructive)) or red-600 - Use for Expenses/Debit",
-    "net_flow": "hsl(var(--foreground)) - Dark/high-contrast for Net totals",
-    "surface": "hsl(var(--card)) with subtle hsl(var(--border)) borders"
-  },
-  "grids_and_layouts": {
-    "base": "Bento Grid Protocol (Mode B: High Density). Use grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-6.",
-    "kpi_row": "col-span-full grid grid-cols-2 md:grid-cols-5 gap-4. 5 cards: Money In, Money Out, Net Cash Flow, Bills Pending, Untagged Alerts.",
-    "charts_row": "Monthly Trend Chart (col-span-1 md:col-span-3 lg:col-span-3) + Income/Expense Donut (col-span-1 md:col-span-2 lg:col-span-2).",
-    "drilldown_section": "col-span-full. Card containing the 3-level Expense breakdown.",
-    "bottom_row": "Bank Accounts (col-span-1 md:col-span-2 lg:col-span-2) + Top Vendors (col-span-1 md:col-span-2 lg:col-span-3)"
-  },
-  "component_guidelines": {
-    "kpi_cards": "Use 'metric-card' class (or flat bg-card with 1px border). Remove heavy shadows. Include a small sparkline or trend indicator (e.g., +12% vs last period) in emerald or red.",
-    "drill_down_pattern": "In-place view swapping using Framer Motion (AnimatePresence) or conditional rendering. Include a breadcrumb header (e.g., 'Expenses / Marketing / Ads') to navigate back up. Level 1: Horizontal Bar list + Donut. Level 2: Sub-category list. Level 3: Dense Transactions Table.",
-    "period_switcher": "Pill-shaped toggle (rounded-full bg-secondary p-1) with inner buttons (rounded-full) for active states. Options: FY, Qtr, Month, Custom.",
-    "charts": "Recharts AreaChart for Net Flow over time, or BarChart for In vs Out. Remove Y-axis lines, keep faint horizontal grid lines (strokeDasharray='3 3' stroke='hsl(var(--border))'). Tooltips must be Glassmorphism (bg-white/70 backdrop-blur-md border border-white/40).",
-    "tables": "Dense rows. text-sm. Right-align all currency columns. Use tabular-nums. Add subtle hover state (hover:bg-muted/50)."
+    "background": {
+      "primary": "#FFFFFF",
+      "secondary": "#F5F5F5",
+      "tertiary": "#EAEAEA"
+    },
+    "text": {
+      "primary": "#0A0A0A",
+      "secondary": "#525252",
+      "inverse": "#FFFFFF"
+    },
+    "accent": {
+      "primary": "#002FA7",
+      "primary_hover": "#00227A",
+      "secondary": "#FFD600",
+      "danger": "#FF3B30"
+    },
+    "border": {
+      "default": "rgba(10, 10, 10, 0.1)",
+      "strong": "rgba(10, 10, 10, 0.8)"
+    },
+    "rules": "No gradients for backgrounds. Use flat colors. Use the primary accent (#002FA7) strictly for primary CTA buttons and important links."
   },
   "visual_enhancers": {
-    "glassmorphism": "Use the existing '.glass' utility from index.css for sticky headers, tooltips, or floating action menus.",
-    "motion": "Subtle layout transitions. Staggered fade-in for KPI cards (framer-motion). Drill-down views should slide left/right on transition.",
-    "icons": "lucide-react. Use ArrowUpRight (Money In), ArrowDownRight (Money Out), AlertCircle (Untagged), Wallet (Net Flow)."
+    "borders": "1px sharp borders. Expose the structural grid where possible (Technical Look).",
+    "shadows": "Minimalistic. Use sharp 1px offset borders or very diffuse shadows. No muddy gray shadows.",
+    "surfaces": {
+      "header": "Crystal Glass: backdrop-blur-xl bg-white/70, 1px bottom border-border.",
+      "cards": "Flat background, 1px subtle border, no shadow by default. On hover, slight lift (-translate-y-1) and drop-shadow."
+    }
+  },
+  "components": {
+    "buttons": "Sharp corners or very slight rounding (rounded-sm). Solid fill for primary, 1px border for secondary. Strong hover states with color shifts.",
+    "cards": "Use raw div elements for layout freedom rather than Shadcn cards. 1px borders. Add generous padding (p-8 or p-12).",
+    "navigation": "Fixed header with backdrop-blur. Logo left, links center, Sign in / Register right.",
+    "pricing_card": "High contrast. Deep charcoal background (#0A0A0A) for the primary pricing tier if featured, white text. Large price typography."
+  },
+  "layouts": {
+    "hero": "Massive typography (text-5xl to text-6xl+). Asymmetrical layout. High contrast text.",
+    "feature_tour": "Bento Grid (Mode A: 'Tetris' Grid). Asymmetrical, mixing wide, tall, and square cells. Gap-8 to gap-12.",
+    "industry_templates": "Overlapping or masonry grid layout with heavy imagery and stark text overlays.",
+    "spacing": "Generous spacing. py-24 to py-32 for sections."
+  },
+  "motion": {
+    "interactions": "Hover states on all interactive elements (color shift + slight transform).",
+    "entrance": "Framer motion for staggered fade-in and slide-up on scroll.",
+    "parallax": "Use Lenis for smooth scrolling if possible. Subtle parallax on hero image."
+  },
+  "image_urls": {
+    "hero_background": {
+      "url": "https://images.pexels.com/photos/4487365/pexels-photo-4487365.jpeg",
+      "description": "Two workers managing inventory in a spacious warehouse aisle. Used for the Hero section to establish operations context."
+    },
+    "apparel_industry": {
+      "url": "https://images.pexels.com/photos/31019572/pexels-photo-31019572.jpeg",
+      "description": "Apparel factory line. Used for Industry Templates section."
+    },
+    "pharma_industry": {
+      "url": "https://images.unsplash.com/photo-1669707041081-dd4d51943041?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTJ8MHwxfHNlYXJjaHwxfHxwaGFybWFjZXV0aWNhbCUyMGxhYnxlbnwwfHx8fDE3ODU5OTUzODR8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Pharmaceutical lab worker. Used for Industry Templates section."
+    },
+    "food_production": {
+      "url": "https://images.pexels.com/photos/18631424/pexels-photo-18631424.jpeg",
+      "description": "Food production line. Used for Industry Templates section."
+    },
+    "fmcg_industry": {
+      "url": "https://images.unsplash.com/photo-1587293852726-70cdb56c2866?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NjZ8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjB3YXJlaG91c2UlMjBvcGVyYXRpb25zfGVufDB8fHx8MTc4MjI4NjU0OHww&ixlib=rb-4.1.0&q=85",
+      "description": "Generic warehouse operations. Used for FMCG or general template."
+    }
   },
   "accessibility": {
-    "contrast": "Ensure text over charts and colored badges meets APCA/WCAG standards. Do not rely on color alone (use +/- signs or up/down arrows).",
-    "focus": "All interactive elements must have focus:ring-2 focus:ring-ring focus:ring-offset-2.",
-    "testing": "All interactive elements (drill-down rows, switcher tabs) MUST include data-testid attributes."
-  },
-  "media_and_icons": {
-    "instructions": "No external images required. Rely heavily on typography, color-coded progress bars, and Recharts."
+    "contrast": "Ensure all text meets 4.5:1 ratio.",
+    "testing": "All interactive elements MUST include a data-testid attribute (e.g., data-testid='hero-cta-button', data-testid='pricing-subscribe-button')."
   },
   "instructions_to_main_agent": [
-    "Build the dashboard inside the main content area (assuming sidebar exists). Add 'Dashboard' menu item in the navigation.",
-    "Use INR currency formatting (e.g., new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value)).",
-    "Implement a robust 3-level drill down for expenses: Root Category -> Sub Category -> Transactions.",
-    "Add 'tabular-nums' to all monetary values to ensure alignment.",
-    "Use Recharts for the monthly trend chart and expense breakdown donuts.",
-    "Mock the data comprehensively to showcase the FY (April to March) periods, realistic expense categories (e.g., Logistics, Marketing, Office), and sub-categories.",
-    "Apply 'alerting-border' class to the 'Untagged Transactions' card if count > 0 to draw attention.",
-    "Do not use transparent backgrounds where content scrolls underneath. Use '.glass' utility."
+    "Build a high-conversion marketing page in /app/frontend/src/App.js (or relevant entry point).",
+    "Use Lucide-react for icons.",
+    "Implement Framer Motion for scroll animations.",
+    "Do not apply global transitions (e.g., transition: all).",
+    "Include the header with 'Sign in' (/login) and 'Start free trial' (/register).",
+    "Build the Feature Tour as a Bento grid.",
+    "Create a bold Pricing section highlighting '$10/user/month' and '14-day free trial'."
   ],
   "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
-    "Avoid generic, centered 'AI slop' layouts. Use asymmetrical or heavily structured grid alignments.",
-    "Create depth using subtle borders and nested radii (e.g., child element radius <= parent radius).",
-    "Apply hover/active/focus states to ALL interactive elements. Ensure color contrast increases on interaction.",
-    "Never use generic AI emojis for icons; strictly use lucide-react.",
-    "Implement micro-animations for data mounting and view swapping.",
-    "Use Sonner for toasts."
+    "You tend to converge toward generic outputs. Create distinctive frontends that surprise and delight.",
+    "Don't make generic centered layouts. Use asymmetrical layouts with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters for floating navs.",
+    "Every interaction needs micro-animations - hover states, transitions, entrance animations.",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Never use placeholder URLs. Use the provided image URLs.",
+    "Do NOT use complete transparent backgrounds for overlays."
   ]
 }
