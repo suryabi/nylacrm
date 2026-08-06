@@ -366,6 +366,72 @@ async def onboarding_complete(body: OnboardingComplete, current_user: dict = Dep
     return {"success": True, "invited": created, "skipped": skipped}
 
 
+# ── Hostname-based tenant resolution (custom domains / subdomains) ──────
+PLATFORM_HOST_SUFFIXES = (".emergentagent.com", ".emergent.host", "localhost", ".local")
+
+_HOSTNAME_RE = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$")
+
+
+def _normalize_host(raw: str) -> str:
+    h = (raw or "").strip().lower()
+    h = re.sub(r"^https?://", "", h).split("/")[0].split(":")[0]
+    if h.startswith("www."):
+        h = h[4:]
+    return h
+
+
+def _is_platform_host(host: str) -> bool:
+    return host == "localhost" or any(host.endswith(s) for s in PLATFORM_HOST_SUFFIXES)
+
+
+@router.get("/resolve/host")
+async def resolve_host(host: str):
+    """Public: map an incoming hostname to a tenant (custom domain, else subdomain label)."""
+    h = _normalize_host(host)
+    proj = {"_id": 0, "tenant_id": 1, "name": 1, "branding": 1, "is_active": 1}
+    tenant = None
+    if h:
+        tenant = await db.tenants.find_one({"custom_domain": h}, proj)
+        if not tenant and not _is_platform_host(h) and "." in h:
+            sub = h.split(".")[0]
+            tenant = await db.tenants.find_one({"tenant_id": sub}, proj)
+    if not tenant or tenant.get("is_active") is False:
+        return {"tenant_id": None}
+    return {
+        "tenant_id": tenant["tenant_id"],
+        "name": tenant.get("name"),
+        "logo_url": (tenant.get("branding") or {}).get("logo_url"),
+    }
+
+
+class CustomDomainBody(BaseModel):
+    domain: str = ""
+
+
+@router.put("/current/custom-domain")
+async def set_custom_domain(body: CustomDomainBody, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tenant = await db.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    _require_tenant_admin(current_user, tenant)
+
+    domain = _normalize_host(body.domain)
+    if domain:
+        if not _HOSTNAME_RE.match(domain):
+            raise HTTPException(status_code=400, detail="Invalid domain — expected e.g. crm.yourcompany.com")
+        if _is_platform_host(domain):
+            raise HTTPException(status_code=400, detail="Platform domains cannot be claimed")
+        clash = await db.tenants.find_one({"custom_domain": domain, "tenant_id": {"$ne": tenant_id}}, {"_id": 0, "tenant_id": 1})
+        if clash:
+            raise HTTPException(status_code=409, detail="This domain is already linked to another workspace")
+    await db.tenants.update_one(
+        {"tenant_id": tenant_id},
+        {"$set": {"custom_domain": domain or None, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"success": True, "custom_domain": domain or None}
+
+
 @router.get("/list")
 async def list_all_tenants(current_user: dict = Depends(get_current_user)):
     """List tenants (restricted to platform admins)."""

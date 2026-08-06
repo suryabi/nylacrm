@@ -20,6 +20,7 @@ import {
   Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw, ClipboardList, BookOpen, Sparkles, BarChart3, PenLine, Languages
 } from 'lucide-react';
 import TerminologyEditor from '../components/settings/TerminologyEditor';
+import CustomDomainCard from '../components/settings/CustomDomainCard';
 import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
 import InvoiceRelinkTool from '../components/InvoiceRelinkTool';
@@ -636,6 +637,7 @@ export default function TenantSettings() {
 
         {/* Company Profile Tab */}
         <TabsContent value="company" className="space-y-6">
+          <CustomDomainCard />
           {/* Business Identity */}
           <Card>
             <CardHeader>

@@ -65,6 +65,21 @@ export default function Login() {
   const [tenants, setTenants] = useState([]);
   const [selectedTenant, setSelectedTenant] = useState(tenantFromUrl || rememberedTenant);
   const [loadingTenants, setLoadingTenants] = useState(true);
+  const [hostTenant, setHostTenant] = useState(null);
+
+  // Hostname-based tenant resolution: on a tenant subdomain or custom domain,
+  // lock the workspace to that tenant and hide the selector.
+  useEffect(() => {
+    axios.get(`${API_URL}/api/tenants/resolve/host`, { params: { host: window.location.hostname } })
+      .then((r) => {
+        if (r.data?.tenant_id) {
+          setHostTenant(r.data.tenant_id);
+          setSelectedTenant(r.data.tenant_id);
+          localStorage.setItem('selectedTenant', r.data.tenant_id);
+        }
+      })
+      .catch(() => {});
+  }, []);
   
   // Tenant-specific info
   const [tenantInfo, setTenantInfo] = useState(null);
@@ -334,7 +349,7 @@ export default function Login() {
               {authConfig.allow_password_login !== false && (
                 <form onSubmit={handleLogin} className="space-y-4">
                   {/* Tenant Selector (for testing) */}
-                  {tenants.length > 1 && !tenantFromUrl && (
+                  {tenants.length > 1 && !tenantFromUrl && !hostTenant && (
                     <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
                       <Label className="text-amber-800 flex items-center gap-2 mb-2">
                         <Building2 className="h-4 w-4" />

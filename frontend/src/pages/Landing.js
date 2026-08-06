@@ -23,7 +23,18 @@ const Section = ({ children, className = '' }) => (
 
 export default function Landing() {
   const { user, loading } = useAuth();
+  const [hostTenant, setHostTenant] = React.useState(undefined); // undefined = checking
+
+  // White-label: on a tenant subdomain / custom domain, skip marketing → tenant login
+  React.useEffect(() => {
+    fetch(`${process.env.REACT_APP_BACKEND_URL}/api/tenants/resolve/host?host=${window.location.hostname}`)
+      .then((r) => r.json())
+      .then((d) => setHostTenant(d?.tenant_id || null))
+      .catch(() => setHostTenant(null));
+  }, []);
+
   if (!loading && user) return <Navigate to="/home" replace />;
+  if (hostTenant) return <Navigate to="/login" replace />;
 
   return (
     <div
