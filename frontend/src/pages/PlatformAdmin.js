@@ -352,6 +352,15 @@ export default function PlatformAdmin() {
                       <p className="text-xs text-muted-foreground truncate">{tenant.tenant_id}</p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {tenant.custom_domain && (
+                        <Badge variant="outline" className={
+                          tenant.custom_domain_status === 'verified'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        } title={tenant.custom_domain}>
+                          {tenant.custom_domain_status === 'verified' ? 'Domain ✓' : 'Domain pending'}
+                        </Badge>
+                      )}
                       {tenant.subscription_status === 'active' && (
                         <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Pro</Badge>
                       )}

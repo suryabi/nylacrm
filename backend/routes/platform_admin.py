@@ -84,6 +84,8 @@ async def list_all_tenants(
             "subscription_seats": 1,
             "onboarding_completed": 1,
             "industry_label": 1,
+            "custom_domain": 1,
+            "custom_domain_status": 1,
             "registered_email": 1,
             "email_verified": 1,
             "created_at": 1,

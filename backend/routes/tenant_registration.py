@@ -2,7 +2,7 @@
 Tenant Registration Routes - Self-service tenant onboarding
 Handles: tenant registration, subdomain availability, email verification
 """
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 import uuid
@@ -427,9 +427,62 @@ async def set_custom_domain(body: CustomDomainBody, current_user: dict = Depends
             raise HTTPException(status_code=409, detail="This domain is already linked to another workspace")
     await db.tenants.update_one(
         {"tenant_id": tenant_id},
-        {"$set": {"custom_domain": domain or None, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        {"$set": {
+            "custom_domain": domain or None,
+            "custom_domain_status": None,
+            "custom_domain_checked_at": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
     )
     return {"success": True, "custom_domain": domain or None}
+
+
+async def _resolve_ips(hostname: str) -> list:
+    import socket
+    import asyncio as _aio
+    loop = _aio.get_event_loop()
+    try:
+        infos = await _aio.wait_for(loop.run_in_executor(None, lambda: socket.getaddrinfo(hostname, 443)), timeout=6)
+        return sorted({i[4][0] for i in infos})
+    except Exception:
+        return []
+
+
+@router.get("/current/custom-domain/status")
+async def custom_domain_status(request: Request, current_user: dict = Depends(get_current_user)):
+    """Live DNS check: does the tenant's custom domain point at this platform?"""
+    tenant_id = get_current_tenant_id()
+    tenant = await db.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0, "custom_domain": 1})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    domain = tenant.get("custom_domain")
+    if not domain:
+        return {"status": "none", "domain": None}
+
+    expected_host = _normalize_host(
+        request.headers.get("x-forwarded-host") or request.headers.get("host") or ""
+    )
+    expected_ips, domain_ips = await _resolve_ips(expected_host), await _resolve_ips(domain)
+    if domain_ips and expected_ips and set(domain_ips) & set(expected_ips):
+        status = "verified"
+    elif not domain_ips:
+        status = "unresolvable"
+    else:
+        status = "pending"
+
+    checked_at = datetime.now(timezone.utc).isoformat()
+    await db.tenants.update_one(
+        {"tenant_id": tenant_id},
+        {"$set": {"custom_domain_status": status, "custom_domain_checked_at": checked_at}},
+    )
+    return {
+        "status": status,
+        "domain": domain,
+        "expected_host": expected_host,
+        "domain_ips": domain_ips,
+        "expected_ips": expected_ips,
+        "checked_at": checked_at,
+    }
 
 
 @router.get("/list")
