@@ -275,7 +275,9 @@ export default function Login() {
           className="w-full max-w-md space-y-8"
         >
           <div className="text-center">
-            <img src="/nyla-logo.png" alt="Nyla Air Water" className="h-14 w-14 object-contain mx-auto mb-5" data-testid="login-logo" />
+            <Link to="/" data-testid="login-logo-home-link">
+              <img src="/nyla-logo.png" alt="Nyla Air Water" className="h-14 w-14 object-contain mx-auto mb-5" data-testid="login-logo" />
+            </Link>
             {/* Show tenant name if available */}
             {tenantInfo && (
               <p className="text-sm mb-2" style={{ color: '#86868B' }}>
@@ -374,7 +376,7 @@ export default function Login() {
                       onChange={e => setEmail(e.target.value)}
                       placeholder="you@company.com"
                       required
-                      className="h-12 rounded-xl bg-white border-[#D2D2D7]"
+                      className="h-12 rounded-xl bg-white border-[#D2D2D7] text-base"
                     />
                   </div>
                   <div>
@@ -386,7 +388,7 @@ export default function Login() {
                         onChange={e => setPassword(e.target.value)}
                         placeholder="Enter password"
                         required
-                        className="h-12 pr-12 rounded-xl bg-white border-[#D2D2D7]"
+                        className="h-12 pr-12 rounded-xl bg-white border-[#D2D2D7] text-base"
                         data-testid="login-password-input"
                       />
                       <button

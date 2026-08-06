@@ -2198,3 +2198,8 @@ Test tenant sales-only deleted.
 - All /icons/icon-{72..512}.png regenerated (logo centered on white) for PWA/apple-touch.
 - manifest.json: name "Nyla Air Water", short_name "Nyla", theme #1D1D1F, bg #F5F5F7.
 - Verified: favicon.ico/png/icon-192 all serve HTTP 200; favicon-32.png visually confirmed shows kingfisher logo.
+
+## 2026-08-06 — Mobile polish (landing + login)
+- Verified landing & login at 390px: no horizontal overflow, sections stack cleanly, header nav hidden on mobile, form fully usable.
+- Login tweaks: logo above "Welcome Back" now links to / (login-logo-home-link); email/password inputs use text-base (16px) to prevent iOS focus auto-zoom.
+- Verified on mobile viewport: logo tap → landing; full sign-in → /home.
