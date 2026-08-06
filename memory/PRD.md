@@ -2181,3 +2181,10 @@ Test tenant sales-only deleted.
 - `Landing.js` rewritten: minimal Nyla Air Water branded page (logo /nyla-logo.png in public/, teal #00A6B8 + navy #003048 from logo), tagline, single "Sign in" CTA. No pricing, no FlowStack, no trial/signup, removed host-tenant redirect fetch.
 - Public self-signup removed: `/register` route now redirects to `/login` (RegisterTenant import removed from App.js); "Don't have a workspace? Create one" link removed from Login.js.
 - Verified via screenshot: landing renders, no "Start free trial"/"FlowStack" text, /register → /login redirect works, login page clean.
+
+## 2026-08-06 — Landing page rebuilt from user's reference site (hello-world-11369 preview)
+- User provided a Nyla brand marketing home page as reference; option (b): same visual content but only Sign in / Team Login clickable.
+- `Landing.js` rewritten: Apple-style page (#F5F5F7/#1D1D1F/#86868B, green #2C3E35, Inter font) with hero "Born from Air. Perfected by Nature.", intro + quote, 4 Explore cards, Nyla Journal (3 articles), black CTA banner, full footer (Now Serving cities, Team Login → /login). Nav items + card CTAs rendered as non-clickable spans. Header keeps "Sign in" button.
+- Images downloaded locally to /app/frontend/public/landing/ (hero.jpg, blog-air.jpg, blog-alkaline.jpg compressed from 1.5MB png, blog-groundwater.jpg).
+- index.html title → "Nyla Air Water — Where Nature Meets Purity" + brand meta description.
+- Verified via screenshots: all sections render, blog images naturalWidth>0, footer Team Login navigates to /login.
