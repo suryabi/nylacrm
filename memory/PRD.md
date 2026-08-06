@@ -2192,3 +2192,9 @@ Test tenant sales-only deleted.
 ## 2026-08-06 — Login page rebranded to Nyla clean look
 - Login.js restyled to match new landing: left panel = /landing/hero.jpg water image w/ dark bottom gradient, Nyla logo + "Born from Air. Perfected by Nature." headline (logo links to /); right panel #F5F5F7, Inter font, Nyla logo above "Welcome Back", black pill Sign In/Google/Face ID buttons, rounded-xl white inputs. All auth logic untouched (tenant selector, google workspace, face id, onboarding redirect).
 - Verified: screenshot + full login flow with test creds → redirected to /home dashboard successfully.
+
+## 2026-08-06 — Favicon & PWA icons rebranded to Nyla logo
+- favicon.ico (16/32/48/64, transparent) + favicon-32.png generated from nyla-logo.png; index.html adds sizes=32 png link.
+- All /icons/icon-{72..512}.png regenerated (logo centered on white) for PWA/apple-touch.
+- manifest.json: name "Nyla Air Water", short_name "Nyla", theme #1D1D1F, bg #F5F5F7.
+- Verified: favicon.ico/png/icon-192 all serve HTTP 200; favicon-32.png visually confirmed shows kingfisher logo.

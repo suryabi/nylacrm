@@ -1,11 +1,11 @@
 {
-  "name": "Nyla Sales CRM",
-  "short_name": "Nyla CRM",
-  "description": "Sales CRM for Nyla Air Water - Track leads, close deals, grow revenue",
+  "name": "Nyla Air Water",
+  "short_name": "Nyla",
+  "description": "Nyla Air Water operations platform",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#10b981",
+  "background_color": "#F5F5F7",
+  "theme_color": "#1D1D1F",
   "orientation": "any",
   "icons": [
     {
@@ -57,7 +57,10 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["business", "productivity"],
+  "categories": [
+    "business",
+    "productivity"
+  ],
   "screenshots": [],
   "prefer_related_applications": false
 }
