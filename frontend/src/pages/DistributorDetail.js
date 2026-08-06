@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ShareButton } from '../components/share/ShareButton';
-import { useTenantConfig } from '../context/TenantConfigContext';
+import { useTenantConfig, getTerm } from '../context/TenantConfigContext';
 import useMasterLocations from '../hooks/useMasterLocations';
 import { packagingBreakdown } from '../utils/packaging';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -2753,7 +2753,7 @@ export default function DistributorDetail() {
     <div className="p-6 space-y-6" data-testid="distributor-detail-page">
       <Breadcrumbs items={[
         { label: 'Distribution' },
-        { label: 'Distributors', href: '/distributors' },
+        { label: getTerm('distributor', { plural: true }), href: '/distributors' },
         { label: distributor.distributor_name || 'Detail' },
       ]} />
       {/* Header */}

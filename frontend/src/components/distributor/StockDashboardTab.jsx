@@ -7,6 +7,7 @@ import {
   TrendingUp, Clock, Droplets, ChevronDown, ChevronRight, BarChart3, Lock, Tags
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getTerm } from '../../context/TenantConfigContext';
 import { useAuth } from '../../context/AuthContext';
 import { BrandedStockSections } from './BrandedStockSections';
 
@@ -292,7 +293,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
           testId="total-stock-reserved"
         />
         <SummaryCard
-          label="Empty Bottles"
+          label={`Empty ${getTerm('unit', { plural: true })}`}
           value={fmt(t.empty_bottles_returned || 0)}
           icon={<RotateCcw className="h-4 w-4" />}
           color="emerald"
@@ -308,7 +309,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
           testId="total-product-returns"
         />
         <SummaryCard
-          label="Factory Returns"
+          label={`${getTerm('factory')} Returns`}
           value={fmt(t.factory_returns)}
           icon={<Factory className="h-4 w-4" />}
           color="purple"
@@ -388,22 +389,22 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <RotateCcw className="h-4 w-4 text-emerald-500" />
-            Empty Bottles &amp; Returns
+            Empty {getTerm('unit', { plural: true })} &amp; Returns
           </CardTitle>
           <CardDescription>
-            Empty &amp; FOC bottles cycle back for recycling; damaged &amp; expired are unsellable product returned to the factory.
+            Empty &amp; FOC {getTerm('unit', { plural: true, lower: true })} cycle back for recycling; damaged &amp; expired are unsellable product returned to the {getTerm('factory', { lower: true })}.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div>
-            <p className="text-xs font-semibold text-emerald-700 mb-2 uppercase tracking-wide">Empty bottles (for recycling)</p>
+            <p className="text-xs font-semibold text-emerald-700 mb-2 uppercase tracking-wide">Empty {getTerm('unit', { plural: true, lower: true })} (for recycling)</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <BottleCard label="Empty / Reusable" value={bt.empty_reusable} color="emerald" />
               <BottleCard label="FOC / Promotional" value={bt.promotional} color="emerald" />
             </div>
           </div>
           <div>
-            <p className="text-xs font-semibold text-amber-700 mb-2 uppercase tracking-wide">Unsellable product (return to factory)</p>
+            <p className="text-xs font-semibold text-amber-700 mb-2 uppercase tracking-wide">Unsellable product (return to {getTerm('factory', { lower: true })})</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <BottleCard label="Damaged" value={bt.damaged} color="red" />
               <BottleCard label="Expired" value={bt.expired} color="amber" />
@@ -424,7 +425,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
               </CardTitle>
               <CardDescription>
                 Complete inventory picture per product · showing quantities in{' '}
-                <span className="font-semibold text-slate-600">{viewCrates ? 'default crates' : 'base units (bottles)'}</span>
+                <span className="font-semibold text-slate-600">{viewCrates ? `default ${getTerm('package', { plural: true, lower: true })}` : `base units (${getTerm('unit', { plural: true, lower: true })})`}</span>
               </CardDescription>
             </div>
             <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 self-start" data-testid="stock-unit-toggle">
@@ -434,7 +435,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                 className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${!viewCrates ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 data-testid="stock-unit-bottles"
               >
-                Bottles
+                {getTerm('unit', { plural: true })}
               </button>
               <button
                 type="button"
@@ -442,7 +443,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                 className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${viewCrates ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 data-testid="stock-unit-crates"
               >
-                Default Crates
+                Default {getTerm('package', { plural: true })}
               </button>
             </div>
           </div>
@@ -463,7 +464,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     <span className="text-amber-600" title="Committed to open Stock Out orders (draft → in-transit) — not available for other orders">Reserved</span>
                   </th>
                   <th className="text-right p-3">
-                    <span className="text-emerald-600" title="Empty / Reusable + FOC units returned for recycling (counted in raw base units)">Empty Bottles</span>
+                    <span className="text-emerald-600" title="Empty / Reusable + FOC units returned for recycling (counted in raw base units)">Empty {getTerm('unit', { plural: true })}</span>
                   </th>
                   <th className="text-right p-3">
                     <span className="text-amber-600" title="Damaged + Expired — unsellable product">Product Ret.</span>

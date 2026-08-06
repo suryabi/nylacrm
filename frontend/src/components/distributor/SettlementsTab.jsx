@@ -6,6 +6,7 @@ import { Textarea } from '../ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Badge } from '../ui/badge';
 import { Plus, Trash2, DollarSign, RefreshCw, FileText, Calendar, Download, Building2, ChevronLeft, ChevronRight, Send, Check, X, Truck, CreditCard, Factory, ArrowRight, ArrowDown, Package, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { getTerm } from '../../context/TenantConfigContext';
 
 const MONTHS = [
   { value: 1, label: 'January' }, { value: 2, label: 'February' }, { value: 3, label: 'March' },
@@ -150,12 +151,12 @@ export default function SettlementsTab({
           'Account': s.account_name || '-',
           'Deliveries': s.total_deliveries || 0,
           'Customer Order Value': t.customer_order_value || 0,
-          'Distributor Margin': t.distributor_margin || 0,
+          [`${getTerm('distributor')} Margin`]: t.distributor_margin || 0,
           'Credit Notes (Linked + Direct)': credit,
           'Already Billed at Transfer': t.billed_at_transfer || 0,
-          'Factory Return Credit': fr,
+          [`${getTerm('factory')} Return Credit`]: fr,
           'Net Settlement': net,
-          'Direction': Math.abs(net) < 0.01 ? 'Settled' : (net > 0 ? 'Distributor pays Supplier' : 'Supplier pays Distributor'),
+          'Direction': Math.abs(net) < 0.01 ? 'Settled' : (net > 0 ? `${getTerm('distributor')} pays Supplier` : `Supplier pays ${getTerm('distributor')}`),
           'Status': s.status,
         };
       });
@@ -176,7 +177,7 @@ export default function SettlementsTab({
         <div className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-lg">Monthly Settlements</CardTitle>
-            <CardDescription>Customer Order Value − Distributor Margin − Credit Notes (Linked + Direct) − Already Billed at Transfer − Factory Return Credit = Net Settlement</CardDescription>
+            <CardDescription>Customer Order Value − {getTerm('distributor')} Margin − Credit Notes (Linked + Direct) − Already Billed at Transfer − {getTerm('factory')} Return Credit = Net Settlement</CardDescription>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={downloadExcel} disabled={downloading || !settlements.length} data-testid="download-settlements-btn">
@@ -266,7 +267,7 @@ export default function SettlementsTab({
                           );
                         })()}
                       </div>
-                      <p className="text-[10px] text-slate-500 mt-2">Distributor margin (₹{fmt(totalEarnings)}) already retained from customer collections</p>
+                      <p className="text-[10px] text-slate-500 mt-2">{getTerm('distributor')} margin (₹{fmt(totalEarnings)}) already retained from customer collections</p>
                     </div>
 
                     {/* === DELIVERY DETAILS === */}
@@ -423,7 +424,7 @@ export default function SettlementsTab({
           <div className="text-center py-12 text-slate-400">
             <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-40" />
             <p className="font-medium">No settlements yet</p>
-            <p className="text-sm mt-1">Generate a settlement to calculate distributor payout</p>
+            <p className="text-sm mt-1">Generate a settlement to calculate {getTerm('distributor', { lower: true })} payout</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -445,9 +446,9 @@ export default function SettlementsTab({
                   <p className="text-[10px] text-slate-500 mt-0.5">across all deliveries</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-blue-400 uppercase tracking-wider">Distributor Margin</p>
+                  <p className="text-[10px] text-blue-400 uppercase tracking-wider">{getTerm('distributor')} Margin</p>
                   <p className="text-lg font-bold text-blue-300">₹{fmt(grandTotals.earnings)}</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">earned by distributor</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">earned by {getTerm('distributor', { lower: true })}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-rose-400 uppercase tracking-wider">Credit Notes</p>
@@ -455,7 +456,7 @@ export default function SettlementsTab({
                   <p className="text-[10px] text-slate-500 mt-0.5">linked + direct issuances</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-emerald-400 uppercase tracking-wider">Factory Return Credit</p>
+                  <p className="text-[10px] text-emerald-400 uppercase tracking-wider">{getTerm('factory')} Return Credit</p>
                   <p className="text-lg font-bold text-emerald-300">+₹{fmt(grandTotals.fr_credit)}</p>
                   <p className="text-[10px] text-slate-500 mt-0.5">stock returned to supplier</p>
                 </div>
@@ -478,7 +479,7 @@ export default function SettlementsTab({
                           {distPays ? '+' : '−'}₹{fmt(Math.abs(net))}
                         </p>
                         <p className="text-[10px] text-slate-400 mt-0.5">
-                          {distPays ? 'Distributor pays Supplier' : 'Supplier pays Distributor'}
+                          {distPays ? `${getTerm('distributor')} pays Supplier` : `Supplier pays ${getTerm('distributor')}`}
                         </p>
                       </>
                     );
@@ -504,7 +505,7 @@ export default function SettlementsTab({
                     <div><p className="text-[10px] text-slate-400 uppercase">Cust. Order</p><p className="text-sm font-medium">₹{fmt(group.totals.billing)}</p></div>
                     <div><p className="text-[10px] text-blue-500 uppercase">Margin</p><p className="text-sm font-semibold text-blue-600">₹{fmt(group.totals.earnings)}</p></div>
                     <div><p className="text-[10px] text-rose-500 uppercase">Credit Notes</p><p className="text-sm font-semibold text-rose-600">−₹{fmt(group.totals.credit_applied)}</p></div>
-                    <div><p className="text-[10px] text-emerald-500 uppercase">Factory Ret.</p><p className="text-sm font-semibold text-emerald-600">+₹{fmt(group.totals.fr_credit)}</p></div>
+                    <div><p className="text-[10px] text-emerald-500 uppercase">{getTerm('factory')} Ret.</p><p className="text-sm font-semibold text-emerald-600">+₹{fmt(group.totals.fr_credit)}</p></div>
                     <div className="border-l pl-4">
                       <p className="text-[10px] text-slate-400 uppercase">Net Settlement</p>
                       {(() => {
@@ -532,7 +533,7 @@ export default function SettlementsTab({
                         <th className="text-right p-3">Customer Order Value</th>
                         <th className="text-right p-3 text-blue-600">Margin</th>
                         <th className="text-right p-3 text-rose-600">Credit Notes</th>
-                        <th className="text-right p-3 text-emerald-600">Factory Ret.</th>
+                        <th className="text-right p-3 text-emerald-600">{getTerm('factory')} Ret.</th>
                         <th className="text-right p-3 font-bold">Net Settlement</th>
                         <th className="text-center p-3">Status</th>
                         <th className="text-center p-3">Actions</th>

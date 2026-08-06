@@ -20,9 +20,9 @@ const METRIC_DEFS = [
   { key: 'delivered', label: 'Delivered', icon: PackageCheck, color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', tip: 'Delivered to customer accounts (Stock Out orders completed)' },
   { key: 'reserved', label: 'Reserved', icon: Clock, color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200', tip: 'Committed to open Stock Out orders — not available for other orders' },
   { key: 'sent', label: 'Transfer Out', icon: Truck, color: 'text-purple-700', bg: 'bg-purple-50 border-purple-200', tip: 'Stock transferred OUT to other warehouses (not customer deliveries)' },
-  { key: 'empty_bottles', label: 'Empty Bottles', icon: Recycle, color: 'text-teal-700', bg: 'bg-teal-50 border-teal-200', tip: 'Empty / Reusable + FOC bottles returned for recycling' },
+  { key: 'empty_bottles', label: () => `Empty ${getTerm('unit', { plural: true })}`, icon: Recycle, color: 'text-teal-700', bg: 'bg-teal-50 border-teal-200', tip: 'Empty / Reusable + FOC units returned for recycling' },
   { key: 'product_returns', label: 'Product Ret.', icon: PackageX, color: 'text-orange-700', bg: 'bg-orange-50 border-orange-200', tip: 'Damaged + Expired — unsellable product returned by customers' },
-  { key: 'factory_returns', label: 'Factory Ret.', icon: Undo2, color: 'text-violet-700', bg: 'bg-violet-50 border-violet-200', tip: 'Stock sent back to the factory' },
+  { key: 'factory_returns', label: () => `${getTerm('factory')} Ret.`, icon: Undo2, color: 'text-violet-700', bg: 'bg-violet-50 border-violet-200', tip: 'Stock sent back to the factory' },
   { key: 'on_hand', label: 'Wh. Stock', icon: Boxes, color: 'text-cyan-700', bg: 'bg-cyan-50 border-cyan-200', tip: 'Current physical stock at the warehouse' },
   { key: 'available', label: 'Available', icon: CheckCircle2, color: 'text-indigo-700', bg: 'bg-indigo-50 border-indigo-200', tip: 'Available = Wh. Stock − Reserved (deliverable right now)' },
 ];
@@ -146,9 +146,9 @@ export default function GlobalStockDashboard() {
             <CardContent className="pt-4 pb-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-slate-500">{label}</p>
+                  <p className="text-xs uppercase tracking-wider text-slate-500">{typeof label === 'function' ? label() : label}</p>
                   <p className={`text-2xl font-bold ${color}`}>{fmt(val(data?.grand_totals, key))}</p>
-                  <p className="text-[11px] text-muted-foreground">{unit}</p>
+                  <p className="text-[11px] text-muted-foreground">{unit === 'crates' ? getTerm('package', { plural: true, lower: true }) : getTerm('unit', { plural: true, lower: true })}</p>
                 </div>
                 <Icon className={`h-8 w-8 ${color} opacity-30`} />
               </div>
@@ -197,7 +197,7 @@ export default function GlobalStockDashboard() {
                 <div className="hidden md:flex items-center gap-5 shrink-0 text-sm">
                   {METRIC_DEFS.filter(({ key }) => WH_HEADER_KEYS.includes(key)).map(({ key, label, color }) => (
                     <div key={key} className="text-right min-w-[72px]">
-                      <p className="text-[10px] uppercase tracking-wider text-slate-400">{label}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-400">{typeof label === 'function' ? label() : label}</p>
                       <p className={`font-semibold ${color}`}>{fmt(val(w.totals, key))}</p>
                     </div>
                   ))}
@@ -211,7 +211,7 @@ export default function GlobalStockDashboard() {
                       <tr className="text-[11px] uppercase tracking-wider border-b">
                         <th className="text-left py-2 pl-8 font-medium text-slate-400">SKU / Child SKU</th>
                         {METRIC_DEFS.map(({ key, label, color, tip }) => (
-                          <th key={key} className={`text-right py-2 font-semibold ${color} ${key === 'available' ? 'pr-2' : ''}`} title={tip}>{label}</th>
+                          <th key={key} className={`text-right py-2 font-semibold ${color} ${key === 'available' ? 'pr-2' : ''}`} title={tip}>{typeof label === 'function' ? label() : label}</th>
                         ))}
                       </tr>
                     </thead>

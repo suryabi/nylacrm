@@ -380,14 +380,17 @@ async def export_global_stock_dashboard(
     """Excel export of the global stock dashboard incl. child SKU drill-down."""
     tenant_id = get_current_tenant_id()
     data = await _build_dashboard(tenant_id)
+    from core.terminology import get_terms, term
+    terms = await get_terms()
     suffix = "crates" if unit == "crates" else "units"
+    suffix_label = term(terms, "package", plural=True, lower=True) if unit == "crates" else f"units ({term(terms, 'unit', plural=True, lower=True)})"
 
     wb = Workbook()
     ws = wb.active
-    ws.title = f"Global Stock ({suffix})"
+    ws.title = f"Global Stock ({suffix_label})"[:31]
 
-    headers = ["Warehouse", "Owner", "City", "Type", "SKU", "Child SKU / Branding",
-               "Units per Crate"] + [label for _, label in EXPORT_METRICS]
+    headers = ["Warehouse", "Owner", "City", "Type", term(terms, "sku"), f"Child {term(terms, 'sku')} / Branding",
+               f"Units per {term(terms, 'package')}"] + [label for _, label in EXPORT_METRICS]
     ws.append(headers)
     head_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
     for cell in ws[1]:

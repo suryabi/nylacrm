@@ -4728,8 +4728,10 @@ async def export_distributor_deliveries(
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from fastapi.responses import StreamingResponse
+    from core.terminology import get_terms, term as _t
 
     tenant_id = get_current_tenant_id()
+    terms = await get_terms()
 
     query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
     if status and status != 'all':
@@ -4781,10 +4783,10 @@ async def export_distributor_deliveries(
     ws.title = "Stock Out"
     ws.sheet_properties.outlinePr.summaryBelow = False
 
-    headers = ['Delivery #', 'Date', 'Account', 'City', 'SKU', 'Quantity', 'Margin %',
-               'Base Price', 'Transfer Price', 'Billed to Distributor', 'Customer Price',
-               'New Transfer Price', 'Actual Billable to Distributor',
-               'Adjustment (Dist to Factory)', 'Customer Invoice Amount', 'Status']
+    headers = ['Delivery #', 'Date', 'Account', 'City', _t(terms, 'sku'), 'Quantity', 'Margin %',
+               'Base Price', 'Transfer Price', f'Billed to {_t(terms, "distributor")}', 'Customer Price',
+               'New Transfer Price', f'Actual Billable to {_t(terms, "distributor")}',
+               f'Adjustment ({_t(terms, "distributor")} to {_t(terms, "factory")})', 'Customer Invoice Amount', 'Status']
     header_font = Font(bold=True, color="FFFFFF", size=11)
     header_fill = PatternFill(start_color="166534", end_color="166534", fill_type="solid")
     summary_fill = PatternFill(start_color="ecfdf5", end_color="ecfdf5", fill_type="solid")
