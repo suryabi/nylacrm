@@ -10,7 +10,6 @@ import DashboardLayout from './layouts/DashboardLayout';
 import SplashScreen from './pages/SplashScreen';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
-import RegisterTenant from './pages/RegisterTenant';
 import OnboardingWizard from './pages/OnboardingWizard';
 import Billing from './pages/Billing';
 import PaymentSuccess from './pages/PaymentSuccess';
@@ -368,7 +367,7 @@ function AppRouter() {
       <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<RegisterTenant />} />
+          <Route path="/register" element={<Navigate to="/login" replace />} />
           <Route path="/onboarding" element={<OnboardingWizard />} />
           <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
           <Route path="/payment/success" element={<PaymentSuccess />} />

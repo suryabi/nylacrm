@@ -2175,3 +2175,9 @@ Test tenant sales-only deleted.
 - Backend (`tenant_registration.py`): `GET /api/tenants/current/custom-domain/status` — resolves IPs of the tenant's custom_domain and of the serving host (x-forwarded-host → host header) via socket.getaddrinfo (6s timeout, executor); status = verified (IP overlap) / pending (resolves elsewhere) / unresolvable (no DNS) / none. Persists custom_domain_status + custom_domain_checked_at on tenant (cleared on domain change). Platform admin tenant list projection includes custom_domain(+status).
 - Frontend: `CustomDomainCard.jsx` auto-checks on load/after save — colored status badge (Verified/Pending DNS/Not resolving), guidance text w/ expected CNAME target, checked-at time, "Check again" button. PlatformAdmin.js workspace rows show "Domain ✓ / Domain pending" badge.
 - Verified all 3 states: example.com → pending, nonexistent domain → unresolvable, platform host injected via DB → verified (+UI screenshot showing Verified badge). Nyla domain cleared after testing.
+
+## 2026-08-06 — Nyla-specific landing page (this deployment only)
+- Context: This session's deployment = crm.nylaairwater.earth (Nyla-only). FlowStack SaaS lives in a separate session (support_agent confirmed sessions/codebases are fully isolated; Republish here only updates this deployment).
+- `Landing.js` rewritten: minimal Nyla Air Water branded page (logo /nyla-logo.png in public/, teal #00A6B8 + navy #003048 from logo), tagline, single "Sign in" CTA. No pricing, no FlowStack, no trial/signup, removed host-tenant redirect fetch.
+- Public self-signup removed: `/register` route now redirects to `/login` (RegisterTenant import removed from App.js); "Don't have a workspace? Create one" link removed from Login.js.
+- Verified via screenshot: landing renders, no "Start free trial"/"FlowStack" text, /register → /login redirect works, login page clean.

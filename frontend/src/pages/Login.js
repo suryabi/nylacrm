@@ -464,14 +464,6 @@ export default function Login() {
                   </Button>
                 </>
               )}
-              
-              {/* Create Workspace Link */}
-              <p className="text-center text-sm text-muted-foreground pt-4">
-                Don't have a workspace?{' '}
-                <Link to="/register" className="text-primary hover:underline font-medium">
-                  Create one
-                </Link>
-              </p>
             </div>
           ) : (
             <RegisterForm onBack={() => setShowRegister(false)} />
