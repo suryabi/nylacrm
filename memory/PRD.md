@@ -2227,3 +2227,6 @@ Test tenant sales-only deleted.
 - Left login panel now uses /landing/forest.jpg (thick misty/moist forest stock photo, Unsplash 1448375240586) instead of the water-droplet image; top-left Nyla logo + "Nyla Air Water" text removed from that panel. Bottom overlay headline kept.
 - Right-side small logo above "Welcome Back" retained (still links to /).
 - Verified via screenshot: brand block count 0, forest image renders, form untouched.
+
+## 2026-08-06 — Login panel image: dark rain sky
+- Replaced forest with /landing/rainsky.jpg (dark storm clouds + raindrops, Unsplash 1534274988757, compressed). forest.jpg removed. Verified via screenshot — fits "Born from the Sky" copy.

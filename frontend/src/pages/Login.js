@@ -251,7 +251,7 @@ export default function Login() {
     <div className="min-h-screen flex text-[#1D1D1F]" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif" }} data-testid="login-page">
       {/* Left side - Nature brand panel */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-[#1D1D1F]">
-        <img src="/landing/forest.jpg" alt="Misty rain forest" className="absolute inset-0 w-full h-full object-cover" />
+        <img src="/landing/rainsky.jpg" alt="Dark rain clouds" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
         <div className="relative z-10 flex flex-col justify-end p-12 w-full">
           <div>
