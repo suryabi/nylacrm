@@ -2222,3 +2222,8 @@ Test tenant sales-only deleted.
 - Logo copied to /app/backend/assets/nyla-logo.png.
 - pdf_generator.fetch_logo_image: falls back to bundled Nyla logo when tenant branding.logo_url missing/unfetchable; 3 call sites now always call it → debit/credit note PDFs always show logo.
 - Verified e2e: global-stock, invoices, complaints exports each contain 1 image + header text + Helvetica fonts, freeze panes correct (A6); PDF fallback returns 50x50 Image.
+
+## 2026-08-06 — Login panel image swap (user request)
+- Left login panel now uses /landing/forest.jpg (thick misty/moist forest stock photo, Unsplash 1448375240586) instead of the water-droplet image; top-left Nyla logo + "Nyla Air Water" text removed from that panel. Bottom overlay headline kept.
+- Right-side small logo above "Welcome Back" retained (still links to /).
+- Verified via screenshot: brand block count 0, forest image renders, form untouched.

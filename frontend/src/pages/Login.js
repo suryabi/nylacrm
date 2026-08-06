@@ -249,15 +249,11 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex text-[#1D1D1F]" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif" }} data-testid="login-page">
-      {/* Left side - Nyla brand panel */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-[#F5F5F7]">
-        <img src="/landing/hero.jpg" alt="Crystal-clear water droplet" className="absolute inset-0 w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/5 to-transparent" />
-        <div className="relative z-10 flex flex-col justify-between p-12 w-full">
-          <Link to="/" className="flex items-center gap-2.5 w-fit" data-testid="login-brand-home-link">
-            <img src="/nyla-logo.png" alt="Nyla Air Water" className="h-10 w-10 object-contain" />
-            <span className="font-bold tracking-tight text-lg text-[#1D1D1F]">Nyla Air Water</span>
-          </Link>
+      {/* Left side - Nature brand panel */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-[#1D1D1F]">
+        <img src="/landing/forest.jpg" alt="Misty rain forest" className="absolute inset-0 w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+        <div className="relative z-10 flex flex-col justify-end p-12 w-full">
           <div>
             <p className="text-xs tracking-[0.2em] uppercase font-semibold text-white/80 mb-4">Pure Water. Born from the Sky.</p>
             <h1 className="text-4xl xl:text-5xl font-bold tracking-tighter text-white leading-[1.1]">Born from Air.<br />Perfected by Nature.</h1>
