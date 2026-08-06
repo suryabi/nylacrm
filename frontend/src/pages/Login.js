@@ -248,31 +248,26 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex" data-testid="login-page">
-      {/* Left side - CRM Illustration Panel */}
-      <div 
-        className="hidden lg:flex lg:w-1/2 relative items-center justify-center overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' }}
-      >
-        {/* Subtle grid */}
-        <div className="absolute inset-0 opacity-[0.04]" style={{
-          backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-          backgroundSize: '48px 48px',
-        }} />
-        
-        {/* Ambient glow */}
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px]" style={{
-          background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)',
-          filter: 'blur(60px)',
-        }} />
-
-        <div className="relative z-10 px-16 max-w-lg w-full">
-          <RotatingHero />
+    <div className="min-h-screen flex text-[#1D1D1F]" style={{ fontFamily: "'Inter', -apple-system, sans-serif" }} data-testid="login-page">
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+      {/* Left side - Nyla brand panel */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-[#F5F5F7]">
+        <img src="/landing/hero.jpg" alt="Crystal-clear water droplet" className="absolute inset-0 w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/5 to-transparent" />
+        <div className="relative z-10 flex flex-col justify-between p-12 w-full">
+          <Link to="/" className="flex items-center gap-2.5 w-fit" data-testid="login-brand-home-link">
+            <img src="/nyla-logo.png" alt="Nyla Air Water" className="h-10 w-10 object-contain" />
+            <span className="font-bold tracking-tight text-lg text-[#1D1D1F]">Nyla Air Water</span>
+          </Link>
+          <div>
+            <p className="text-xs tracking-[0.2em] uppercase font-semibold text-white/80 mb-4">Pure Water. Born from the Sky.</p>
+            <h1 className="text-4xl xl:text-5xl font-bold tracking-tighter text-white leading-[1.1]">Born from Air.<br />Perfected by Nature.</h1>
+          </div>
         </div>
       </div>
 
       {/* Right side - Login form */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-background">
+      <div className="flex-1 flex items-center justify-center p-8 bg-[#F5F5F7]">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -280,17 +275,18 @@ export default function Login() {
           className="w-full max-w-md space-y-8"
         >
           <div className="text-center">
+            <img src="/nyla-logo.png" alt="Nyla Air Water" className="h-14 w-14 object-contain mx-auto mb-5" data-testid="login-logo" />
             {/* Show tenant name if available */}
             {tenantInfo && (
-              <p className="text-sm text-muted-foreground mb-2">
-                Signing in to <span className="font-medium text-foreground">{tenantInfo.name}</span>
+              <p className="text-sm mb-2" style={{ color: '#86868B' }}>
+                Signing in to <span className="font-medium text-[#1D1D1F]">{tenantInfo.name}</span>
               </p>
             )}
-            <h2 className="text-3xl font-semibold text-foreground mb-2" data-testid="login-form-title">
+            <h2 className="text-3xl font-bold tracking-tight text-[#1D1D1F] mb-2" data-testid="login-form-title">
               {showRegister ? 'Create Account' : 'Welcome Back'}
             </h2>
-            <p className="text-muted-foreground">
-              {showRegister ? 'Register for a new account' : 'Sign in to your account'}
+            <p style={{ color: '#86868B' }}>
+              {showRegister ? 'Register for a new account' : 'Sign in to your workspace'}
             </p>
             
             {tenantInfo?.is_trial && (
@@ -314,7 +310,7 @@ export default function Login() {
                   <Button
                     type="button"
                     variant="default"
-                    className="w-full h-14 text-base"
+                    className="w-full h-14 text-base rounded-full bg-[#1D1D1F] hover:bg-black text-white"
                     onClick={handleGoogleWorkspaceLogin}
                     data-testid="google-workspace-login-button"
                   >
@@ -338,7 +334,7 @@ export default function Login() {
                         <div className="w-full border-t border-border"></div>
                       </div>
                       <div className="relative flex justify-center text-sm">
-                        <span className="px-4 bg-background text-muted-foreground">Or use password</span>
+                        <span className="px-4 bg-[#F5F5F7]" style={{ color: "#86868B" }}>Or use password</span>
                       </div>
                     </div>
                   )}
@@ -378,7 +374,7 @@ export default function Login() {
                       onChange={e => setEmail(e.target.value)}
                       placeholder="you@company.com"
                       required
-                      className="h-12"
+                      className="h-12 rounded-xl bg-white border-[#D2D2D7]"
                     />
                   </div>
                   <div>
@@ -390,7 +386,7 @@ export default function Login() {
                         onChange={e => setPassword(e.target.value)}
                         placeholder="Enter password"
                         required
-                        className="h-12 pr-12"
+                        className="h-12 pr-12 rounded-xl bg-white border-[#D2D2D7]"
                         data-testid="login-password-input"
                       />
                       <button
@@ -415,11 +411,11 @@ export default function Login() {
                       Remember me
                     </Label>
                   </div>
-                  <Button type="submit" disabled={loading} className="w-full h-12">
+                  <Button type="submit" disabled={loading} className="w-full h-12 rounded-full bg-[#1D1D1F] hover:bg-black text-white text-sm font-medium">
                     {loading ? 'Signing in...' : 'Sign In'}
                   </Button>
                   {faceIdAvailable && authConfig.face_id_enabled !== false && (
-                    <Button type="button" variant="outline" className="w-full h-12"
+                    <Button type="button" variant="outline" className="w-full h-12 rounded-full border-[#D2D2D7] text-[#1D1D1F] hover:bg-white"
                       onClick={() => setShowFaceLogin(true)} data-testid="face-login-button">
                       <ScanFace className="mr-2 h-5 w-5" /> Sign in with Face ID
                     </Button>
@@ -443,14 +439,14 @@ export default function Login() {
                       <div className="w-full border-t border-border"></div>
                     </div>
                     <div className="relative flex justify-center text-sm">
-                      <span className="px-4 bg-background text-muted-foreground">Or</span>
+                      <span className="px-4 bg-[#F5F5F7]" style={{ color: "#86868B" }}>Or</span>
                     </div>
                   </div>
 
                   <Button
                     type="button"
                     variant="default"
-                    className="w-full h-14 text-base"
+                    className="w-full h-14 text-base rounded-full bg-[#1D1D1F] hover:bg-black text-white"
                     onClick={handleGoogleWorkspaceLogin}
                     data-testid="google-login-button"
                   >

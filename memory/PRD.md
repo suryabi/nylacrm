@@ -2188,3 +2188,7 @@ Test tenant sales-only deleted.
 - Images downloaded locally to /app/frontend/public/landing/ (hero.jpg, blog-air.jpg, blog-alkaline.jpg compressed from 1.5MB png, blog-groundwater.jpg).
 - index.html title → "Nyla Air Water — Where Nature Meets Purity" + brand meta description.
 - Verified via screenshots: all sections render, blog images naturalWidth>0, footer Team Login navigates to /login.
+
+## 2026-08-06 — Login page rebranded to Nyla clean look
+- Login.js restyled to match new landing: left panel = /landing/hero.jpg water image w/ dark bottom gradient, Nyla logo + "Born from Air. Perfected by Nature." headline (logo links to /); right panel #F5F5F7, Inter font, Nyla logo above "Welcome Back", black pill Sign In/Google/Face ID buttons, rounded-xl white inputs. All auth logic untouched (tenant selector, google workspace, face id, onboarding redirect).
+- Verified: screenshot + full login flow with test creds → redirected to /home dashboard successfully.
