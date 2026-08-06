@@ -8,6 +8,7 @@ import { Toaster } from './components/ui/sonner';
 import axios from 'axios';
 import DashboardLayout from './layouts/DashboardLayout';
 import SplashScreen from './pages/SplashScreen';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import RegisterTenant from './pages/RegisterTenant';
 import OnboardingWizard from './pages/OnboardingWizard';
@@ -365,7 +366,7 @@ function AppRouter() {
     <>
       <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>}>
       <Routes>
-          <Route path="/" element={<SplashScreen />} />
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<RegisterTenant />} />
           <Route path="/onboarding" element={<OnboardingWizard />} />
