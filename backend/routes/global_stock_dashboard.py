@@ -27,6 +27,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 
 from deps import get_current_user, db
 from core.tenant import get_current_tenant_id
+from utils.excel_branding import apply_brand_font
 
 router = APIRouter()
 
@@ -437,6 +438,7 @@ async def export_global_stock_dashboard(
     ws.freeze_panes = "A2"
 
     buf = io.BytesIO()
+    apply_brand_font(wb)
     wb.save(buf)
     buf.seek(0)
     fname = f"global-stock-{suffix}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M')}.xlsx"

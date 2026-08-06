@@ -644,6 +644,7 @@ async def export_invoices(
                 cell.number_format = '#,##0.00'
 
     buf = io.BytesIO()
+    apply_brand_font(wb)
     wb.save(buf)
     buf.seek(0)
     filename = f"invoices_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.xlsx"
@@ -868,6 +869,7 @@ async def delete_invoice(
 
 from pydantic import BaseModel
 from core.tenant import get_current_tenant_id
+from utils.excel_branding import apply_brand_font
 
 
 class VoidInvoiceRequest(BaseModel):

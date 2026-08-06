@@ -34,6 +34,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 from core.distributor_auth import DISTRIBUTOR_DEFAULT_PASSWORD  # noqa: E402
+from utils.excel_branding import apply_brand_font
 
 
 def hash_password(password: str) -> str:
@@ -2453,6 +2454,7 @@ async def export_distributor_shipments(
                 cell.number_format = '#,##0.00'
 
     buf = io.BytesIO()
+    apply_brand_font(wb)
     wb.save(buf)
     buf.seek(0)
     filename = f"stock_in_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.xlsx"
@@ -4868,6 +4870,7 @@ async def export_distributor_deliveries(
             r += 1
 
     buf = io.BytesIO()
+    apply_brand_font(wb)
     wb.save(buf)
     buf.seek(0)
     filename = f"stock_out_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.xlsx"

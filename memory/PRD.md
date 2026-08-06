@@ -2208,3 +2208,11 @@ Test tenant sales-only deleted.
 - index.css: single @import Arimo (metric-compatible Helvetica fallback for Windows/Android); universal rule `*, *::before, *::after { font-family: 'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif !important; }` overrides all inline fontFamily usages (IBM Plex/Manrope/Cabinet Grotesk/etc. across components) without editing each file. body/h1-h6/.font-heading/.font-body/.font-mono all set to the stack.
 - index.html: old Google fonts link (Manrope/Outfit/IBM Plex/JetBrains) replaced with Arimo. Landing.js/Login.js Inter links + inline styles removed → Helvetica stack.
 - Verified computed fontFamily on landing h1, login title, and dashboard body = Helvetica stack; layouts intact.
+
+## 2026-08-06 — Brand font in PDF & Excel exports
+- Downloaded Arimo-Regular/Bold TTF (Helvetica-metric, includes ₹) to /app/backend/assets/fonts/.
+- utils/pdf_generator.py: registers HelveticaBrand(-Bold)=Arimo as _REGULAR_FONT/_BOLD_FONT (FreeSans fallback kept) → debit/credit notes etc. use brand font + ₹.
+- services/proposal_pdf.py: FONTS["helvetica"] (default proposal font key) now maps to Arimo; "helvetica" added to _RUPEE_FONT_KEYS so ₹ renders instead of "Rs.".
+- New utils/excel_branding.py apply_brand_font(wb): sets font name "Helvetica" on every cell preserving bold/size/color. Wired before all 9 wb.save() sites: accounting_transactions, customer_complaints (x2), distributor_stock_transfers, distributors (x2), global_stock_dashboard, invoices, marketing.
+- Other reportlab PDFs (server.py stamp, production_qc, delivery schedules) already use base-14 Helvetica — untouched.
+- Verified: e2e global-stock export → all cell fonts "Helvetica"; PDF smoke build with HelveticaBrand + ₹ OK; py_compile all touched files; backend restarted clean.

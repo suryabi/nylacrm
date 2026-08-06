@@ -91,6 +91,21 @@ for _key, (_reg_f, _bold_f, _reg_n, _bold_n) in _BRAND_FONTS.items():
     except Exception:
         pass
 
+# Brand font: map the default "helvetica" key to Arimo (Helvetica-metric TTF
+# with the ₹ glyph) so proposals render the brand font with full rupee support.
+try:
+    _brand_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "fonts")
+    _arimo_reg = os.path.join(_brand_dir, "Arimo-Regular.ttf")
+    pdfmetrics.registerFont(TTFont("Arimo", _arimo_reg))
+    pdfmetrics.registerFont(TTFont("Arimo-Bold", os.path.join(_brand_dir, "Arimo-Bold.ttf")))
+    pdfmetrics.registerFontFamily("Arimo", normal="Arimo", bold="Arimo-Bold",
+                                  italic="Arimo", boldItalic="Arimo-Bold")
+    FONTS["helvetica"] = ("Arimo", "Arimo-Bold")
+    if _font_has_rupee(_arimo_reg):
+        _RUPEE_FONT_KEYS.add("helvetica")
+except Exception:
+    pass
+
 
 # ── Rich text (Quill HTML) -> ReportLab flowables ────────────────────────────
 _INLINE_MAP = {"strong": "b", "b": "b", "em": "i", "i": "i", "u": "u",

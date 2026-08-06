@@ -48,6 +48,7 @@ from services.zoho_service import (
     AccountNotLinkedToZohoError,
 )
 from utils.eway_bill import build_eway_bill_payload
+from utils.excel_branding import apply_brand_font
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -1198,6 +1199,7 @@ async def export_stock_transfers(
             r += 1
 
     buf = io.BytesIO()
+    apply_brand_font(wb)
     wb.save(buf)
     buf.seek(0)
     filename = f"stock_transfers_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.xlsx"

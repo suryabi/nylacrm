@@ -29,15 +29,24 @@ logger = logging.getLogger(__name__)
 _REGULAR_FONT = "Helvetica"
 _BOLD_FONT = "Helvetica-Bold"
 try:
+    # Brand font: Arimo (Helvetica-metric TTF with the ₹ glyph) shipped in assets/fonts.
+    _fonts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "fonts")
+    _arimo = os.path.join(_fonts_dir, "Arimo-Regular.ttf")
+    _arimo_bold = os.path.join(_fonts_dir, "Arimo-Bold.ttf")
     _free_sans = "/usr/share/fonts/truetype/freefont/FreeSans.ttf"
     _free_sans_bold = "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"
-    if os.path.exists(_free_sans) and os.path.exists(_free_sans_bold):
+    if os.path.exists(_arimo) and os.path.exists(_arimo_bold):
+        pdfmetrics.registerFont(TTFont("HelveticaBrand", _arimo))
+        pdfmetrics.registerFont(TTFont("HelveticaBrand-Bold", _arimo_bold))
+        _REGULAR_FONT = "HelveticaBrand"
+        _BOLD_FONT = "HelveticaBrand-Bold"
+    elif os.path.exists(_free_sans) and os.path.exists(_free_sans_bold):
         pdfmetrics.registerFont(TTFont("FreeSans", _free_sans))
         pdfmetrics.registerFont(TTFont("FreeSans-Bold", _free_sans_bold))
         _REGULAR_FONT = "FreeSans"
         _BOLD_FONT = "FreeSans-Bold"
 except Exception as _font_err:  # pragma: no cover - defensive
-    logger.warning(f"Could not register FreeSans for PDF: {_font_err}. Rupee symbol may not render.")
+    logger.warning(f"Could not register brand font for PDF: {_font_err}. Rupee symbol may not render.")
 
 # Month names for display
 MONTH_NAMES = {
