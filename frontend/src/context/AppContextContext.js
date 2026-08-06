@@ -40,8 +40,22 @@ const MODULES = {
 
 export function AppContextProvider({ children }) {
   const { user } = useAuth();
-  const { rolePermissions } = useTenantConfig();
+  const { rolePermissions, isModuleEnabled } = useTenantConfig();
   const [currentContext, setCurrentContext] = useState('sales');
+
+  // Tenant module config gate: a workspace only exists for this tenant if at
+  // least one module inside its registry groups is enabled (Tenant Settings /
+  // onboarding module selection). Admin workspace is always reachable for
+  // admin-capable roles so tenant settings can never be locked out.
+  const tenantAllowsWorkspace = (moduleId) => {
+    if (moduleId === 'admin') return true;
+    const groups = WORKSPACE_GROUPS[moduleId] || [];
+    const keys = MODULE_REGISTRY
+      .filter((g) => groups.includes(g.key))
+      .flatMap((g) => g.items.map((i) => i.key))
+      .concat(WORKSPACE_EXTRA_KEYS[moduleId] || []);
+    return keys.some((k) => isModuleEnabled(k));
+  };
 
   // Role-permission matrix (Tenant Settings → Roles): a VIEW grant on any
   // module belonging to the workspace unlocks it — this is how custom roles
@@ -58,7 +72,10 @@ export function AppContextProvider({ children }) {
   // Determine which modules the user can access
   const canAccessModule = (moduleId) => {
     if (!user) return false;
-    
+
+    // Workspace must be enabled for the tenant before any role logic applies
+    if (!tenantAllowsWorkspace(moduleId)) return false;
+
     // Distributor role users can ONLY access Distribution module
     if (user.role === 'Distributor') {
       return moduleId === 'distribution';
