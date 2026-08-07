@@ -2252,3 +2252,8 @@ Test tenant sales-only deleted.
 - Frontend /app/frontend/src/pages/EquipmentMaster.js at /equipment-master (moduleKey equipment_master; nav in production group, Cog icon; moduleRegistry entry). Tabs: Equipment table (due chips red=overdue/amber≤30d/green, "Order now" badge when replacement due ≤ procurement lead time, vendor list w/ preferred star, log maintenance/replacement quick actions) + Types cards w/ seed button. data-testids eq-*, type-*.
 - Tested by testing_agent iteration_344: 12/12 backend pytest + full frontend flow 100% pass. Minor polish applied after: DialogDescription on type dialog, eq-delete-*/eq-vendor-remove-* testids, leftover TEST_Vendor deleted.
 - The 9 seeded default types remain in preview tenant (harmless). In PREVIEW; Republish for production.
+
+## 2026-08-07 — Deploy failure fixed + code review actions
+- PRODUCTION DEPLOY FAILED: build broke on EquipmentMaster.js corrupted trailing duplicate block ("ooter>..." lines 482-487, introduced by testing-agent edit). Removed; `yarn build` now exits 0 (verified). User must redeploy.
+- code_review_agent verdict: READY WITH FIXES. Fixed MEDIUM: GBR register numbers now use atomic per-tenant counter (db.counters, ReturnDocument.AFTER, legacy skip) + unique index {tenant_id, register_no} lazily created — verified: create GBR-0001/0002, delete 0001, next = GBR-0003 (no reuse). Fixed LOW: glass_breakage update uses dict(exclude_unset=True) so explicit nulls clear fields.
+- Excel branding style-shift concern from review was a FALSE POSITIVE — verified openpyxl insert_rows moves fills/bold correctly (header fill lands on row 5).

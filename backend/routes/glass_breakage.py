@@ -56,9 +56,32 @@ class QAReleaseBody(BaseModel):
     remarks: Optional[str] = None
 
 
+_INDEX_READY = False
+
+
+async def _ensure_index():
+    global _INDEX_READY
+    if not _INDEX_READY:
+        await db.glass_breakage_register.create_index(
+            [("tenant_id", 1), ("register_no", 1)], unique=True)
+        _INDEX_READY = True
+
+
 async def _next_register_no(tenant_id: str) -> str:
-    count = await db.glass_breakage_register.count_documents({"tenant_id": tenant_id})
-    return f"GBR-{count + 1:04d}"
+    """Atomic per-tenant sequence — immune to deletions and concurrent creates."""
+    from pymongo import ReturnDocument
+    key = f"glass_breakage_{tenant_id}"
+    doc = await db.counters.find_one_and_update(
+        {"_id": key}, {"$inc": {"seq": 1}}, upsert=True, return_document=ReturnDocument.AFTER)
+    seq = doc["seq"]
+    if seq == 1:
+        # First use: skip past any legacy count-based numbers already issued.
+        legacy = await db.glass_breakage_register.count_documents({"tenant_id": tenant_id})
+        if legacy:
+            doc = await db.counters.find_one_and_update(
+                {"_id": key}, {"$max": {"seq": legacy + 1}}, return_document=ReturnDocument.AFTER)
+            seq = doc["seq"]
+    return f"GBR-{seq:04d}"
 
 
 @router.get("")
@@ -93,6 +116,7 @@ async def create_entry(data: GlassBreakageCreate, current_user: dict = Depends(g
         raise HTTPException(400, "Cause of breakage is required")
     if data.quantity_quarantined < 0 or data.quantity_rejected < 0:
         raise HTTPException(400, "Quantities cannot be negative")
+    await _ensure_index()
     doc = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
@@ -118,7 +142,7 @@ async def update_entry(entry_id: str, data: GlassBreakageUpdate, current_user: d
         raise HTTPException(404, "Entry not found")
     if entry.get("status") == "released" and not _can_qa_release(current_user):
         raise HTTPException(403, "Entry is QA-released; only QA/managers can amend it.")
-    updates = {k: v for k, v in data.dict().items() if v is not None}
+    updates = data.dict(exclude_unset=True)
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.glass_breakage_register.update_one({"tenant_id": tenant_id, "id": entry_id}, {"$set": updates})
     return await db.glass_breakage_register.find_one({"tenant_id": tenant_id, "id": entry_id}, {"_id": 0})
