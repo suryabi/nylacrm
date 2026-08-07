@@ -2237,3 +2237,10 @@ Test tenant sales-only deleted.
 - Fix: both lookups now also match `(b.child_sku_id || '') === (item.child_sku_id || '')`, same as the availability display at line 1486 and batch-card selection at 1319.
 - Reproduced with real preview data (batch TEST24: branded row 98 + generic row 300): old logic blocked a valid 200-unit generic request against the 98-qty branded row; new logic allows it. Backend guard (distributors.py ~5295) was already classification-scoped — no backend change needed.
 - NOTE: fix is in PREVIEW; user must Republish to get it on production (crm.nylaairwater.earth).
+
+## 2026-08-07 — NEW FEATURE: Glass Breakage Register (production module)
+- Backend /app/backend/routes/glass_breakage.py (prefix /api/production/glass-breakage): CRUD + POST /{id}/qa-release + GET /export (branded Excel). Collection glass_breakage_register. Auto serial GBR-NNNN. Fields: incident_at, location, batch_id/batch_code (picker from production batches), production_details, cause, quantity_quarantined, quantity_rejected, cleaning_undertaken, inspection_performed, corrective_action, status open/released, qa_release{authorized_by(_name), authorized_at, remarks}, reported_by(_name).
+- QA release/delete restricted to roles: CEO, System Admin, Admin, Director, VP, Production Manager, QA/QC/Quality Manager. Released entries only editable by those roles.
+- Frontend /app/frontend/src/pages/GlassBreakageRegister.js at /glass-breakage-register (moduleKey glass_breakage_register — enabled by default, added to moduleRegistry + production nav in DashboardLayout with GlassWater icon). Stats cards, table with all columns, Record/Edit dialog, QA release dialog with remarks, Excel export button. data-testids gbr-*.
+- Gotcha recurrence: App.js lazy import line was lost in a parallel write (runtime "GlassBreakageRegister is not defined"); re-applied.
+- Tested e2e: create GBR-0001 → list → QA release (name+timestamp) → branded export verified; UI screenshot shows table, Released badge, form dialog. Test entry deleted. In PREVIEW; Republish needed for production.

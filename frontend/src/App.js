@@ -102,6 +102,7 @@ const CompanyProfile = lazy(() => import('./pages/CompanyProfile'));
 const FilesDocuments = lazy(() => import('./pages/FilesDocuments'));
 // Production Context Pages
 const Maintenance = lazy(() => import('./pages/Maintenance'));
+const GlassBreakageRegister = lazy(() => import('./pages/GlassBreakageRegister'));
 const Inventory = lazy(() => import('./pages/Inventory'));
 const PublicContactCard = lazy(() => import('./pages/PublicContactCard'));
 const QualityControl = lazy(() => import('./pages/QualityControl'));
@@ -466,6 +467,7 @@ function AppRouter() {
           {/* Production Context Routes */}
           <Route path="/production-dashboard" element={<ProtectedRoute moduleKey="production_dashboard"><ProductionDashboard /></ProtectedRoute>} />
           <Route path="/maintenance" element={<ProtectedRoute moduleKey="maintenance"><Maintenance /></ProtectedRoute>} />
+          <Route path="/glass-breakage-register" element={<ProtectedRoute moduleKey="glass_breakage_register"><GlassBreakageRegister /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute moduleKey="inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/quality-control" element={<ProtectedRoute moduleKey="quality_control"><QualityControl /></ProtectedRoute>} />
           <Route path="/production-batches" element={<ProtectedRoute moduleKey="production_batches"><ProductionBatches /></ProtectedRoute>} />

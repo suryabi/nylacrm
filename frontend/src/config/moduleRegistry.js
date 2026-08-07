@@ -115,6 +115,7 @@ export const MODULE_REGISTRY = [
       { key: 'rejection_cost_config', label: 'Rejection Cost Config', description: 'Cost per rejection configuration' },
       { key: 'packaging_types', label: 'Packaging Types', description: 'Packaging type master' },
       { key: 'maintenance', label: 'Maintenance', description: 'Equipment maintenance tracking' },
+      { key: 'glass_breakage_register', label: 'Glass Breakage Register', description: 'Glass breakage incidents, quarantine & QA release' },
       { key: 'inventory', label: 'Inventory', description: 'Inventory management' },
       { key: 'quality_control', label: 'Quality Control', description: 'QC processes & checks' },
       { key: 'assets', label: 'Assets', description: 'Asset tracking & management' },
