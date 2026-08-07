@@ -479,9 +479,3 @@ export default function EquipmentMaster() {
     </div>
   );
 }
-ooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
