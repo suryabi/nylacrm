@@ -1297,6 +1297,7 @@ export default function StockTransfers() {
     }, { headers: HEAD() });
     const d = res.data;
     toast.success(`Categorized as ${d.child_sku_name}${d.stock_moved_units ? ` — ${d.stock_moved_units} units reclassified at destination (${d.branding_entry_number})` : ''}`);
+    if (d.warning) toast.warning(d.warning, { duration: 10000 });
     load();
   };
 

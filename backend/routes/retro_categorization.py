@@ -323,19 +323,26 @@ async def categorize_shipment_item(payload: ShipmentItemCategorize,
             {"$set": {**child_fields, "updated_at": now}})
 
     # Stock effect — only when the destination already received the stock.
-    moved, entry_number = 0, None
+    moved, entry_number, warning = 0, None, None
     if (shipment.get("status") or "") in ("delivered", "partially_delivered"):
         moved, entry_number = await _move_generic_to_child(
             tenant_id, current_user, shipment["distributor_location_id"], item["sku_id"],
             child, qty, item.get("batch_id"),
             note=f"Retro categorization of Stock In {shipment.get('shipment_number')} — {item.get('sku_name')}",
         )
+        if moved < qty:
+            warning = (
+                f"Only {moved} of {qty} Generic units were still on hand at the destination"
+                f"{' for this batch' if item.get('batch_id') else ''} — the remaining "
+                f"{qty - moved} units were relabeled only (no stock moved for them).")
 
     return {
         "message": "Line categorized.",
         "split": split,
         "categorized_units": qty,
         "stock_moved_units": moved,
+        "shortfall_units": max(0, qty - moved) if warning else 0,
+        "warning": warning,
         "branding_entry_number": entry_number,
         "child_sku_name": child.get("child_sku_name"),
     }
@@ -403,6 +410,7 @@ async def categorize_delivery_item(payload: DeliveryItemCategorize,
     #   bucket (−qty), capped at branded on-hand, batch-aware. Net on-hand is
     #   unchanged; classification becomes correct.
     stock_moved, entry_no = 0, None
+    warning = None
     delivered_statuses = ("delivered", "complete", "completed")
     if (delivery.get("status") or "") not in delivered_statuses:
         loc_id = delivery.get("distributor_location_id")
@@ -433,6 +441,13 @@ async def categorize_delivery_item(payload: DeliveryItemCategorize,
                 (f"Retro categorization (post-delivery) of {delivery.get('delivery_number')} — "
                  f"re-attributed deduction: Generic restored, "
                  f"'{child.get('child_sku_name')}' reduced"))
+            if stock_moved < qty:
+                shortfall = qty - stock_moved
+                warning = (
+                    f"Only {stock_moved} of {qty} units could be re-attributed — the "
+                    f"'{child.get('child_sku_name')}' bucket at the source warehouse had less on-hand"
+                    f"{' for this batch' if item.get('batch_id') else ''}. The remaining {shortfall} "
+                    f"units stay deducted from Generic.")
 
     if split:
         rest = line_units - qty
@@ -465,6 +480,8 @@ async def categorize_delivery_item(payload: DeliveryItemCategorize,
         "split": split,
         "categorized_units": qty,
         "stock_moved_units": stock_moved,
+        "shortfall_units": max(0, qty - stock_moved) if warning else 0,
+        "warning": warning,
         "branding_entry_number": entry_no,
         "child_sku_name": child.get("child_sku_name"),
     }
@@ -541,12 +558,20 @@ async def categorize_transfer_item(payload: TransferItemCategorize,
         child, qty, item.get("batch_id"),
         note=f"Retro categorization of Stock Transfer {transfer.get('transfer_number')} — {item.get('sku_name')}",
     )
+    warning = None
+    if moved < qty:
+        warning = (
+            f"Only {moved} of {qty} Generic units were still on hand at the destination"
+            f"{' for this batch' if item.get('batch_id') else ''} — the remaining "
+            f"{qty - moved} units were relabeled only (no stock moved for them).")
 
     return {
         "message": "Line categorized.",
         "split": split,
         "categorized_units": qty,
         "stock_moved_units": moved,
+        "shortfall_units": max(0, qty - moved) if warning else 0,
+        "warning": warning,
         "branding_entry_number": entry_number,
         "child_sku_name": child.get("child_sku_name"),
     }

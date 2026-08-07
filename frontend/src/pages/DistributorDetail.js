@@ -1872,6 +1872,7 @@ export default function DistributorDetail() {
     }, { headers: { Authorization: `Bearer ${token}` } });
     const d = res.data;
     toast.success(`Categorized as ${d.child_sku_name}${d.stock_moved_units ? ` — ${d.stock_moved_units} units reclassified at destination (${d.branding_entry_number})` : ''}`);
+    if (d.warning) toast.warning(d.warning, { duration: 10000 });
     viewShipmentDetail(selectedShipment.id);
     fetchShipments();
   };
@@ -1880,7 +1881,9 @@ export default function DistributorDetail() {
     const res = await axios.post(`${API_URL}/api/retro-categorize/delivery-item`, {
       distributor_id: id, delivery_id: selectedDelivery.id, item_id: itemKey, child_sku_id, quantity,
     }, { headers: { Authorization: `Bearer ${token}` } });
-    toast.success(`Categorized as ${res.data.child_sku_name}`);
+    const d = res.data;
+    toast.success(`Categorized as ${d.child_sku_name}${d.stock_moved_units ? ` — ${d.stock_moved_units} units re-attributed at the warehouse (${d.branding_entry_number})` : ''}`);
+    if (d.warning) toast.warning(d.warning, { duration: 10000 });
     viewDeliveryDetail(selectedDelivery.id);
     fetchDeliveries();
   };

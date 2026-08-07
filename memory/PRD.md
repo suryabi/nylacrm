@@ -2271,3 +2271,8 @@ Test tenant sales-only deleted.
 - Fix: refactored _move_generic_to_child into generic _move_stock_between_buckets(from_child, to_child) (None = Generic). categorize_delivery_item: delivered statuses now move qty from the BRANDED bucket → GENERIC (batch-aware, capped at branded on-hand), i.e. Generic restored +qty / branded −qty, net on-hand unchanged; writes a BRD- Branding Entry (from=branded, to=Generic) for audit. Pre-delivery path unchanged (delegates to wrapper).
 - Verified function-level in preview (temp rows at loc 5fff767e, batch RETRO-B): post-delivery: generic 140→500, branded 360→0, entry BRD- created. Regression pre-delivery direction: generic 200→80, branded +120. All temp data cleaned.
 - NOTE: existing already-categorized deliveries (e.g. DEL-2026-0337) are NOT retro-corrected by this fix; user can correct via a manual Branding Entry (branded → Generic supported by branding_entries API/UI). In PREVIEW; Republish needed.
+
+## 2026-08-07 — Shortfall warning on retro-categorization capping
+- All 3 retro-categorize endpoints (delivery-item post-delivery, shipment-item, transfer-item) now return shortfall_units + warning when the move was capped (branded bucket short at source, or Generic short at destination). Delivery warning: "Only X of Y units could be re-attributed… remaining Z stay deducted from Generic."
+- Frontend: DistributorDetail (shipment+delivery handlers) & StockTransfers show toast.warning(warning, 10s); delivery success toast now includes re-attributed units + BRD number; RetroCategorizeDialog delivery hint updated (was "no stock is moved" — outdated).
+- Verified: capped move (branded 100, requested 360) → moved 100, shortfall 260 computed; rows correct; temp data cleaned.

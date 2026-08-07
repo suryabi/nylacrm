@@ -86,7 +86,7 @@ export default function RetroCategorizeDialog({
   };
 
   const hint = txType === 'delivery'
-    ? 'Relabels the delivered line for branded sales reporting — no stock is moved.'
+    ? 'Relabels the line and re-attributes the warehouse deduction — Generic is restored and the selected customer SKU\'s bucket is reduced (recorded as a Branding Entry). You\'ll be warned if the branded bucket has less on-hand than the categorized quantity.'
     : 'Relabels the line and reclassifies the Generic stock still on hand at the destination into the selected customer SKU (recorded as a Branding Entry). Quantities and history are preserved.';
 
   return (
