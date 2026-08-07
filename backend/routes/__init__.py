@@ -50,6 +50,7 @@ from .marketing import router as marketing_router
 from .meeting_minutes import router as meeting_minutes_router
 from .production_qc import router as production_qc_router
 from .glass_breakage import router as glass_breakage_router
+from .equipment_master import router as equipment_master_router
 from .cost_cards import router as cost_cards_router
 from .target_planning import router as target_planning_router
 from .proxies import router as proxies_router
@@ -149,6 +150,7 @@ routes_router.include_router(meeting_minutes_router, tags=["Meeting Minutes"])
 # Production QC Module
 routes_router.include_router(production_qc_router, tags=["Production QC"])
 routes_router.include_router(glass_breakage_router, tags=["Glass Breakage Register"])
+routes_router.include_router(equipment_master_router, tags=["Equipment Master"])
 
 # Cost Cards Module
 routes_router.include_router(cost_cards_router, prefix="/cost-cards", tags=["Cost Cards"])

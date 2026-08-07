@@ -20,7 +20,7 @@ import {
   Search, Target, CalendarDays, UsersRound,
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
-  Kanban, Wrench, Box, ShieldCheck, Boxes, TabletSmartphone, Radio, GlassWater,
+  Kanban, Wrench, Box, ShieldCheck, Boxes, TabletSmartphone, Radio, GlassWater, Cog,
   Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Bell, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus, PanelLeftClose, PanelLeftOpen, Printer, Mail, Share2, MessageSquareWarning, RotateCcw, TrendingUp, Banknote, Globe2
 } from 'lucide-react';
 
@@ -129,6 +129,7 @@ const productionNavigationGroups = [
       { name: 'Packaging Types', href: '/packaging-types', icon: Boxes, moduleKey: 'packaging_types', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
       { name: 'Maintenance', href: '/maintenance', icon: Wrench, moduleKey: 'maintenance', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Glass Breakage Register', href: '/glass-breakage-register', icon: GlassWater, moduleKey: 'glass_breakage_register', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Equipment Master', href: '/equipment-master', icon: Cog, moduleKey: 'equipment_master', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Inventory', href: '/inventory', icon: Boxes, moduleKey: 'inventory', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Customer Returns', href: '/customer-returns', icon: PackageOpen, moduleKey: 'customer_returns', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Design Requests - OLD', href: '/marketing-requests', icon: Sparkles, moduleKey: 'marketing_requests', roles: ['CEO', 'Admin', 'System Admin'] },
