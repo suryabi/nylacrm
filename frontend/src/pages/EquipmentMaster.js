@@ -300,7 +300,7 @@ export default function EquipmentMaster() {
                               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditEq(e)} data-testid={`eq-edit-${e.name.replace(/\s/g, '-')}`}>
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => deleteEq(e)}>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => deleteEq(e)} data-testid={`eq-delete-${e.name.replace(/\s/g, '-')}`}>
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </td>
@@ -425,7 +425,7 @@ export default function EquipmentMaster() {
                     <input type="checkbox" checked={v.preferred} onChange={(e) => setVendorField(i, 'preferred', e.target.checked)} data-testid={`eq-vendor-preferred-${i}`} />
                     <Star className="h-3.5 w-3.5 text-amber-500" /> Preferred vendor
                   </label>
-                  <Button size="sm" variant="ghost" className="text-red-500 justify-self-end sm:col-span-1"
+                  <Button size="sm" variant="ghost" className="text-red-500 justify-self-end sm:col-span-1" data-testid={`eq-vendor-remove-${i}`}
                     onClick={() => setEqForm((p) => ({ ...p, vendors: p.vendors.filter((_, j) => j !== i) }))}>
                     <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove
                   </Button>
@@ -474,6 +474,12 @@ export default function EquipmentMaster() {
             <Button variant="outline" onClick={() => setLogTarget(null)}>Cancel</Button>
             <Button onClick={submitLog} data-testid="eq-log-confirm-btn">Save Log</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+ooter>
         </DialogContent>
       </Dialog>
     </div>
