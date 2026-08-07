@@ -2230,3 +2230,10 @@ Test tenant sales-only deleted.
 
 ## 2026-08-06 — Login panel image: dark rain sky
 - Replaced forest with /landing/rainsky.jpg (dark storm clouds + raindrops, Unsplash 1534274988757, compressed). forest.jpg removed. Verified via screenshot — fits "Born from the Sky" copy.
+
+## 2026-08-07 — BUG FIX: Stock Out false "stock unavailable" for branded batches (production report)
+- Symptom: creating a Stock Out delivery for a customer-branded SKU showed "Quantity exceeds batch availability" / disabled Record Delivery even though the SELECTED batch row had stock. Guard compared against a DIFFERENT row of the same batch.
+- Root cause: DeliveriesTab.jsx had two batch lookups matching on batch_id ONLY: (1) per-line over-stock warning (~line 1543), (2) submit guard disabling Record Delivery (~line 1888). Since /batches-available returns one row PER (batch, classification) — generic + customer-branded rows share the same batch_id — `.find(batch_id)` returned whichever row sorted first (received_at FIFO), often the wrong classification.
+- Fix: both lookups now also match `(b.child_sku_id || '') === (item.child_sku_id || '')`, same as the availability display at line 1486 and batch-card selection at 1319.
+- Reproduced with real preview data (batch TEST24: branded row 98 + generic row 300): old logic blocked a valid 200-unit generic request against the 98-qty branded row; new logic allows it. Backend guard (distributors.py ~5295) was already classification-scoped — no backend change needed.
+- NOTE: fix is in PREVIEW; user must Republish to get it on production (crm.nylaairwater.earth).

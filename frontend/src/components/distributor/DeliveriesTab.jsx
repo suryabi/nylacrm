@@ -1540,7 +1540,7 @@ export default function DeliveriesTab({
                             // for each line. To draw from more stock, pick a batch with enough
                             // or add another line for a different batch.
                             const selectedBatch = sourceTracksBatches && item.batch_id
-                              ? (batchesBySku[item.sku_id] || []).find(b => b.batch_id === item.batch_id)
+                              ? (batchesBySku[item.sku_id] || []).find(b => b.batch_id === item.batch_id && (b.child_sku_id || '') === (item.child_sku_id || ''))
                               : null;
                             if (selectedBatch && totalUnits > (selectedBatch.quantity || 0)) {
                               return (
@@ -1885,7 +1885,7 @@ export default function DeliveriesTab({
                 {(() => {
                   const overLines = (deliveryItems || []).filter((it) => {
                     if (!sourceTracksBatches || !it.batch_id) return false;
-                    const sel = (batchesBySku[it.sku_id] || []).find((b) => b.batch_id === it.batch_id);
+                    const sel = (batchesBySku[it.sku_id] || []).find((b) => b.batch_id === it.batch_id && (b.child_sku_id || '') === (it.child_sku_id || ''));
                     if (!sel) return false;
                     const pu = parseInt(it.packaging_units) || 1;
                     const tu = (parseInt(it.quantity) || 0) * pu;
