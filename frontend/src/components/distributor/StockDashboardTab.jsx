@@ -33,7 +33,17 @@ const pct = (v) => `${(v || 0).toFixed(1)}%`;
  * batch code, age and units — FIFO ordered so the oldest batch is first
  * (warehouse teams can immediately see what to ship next).
  */
-function FactoryWarehouseSkuRow({ sku, fmt: format }) {
+function FactoryWarehouseSkuRow({ sku, fmt: format, pkg }) {
+  const pkgInfo = pkg || {};
+  const pkgLabel = (qty) => {
+    const u = Number(pkgInfo.units) || 0;
+    if (u > 1 && qty) {
+      const n = qty / u;
+      const disp = Number.isInteger(n) ? n : Number(n.toFixed(1));
+      return `${disp.toLocaleString('en-IN')} ${pkgInfo.name || 'pkg'} · `;
+    }
+    return '';
+  };
   const batches = sku.batches || [];
   const hasBatches = batches.length > 0;
   const [open, setOpen] = useState(false);
@@ -68,7 +78,7 @@ function FactoryWarehouseSkuRow({ sku, fmt: format }) {
           <span className="text-slate-700 truncate">{sku.sku_name}</span>
         </div>
         <div className="flex items-baseline gap-2 flex-shrink-0">
-          <span className="font-bold text-teal-700">{format(sku.quantity)} units</span>
+          <span className="font-bold text-teal-700">{pkgLabel(sku.quantity)}{format(sku.quantity)} units</span>
           {hasBatches && (
             <span className="text-[10px] font-medium text-teal-600/80 bg-teal-50 border border-teal-200 rounded px-1.5 py-0.5">
               {batches.length} batch{batches.length === 1 ? '' : 'es'}
@@ -80,7 +90,7 @@ function FactoryWarehouseSkuRow({ sku, fmt: format }) {
         <div className="border-t border-teal-100 bg-teal-50/40 px-2 py-1.5" data-testid={`fw-sku-batches-${sku.sku_id}`}>
           <div className="text-[10px] font-semibold text-teal-700 uppercase tracking-wider mb-1 flex items-center justify-between">
             <span>Per-batch breakdown · FIFO</span>
-            <span className="text-teal-600/70 normal-case">{format(sku.quantity)} units total</span>
+            <span className="text-teal-600/70 normal-case">{pkgLabel(sku.quantity)}{format(sku.quantity)} units total</span>
           </div>
           <div className="space-y-0.5">
             {batches.map((b, bi) => {
@@ -100,7 +110,7 @@ function FactoryWarehouseSkuRow({ sku, fmt: format }) {
                       </span>
                     )}
                   </div>
-                  <span className="font-semibold text-teal-700 tabular-nums">{format(b.quantity)}</span>
+                  <span className="font-semibold text-teal-700 tabular-nums">{pkgLabel(b.quantity)}{format(b.quantity)}</span>
                 </div>
               );
             })}
@@ -371,7 +381,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     </div>
                     <div className="space-y-1.5">
                       {wh.skus.map((s, i) => (
-                        <FactoryWarehouseSkuRow key={`${wh.warehouse_id}-${s.sku_id || i}`} sku={s} fmt={fmt} />
+                        <FactoryWarehouseSkuRow key={`${wh.warehouse_id}-${s.sku_id || i}`} sku={s} fmt={fmt} pkg={brandedPkgLookup[s.sku_id]} />
                       ))}
                     </div>
                   </div>
@@ -565,7 +575,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                                 <div className="rounded-lg border border-teal-200 overflow-hidden" data-testid={`sku-batches-${sku.sku_id}`}>
                                   <div className="bg-teal-50 px-3 py-1.5 flex items-center justify-between border-b border-teal-200">
                                     <span className="text-[11px] font-semibold text-teal-700 uppercase tracking-wider">Factory Warehouse Stock · per-batch · FIFO</span>
-                                    <span className="text-[11px] font-bold text-teal-800">{fmt(sku.factory_warehouse_stock)} units</span>
+                                    <span className="text-[11px] font-bold text-teal-800">{pkgEquiv(sku.factory_warehouse_stock, sku) ? `${pkgEquiv(sku.factory_warehouse_stock, sku)} · ` : ''}{fmt(sku.factory_warehouse_stock)} units</span>
                                   </div>
                                   <div className="divide-y divide-slate-100">
                                     {batches.map((b, bi) => {
@@ -597,7 +607,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                                               </span>
                                             )}
                                           </div>
-                                          <span className="font-semibold text-teal-700 tabular-nums">{fmt(b.quantity)} units</span>
+                                          <span className="font-semibold text-teal-700 tabular-nums">{pkgEquiv(b.quantity, sku) ? `${pkgEquiv(b.quantity, sku)} · ` : ''}{fmt(b.quantity)} units</span>
                                         </div>
                                       );
                                     })}

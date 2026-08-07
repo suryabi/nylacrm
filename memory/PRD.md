@@ -2257,3 +2257,10 @@ Test tenant sales-only deleted.
 - PRODUCTION DEPLOY FAILED: build broke on EquipmentMaster.js corrupted trailing duplicate block ("ooter>..." lines 482-487, introduced by testing-agent edit). Removed; `yarn build` now exits 0 (verified). User must redeploy.
 - code_review_agent verdict: READY WITH FIXES. Fixed MEDIUM: GBR register numbers now use atomic per-tenant counter (db.counters, ReturnDocument.AFTER, legacy skip) + unique index {tenant_id, register_no} lazily created — verified: create GBR-0001/0002, delete 0001, next = GBR-0003 (no reuse). Fixed LOW: glass_breakage update uses dict(exclude_unset=True) so explicit nulls clear fields.
 - Excel branding style-shift concern from review was a FALSE POSITIVE — verified openpyxl insert_rows moves fills/bold correctly (header fill lands on row 5).
+
+## 2026-08-07 — Dual quantity display: packaging + UOM (user request "everywhere")
+- ROOT BUG: DeliveriesTab batch card read item.units_per_package but the field is item.packaging_units → factor fell back to 1 → cards showed raw "536 UNITS". Fixed; card now shows "44 CRATES +8 loose · 536 units" based on the packaging chosen in the item's packaging dropdown. Verified in live UI (temp 536-unit test batch QTYTEST at Brian's is_factory Bangalore loc 5fff767e; row deleted after).
+- New helper utils/packaging.js dualQty(qty, unitsPerPkg, packagingName, baseUom) → "44 Crates + 8 (536 Bottles)". Packaging word extraction now skips numeric tokens ("Crate - 12" → "crates", was "12s") — fixed in both dualQty and batch-card unitWord.
+- Applied dual display: DeliveriesTab classification dropdown options, over-stock warning message; StockDashboardTab FactoryWarehouseSkuRow (pkg prop from brandedPkgLookup) totals + per-batch rows, main-table factory stock + batch rows via pkgEquiv.
+- NOTE: batches-available location routing: distributor_locations.is_factory=True → reads factory_warehouse_stock (warehouse_location_id), else distributor_stock (distributor_location_id).
+- Deploy notif: user's redeploy failed with platform-side Cloud Build PermissionDenied (NOT a code issue; frontend build passes locally). If user raises it → Emergent Support.

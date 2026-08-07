@@ -14,6 +14,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/colla
 import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, AlertCircle, Factory, ExternalLink, Check, Pencil, RotateCcw, History } from 'lucide-react';
 import PromoDispatchSection from './PromoDispatchSection';
 import { groupByDateDesc } from '../../utils/dateGrouping';
+import { dualQty } from '../../utils/packaging';
 import { Calendar as DatePicker } from '../ui/calendar';
 import { toast } from 'sonner';
 import { getTerm } from '../../context/TenantConfigContext';
@@ -1366,13 +1367,13 @@ export default function DeliveriesTab({
                                           </div>
                                           <div className="mt-1.5 flex items-baseline gap-1">
                                             {(() => {
-                                              const upp = Math.max(1, Number(item.units_per_package) || 1);
+                                              const upp = Math.max(1, Number(item.packaging_units) || 1);
                                               const qty = Number(b.quantity || 0);
                                               const packs = Math.floor(qty / upp);
                                               const remainder = qty - packs * upp;
                                               // Friendly unit derived from the packaging name's last word
                                               // ("24 Bottle Crate" → "crate", "Bottle (1)" → "bottle").
-                                              const pkgWords = (item.packaging_type_name || '').trim().replace(/\(.*\)$/, '').trim().split(/\s+/).filter(Boolean);
+                                              const pkgWords = (item.packaging_type_name || '').trim().replace(/\(.*\)$/, '').trim().split(/\s+/).filter((w) => /[a-zA-Z]/.test(w));
                                               const unitWord = upp === 1
                                                 ? 'units'
                                                 : ((pkgWords[pkgWords.length - 1] || 'package').toLowerCase() + 's');
@@ -1385,6 +1386,11 @@ export default function DeliveriesTab({
                                                   {upp > 1 && remainder > 0 && (
                                                     <span className="ml-1 text-[10px] text-slate-400 normal-case tracking-normal" title="Bottles left over that don't make a full package">
                                                       +{remainder} loose
+                                                    </span>
+                                                  )}
+                                                  {upp > 1 && (
+                                                    <span className="ml-1 text-[10px] text-slate-500 normal-case tracking-normal font-medium" data-testid={`delivery-batch-uom-${item.id}-${bi}`}>
+                                                      · {qty.toLocaleString('en-IN')} {(selectedSku?.base_unit_name || 'units').toLowerCase()}{qty !== 1 && !/s$/i.test(selectedSku?.base_unit_name || 'units') ? 's' : ''}
                                                     </span>
                                                   )}
                                                 </>
@@ -1439,7 +1445,7 @@ export default function DeliveriesTab({
                                 >
                                   {options.map(r => (
                                     <option key={r.child_sku_id || 'gen'} value={r.child_sku_id || ''}>
-                                      {r.child_sku_id ? r.child_sku_name : 'Generic (unbranded)'} — {(r.quantity || 0).toLocaleString()} bottles
+                                      {r.child_sku_id ? r.child_sku_name : 'Generic (unbranded)'} — {dualQty(r.quantity || 0, item.packaging_units, item.packaging_type_name, selectedSku?.base_unit_name || 'Bottle')}
                                     </option>
                                   ))}
                                 </select>
@@ -1546,7 +1552,7 @@ export default function DeliveriesTab({
                               return (
                                 <p className="mt-1 text-xs text-red-600 flex items-center gap-1" data-testid={`delivery-over-stock-${item.id}`}>
                                   <AlertCircle className="h-3 w-3" />
-                                  Quantity exceeds batch availability ({selectedBatch.quantity} units in {selectedBatch.batch_code}).
+                                  Quantity exceeds batch availability — {dualQty(selectedBatch.quantity, item.packaging_units, item.packaging_type_name, 'unit')} in {selectedBatch.batch_code}.
                                 </p>
                               );
                             }

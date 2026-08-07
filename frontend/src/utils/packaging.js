@@ -17,6 +17,21 @@ export function packagingBreakdown(item, baseUom = 'Bottle') {
   return null;
 }
 
+// "Dual" quantity display — chosen packaging + base UOM together, e.g.
+// "44 Crates + 8 (536 Bottles)". Falls back to plain "536 Bottles" when the
+// packaging is single-unit/unknown. `qty` is always in base units.
+export function dualQty(qty, unitsPerPkg, packagingName, baseUom = 'unit') {
+  const q = Number(qty) || 0;
+  const upp = Math.max(1, Number(unitsPerPkg) || 1);
+  const uom = pluralizeUom(baseUom, q);
+  if (upp <= 1) return `${q.toLocaleString('en-IN')} ${uom}`;
+  const packs = Math.floor(q / upp);
+  const rem = q - packs * upp;
+  const words = (packagingName || '').trim().replace(/\(.*\)$/, '').trim().split(/\s+/).filter((w) => /[a-zA-Z]/.test(w));
+  const pw = pluralizeUom(words[words.length - 1] || 'Pack', packs);
+  return `${packs.toLocaleString('en-IN')} ${pw}${rem > 0 ? ` + ${rem}` : ''} (${q.toLocaleString('en-IN')} ${uom})`;
+}
+
 // "Bottle" → "Bottles" when count != 1 (and not already plural).
 export function pluralizeUom(uom, count) {
   const u = (uom || 'Bottle').trim();
