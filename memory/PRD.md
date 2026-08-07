@@ -2264,3 +2264,10 @@ Test tenant sales-only deleted.
 - Applied dual display: DeliveriesTab classification dropdown options, over-stock warning message; StockDashboardTab FactoryWarehouseSkuRow (pkg prop from brandedPkgLookup) totals + per-batch rows, main-table factory stock + batch rows via pkgEquiv.
 - NOTE: batches-available location routing: distributor_locations.is_factory=True → reads factory_warehouse_stock (warehouse_location_id), else distributor_stock (distributor_location_id).
 - Deploy notif: user's redeploy failed with platform-side Cloud Build PermissionDenied (NOT a code issue; frontend build passes locally). If user raises it → Emergent Support.
+
+## 2026-08-07 — BUG FIX: retro-categorization of COMPLETED deliveries now re-attributes warehouse stock
+- User report (production, DEL-2026-0337): categorized delivery lines to customer brand but warehouse stock unchanged — deduction stayed on Generic, branded pile untouched.
+- Root cause: routes/retro_categorization.py delivered-delivery branch was "relabel only" by design (Jul 2026 rule). User now expects classification-level correction.
+- Fix: refactored _move_generic_to_child into generic _move_stock_between_buckets(from_child, to_child) (None = Generic). categorize_delivery_item: delivered statuses now move qty from the BRANDED bucket → GENERIC (batch-aware, capped at branded on-hand), i.e. Generic restored +qty / branded −qty, net on-hand unchanged; writes a BRD- Branding Entry (from=branded, to=Generic) for audit. Pre-delivery path unchanged (delegates to wrapper).
+- Verified function-level in preview (temp rows at loc 5fff767e, batch RETRO-B): post-delivery: generic 140→500, branded 360→0, entry BRD- created. Regression pre-delivery direction: generic 200→80, branded +120. All temp data cleaned.
+- NOTE: existing already-categorized deliveries (e.g. DEL-2026-0337) are NOT retro-corrected by this fix; user can correct via a manual Branding Entry (branded → Generic supported by branding_entries API/UI). In PREVIEW; Republish needed.

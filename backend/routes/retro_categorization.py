@@ -81,16 +81,20 @@ def _validate_qty(qty: Optional[int], line_units: int, packaging_units: Optional
     return qty
 
 
-async def _move_generic_to_child(tenant_id: str, user: dict, location_id: str, sku_id: str,
-                                 child: dict, qty_units: int, batch_id: Optional[str],
-                                 note: str):
-    """Move up to qty_units of Generic on-hand stock at a warehouse into the child
-    bucket (batch-restricted when the line carries a batch, else FIFO). Capped at
-    what's still available. Writes a Branding Entry for audit when anything moved.
-    Returns (moved_units, entry_number|None)."""
+async def _move_stock_between_buckets(tenant_id: str, user: dict, location_id: str, sku_id: str,
+                                      from_child: Optional[dict], to_child: Optional[dict],
+                                      qty_units: int, batch_id: Optional[str], note: str):
+    """Move up to qty_units between classification buckets (None = Generic) at a
+    warehouse (batch-restricted when the line carries a batch, else FIFO). Capped
+    at what's still available in the FROM bucket. Writes a Branding Entry for
+    audit when anything moved. Returns (moved_units, entry_number|None)."""
     loc = await _load_location(tenant_id, location_id)
     coll, base = _stock_coll_and_base(loc, tenant_id)
-    from_q = {**base, "sku_id": sku_id, "child_sku_id": {"$in": [None]}, "quantity": {"$gt": 0}}
+    from_id = from_child["id"] if from_child else None
+    from_filter = from_id if from_id else {"$in": [None]}
+    to_id = to_child["id"] if to_child else None
+    to_filter = to_id if to_id else {"$in": [None]}
+    from_q = {**base, "sku_id": sku_id, "child_sku_id": from_filter, "quantity": {"$gt": 0}}
     if batch_id:
         from_q["batch_id"] = batch_id
     from_rows = await coll.find(from_q, {"_id": 0}).sort("created_at", 1).to_list(500)
@@ -109,19 +113,19 @@ async def _move_generic_to_child(tenant_id: str, user: dict, location_id: str, s
         await coll.update_one(
             {**base, "sku_id": sku_id,
              "batch_id": row_batch if row_batch else {"$in": [None]},
-             "child_sku_id": {"$in": [None]}},
+             "child_sku_id": from_filter},
             {"$inc": {"quantity": -take}, "$set": {"updated_at": now}},
         )
         to_key = {**base, "sku_id": sku_id,
                   "batch_id": row_batch if row_batch else {"$in": [None]},
-                  "child_sku_id": child["id"]}
+                  "child_sku_id": to_filter}
         on_insert = {k: v for k, v in r.items()
                      if k not in ("quantity", "updated_at", "child_sku_id", "child_sku_name", "child_sku_code", "id")}
         on_insert.update({
             "id": str(uuid.uuid4()),
-            "child_sku_id": child["id"],
-            "child_sku_name": child.get("child_sku_name"),
-            "child_sku_code": child.get("child_sku_code"),
+            "child_sku_id": to_id,
+            "child_sku_name": to_child.get("child_sku_name") if to_child else None,
+            "child_sku_code": to_child.get("child_sku_code") if to_child else None,
             "created_at": now,
         })
         await coll.update_one(
@@ -145,10 +149,10 @@ async def _move_generic_to_child(tenant_id: str, user: dict, location_id: str, s
         "is_factory": bool(loc.get("is_factory")),
         "sku_id": sku_id,
         "sku_name": (sku or {}).get("sku_name"),
-        "from_child_sku_id": None,
-        "from_child_sku_name": None,
-        "to_child_sku_id": child["id"],
-        "to_child_sku_name": child.get("child_sku_name"),
+        "from_child_sku_id": from_id,
+        "from_child_sku_name": from_child.get("child_sku_name") if from_child else None,
+        "to_child_sku_id": to_id,
+        "to_child_sku_name": to_child.get("child_sku_name") if to_child else None,
         "quantity": moved,
         "moves": moves,
         "notes": note,
@@ -159,6 +163,17 @@ async def _move_generic_to_child(tenant_id: str, user: dict, location_id: str, s
     }
     await db.branding_entries.insert_one(dict(entry))
     return moved, entry["entry_number"]
+
+
+async def _move_generic_to_child(tenant_id: str, user: dict, location_id: str, sku_id: str,
+                                 child: dict, qty_units: int, batch_id: Optional[str],
+                                 note: str):
+    """Move up to qty_units of Generic on-hand stock at a warehouse into the child
+    bucket (batch-restricted when the line carries a batch, else FIFO). Capped at
+    what's still available. Writes a Branding Entry for audit when anything moved.
+    Returns (moved_units, entry_number|None)."""
+    return await _move_stock_between_buckets(
+        tenant_id, user, location_id, sku_id, None, child, qty_units, batch_id, note)
 
 
 @router.get("/eligible-children")
@@ -377,10 +392,16 @@ async def categorize_delivery_item(payload: DeliveryItemCategorize,
         **_audit_fields(current_user),
     }
 
-    # If the delivery has NOT been delivered yet, its stock deduction is still
-    # pending and will target this line's classification — so the matching
-    # Generic on-hand must move into the branded bucket NOW, otherwise the
-    # deduction later misses the (non-existent) branded row.
+    # Stock effect:
+    # • NOT yet delivered → the deduction is still pending and will target this
+    #   line's classification, so matching Generic on-hand must move into the
+    #   branded bucket NOW, otherwise the deduction later misses the
+    #   (non-existent) branded row.
+    # • Already delivered → the deduction was taken from GENERIC when the
+    #   delivery completed, but physically the customer's BRANDED units left the
+    #   warehouse. Re-attribute: restore Generic (+qty) and reduce the branded
+    #   bucket (−qty), capped at branded on-hand, batch-aware. Net on-hand is
+    #   unchanged; classification becomes correct.
     stock_moved, entry_no = 0, None
     delivered_statuses = ("delivered", "complete", "completed")
     if (delivery.get("status") or "") not in delivered_statuses:
@@ -403,6 +424,15 @@ async def categorize_delivery_item(payload: DeliveryItemCategorize,
             tenant_id, current_user, loc_id, item["sku_id"], child, qty,
             item.get("batch_id"),
             f"Retro categorization (pre-delivery) for {delivery.get('delivery_number')}")
+    else:
+        loc_id = delivery.get("distributor_location_id")
+        if loc_id:
+            stock_moved, entry_no = await _move_stock_between_buckets(
+                tenant_id, current_user, loc_id, item["sku_id"], child, None, qty,
+                item.get("batch_id"),
+                (f"Retro categorization (post-delivery) of {delivery.get('delivery_number')} — "
+                 f"re-attributed deduction: Generic restored, "
+                 f"'{child.get('child_sku_name')}' reduced"))
 
     if split:
         rest = line_units - qty
@@ -428,7 +458,7 @@ async def categorize_delivery_item(payload: DeliveryItemCategorize,
             {"id": item["id"], "tenant_id": tenant_id},
             {"$set": {**child_fields, "updated_at": now}})
 
-    # Delivered → relabel only (stock already left the network).
+    # Delivered → deduction re-attributed above (Generic restored, branded reduced).
     # Undelivered → the matching Generic on-hand was moved to the branded bucket above.
     return {
         "message": "Line categorized.",
