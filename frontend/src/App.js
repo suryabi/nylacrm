@@ -104,6 +104,8 @@ const FilesDocuments = lazy(() => import('./pages/FilesDocuments'));
 const Maintenance = lazy(() => import('./pages/Maintenance'));
 const GlassBreakageRegister = lazy(() => import('./pages/GlassBreakageRegister'));
 const EquipmentMaster = lazy(() => import('./pages/EquipmentMaster'));
+const EventsPage = lazy(() => import('./pages/Events'));
+const EventDetailPage = lazy(() => import('./pages/EventDetail'));
 const Inventory = lazy(() => import('./pages/Inventory'));
 const PublicContactCard = lazy(() => import('./pages/PublicContactCard'));
 const QualityControl = lazy(() => import('./pages/QualityControl'));
@@ -470,6 +472,8 @@ function AppRouter() {
           <Route path="/maintenance" element={<ProtectedRoute moduleKey="maintenance"><Maintenance /></ProtectedRoute>} />
           <Route path="/glass-breakage-register" element={<ProtectedRoute moduleKey="glass_breakage_register"><GlassBreakageRegister /></ProtectedRoute>} />
           <Route path="/equipment-master" element={<ProtectedRoute moduleKey="equipment_master"><EquipmentMaster /></ProtectedRoute>} />
+          <Route path="/events" element={<ProtectedRoute moduleKey="marketing_events"><EventsPage /></ProtectedRoute>} />
+          <Route path="/events/:eventId" element={<ProtectedRoute moduleKey="marketing_events"><EventDetailPage /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute moduleKey="inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/quality-control" element={<ProtectedRoute moduleKey="quality_control"><QualityControl /></ProtectedRoute>} />
           <Route path="/production-batches" element={<ProtectedRoute moduleKey="production_batches"><ProductionBatches /></ProtectedRoute>} />

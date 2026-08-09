@@ -148,7 +148,8 @@ export const MODULE_REGISTRY = [
     description: 'Content calendar and marketing masters',
     items: [
       { key: 'marketing_calendar', label: 'Content Calendar', description: 'Plan & schedule marketing content' },
-      { key: 'marketing_masters', label: 'Marketing Masters', description: 'Categories, platforms & events' },
+      { key: 'marketing_events', label: 'Events', description: 'Event journeys — planning, stakeholders & budget' },
+      { key: 'marketing_masters', label: 'Marketing Masters', description: 'Categories, platforms & event types' },
     ],
   },
   {

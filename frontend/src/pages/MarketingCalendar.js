@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { marketingAPI } from '../utils/api';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
-import EventPanel from '../components/EventPanel';
 import {
   ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon,
   Film, Image, Video, MoreHorizontal, X, Save, Trash2,
@@ -248,38 +247,45 @@ function EventBadge({ event }) {
   );
 }
 
-// --- Calendar Event Card (full events with requirements/tasks) ---
+// --- Calendar Event Card (journey events spanning their full date range) ---
 function CalendarEventCard({ event, onClick }) {
   const styles = {
-    planned: { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-l-violet-500' },
-    in_progress: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-l-amber-500' },
-    completed: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-l-emerald-500' },
+    planned: { bg: 'bg-violet-50', text: 'text-violet-800', border: 'border-l-violet-500' },
+    in_progress: { bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-l-amber-500' },
+    completed: { bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-l-emerald-500' },
     cancelled: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-l-rose-400' },
   };
   const s = styles[event.status] || styles.planned;
-  const tasksDone = (event.tasks || []).filter(t => t.status === 'done').length;
-  const tasksTotal = (event.tasks || []).length;
+  const todayD = new Date().toISOString().slice(0, 10);
+  const active = event.status !== 'cancelled' && event.status !== 'completed';
+  const isLive = active && event.date_from <= todayD && event.date_to >= todayD;
+  const isUpcoming = active && event.date_from > todayD;
 
   return (
     <div
-      className={`w-full text-left rounded-lg border-l-[3px] ${s.border} ${s.bg} hover:brightness-95 transition-all cursor-pointer group/evcard ${event.status === 'cancelled' ? 'opacity-60' : ''}`}
+      className={`w-full text-left rounded-xl border-l-4 ${s.border} ${s.bg} hover:brightness-95 transition-all cursor-pointer ${event.status === 'cancelled' ? 'opacity-60' : ''} ${isUpcoming ? 'ring-2 ring-amber-400/80 shadow-md' : isLive ? 'ring-2 ring-emerald-400/80 shadow-md' : 'shadow-sm'}`}
       onClick={(e) => { e.stopPropagation(); onClick(event); }}
       data-testid={`cal-event-${event.id}`}
     >
-      <div className="px-2 py-1.5">
-        <div className="flex items-center gap-1 mb-0.5">
-          <CalendarDays className={`w-3 h-3 ${s.text} shrink-0`} />
-          {event.event_type && (
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: event.event_type_color || '#8B5CF6' }} />
-          )}
+      <div className="px-2.5 py-2">
+        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+          <CalendarDays className={`w-3.5 h-3.5 ${s.text} shrink-0`} />
           <span className={`text-[10px] font-bold uppercase tracking-wider ${s.text} truncate`}>{event.event_type || 'Event'}</span>
+          {isLive && <span className="px-1.5 py-px rounded-full bg-emerald-500 text-white text-[9px] font-bold uppercase tracking-wide">Live</span>}
+          {isUpcoming && <span className="px-1.5 py-px rounded-full bg-amber-500 text-white text-[9px] font-bold uppercase tracking-wide">Upcoming</span>}
         </div>
-        <p className={`text-xs font-semibold ${s.text} leading-snug line-clamp-1`}>{event.name}</p>
-        {(event.start_time || event.location || tasksTotal > 0) && (
-          <div className={`flex items-center gap-2 mt-0.5 text-[10px] ${s.text} opacity-70`}>
-            {event.start_time && <span className="tabular-nums">{event.start_time}</span>}
-            {event.location && <span className="flex items-center gap-0.5 truncate"><MapPin className="w-2.5 h-2.5" />{event.location}</span>}
-            {tasksTotal > 0 && <span className="tabular-nums">{tasksDone}/{tasksTotal}</span>}
+        <p className={`text-sm font-bold ${s.text} leading-snug line-clamp-2`}>{event.name}</p>
+        <div className={`flex items-center flex-wrap gap-x-2 gap-y-0.5 mt-1 text-[11px] font-medium ${s.text} opacity-80`}>
+          {event.total_days > 1 && <span>Day {event.day_index}/{event.total_days}</span>}
+          {event.start_time && <span className="tabular-nums">{event.start_time}{event.end_time ? `–${event.end_time}` : ''}</span>}
+          {event.location && <span className="flex items-center gap-0.5 truncate max-w-[120px]"><MapPin className="w-3 h-3" />{event.location}</span>}
+        </div>
+        {event.tasks_total > 0 && (
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <div className="flex-1 h-1.5 rounded-full bg-white/70 overflow-hidden">
+              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${event.progress || 0}%` }} />
+            </div>
+            <span className={`text-[10px] font-bold tabular-nums ${s.text}`}>{event.tasks_done}/{event.tasks_total}</span>
           </div>
         )}
       </div>
@@ -301,8 +307,7 @@ export default function MarketingCalendar() {
   const [postsByDate, setPostsByDate] = useState({});
   const [events, setEvents] = useState([]);
   const [calEventsByDate, setCalEventsByDate] = useState({});
-  const [eventTypes, setEventTypes] = useState([]);
-  const [teamMembers, setTeamMembers] = useState([]);
+  const [journeyEvents, setJourneyEvents] = useState([]);
   const [stats, setStats] = useState({ total: 0, by_status: {} });
   const [categories, setCategories] = useState([]);
   const [platforms, setPlatforms] = useState([]);
@@ -310,10 +315,6 @@ export default function MarketingCalendar() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingPost, setEditingPost] = useState(null);
   const [clickedDate, setClickedDate] = useState('');
-
-  // Event panel state
-  const [eventPanelOpen, setEventPanelOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState(null);
 
   const [weekStart, setWeekStart] = useState(null);
   const [draggingPostId, setDraggingPostId] = useState(null);
@@ -339,9 +340,9 @@ export default function MarketingCalendar() {
   const loadCalendar = useCallback(async () => {
     setLoading(true);
     try {
-      const [calRes, catRes, platRes, etRes] = await Promise.all([
+      const [calRes, catRes, platRes, journeyRes] = await Promise.all([
         marketingAPI.getCalendar(month, year), marketingAPI.getCategories(), marketingAPI.getPlatforms(),
-        marketingAPI.getEventTypes(),
+        marketingAPI.getJourneyEvents(),
       ]);
       setPostsByDate(calRes.data.posts_by_date || {});
       setEvents(calRes.data.events || []);
@@ -349,28 +350,10 @@ export default function MarketingCalendar() {
       setStats(calRes.data.stats || { total: 0, by_status: {} });
       setCategories(catRes.data || []);
       setPlatforms(platRes.data || []);
-      setEventTypes(etRes.data || []);
+      setJourneyEvents(journeyRes.data.events || []);
     } catch { toast.error('Failed to load calendar'); }
     finally { setLoading(false); }
   }, [month, year]);
-
-  // Load team members for task assignment
-  useEffect(() => {
-    const loadTeam = async () => {
-      try {
-        const { data } = await require('axios').get(process.env.REACT_APP_BACKEND_URL + '/api/users', {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'X-Tenant-ID': localStorage.getItem('tenant_id') }
-        });
-        const marketing = data.filter(u => {
-          if (!u.is_active) return false;
-          const depts = Array.isArray(u.department) ? u.department : [u.department || ''];
-          return depts.some(d => d === 'Marketing' || d === 'Admin');
-        });
-        setTeamMembers(marketing);
-      } catch { }
-    };
-    loadTeam();
-  }, []);
 
   useEffect(() => { loadCalendar(); }, [loadCalendar]);
 
@@ -389,15 +372,8 @@ export default function MarketingCalendar() {
 
   const deletePost = async (id) => { await marketingAPI.deletePost(id); toast.success('Post deleted'); loadCalendar(); };
 
-  // Calendar Event handlers
-  const openNewEvent = (dateStr) => { setEditingEvent(null); setClickedDate(dateStr); setEventPanelOpen(true); };
-  const openEditEvent = (ev) => { setEditingEvent(ev); setClickedDate(ev.event_date); setEventPanelOpen(true); };
-  const saveEvent = async (formData) => {
-    if (editingEvent?.id) { await marketingAPI.updateCalendarEvent(editingEvent.id, formData); toast.success('Event updated'); }
-    else { await marketingAPI.createCalendarEvent(formData); toast.success('Event created'); }
-    loadCalendar();
-  };
-  const deleteEvent = async (id) => { await marketingAPI.deleteCalendarEvent(id); toast.success('Event deleted'); loadCalendar(); };
+  // Journey events — full management lives in the dedicated Events module
+  const openEventDetail = (ev) => navigate(`/events/${ev.id}`);
 
   const handleDrop = async (dateStr) => {
     if (!draggingPostId) return;
@@ -524,7 +500,7 @@ export default function MarketingCalendar() {
           <button onClick={() => { setUploadOpen(true); setUploadStep('choose'); setUploadParsed(null); }}
             className="h-10 px-3.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-1.5"
             data-testid="upload-btn"><Upload className="w-4 h-4" /> Upload</button>
-          <button onClick={() => openNewEvent(todayStr)}
+          <button onClick={() => navigate('/events?new=1')}
             className="h-10 px-3.5 rounded-xl border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 text-sm font-semibold flex items-center gap-1.5"
             data-testid="new-event-btn"><CalendarDays className="w-4 h-4" /> New Event</button>
           <button onClick={() => openNew(todayStr)}
@@ -532,6 +508,50 @@ export default function MarketingCalendar() {
             data-testid="new-post-btn"><Plus className="w-4 h-4" /> New Post</button>
         </div>
       </div>
+
+      {/* Upcoming events strip */}
+      {(() => {
+        const upcoming = journeyEvents
+          .filter(e => e.status !== 'cancelled' && e.status !== 'completed' && e.date_to >= todayStr)
+          .sort((a, b) => (a.date_from || '').localeCompare(b.date_from || ''))
+          .slice(0, 6);
+        if (upcoming.length === 0) return null;
+        const fmt = (d) => new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        return (
+          <div data-testid="upcoming-events-strip">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500 flex items-center gap-1.5"><CalendarDays className="w-3.5 h-3.5" /> Upcoming Events</h3>
+              <button onClick={() => navigate('/events')} className="text-xs font-semibold text-violet-700 hover:text-violet-900" data-testid="view-all-events-btn">View all events →</button>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {upcoming.map(ev => {
+                const live = ev.date_from <= todayStr;
+                const daysTo = Math.ceil((new Date(ev.date_from) - new Date(todayStr)) / 86400000);
+                return (
+                  <button key={ev.id} onClick={() => navigate(`/events/${ev.id}`)}
+                    className={`min-w-[240px] max-w-[280px] text-left rounded-2xl border bg-white p-3.5 shadow-sm hover:shadow-md transition-all ${live ? 'border-emerald-300 ring-1 ring-emerald-200' : 'border-amber-200 ring-1 ring-amber-100'}`}
+                    data-testid={`upcoming-event-${ev.id}`}>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${live ? 'bg-emerald-500 text-white' : 'bg-amber-100 text-amber-800'}`}>
+                        {live ? 'Live now' : daysTo === 1 ? 'Tomorrow' : `In ${daysTo} days`}
+                      </span>
+                      {ev.overdue_tasks > 0 && <span className="text-[10px] font-bold text-red-600">{ev.overdue_tasks} overdue</span>}
+                    </div>
+                    <p className="text-sm font-bold text-slate-900 line-clamp-1">{ev.name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{fmt(ev.date_from)}{ev.date_to !== ev.date_from ? ` – ${fmt(ev.date_to)}` : ''}{ev.location ? ` · ${ev.location}` : ''}</p>
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${ev.progress || 0}%` }} />
+                      </div>
+                      <span className="text-[10px] font-bold tabular-nums text-slate-500">{ev.progress || 0}%</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Calendar shell */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
@@ -619,7 +639,7 @@ export default function MarketingCalendar() {
                         </div>
                         <div className="space-y-1 overflow-hidden">
                           {dayEvents.map((ev, ei) => <EventBadge key={ei} event={ev} />)}
-                          {(calEventsByDate[dateStr] || []).map(ce => <CalendarEventCard key={ce.id} event={ce} onClick={openEditEvent} />)}
+                          {(calEventsByDate[dateStr] || []).map(ce => <CalendarEventCard key={ce.id} event={ce} onClick={openEventDetail} />)}
                           {posts.slice(0, 3).map(p => (
                             <PostCard key={p.id} post={p} onClick={openEdit} onDelete={deletePost} onDragStart={setDraggingPostId} />
                           ))}
@@ -676,7 +696,7 @@ export default function MarketingCalendar() {
                         onDrop={(e) => { e.preventDefault(); handleDrop(ds); }}>
                         <div className="space-y-1">
                           {dayEvents.map((ev, ei) => <EventBadge key={ei} event={ev} />)}
-                          {(calEventsByDate[ds] || []).map(ce => <CalendarEventCard key={ce.id} event={ce} onClick={openEditEvent} />)}
+                          {(calEventsByDate[ds] || []).map(ce => <CalendarEventCard key={ce.id} event={ce} onClick={openEventDetail} />)}
                           {posts.map(p => <PostCard key={p.id} post={p} onClick={openEdit} onDelete={deletePost} onDragStart={setDraggingPostId} />)}
                           {posts.length === 0 && dayEvents.length === 0 && (calEventsByDate[ds] || []).length === 0 && (
                             <div className="opacity-0 group-hover:opacity-100 mt-2 rounded-lg border border-dashed border-slate-300 py-2 text-center text-[11px] text-slate-400 flex items-center justify-center gap-1">
@@ -722,7 +742,7 @@ export default function MarketingCalendar() {
                       <div className="space-y-2">
                         <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-1">Events</div>
                         {(calEventsByDate[todayStr] || []).map(ce => (
-                          <CalendarEventCard key={ce.id} event={ce} onClick={openEditEvent} />
+                          <CalendarEventCard key={ce.id} event={ce} onClick={openEventDetail} />
                         ))}
                       </div>
                     )}
@@ -1075,17 +1095,6 @@ export default function MarketingCalendar() {
         </SheetContent>
       </Sheet>
 
-      {/* Event Panel */}
-      <EventPanel
-        open={eventPanelOpen}
-        onClose={() => setEventPanelOpen(false)}
-        event={editingEvent}
-        eventTypes={eventTypes}
-        teamMembers={teamMembers}
-        onSave={saveEvent}
-        onDelete={deleteEvent}
-        clickedDate={clickedDate}
-      />
     </div>
   );
 }

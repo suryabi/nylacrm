@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { marketingAPI } from '../utils/api';
 import { toast } from 'sonner';
-import { Plus, Trash2, Save, Palette, Globe, Sparkles, X, Edit2, CalendarDays } from 'lucide-react';
+import { Plus, Trash2, Save, Palette, Globe, X, Edit2, CalendarDays } from 'lucide-react';
 
 const TABS = [
   { id: 'categories', label: 'Categories', icon: Palette },
   { id: 'platforms', label: 'Platforms', icon: Globe },
   { id: 'event_types', label: 'Event Types', icon: CalendarDays },
-  { id: 'events', label: 'Custom Events', icon: Sparkles },
 ];
 
 export default function MarketingMasters() {
@@ -15,10 +14,8 @@ export default function MarketingMasters() {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState([]);
   const [platforms, setPlatforms] = useState([]);
-  const [events, setEvents] = useState([]);
   const [eventTypes, setEventTypes] = useState([]);
   const [newCat, setNewCat] = useState({ name: '', color: '#3B82F6' });
-  const [newEvent, setNewEvent] = useState({ date: '', name: '' });
   const [newET, setNewET] = useState({ name: '', color: '#8B5CF6' });
   const [editingCat, setEditingCat] = useState(null);
   const [editingET, setEditingET] = useState(null);
@@ -26,13 +23,12 @@ export default function MarketingMasters() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [catRes, platRes, evRes, etRes] = await Promise.all([
-        marketingAPI.getCategories(), marketingAPI.getPlatforms(), marketingAPI.getEvents(),
+      const [catRes, platRes, etRes] = await Promise.all([
+        marketingAPI.getCategories(), marketingAPI.getPlatforms(),
         marketingAPI.getEventTypes(),
       ]);
       setCategories(catRes.data || []);
       setPlatforms(platRes.data || []);
-      setEvents(evRes.data || []);
       setEventTypes(etRes.data || []);
     } catch { toast.error('Failed to load'); }
     finally { setLoading(false); }
@@ -58,15 +54,6 @@ export default function MarketingMasters() {
     try { await marketingAPI.updatePlatform(plat.id, { enabled: !plat.enabled }); toast.success(`${plat.name} ${plat.enabled ? 'disabled' : 'enabled'}`); load(); }
     catch { toast.error('Failed'); }
   };
-  const addEvent = async () => {
-    if (!newEvent.date || !newEvent.name.trim()) { toast.error('Date and name required'); return; }
-    try { await marketingAPI.createEvent(newEvent); toast.success('Added'); setNewEvent({ date: '', name: '' }); load(); }
-    catch { toast.error('Failed'); }
-  };
-  const deleteEvent = async (id) => {
-    try { await marketingAPI.deleteEvent(id); toast.success('Deleted'); load(); }
-    catch { toast.error('Failed'); }
-  };
   const addEventType = async () => {
     if (!newET.name.trim()) { toast.error('Name required'); return; }
     try { await marketingAPI.createEventType(newET); toast.success('Added'); setNewET({ name: '', color: '#8B5CF6' }); load(); }
@@ -87,7 +74,7 @@ export default function MarketingMasters() {
       <div className="border-b border-slate-200 sticky top-0 z-40 bg-white">
         <div className="px-6 lg:px-8 py-4">
           <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Marketing Masters</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Manage categories, platforms & events</p>
+          <p className="text-sm text-slate-500 mt-0.5">Manage categories, platforms & event types</p>
           <div className="flex gap-1 mt-4">
             {TABS.map(t => {
               const Icon = t.icon;
@@ -221,57 +208,6 @@ export default function MarketingMasters() {
                   </div>
                 ))}
                 {eventTypes.length === 0 && <p className="text-center text-slate-400 text-sm py-8">No event types yet</p>}
-              </div>
-            )}
-
-            {/* CUSTOM EVENTS */}
-            {tab === 'events' && (
-              <div className="space-y-4">
-                <div className="border border-slate-200 rounded-lg p-4">
-                  <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400 mb-2 block">Add Custom Event</label>
-                  <div className="flex gap-2 items-center">
-                    <input type="date" value={newEvent.date} onChange={e => setNewEvent(p => ({ ...p, date: e.target.value }))}
-                      className="w-40 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                      data-testid="new-event-date" />
-                    <input type="text" value={newEvent.name} onChange={e => setNewEvent(p => ({ ...p, name: e.target.value }))}
-                      placeholder="Event name..." onKeyDown={e => { if (e.key === 'Enter') addEvent(); }}
-                      className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
-                      data-testid="new-event-name" />
-                    <button onClick={addEvent} className="bg-blue-600 text-white hover:bg-blue-700 rounded-lg p-2 transition-colors" data-testid="add-event-btn"><Plus size={18} /></button>
-                  </div>
-                </div>
-
-                {events.filter(e => e.type === 'custom').map(ev => {
-                  const dateLabel = ev.date?.length > 5
-                    ? new Date(ev.date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-                    : ev.date;
-                  return (
-                  <div key={ev.id} className="border border-slate-200 rounded-lg px-4 py-3 flex items-center justify-between group hover:border-slate-300 transition-all"
-                    data-testid={`event-${ev.id}`}>
-                    <div className="flex items-center gap-3">
-                      <span className="bg-violet-50 text-violet-600 rounded px-2 py-0.5 text-xs font-medium">{dateLabel}</span>
-                      <span className="text-sm font-medium text-slate-700">{ev.name}</span>
-                    </div>
-                    <button onClick={() => deleteEvent(ev.id)} className="text-slate-400 hover:text-red-600 p-1 opacity-0 group-hover:opacity-100 transition-all"><Trash2 size={13} /></button>
-                  </div>
-                  );
-                })}
-                {events.filter(e => e.type === 'custom').length === 0 && (
-                  <p className="text-center text-slate-400 text-sm py-8">No custom events yet</p>
-                )}
-
-                <div className="mt-6">
-                  <h3 className="text-[11px] font-medium uppercase tracking-wider text-slate-400 mb-3">Built-in Events</h3>
-                  <div className="border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100">
-                    {events.filter(e => e.type !== 'custom').map((ev, i) => (
-                      <div key={i} className="flex items-center gap-3 px-4 py-2">
-                        <Sparkles size={10} className={ev.type === 'indian' ? 'text-orange-400' : 'text-sky-400'} />
-                        <span className="text-xs text-slate-400 font-medium w-12">{ev.date}</span>
-                        <span className="text-sm text-slate-600">{ev.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </div>
             )}
           </>

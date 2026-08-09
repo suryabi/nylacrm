@@ -215,6 +215,7 @@ export const investorAPI = {
 // Marketing Module API
 export const marketingAPI = {
   getCalendar: (month, year) => axios.get(`${API_URL}/marketing/calendar?month=${month}&year=${year}`, { headers: getAuthHeaders() }),
+  getJourneyEvents: () => axios.get(`${API_URL}/events`, { headers: getAuthHeaders() }),
   getPosts: (params = {}) => {
     const q = new URLSearchParams();
     if (params.month) q.append('month', params.month);

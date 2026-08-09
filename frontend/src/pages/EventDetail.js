@@ -109,7 +109,7 @@ export default function EventDetail() {
     const fd = new FormData();
     fd.append('file', file);
     const res = await fetch(`${API_URL}/api/events/${eventId}/tasks/${taskId}/files`, {
-      method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` }, body: fd,
+      method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, body: fd,
     });
     if (!res.ok) return toast.error((await res.json()).detail || 'Upload failed');
     toast.success('File uploaded');
@@ -118,7 +118,7 @@ export default function EventDetail() {
 
   const downloadFile = async (taskId, f) => {
     const res = await fetch(`${API_URL}/api/events/${eventId}/tasks/${taskId}/files/${f.id}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` },
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
     const blob = await res.blob();
     const a = document.createElement('a');

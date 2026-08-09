@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -11,7 +11,7 @@ import { CalendarRange, Plus, MapPin, Users, AlertTriangle, RefreshCw, Copy } fr
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-export const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' });
+export const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
 const STATUS_STYLE = {
   planned: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -38,7 +38,13 @@ export function EventForm({ initial, onSaved, onCancel }) {
     description: '', requirements: [], date_from: '', date_to: '', day_schedules: [],
   });
   const [saving, setSaving] = useState(false);
+  const [typeOptions, setTypeOptions] = useState([]);
   const setF = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/marketing/event-types`, { headers: authHeaders() })
+      .then((r) => r.json()).then((d) => setTypeOptions(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const days = datesBetween(form.date_from, form.date_to);
@@ -125,9 +131,17 @@ export function EventForm({ initial, onSaved, onCancel }) {
 
 export default function Events() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setShowNew(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -138,6 +152,20 @@ export default function Events() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const rank = (e) => {
+    const active = e.status !== 'cancelled' && e.status !== 'completed';
+    if (active && e.date_from <= todayStr && e.date_to >= todayStr) return 0;
+    if (active && e.date_from > todayStr) return 1;
+    return 2;
+  };
+  const sortedEvents = [...events].sort((a, b) => {
+    const ra = rank(a), rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    if (ra === 1) return (a.date_from || '').localeCompare(b.date_from || '');
+    return (b.date_from || '').localeCompare(a.date_from || '');
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100/50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="events-page">
@@ -164,15 +192,24 @@ export default function Events() {
           </CardContent></Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {events.map((ev) => (
-              <Card key={ev.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/events/${ev.id}`)} data-testid={`event-card-${ev.name.replace(/\s/g, '-')}`}>
+            {sortedEvents.map((ev) => {
+              const r = rank(ev);
+              const isLive = r === 0;
+              const isUpcoming = r === 1;
+              const daysTo = isUpcoming ? Math.ceil((new Date(ev.date_from) - new Date(todayStr)) / 86400000) : 0;
+              return (
+              <Card key={ev.id} className={`cursor-pointer hover:shadow-md transition-shadow ${isLive ? 'ring-2 ring-emerald-400/80 border-emerald-300' : isUpcoming ? 'ring-2 ring-amber-400/70 border-amber-200' : ''}`} onClick={() => navigate(`/events/${ev.id}`)} data-testid={`event-card-${ev.name.replace(/\s/g, '-')}`}>
                 <CardContent className="p-5 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="font-bold text-lg leading-tight">{ev.name}</p>
                       {ev.event_type && <p className="text-xs text-muted-foreground">{ev.event_type}</p>}
                     </div>
-                    <Badge variant="outline" className={STATUS_STYLE[ev.status] || ''}>{(ev.status || '').replace('_', ' ')}</Badge>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge variant="outline" className={STATUS_STYLE[ev.status] || ''}>{(ev.status || '').replace('_', ' ')}</Badge>
+                      {isLive && <Badge className="bg-emerald-500 text-white border-emerald-500" data-testid={`event-live-${ev.name.replace(/\s/g, '-')}`}>Live now</Badge>}
+                      {isUpcoming && <Badge className="bg-amber-100 text-amber-800 border-amber-200" data-testid={`event-upcoming-${ev.name.replace(/\s/g, '-')}`}>{daysTo === 1 ? 'Tomorrow' : `In ${daysTo} days`}</Badge>}
+                    </div>
                   </div>
                   <div className="text-sm text-muted-foreground space-y-1">
                     <p className="flex items-center gap-1.5"><CalendarRange className="h-3.5 w-3.5" /> {ev.date_from}{ev.date_to !== ev.date_from ? ` → ${ev.date_to}` : ''}</p>
@@ -195,7 +232,8 @@ export default function Events() {
                   )}
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -5,7 +5,7 @@ Provides endpoints for managing marketing content calendar and social media plan
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from database import db
@@ -602,19 +602,41 @@ async def get_calendar_data(month: int = Query(...), year: int = Query(...), cur
     custom = await db.marketing_events.find(custom_query, {"_id": 0}).to_list(100)
     events = auto + [{"date": c.get("date", ""), "name": c["name"], "type": "custom", "id": c.get("id")} for c in custom]
 
-    # Get calendar events (full events with requirements & tasks) for this month
-    cal_events = await db.marketing_calendar_events.find(
-        {"tenant_id": tenant_id, "event_date": {"$gte": start, "$lt": end}},
+    # Journey events (Events module) — expand each event across its day range
+    journeys = await db.event_journeys.find(
+        {"tenant_id": tenant_id, "date_from": {"$lt": end}, "date_to": {"$gte": start}},
         {"_id": 0}
-    ).sort("event_date", 1).to_list(200)
+    ).sort("date_from", 1).to_list(200)
 
-    # Group calendar events by date
     cal_events_by_date = {}
-    for ce in cal_events:
-        d = ce.get("event_date", "")[:10]
-        if d not in cal_events_by_date:
-            cal_events_by_date[d] = []
-        cal_events_by_date[d].append(ce)
+    for ev in journeys:
+        tasks = await db.event_tasks.find(
+            {"tenant_id": tenant_id, "event_id": ev["id"]}, {"_id": 0, "status": 1}).to_list(1000)
+        tasks_done = sum(1 for t in tasks if t.get("status") == "done")
+        sched = {s.get("date"): s for s in ev.get("day_schedules", [])}
+        try:
+            d = datetime.strptime(ev["date_from"], "%Y-%m-%d").date()
+            d_end = datetime.strptime(ev["date_to"], "%Y-%m-%d").date()
+        except (ValueError, KeyError):
+            continue
+        total_days = (d_end - d).days + 1
+        day_idx = 0
+        while d <= d_end and day_idx < 60:
+            day_idx += 1
+            ds = d.isoformat()
+            d = d + timedelta(days=1)
+            if not (start <= ds < end):
+                continue
+            s = sched.get(ds, {})
+            cal_events_by_date.setdefault(ds, []).append({
+                "id": ev["id"], "name": ev["name"], "event_type": ev.get("event_type"),
+                "status": ev.get("status", "planned"), "location": ev.get("location"),
+                "start_time": s.get("start_time"), "end_time": s.get("end_time"),
+                "date_from": ev["date_from"], "date_to": ev["date_to"],
+                "day_index": day_idx, "total_days": total_days,
+                "tasks_done": tasks_done, "tasks_total": len(tasks),
+                "progress": round(tasks_done * 100 / len(tasks)) if tasks else 0,
+            })
 
     # Stats
     total = len(posts)
@@ -640,7 +662,7 @@ async def get_calendar_data(month: int = Query(...), year: int = Query(...), cur
             "by_category": by_category,
             "by_content_type": by_content_type,
             "events_count": len(events),
-            "calendar_events_count": len(cal_events),
+            "calendar_events_count": len(journeys),
         },
         "month": month,
         "year": year,
