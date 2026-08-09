@@ -244,8 +244,9 @@ export default function EventDetail() {
     </div>
   );
 
-  const StakeholderEditRow = () => (
+  const StakeholderEditRow = (sno) => (
     <tr className="border-b bg-amber-50/40 align-top" data-testid="stakeholder-edit-row">
+      <td className="px-3 py-2 text-muted-foreground tabular-nums pt-3.5">{sno || '—'}</td>
       <td className="px-3 py-2">
         <select className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm mb-1"
           value={shEdit.is_internal ? 'internal' : 'external'}
@@ -275,8 +276,9 @@ export default function EventDetail() {
     </tr>
   );
 
-  const TaskEditRow = () => (
+  const TaskEditRow = (sno) => (
     <tr className="border-b bg-amber-50/40 align-top" data-testid="task-edit-row">
+      <td className="px-3 py-2 text-muted-foreground tabular-nums pt-3.5">{sno || '—'}</td>
       <td className="px-3 py-2 min-w-[220px]">
         <Input className={cellInput} placeholder="Task name *" value={taskEdit.name || ''} onChange={(e) => setTaskEdit((p) => ({ ...p, name: e.target.value }))} data-testid="task-name-input" />
         <Input className="h-7 text-xs mt-1" placeholder="Description (optional)" value={taskEdit.description || ''} onChange={(e) => setTaskEdit((p) => ({ ...p, description: e.target.value }))} data-testid="task-desc-input" />
@@ -398,15 +400,17 @@ export default function EventDetail() {
             <Card><CardContent className="p-0 overflow-x-auto">
               <table className="w-full text-sm" data-testid="stakeholders-table">
                 <thead><tr className="border-b bg-slate-50 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                  <th className="px-3 py-3 w-12">S.No</th>
                   <th className="px-3 py-3 min-w-[180px]">Company / Type</th><th className="px-3 py-3">Contact</th><th className="px-3 py-3">Phone</th>
                   <th className="px-3 py-3">Email</th><th className="px-3 py-3 min-w-[200px]">Scope</th><th className="px-3 py-3 w-24"></th>
                 </tr></thead>
                 <tbody>
                   {shEdit && !shEdit.id && StakeholderEditRow()}
-                  {ev.stakeholders.length === 0 && !shEdit && <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No stakeholders yet — click “Add Stakeholder” to add one inline.</td></tr>}
-                  {ev.stakeholders.map((s) => (
-                    shEdit?.id === s.id ? <React.Fragment key={s.id}>{StakeholderEditRow()}</React.Fragment> : (
+                  {ev.stakeholders.length === 0 && !shEdit && <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No stakeholders yet — click “Add Stakeholder” to add one inline.</td></tr>}
+                  {ev.stakeholders.map((s, i) => (
+                    shEdit?.id === s.id ? <React.Fragment key={s.id}>{StakeholderEditRow(i + 1)}</React.Fragment> : (
                     <tr key={s.id} className="border-b align-top hover:bg-slate-50/60" data-testid={`stakeholder-row-${s.contact_name.replace(/\s/g, '-')}`}>
+                      <td className="px-3 py-2.5 text-muted-foreground tabular-nums">{i + 1}</td>
                       <td className="px-3 py-2.5">{s.is_internal ? <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">Internal</Badge> : (s.company_name || '—')}</td>
                       <td className="px-3 py-2.5 font-medium">{s.contact_name}</td>
                       <td className="px-3 py-2.5">{s.phone || '—'}</td>
@@ -432,18 +436,20 @@ export default function EventDetail() {
             <Card><CardContent className="p-0 overflow-x-auto">
               <table className="w-full text-sm" data-testid="tasks-table">
                 <thead><tr className="border-b bg-slate-50 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                  <th className="px-3 py-3 w-12">S.No</th>
                   <th className="px-3 py-3 min-w-[220px]">Task</th><th className="px-3 py-3">Owner</th><th className="px-3 py-3">Start</th>
                   <th className="px-3 py-3">End</th><th className="px-3 py-3 min-w-[140px]">Depends On</th><th className="px-3 py-3">Status</th>
                   <th className="px-3 py-3 min-w-[130px]">Files</th><th className="px-3 py-3 w-24"></th>
                 </tr></thead>
                 <tbody>
                   {taskEdit && !taskEdit.id && TaskEditRow()}
-                  {ev.tasks.length === 0 && !taskEdit && <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">No plan tasks yet — click “Add Task” to add one inline.</td></tr>}
-                  {ev.tasks.map((t) => {
-                    if (taskEdit?.id === t.id) return <React.Fragment key={t.id}>{TaskEditRow()}</React.Fragment>;
+                  {ev.tasks.length === 0 && !taskEdit && <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">No plan tasks yet — click “Add Task” to add one inline.</td></tr>}
+                  {ev.tasks.map((t, i) => {
+                    if (taskEdit?.id === t.id) return <React.Fragment key={t.id}>{TaskEditRow(i + 1)}</React.Fragment>;
                     const overdue = t.status !== 'done' && t.end_date && t.end_date < today();
                     return (
                       <tr key={t.id} className={`border-b align-top hover:bg-slate-50/60 ${overdue ? 'bg-red-50/40' : ''}`} data-testid={`task-row-${t.name.replace(/\s/g, '-')}`}>
+                        <td className="px-3 py-2.5 text-muted-foreground tabular-nums">{i + 1}</td>
                         <td className="px-3 py-2.5">
                           <p className="font-medium leading-tight">{t.name}</p>
                           {t.description && <p className="text-xs text-muted-foreground">{t.description}</p>}
