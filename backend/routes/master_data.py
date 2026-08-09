@@ -17,8 +17,10 @@ router = APIRouter()
 
 @router.get("/master-skus")
 async def get_master_skus(current_user: dict = Depends(get_current_user)):
-    """Get all master SKUs"""
-    skus = await db.master_skus.find({'is_active': True}, {'_id': 0}).to_list(100)
+    """Get all master SKUs (honouring the master sort order)"""
+    from utils.sku_order import sort_rank
+    skus = await db.master_skus.find({'is_active': True}, {'_id': 0}).to_list(500)
+    skus.sort(key=lambda s: (sort_rank(s), (s.get('name') or s.get('sku_name') or '').lower()))
     return skus
 
 @router.post("/master-skus")

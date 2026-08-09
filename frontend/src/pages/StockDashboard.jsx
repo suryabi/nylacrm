@@ -423,7 +423,7 @@ export default function StockDashboard() {
                             </tr>
                           </thead>
                           <tbody>
-                            {location.items?.sort((a, b) => b.quantity - a.quantity).map((item, idx) => {
+                            {location.items?.map((item, idx) => {
                               const q = toUnit(item, item.quantity);
                               const lbl = unitLabelFor(item);
                               const skuKey = `${location.location_id}:${item.sku_id || idx}`;

@@ -28,6 +28,7 @@ from models.distributor import (
 )
 from utils.pdf_generator import generate_debit_credit_note_pdf, generate_customer_invoice_pdf
 from utils.storage import upload_pdf, download_pdf
+from utils.sku_order import master_sku_order, sku_sort_key
 from utils.object_storage import init_storage
 
 router = APIRouter()
@@ -4034,7 +4035,8 @@ async def _build_branded_stock_sections(tenant_id: str, stock_rows: list,
                 base_units[ms["id"]] = ms["base_uom"]
         for s in sections:
             s["base_unit_name"] = base_units.get(s["sku_id"]) or "units"
-    sections.sort(key=lambda s: (-s["total_quantity"], (s["sku_name"] or "").lower()))
+    _sec_order = await master_sku_order([s["sku_id"] for s in sections])
+    sections.sort(key=sku_sort_key(_sec_order))
     return sections
 
 
@@ -4158,6 +4160,7 @@ async def get_stock_dashboard_summary(
 
     # ── 6. Top-level summary ──────────────────────────────────────────────
     total_quantity = sum(r["quantity"] for r in unified)
+    sku_order = await master_sku_order({r.get("sku_id") for r in unified})
     total_skus = len({r["sku_id"] for r in unified if r.get("sku_id")})
     total_locations = len({r["location_id"] for r in unified if r.get("location_id")})
     total_distributors = len({r["distributor_id"] for r in unified if r.get("distributor_id")})
@@ -4201,7 +4204,7 @@ async def get_stock_dashboard_summary(
         {"sku_id": v["sku_id"], "sku_name": v["sku_name"],
          "total_quantity": v["total_quantity"], "location_count": len(v["locations"])}
         for v in by_sku.values()
-    ], key=lambda x: x["total_quantity"], reverse=True)
+    ], key=sku_sort_key(sku_order))
 
     by_loc: dict = {}
     for r in unified:
@@ -4262,7 +4265,7 @@ async def get_stock_dashboard_summary(
             "is_factory": v["is_factory"],
             "total_quantity": v["total_quantity"],
             "sku_count": len([s for s in v["sku_count"] if s]),
-            "items": sorted(items_out, key=lambda x: (x.get("sku_name") or "").lower()),
+            "items": sorted(items_out, key=sku_sort_key(sku_order)),
         })
     location_summary.sort(key=lambda x: x["total_quantity"], reverse=True)
 

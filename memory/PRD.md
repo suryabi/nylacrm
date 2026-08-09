@@ -2305,3 +2305,10 @@ Test tenant sales-only deleted.
 
 ## 2026-08-09 — S.No columns on Stakeholders + Plan grids [screenshot verified]
 - EventDetail.js: added S.No column (row index) to stakeholders-table and tasks-table; edit rows keep their number; colSpans updated (7 / 9).
+
+## 2026-08-09 — Master SKU sort order honored everywhere [SELF-TESTED via curl on all 5 endpoints + UI screenshots]
+- NEW helper /app/backend/utils/sku_order.py: master_sku_order(sku_ids)→{id:rank} + sku_sort_key(order). Rank = master_skus.sort_order (>0 asc); unset/0 → last, then A-Z.
+- Fixed sort in: global_stock_dashboard.py (per-warehouse skus were sorted by stock desc → now master order; export inherits), distributors.py stock-summary (by_sku + by_location items were qty/alpha sorted) and _build_branded_stock_sections, distributor_stock_transfers.py warehouse-stock-overview (items_distributor/items_factory), factory_returns.py available-stock (SKU dropdown in deliveries/factory returns), master_data.py /master-skus (shadowed by server.py:2057 route which ALREADY sorts by sort_order — dropdowns were fine).
+- Frontend: StockDashboard.jsx removed client-side re-sort by quantity (line ~426) so API order is preserved. GlobalStockDashboard.jsx has no client sorts.
+- Verified: all warehouses now list SKUs identically (600 Silver→330 Silver→660 Gold→330 Gold→660 Sparkling→24 Brand). Note: inactive legacy SKUs with old stock (e.g. '20L Premium', sort_order=1) tie with active rank-1 and break alphabetically — consistent everywhere.
+- In PREVIEW; user's screenshots were production (Pickval/Mumbai) — needs Republish.

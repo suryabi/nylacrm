@@ -205,7 +205,11 @@ async def get_available_stock(
     if not distributor:
         raise HTTPException(status_code=404, detail="Distributor not found")
     stock = await compute_available_stock_at_distributor(tenant_id, distributor_id)
-    return {"available_stock": list(stock.values())}
+    rows = list(stock.values())
+    from utils.sku_order import master_sku_order, sku_sort_key
+    order = await master_sku_order({r.get("sku_id") for r in rows})
+    rows.sort(key=sku_sort_key(order))
+    return {"available_stock": rows}
 
 
 @router.get("/{distributor_id}/factory-returns")

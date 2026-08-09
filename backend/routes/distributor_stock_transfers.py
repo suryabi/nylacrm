@@ -48,6 +48,7 @@ from services.zoho_service import (
     AccountNotLinkedToZohoError,
 )
 from utils.eway_bill import build_eway_bill_payload
+from utils.sku_order import master_sku_order, sku_sort_key
 from utils.excel_branding import brand_workbook
 
 logger = logging.getLogger(__name__)
@@ -536,6 +537,12 @@ async def warehouse_stock_overview(current_user: dict = Depends(get_current_user
     # Include empty warehouses
     for lid, loc in loc_by_id.items():
         _bucket_for(lid, loc)
+
+    # SKU rows within each warehouse honour the master SKU sort order
+    _sku_order = await master_sku_order({r.get("sku_id") for r in d_rows + f_rows})
+    for b in warehouses.values():
+        b["items_distributor"].sort(key=sku_sort_key(_sku_order))
+        b["items_factory"].sort(key=sku_sort_key(_sku_order))
 
     rows_out = sorted(
         warehouses.values(),

@@ -28,6 +28,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from deps import get_current_user, db
 from core.tenant import get_current_tenant_id
 from utils.excel_branding import brand_workbook
+from utils.sku_order import master_sku_order, sku_sort_key
 
 router = APIRouter()
 
@@ -297,6 +298,7 @@ async def _build_dashboard(tenant_id: str) -> dict:
         node["available_units"] = node["on_hand_units"] - node["reserved_units"]
 
     warehouses: dict = {}
+    sku_order = await master_sku_order({k[1] for k in agg.keys()})
     for (loc_id, sku_id, child_id), node in agg.items():
         m = meta.get((loc_id, sku_id, child_id), {})
         loc = locs.get(loc_id, {})
@@ -344,7 +346,7 @@ async def _build_dashboard(tenant_id: str) -> dict:
             ) if has_real_children else []
             finalize(sku["totals"])
             skus.append(sku)
-        skus.sort(key=lambda s: -s["totals"]["on_hand_crates"])
+        skus.sort(key=sku_sort_key(sku_order))
         wh["skus"] = skus
         add_into(grand, wh["totals"])
         finalize(wh["totals"])
