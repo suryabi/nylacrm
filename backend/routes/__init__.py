@@ -51,6 +51,7 @@ from .meeting_minutes import router as meeting_minutes_router
 from .production_qc import router as production_qc_router
 from .glass_breakage import router as glass_breakage_router
 from .equipment_master import router as equipment_master_router
+from .event_journeys import router as event_journeys_router
 from .cost_cards import router as cost_cards_router
 from .target_planning import router as target_planning_router
 from .proxies import router as proxies_router
