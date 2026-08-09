@@ -1,109 +1,132 @@
 {
-  "theme": "light",
-  "archetype": "Swiss & High-Contrast (Authority, Clarity, Truth)",
+  "theme_and_context": {
+    "app_type": "Internal SaaS CRM Module (Dashboard)",
+    "brand": "Nyla Air Water",
+    "theme": "Light",
+    "archetype": "Swiss & High-Contrast (Data-Heavy, Functional Beauty)",
+    "vibe": "Professional, premium, structured, highly readable"
+  },
   "typography": {
     "headings": {
-      "fontFamily": "'Outfit', sans-serif",
-      "weights": ["400", "700", "900"],
-      "usage": "Use tight letter spacing (tracking-tight). Do not default to bold, mix weights."
+      "family": "Outfit",
+      "classes": "font-outfit tracking-tight font-medium text-slate-900"
     },
     "body": {
-      "fontFamily": "'IBM Plex Sans', sans-serif",
-      "weights": ["400", "500", "600"],
-      "usage": "Loose line-height (leading-relaxed) for readability."
+      "family": "IBM Plex Sans",
+      "classes": "font-plex text-sm text-slate-700 leading-relaxed"
     },
-    "google_fonts_url": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Outfit:wght@400;700;900&display=swap"
+    "data_and_financials": {
+      "classes": "font-mono text-sm tabular-nums tracking-tight"
+    },
+    "labels_and_table_headers": {
+      "classes": "text-xs font-semibold uppercase tracking-[0.05em] text-slate-500"
+    }
   },
   "colors": {
     "background": {
-      "primary": "#FFFFFF",
-      "secondary": "#F5F5F5",
-      "tertiary": "#EAEAEA"
+      "page": "bg-slate-50",
+      "surface": "bg-white",
+      "surface_hover": "hover:bg-slate-50",
+      "row_edit": "bg-blue-50/30"
     },
-    "text": {
-      "primary": "#0A0A0A",
-      "secondary": "#525252",
-      "inverse": "#FFFFFF"
+    "primary": {
+      "DEFAULT": "#002FA7",
+      "classes": "bg-[#002FA7] text-white hover:bg-[#002FA7]/90"
     },
     "accent": {
-      "primary": "#002FA7",
-      "primary_hover": "#00227A",
-      "secondary": "#FFD600",
-      "danger": "#FF3B30"
+      "DEFAULT": "#FFD600",
+      "classes": "bg-[#FFD600] text-yellow-900"
     },
-    "border": {
-      "default": "rgba(10, 10, 10, 0.1)",
-      "strong": "rgba(10, 10, 10, 0.8)"
+    "danger": {
+      "DEFAULT": "#FF3B30",
+      "classes": "text-[#FF3B30] bg-[#FF3B30]/10 border-[#FF3B30]/20"
     },
-    "rules": "No gradients for backgrounds. Use flat colors. Use the primary accent (#002FA7) strictly for primary CTA buttons and important links."
+    "success": {
+      "DEFAULT": "#34C759",
+      "classes": "text-[#34C759] bg-[#34C759]/10 border-[#34C759]/20"
+    },
+    "borders": "border-slate-200 focus:border-[#002FA7] focus:ring-[#002FA7]"
   },
-  "visual_enhancers": {
-    "borders": "1px sharp borders. Expose the structural grid where possible (Technical Look).",
-    "shadows": "Minimalistic. Use sharp 1px offset borders or very diffuse shadows. No muddy gray shadows.",
-    "surfaces": {
-      "header": "Crystal Glass: backdrop-blur-xl bg-white/70, 1px bottom border-border.",
-      "cards": "Flat background, 1px subtle border, no shadow by default. On hover, slight lift (-translate-y-1) and drop-shadow."
+  "layout_and_spacing": {
+    "container": "w-full max-w-full px-6 py-8",
+    "spacing_philosophy": "Dense but optical. Use p-3 or p-4 for table cells to allow breathing room, but keep row heights tight for data density.",
+    "borders_and_radius": "Sharp to slightly rounded (rounded-sm). 1px sharp borders for all components.",
+    "shadows": "Minimal. Use shadow-sm for active elements, shadow-md strictly for elevated states (like inline edit mode or dropdowns)."
+  },
+  "component_patterns": {
+    "tabs_navigation": {
+      "description": "Shift away from generic Shadcn pills. Use an elegant, underlined active state.",
+      "container": "flex space-x-8 border-b border-slate-200 mb-6",
+      "item": "pb-3 text-sm font-outfit font-medium text-slate-500 hover:text-slate-900 transition-colors relative",
+      "active_item": "text-[#002FA7] after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-[#002FA7]"
+    },
+    "inline_editable_tables": {
+      "philosophy": "Inline row editing MUST be preserved, absolutely no modal-based CRUD. The row must visually pop out when entering edit mode to maintain focus.",
+      "read_state_row": "border-b border-slate-100 hover:bg-slate-50 transition-colors group",
+      "edit_state_row": "relative z-10 bg-white ring-1 ring-[#002FA7] shadow-md border-transparent",
+      "edit_state_cells": "p-2",
+      "inputs": "w-full h-8 px-2 text-sm border-slate-200 rounded-sm focus-visible:ring-1 focus-visible:ring-[#002FA7] focus-visible:border-[#002FA7] transition-all",
+      "actions_column": "flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity",
+      "s_no_column": "w-12 text-center text-xs font-mono text-slate-400 select-none"
+    },
+    "chips_and_pills": {
+      "general": "Inline flex items-center px-2 py-0.5 rounded-sm text-xs border whitespace-nowrap",
+      "status_done": "bg-[#34C759]/10 text-green-800 border-green-200",
+      "status_in_progress": "bg-blue-50 text-blue-700 border-blue-200",
+      "status_blocked": "bg-[#FF3B30]/10 text-red-700 border-red-200",
+      "status_not_started": "bg-slate-100 text-slate-600 border-slate-200",
+      "tags_scope": "bg-slate-50 text-slate-700 border-slate-200 font-plex",
+      "dependency_chip": "bg-orange-50 text-orange-700 border-orange-200 flex items-center gap-1"
+    },
+    "budget_workflow_header": {
+      "layout": "Flex container with state chip, summary totals, and action buttons. Sticky top if table is long.",
+      "card_style": "bg-white border border-slate-200 rounded-sm p-4 mb-6 flex justify-between items-center shadow-sm",
+      "status_chip": "font-outfit font-bold uppercase tracking-widest text-xs px-3 py-1 border rounded-sm",
+      "totals_summary": "flex gap-6 divide-x divide-slate-200",
+      "total_item": "pl-6 first:pl-0 flex flex-col",
+      "total_label": "text-[10px] uppercase tracking-wider text-slate-500 mb-1",
+      "total_value": "font-mono text-lg font-medium text-slate-900"
     }
   },
-  "components": {
-    "buttons": "Sharp corners or very slight rounding (rounded-sm). Solid fill for primary, 1px border for secondary. Strong hover states with color shifts.",
-    "cards": "Use raw div elements for layout freedom rather than Shadcn cards. 1px borders. Add generous padding (p-8 or p-12).",
-    "navigation": "Fixed header with backdrop-blur. Logo left, links center, Sign in / Register right.",
-    "pricing_card": "High contrast. Deep charcoal background (#0A0A0A) for the primary pricing tier if featured, white text. Large price typography."
-  },
-  "layouts": {
-    "hero": "Massive typography (text-5xl to text-6xl+). Asymmetrical layout. High contrast text.",
-    "feature_tour": "Bento Grid (Mode A: 'Tetris' Grid). Asymmetrical, mixing wide, tall, and square cells. Gap-8 to gap-12.",
-    "industry_templates": "Overlapping or masonry grid layout with heavy imagery and stark text overlays.",
-    "spacing": "Generous spacing. py-24 to py-32 for sections."
-  },
-  "motion": {
-    "interactions": "Hover states on all interactive elements (color shift + slight transform).",
-    "entrance": "Framer motion for staggered fade-in and slide-up on scroll.",
-    "parallax": "Use Lenis for smooth scrolling if possible. Subtle parallax on hero image."
-  },
-  "image_urls": {
-    "hero_background": {
-      "url": "https://images.pexels.com/photos/4487365/pexels-photo-4487365.jpeg",
-      "description": "Two workers managing inventory in a spacious warehouse aisle. Used for the Hero section to establish operations context."
+  "tab_specific_guidelines": {
+    "stakeholders": {
+      "columns": ["S.No", "Company / Name", "Contact (Phone & Email)", "Scopes (Tags)", "Actions"],
+      "inline_add": "A permanent 'Add Stakeholder' row at the bottom with dashed border, or a top row that appears when clicking 'Add'.",
+      "employee_picker": "Use a Shadcn Popover Combobox for selecting internal employees within the inline cell."
     },
-    "apparel_industry": {
-      "url": "https://images.pexels.com/photos/31019572/pexels-photo-31019572.jpeg",
-      "description": "Apparel factory line. Used for Industry Templates section."
+    "plan": {
+      "columns": ["S.No", "Task", "Owner", "Timeline (Start - End)", "Dependencies", "Status", "Attachments", "Actions"],
+      "task_cell": "Bold task name, block-display small optional description below it.",
+      "status_dropdown": "Instead of text, render a sleek inline select (ghost trigger) that looks like a chip but is clickable.",
+      "overdue_highlight": "If overdue and not Done, the Timeline cell gets a text-[#FF3B30] class and a small warning icon.",
+      "attachments": "Show tiny paperclip icon with count. In edit mode, show a dropzone or simple file input."
     },
-    "pharma_industry": {
-      "url": "https://images.unsplash.com/photo-1669707041081-dd4d51943041?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTJ8MHwxfHNlYXJjaHwxfHxwaGFybWFjZXV0aWNhbCUyMGxhYnxlbnwwfHx8fDE3ODU5OTUzODR8MA&ixlib=rb-4.1.0&q=85",
-      "description": "Pharmaceutical lab worker. Used for Industry Templates section."
-    },
-    "food_production": {
-      "url": "https://images.pexels.com/photos/18631424/pexels-photo-18631424.jpeg",
-      "description": "Food production line. Used for Industry Templates section."
-    },
-    "fmcg_industry": {
-      "url": "https://images.unsplash.com/photo-1587293852726-70cdb56c2866?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NjZ8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjB3YXJlaG91c2UlMjBvcGVyYXRpb25zfGVufDB8fHx8MTc4MjI4NjU0OHww&ixlib=rb-4.1.0&q=85",
-      "description": "Generic warehouse operations. Used for FMCG or general template."
+    "budget": {
+      "columns": ["Category", "Description", "Vendor", "Planned ₹", "Approved ₹", "Actual ₹", "Variance", "Bills", "Actions"],
+      "variance_styling": "Tabular nums. If positive (over budget): text-[#FF3B30]. If negative/zero (under/on budget): text-[#34C759].",
+      "lock_states": "If pending approval, inputs are disabled (opacity-50, cursor-not-allowed). If approved, only 'Actual' is an input in edit mode."
     }
   },
-  "accessibility": {
-    "contrast": "Ensure all text meets 4.5:1 ratio.",
-    "testing": "All interactive elements MUST include a data-testid attribute (e.g., data-testid='hero-cta-button', data-testid='pricing-subscribe-button')."
+  "micro_interactions": {
+    "hover": "Table rows highlight subtly. Action buttons reveal on hover to reduce visual clutter.",
+    "transitions": "Use `transition-all duration-200 ease-in-out` for input focus rings and row elevations.",
+    "loading": "Use skeleton rows matching the exact table structure, not spinners."
   },
-  "instructions_to_main_agent": [
-    "Build a high-conversion marketing page in /app/frontend/src/App.js (or relevant entry point).",
-    "Use Lucide-react for icons.",
-    "Implement Framer Motion for scroll animations.",
-    "Do not apply global transitions (e.g., transition: all).",
-    "Include the header with 'Sign in' (/login) and 'Start free trial' (/register).",
-    "Build the Feature Tour as a Bento grid.",
-    "Create a bold Pricing section highlighting '$10/user/month' and '14-day free trial'."
-  ],
-  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
-    "You tend to converge toward generic outputs. Create distinctive frontends that surprise and delight.",
-    "Don't make generic centered layouts. Use asymmetrical layouts with z-index hierarchy.",
-    "Use glass-morphism effects with backdrop filters for floating navs.",
-    "Every interaction needs micro-animations - hover states, transitions, entrance animations.",
-    "Use 2-3x more spacing than feels comfortable.",
-    "Never use placeholder URLs. Use the provided image URLs.",
-    "Do NOT use complete transparent backgrounds for overlays."
-  ]
+  "accessibility_and_testing": {
+    "testing_attributes": "MUST include `data-testid` on all inputs, action buttons, table rows, and tabs (e.g., `data-testid='plan-task-row-3'`, `data-testid='budget-submit-approval'`).",
+    "contrast": "Ensure #002FA7 and #FF3B30 maintain APCA/WCAG AA contrast against white/slate-50 backgrounds."
+  },
+  "instructions_to_main_agent": {
+    "1": "You are editing `.js` files, NOT `.tsx`. Ensure you do not use TypeScript annotations.",
+    "2": "For the three tabs (Stakeholders, Plan, Budget), remove any modal Dialog components for Add/Edit/Delete.",
+    "3": "Implement inline editing state tracking per row (e.g., `editingRowId` state). Replace static text with Shadcn Inputs/Selects/Comboboxes natively inside the `<td>` when a row is active.",
+    "4": "Add an explicit 'S.No' column to Stakeholders and Plan tables. Map index + 1 if needed.",
+    "5": "Do NOT use generic Vercel gradients. Stick to Nyla Air Water brand styling: flat white/slate backgrounds, sharp 1px borders, #002FA7 primary highlights.",
+    "6": "Use lucide-react for icons (e.g., Edit2, Trash2, Paperclip, AlertCircle).",
+    "7": "Do not center the app container text. Keep data strictly left-aligned, financials right-aligned.",
+    "8": "Use `table-fixed` with exact width classes for action/status columns to prevent layout jumping when switching to edit mode.",
+    "9": "Preserve all existing data fields and the Budget approval logic/state machine.",
+    "10": "For components needing transparent backgrounds, do not use `bg-transparent` blindly if content scrolls underneath; use `bg-white/90 backdrop-blur-sm`."
+  },
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": "Prioritize optical alignment over strict geometric alignment. Provide distinct :hover and :focus-visible states for every interactive element. Avoid using universal transitions (`transition-all` on root elements). Never use placeholder emojis for icons. Use dense layouts for dashboards but maintain high contrast and clear hierarchy. Add data-testid to everything."
 }
