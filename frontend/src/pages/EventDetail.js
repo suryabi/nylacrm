@@ -8,7 +8,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
-import { ArrowLeft, Plus, Pencil, Trash2, Users, ListChecks, Wallet, Paperclip, Download, Clock, Link2, RefreshCw, Check, X } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Users, ListChecks, Wallet, Paperclip, Download, Clock, Link2, RefreshCw, Check, X, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { EventForm, authHeaders } from './Events';
 
@@ -151,6 +151,46 @@ export default function EventDetail() {
     a.download = f.filename;
     a.click();
     URL.revokeObjectURL(a.href);
+  };
+
+  const uploadBudgetFile = async (bid, file) => {
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${API_URL}/api/events/${eventId}/budget-items/${bid}/files`, {
+      method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, body: fd,
+    });
+    if (!res.ok) return toast.error((await res.json()).detail || 'Upload failed');
+    toast.success('Bill attached');
+    load();
+  };
+
+  const downloadBudgetFile = async (bid, f) => {
+    const res = await fetch(`${API_URL}/api/events/${eventId}/budget-items/${bid}/files/${f.id}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    });
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = f.filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const downloadReport = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/events/${eventId}/report`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      if (!res.ok) throw new Error('Report generation failed');
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${ev.name} - Event Report.pdf`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success('Report downloaded');
+    } catch (e) { toast.error(e.message); }
   };
 
   const openTransition = (t) => {
@@ -298,6 +338,7 @@ export default function EventDetail() {
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="outline">{(ev.status || '').replace('_', ' ')}</Badge>
+            <Button variant="outline" onClick={downloadReport} data-testid="event-report-btn"><FileText className="h-4 w-4 mr-2" /> Report</Button>
             <Button variant="outline" onClick={() => setShowEdit(true)} data-testid="event-edit-btn"><Pencil className="h-4 w-4 mr-2" /> Edit Event</Button>
           </div>
         </div>
@@ -463,6 +504,7 @@ export default function EventDetail() {
                     <td className="px-3 py-2 text-right tabular-nums text-muted-foreground pt-3.5">{budEdit.approved_amount != null ? inr(budEdit.approved_amount) : '—'}</td>
                     <td className="px-3 py-2"><Input className={`${cellInput} text-right`} type="number" min="0" value={budEdit.actual_amount ?? ''} onChange={(e) => setBudEdit((p) => ({ ...p, actual_amount: e.target.value }))} data-testid="budget-actual-input" /></td>
                     <td className="px-3 py-2"></td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground pt-3.5">{budEdit.id ? `${(budEdit.files || []).length} bill(s)` : 'Save first'}</td>
                     <td className="px-3 py-2"><RowActions onSave={saveBudget} onCancel={() => setBudEdit(null)} /></td>
                   </tr>
                 );
@@ -502,11 +544,11 @@ export default function EventDetail() {
                     <table className="w-full text-sm" data-testid="budget-table">
                       <thead><tr className="border-b bg-slate-50 text-left text-xs uppercase tracking-wider text-muted-foreground">
                         <th className="px-3 py-3 min-w-[150px]">Category</th><th className="px-3 py-3">Description</th><th className="px-3 py-3">Vendor</th>
-                        <th className="px-3 py-3 text-right">Planned</th><th className="px-3 py-3 text-right">Approved</th><th className="px-3 py-3 text-right">Actual</th><th className="px-3 py-3 text-right">Variance</th><th className="px-3 py-3 w-24"></th>
+                        <th className="px-3 py-3 text-right">Planned</th><th className="px-3 py-3 text-right">Approved</th><th className="px-3 py-3 text-right">Actual</th><th className="px-3 py-3 text-right">Variance</th><th className="px-3 py-3 min-w-[120px]">Bills</th><th className="px-3 py-3 w-24"></th>
                       </tr></thead>
                       <tbody>
                         {budEdit && !budEdit.id && BudgetEditRow()}
-                        {ev.budget_items.length === 0 && !budEdit && <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">No budget lines yet{isDraft ? ' — click “Add Budget Line” to add one inline.' : '.'}</td></tr>}
+                        {ev.budget_items.length === 0 && !budEdit && <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">No budget lines yet{isDraft ? ' — click “Add Budget Line” to add one inline.' : '.'}</td></tr>}
                         {ev.budget_items.map((b) => {
                           if (budEdit?.id === b.id) return <React.Fragment key={b.id}>{BudgetEditRow()}</React.Fragment>;
                           const baseline = b.approved_amount != null ? b.approved_amount : (b.planned_amount || 0);
@@ -520,6 +562,17 @@ export default function EventDetail() {
                               <td className="px-3 py-2.5 text-right tabular-nums">{b.approved_amount != null ? inr(b.approved_amount) : '—'}</td>
                               <td className="px-3 py-2.5 text-right tabular-nums">{b.actual_amount != null ? inr(b.actual_amount) : '—'}</td>
                               <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${varc > 0 ? 'text-red-600' : varc < 0 ? 'text-emerald-600' : ''}`}>{varc != null ? inr(varc) : '—'}</td>
+                              <td className="px-3 py-2.5">
+                                <div className="flex flex-wrap items-center gap-1">
+                                  {(b.files || []).map((f) => (
+                                    <button key={f.id} onClick={() => downloadBudgetFile(b.id, f)} className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border bg-slate-50 hover:bg-slate-100 max-w-[110px] truncate" title={f.filename} data-testid={`budget-file-${f.filename}`}>
+                                      <Download className="h-3 w-3 shrink-0" /> <span className="truncate">{f.filename}</span>
+                                    </button>
+                                  ))}
+                                  <input type="file" hidden ref={(el) => { fileRefs.current[`bud_${b.id}`] = el; }} onChange={(e) => uploadBudgetFile(b.id, e.target.files[0])} />
+                                  <Button size="icon" variant="ghost" className="h-6 w-6" title="Attach vendor bill" onClick={() => fileRefs.current[`bud_${b.id}`]?.click()} data-testid={`budget-upload-${b.category.replace(/\s/g, '-')}`}><Paperclip className="h-3.5 w-3.5" /></Button>
+                                </div>
+                              </td>
                               <td className="px-3 py-2.5 whitespace-nowrap">
                                 {(isDraft || isApproved) && (
                                   <Button size="icon" variant="ghost" className="h-7 w-7" disabled={!!budEdit} title={isApproved ? 'Record actual spend' : 'Edit'}

@@ -8,7 +8,7 @@ from datetime import datetime, timezone, date as date_cls, timedelta
 from typing import Optional, List
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from database import db
@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/events", tags=["Event Journeys"])
 
 UPLOAD_DIR = "/app/backend/uploads/event_tasks"
+BUDGET_UPLOAD_DIR = "/app/backend/uploads/event_budget"
 MAX_FILE_MB = 15
 TASK_STATUSES = ["not_started", "in_progress", "blocked", "done"]
 EVENT_STATUSES = ["planned", "in_progress", "completed", "cancelled"]
@@ -506,6 +507,250 @@ async def delete_budget_item(event_id: str, bid: str, current_user: dict = Depen
     return {"deleted": True}
 
 
+# ── Budget line files (vendor bills / invoices) ──────────────
+
+@router.post("/{event_id}/budget-items/{bid}/files")
+async def upload_budget_file(event_id: str, bid: str, file: UploadFile = File(...),
+                             current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    item = await db.event_budget_items.find_one({"tenant_id": tenant_id, "event_id": event_id, "id": bid}, {"_id": 0, "id": 1})
+    if not item:
+        raise HTTPException(404, "Budget item not found")
+    content = await file.read()
+    if len(content) > MAX_FILE_MB * 1024 * 1024:
+        raise HTTPException(400, f"File too large (max {MAX_FILE_MB} MB)")
+    os.makedirs(BUDGET_UPLOAD_DIR, exist_ok=True)
+    file_id = str(uuid.uuid4())
+    safe_name = os.path.basename(file.filename or "file")
+    with open(os.path.join(BUDGET_UPLOAD_DIR, f"{file_id}_{safe_name}"), "wb") as fh:
+        fh.write(content)
+    meta = {"id": file_id, "filename": safe_name, "size": len(content),
+            "content_type": file.content_type,
+            "uploaded_by": current_user.get("name") or current_user.get("email"),
+            "uploaded_at": _now()}
+    await db.event_budget_items.update_one(
+        {"tenant_id": tenant_id, "event_id": event_id, "id": bid}, {"$push": {"files": meta}})
+    return meta
+
+
+@router.get("/{event_id}/budget-items/{bid}/files/{file_id}")
+async def download_budget_file(event_id: str, bid: str, file_id: str, current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    item = await db.event_budget_items.find_one({"tenant_id": tenant_id, "event_id": event_id, "id": bid}, {"_id": 0, "files": 1})
+    if not item:
+        raise HTTPException(404, "Budget item not found")
+    meta = next((f for f in item.get("files", []) if f["id"] == file_id), None)
+    if not meta:
+        raise HTTPException(404, "File not found")
+    path = os.path.join(BUDGET_UPLOAD_DIR, f"{file_id}_{meta['filename']}")
+    if not os.path.exists(path):
+        raise HTTPException(404, "File missing from storage")
+    return FileResponse(path, filename=meta["filename"], media_type=meta.get("content_type") or "application/octet-stream")
+
+
+@router.delete("/{event_id}/budget-items/{bid}/files/{file_id}")
+async def delete_budget_file(event_id: str, bid: str, file_id: str, current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    item = await db.event_budget_items.find_one({"tenant_id": tenant_id, "event_id": event_id, "id": bid}, {"_id": 0, "files": 1})
+    if not item:
+        raise HTTPException(404, "Budget item not found")
+    meta = next((f for f in item.get("files", []) if f["id"] == file_id), None)
+    if not meta:
+        raise HTTPException(404, "File not found")
+    path = os.path.join(BUDGET_UPLOAD_DIR, f"{file_id}_{meta['filename']}")
+    if os.path.exists(path):
+        os.remove(path)
+    await db.event_budget_items.update_one(
+        {"tenant_id": tenant_id, "event_id": event_id, "id": bid}, {"$pull": {"files": {"id": file_id}}})
+    return {"deleted": True}
+
+
+# ── Post-event report (PDF) ──────────────────────────────────
+
+@router.get("/{event_id}/report")
+async def event_report_pdf(event_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    ev = await _get_event(tenant_id, event_id)
+    tasks = await db.event_tasks.find({"tenant_id": tenant_id, "event_id": event_id}, {"_id": 0}).to_list(1000)
+    items = await db.event_budget_items.find({"tenant_id": tenant_id, "event_id": event_id}, {"_id": 0}).to_list(500)
+    stakeholders = await db.event_stakeholders.find({"tenant_id": tenant_id, "event_id": event_id}, {"_id": 0}).to_list(200)
+    pdf = _build_event_report_pdf(ev, tasks, items, stakeholders,
+                                  generated_by=current_user.get("name") or current_user.get("email"))
+    safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in ev["name"])[:60]
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{safe} - Event Report.pdf"'})
+
+
+def _build_event_report_pdf(ev, tasks, items, stakeholders, generated_by):
+    from io import BytesIO
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+    import utils.pdf_generator as pg
+
+    reg = getattr(pg, "_REGULAR_FONT", "Helvetica")
+    bold = getattr(pg, "_BOLD_FONT", "Helvetica-Bold")
+    ink = colors.HexColor("#0f172a")
+    muted = colors.HexColor("#64748b")
+    line = colors.HexColor("#e2e8f0")
+    accent = colors.HexColor("#0e7490")
+
+    def P(text, size=9, font=reg, color=ink, leading=None, align=0):
+        return Paragraph(str(text), ParagraphStyle(
+            "p", fontName=font, fontSize=size, textColor=color,
+            leading=leading or size + 3, alignment=align))
+
+    def money(n):
+        return f"Rs {float(n or 0):,.0f}"
+
+    story = []
+    logo_path = "/app/backend/assets/nyla-logo.png"
+    header_cells = [[P("POST-EVENT REPORT", 8, bold, muted), ""]]
+    if os.path.exists(logo_path):
+        img = Image(logo_path)
+        ratio = img.imageWidth / float(img.imageHeight or 1)
+        img.drawHeight = 14 * mm
+        img.drawWidth = 14 * mm * ratio
+        header = Table([[img, P("Nyla Air Water", 13, bold), P("POST-EVENT REPORT", 9, bold, muted, align=2)]],
+                       colWidths=[22 * mm, 90 * mm, 68 * mm])
+    else:
+        header = Table([[P("Nyla Air Water", 13, bold), P("POST-EVENT REPORT", 9, bold, muted, align=2)]],
+                       colWidths=[112 * mm, 68 * mm])
+    header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                                ("LINEBELOW", (0, 0), (-1, -1), 0.8, accent),
+                                ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
+    story += [header, Spacer(1, 6 * mm)]
+
+    story.append(P(ev["name"], 16, bold))
+    dates = ev.get("date_from", "")
+    if ev.get("date_to") and ev["date_to"] != ev.get("date_from"):
+        dates += f"  →  {ev['date_to']}"
+    meta_bits = [b for b in [ev.get("event_type"), dates, ev.get("location"),
+                             f"Status: {(ev.get('status') or '').replace('_', ' ').title()}"] if b]
+    story += [Spacer(1, 1.5 * mm), P("   ·   ".join(meta_bits), 9, reg, muted), Spacer(1, 5 * mm)]
+
+    # KPI strip
+    done = sum(1 for t in tasks if t.get("status") == "done")
+    overdue = sum(1 for t in tasks if t.get("status") != "done" and (t.get("end_date") or "") and t["end_date"] < datetime.now(timezone.utc).date().isoformat())
+    progress = round(done * 100 / len(tasks)) if tasks else 0
+    planned_t = sum(i.get("planned_amount") or 0 for i in items)
+    approved_t = sum(i.get("approved_amount") or 0 for i in items)
+    actual_t = sum(i.get("actual_amount") or 0 for i in items)
+    variance_t = actual_t - (approved_t if approved_t else planned_t)
+    kpis = [("Task Completion", f"{progress}%  ({done}/{len(tasks)})"),
+            ("Overdue Tasks", str(overdue)),
+            ("Budget Planned", money(planned_t)),
+            ("Budget Approved", money(approved_t)),
+            ("Actual Spend", money(actual_t)),
+            ("Variance", ("+" if variance_t > 0 else "") + money(variance_t).replace("Rs ", "Rs "))]
+    kpi_tbl = Table([[P(k.upper(), 6.5, bold, muted) for k, _ in kpis],
+                     [P(v, 11, bold, colors.HexColor("#b91c1c") if (k == "Variance" and variance_t > 0) or (k == "Overdue Tasks" and overdue > 0) else ink) for k, v in kpis]],
+                    colWidths=[30 * mm] * 6)
+    kpi_tbl.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.6, line), ("INNERGRID", (0, 0), (-1, -1), 0.6, line),
+        ("TOPPADDING", (0, 0), (-1, 0), 5), ("BOTTOMPADDING", (0, 1), (-1, 1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story += [kpi_tbl, Spacer(1, 6 * mm)]
+
+    # Budget breakdown
+    story.append(P("Budget — Spend vs Approved", 11, bold, accent))
+    story.append(Spacer(1, 2 * mm))
+    b_state = (ev.get("budget_state") or "draft").replace("_", " ").title()
+    story.append(P(f"Approval status: {b_state}", 8.5, reg, muted))
+    story.append(Spacer(1, 2 * mm))
+    rows = [[P(h, 8, bold, muted) for h in ["Category", "Vendor", "Planned", "Approved", "Actual", "Variance", "Bills"]]]
+    for i in items:
+        base = i.get("approved_amount") if i.get("approved_amount") is not None else (i.get("planned_amount") or 0)
+        var = (i.get("actual_amount") - base) if i.get("actual_amount") is not None else None
+        rows.append([
+            P(i.get("category") or "—", 8.5), P(i.get("vendor") or "—", 8.5),
+            P(money(i.get("planned_amount")), 8.5, align=2),
+            P(money(i.get("approved_amount")) if i.get("approved_amount") is not None else "—", 8.5, align=2),
+            P(money(i.get("actual_amount")) if i.get("actual_amount") is not None else "—", 8.5, align=2),
+            P(("+" if var and var > 0 else "") + money(var) if var is not None else "—", 8.5,
+              bold if var else reg, colors.HexColor("#b91c1c") if var and var > 0 else (colors.HexColor("#047857") if var and var < 0 else ink), align=2),
+            P(str(len(i.get("files") or [])), 8.5, align=1),
+        ])
+    rows.append([P("TOTAL", 8.5, bold), "", P(money(planned_t), 8.5, bold, align=2),
+                 P(money(approved_t), 8.5, bold, align=2), P(money(actual_t), 8.5, bold, align=2),
+                 P(("+" if variance_t > 0 else "") + money(variance_t), 8.5, bold,
+                   colors.HexColor("#b91c1c") if variance_t > 0 else colors.HexColor("#047857"), align=2), ""])
+    bt = Table(rows, colWidths=[38 * mm, 30 * mm, 24 * mm, 24 * mm, 24 * mm, 26 * mm, 14 * mm], repeatRows=1)
+    bt.setStyle(TableStyle([
+        ("LINEBELOW", (0, 0), (-1, 0), 0.8, accent), ("LINEABOVE", (0, -1), (-1, -1), 0.8, line),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#f8fafc")]),
+        ("TOPPADDING", (0, 0), (-1, -1), 3.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 3.5),
+    ]))
+    story += [bt, Spacer(1, 6 * mm)]
+
+    # Task completion breakdown
+    story.append(P("Plan — Task Completion", 11, bold, accent))
+    story.append(Spacer(1, 2 * mm))
+    if tasks:
+        trows = [[P(h, 8, bold, muted) for h in ["Task", "Owner", "End Date", "Status"]]]
+        status_lbl = {"not_started": "Not Started", "in_progress": "In Progress", "blocked": "Blocked", "done": "Done"}
+        for t in tasks:
+            is_over = t.get("status") != "done" and (t.get("end_date") or "") and t["end_date"] < datetime.now(timezone.utc).date().isoformat()
+            trows.append([P(t.get("name") or "—", 8.5), P(t.get("owner_name") or "—", 8.5),
+                          P((t.get("end_date") or "—") + ("  (overdue)" if is_over else ""), 8.5,
+                            reg, colors.HexColor("#b91c1c") if is_over else ink),
+                          P(status_lbl.get(t.get("status"), t.get("status")), 8.5,
+                            bold if t.get("status") == "done" else reg,
+                            colors.HexColor("#047857") if t.get("status") == "done" else ink)])
+        tt = Table(trows, colWidths=[76 * mm, 40 * mm, 36 * mm, 28 * mm], repeatRows=1)
+        tt.setStyle(TableStyle([
+            ("LINEBELOW", (0, 0), (-1, 0), 0.8, accent),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        story.append(tt)
+    else:
+        story.append(P("No plan tasks were recorded for this event.", 8.5, reg, muted))
+    story.append(Spacer(1, 6 * mm))
+
+    # Stakeholders summary
+    if stakeholders:
+        story.append(P("Stakeholders", 11, bold, accent))
+        story.append(Spacer(1, 2 * mm))
+        parts = []
+        for s in stakeholders:
+            who = s.get("contact_name") or "—"
+            if s.get("company_name"):
+                who += f" ({s['company_name']})"
+            elif s.get("is_internal"):
+                who += " (Internal)"
+            if s.get("scopes"):
+                who += " — " + ", ".join(s["scopes"])
+            parts.append(who)
+        story.append(P(" · ".join(parts), 8.5, reg, muted))
+        story.append(Spacer(1, 6 * mm))
+
+    # Approval history
+    hist = ev.get("budget_history") or []
+    if hist:
+        story.append(P("Budget Approval Trail", 11, bold, accent))
+        story.append(Spacer(1, 2 * mm))
+        for h in hist:
+            when = (h.get("at") or "")[:16].replace("T", " ")
+            txt = f"{h.get('action_label')} — {h.get('by_name')} · {when}"
+            if h.get("comment"):
+                txt += f' · "{h["comment"]}"'
+            story.append(P(txt, 8, reg, muted))
+        story.append(Spacer(1, 5 * mm))
+
+    story.append(P(f"Generated by {generated_by} on {datetime.now(timezone.utc).strftime('%d %b %Y, %H:%M UTC')}", 7.5, reg, muted))
+
+    buf = BytesIO()
+    SimpleDocTemplate(buf, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,
+                      topMargin=14 * mm, bottomMargin=14 * mm, title=f"{ev['name']} — Event Report").build(story)
+    return buf.getvalue()
+
+
 # ── Budget approval workflow (state machine driven) ──────────
 
 @router.post("/{event_id}/budget/transition")
@@ -557,13 +802,39 @@ async def budget_transition(event_id: str, data: BudgetTransitionIn, current_use
     link = f"/events/{event_id}"
     actor = current_user.get("name") or current_user.get("email")
     if data.action_key == "submit":
-        approvers = await db.users.find({"tenant_id": tenant_id, "role": "Director"}, {"_id": 0, "id": 1}).to_list(100)
+        approvers = await db.users.find(
+            {"tenant_id": tenant_id, "role": "Director"}, {"_id": 0, "id": 1, "email": 1}).to_list(100)
         planned_total = sum(b.get("planned_amount") or 0 for b in items)
+        base_url = (os.environ.get("APP_BASE_URL") or "").rstrip("/")
         for u in approvers:
             if u["id"] != current_user.get("id"):
                 await _notify(tenant_id, u["id"], f"Budget approval needed: {ev['name']}",
                               f"{actor} submitted the event budget (₹{planned_total:,.0f} planned) for approval.",
                               link, event_id, entity_type="event_budget")
+                if u.get("email"):
+                    try:
+                        from utils.email_sender import send_email
+                        lines_html = "".join(
+                            f"<tr><td style='padding:4px 10px;border-bottom:1px solid #e2e8f0'>{b.get('category')}</td>"
+                            f"<td style='padding:4px 10px;border-bottom:1px solid #e2e8f0'>{b.get('vendor') or '—'}</td>"
+                            f"<td style='padding:4px 10px;border-bottom:1px solid #e2e8f0;text-align:right'>₹{(b.get('planned_amount') or 0):,.0f}</td></tr>"
+                            for b in items)
+                        open_link = f"<p><a href='{base_url}{link}' style='color:#0e7490'>Open the event to review &amp; approve</a></p>" if base_url else f"<p>Open <strong>Marketing → Events → {ev['name']} → Budget</strong> to review &amp; approve.</p>"
+                        html = (
+                            f"<h2 style='color:#0e7490;margin-bottom:4px'>Budget approval needed</h2>"
+                            f"<p><strong>{actor}</strong> submitted the budget for event <strong>{ev['name']}</strong> "
+                            f"({ev.get('date_from')}{' → ' + ev['date_to'] if ev.get('date_to') and ev['date_to'] != ev.get('date_from') else ''}).</p>"
+                            f"<table style='border-collapse:collapse;font-size:14px'>"
+                            f"<tr><th style='padding:4px 10px;text-align:left;border-bottom:2px solid #0e7490'>Category</th>"
+                            f"<th style='padding:4px 10px;text-align:left;border-bottom:2px solid #0e7490'>Vendor</th>"
+                            f"<th style='padding:4px 10px;text-align:right;border-bottom:2px solid #0e7490'>Planned</th></tr>"
+                            f"{lines_html}"
+                            f"<tr><td style='padding:6px 10px;font-weight:bold'>Total</td><td></td>"
+                            f"<td style='padding:6px 10px;text-align:right;font-weight:bold'>₹{planned_total:,.0f}</td></tr></table>"
+                            f"{open_link}")
+                        await send_email(u["email"], f"Approval needed: {ev['name']} budget (₹{planned_total:,.0f})", html)
+                    except Exception:
+                        logging.getLogger("event_journeys").exception("Budget approval email failed")
     elif data.action_key in ("approve", "reject") and ev.get("created_by") and ev["created_by"] != current_user.get("id"):
         verb = "approved" if data.action_key == "approve" else "rejected"
         body = f"{actor} {verb} the budget for event '{ev['name']}'."
