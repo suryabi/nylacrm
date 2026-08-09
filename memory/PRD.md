@@ -2312,3 +2312,9 @@ Test tenant sales-only deleted.
 - Frontend: StockDashboard.jsx removed client-side re-sort by quantity (line ~426) so API order is preserved. GlobalStockDashboard.jsx has no client sorts.
 - Verified: all warehouses now list SKUs identically (600 Silver→330 Silver→660 Gold→330 Gold→660 Sparkling→24 Brand). Note: inactive legacy SKUs with old stock (e.g. '20L Premium', sort_order=1) tie with active rank-1 and break alphabetically — consistent everywhere.
 - In PREVIEW; user's screenshots were production (Pickval/Mumbai) — needs Republish.
+
+## 2026-06 — EventDetail UX Redesign (verified)
+- EventDetail.js fully redesigned (Swiss high-contrast per /app/design_guidelines.json): tab bar with underline style, stat strip (Progress/Stakeholders/Budget/Status), avatar chips, approval-trail timeline, variance column in budget table.
+- User feedback addressed: inline edit inputs enlarged h-8→h-10 (40px, text-[15px]) with visible uppercase field labels (Field component) on every stakeholder/task/budget edit field; view-mode phone/email text-xs→text-sm; wider min-width columns; larger scope/dependency chips.
+- Added delete-button data-testids (stakeholder-delete-*, task-delete-*, budget-delete-*) and res.ok checks on file/report downloads.
+- Tested: iteration_346.json — backend 18/18, frontend 11/11 flows pass. Temp test event created+deleted; real events untouched.

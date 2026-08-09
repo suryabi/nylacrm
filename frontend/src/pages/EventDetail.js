@@ -65,7 +65,7 @@ function RowActions({ onSave, onCancel }) {
   );
 }
 
-function HoverActions({ onEdit, onDelete, disabled, editTitle = 'Edit', editTestId, extra }) {
+function HoverActions({ onEdit, onDelete, disabled, editTitle = 'Edit', editTestId, deleteTestId, extra }) {
   return (
     <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
       {extra}
@@ -75,7 +75,7 @@ function HoverActions({ onEdit, onDelete, disabled, editTitle = 'Edit', editTest
         </Button>
       )}
       {onDelete && (
-        <Button size="icon" variant="ghost" className="h-7 w-7 rounded-sm text-[#FF3B30] hover:bg-red-50" onClick={onDelete}>
+        <Button size="icon" variant="ghost" className="h-7 w-7 rounded-sm text-[#FF3B30] hover:bg-red-50" onClick={onDelete} data-testid={deleteTestId}>
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
       )}
@@ -188,6 +188,7 @@ export default function EventDetail() {
     const res = await fetch(`${API_URL}/api/events/${eventId}/tasks/${taskId}/files/${f.id}`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
+    if (!res.ok) return toast.error('Download failed');
     const blob = await res.blob();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -212,6 +213,7 @@ export default function EventDetail() {
     const res = await fetch(`${API_URL}/api/events/${eventId}/budget-items/${bid}/files/${f.id}`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
+    if (!res.ok) return toast.error('Download failed');
     const blob = await res.blob();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -553,6 +555,7 @@ export default function EventDetail() {
                         </td>
                         <td className="px-4 py-3 w-24">
                           <HoverActions disabled={!!shEdit} onEdit={() => setShEdit({ ...s })} editTestId={`stakeholder-edit-${s.contact_name.replace(/\s/g, '-')}`}
+                            deleteTestId={`stakeholder-delete-${s.contact_name.replace(/\s/g, '-')}`}
                             onDelete={() => del(`/stakeholders/${s.id}`, `Remove ${s.contact_name}?`)} />
                         </td>
                       </tr>
@@ -650,6 +653,7 @@ export default function EventDetail() {
                           </td>
                           <td className="px-4 py-3 w-24">
                             <HoverActions disabled={!!taskEdit} onEdit={() => setTaskEdit({ ...t })} editTestId={`task-edit-${t.name.replace(/\s/g, '-')}`}
+                              deleteTestId={`task-delete-${t.name.replace(/\s/g, '-')}`}
                               onDelete={() => del(`/tasks/${t.id}`, `Delete task "${t.name}"?`)} />
                           </td>
                         </tr>
@@ -786,6 +790,7 @@ export default function EventDetail() {
                                     onEdit={(isDraft || isApproved) ? () => setBudEdit({ ...b, actual_amount: b.actual_amount ?? '' }) : null}
                                     editTitle={isApproved ? 'Record actual spend' : 'Edit'}
                                     editTestId={`budget-edit-${b.category.replace(/\s/g, '-')}`}
+                                    deleteTestId={`budget-delete-${b.category.replace(/\s/g, '-')}`}
                                     onDelete={isDraft ? () => del(`/budget-items/${b.id}`, `Delete budget line "${b.category}"?`) : null} />
                                 </td>
                               </tr>
