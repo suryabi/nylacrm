@@ -12,6 +12,9 @@ from fastapi.responses import FileResponse
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from database import db
+from utils.sm_helpers import (
+    ensure_default_event_budget_sm, find_transition, find_state, user_can_trigger,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/events", tags=["Event Journeys"])
@@ -78,8 +81,15 @@ class BudgetItemIn(BaseModel):
     category: str
     description: Optional[str] = None
     planned_amount: float = 0
+    approved_amount: Optional[float] = None
     actual_amount: Optional[float] = None
     vendor: Optional[str] = None
+
+
+class BudgetTransitionIn(BaseModel):
+    action_key: str
+    comment: Optional[str] = None
+    line_approvals: List[dict] = []  # [{id, approved_amount}]
 
 
 async def _get_event(tenant_id: str, event_id: str) -> dict:
@@ -97,19 +107,19 @@ def _progress(tasks: list) -> int:
 
 
 async def _notify(tenant_id: str, user_id: Optional[str], title: str, body: str, link: str,
-                  entity_id: str, dedupe_key: Optional[str] = None):
+                  entity_id: str, dedupe_key: Optional[str] = None, entity_type: str = "event_task"):
     if not user_id:
         return
     if dedupe_key:
         exists = await db.notifications.find_one(
-            {"tenant_id": tenant_id, "user_id": user_id, "entity_type": "event_task", "entity_id": entity_id,
+            {"tenant_id": tenant_id, "user_id": user_id, "entity_type": entity_type, "entity_id": entity_id,
              "category": dedupe_key})
         if exists:
             return
     await db.notifications.insert_one({
         "id": str(uuid.uuid4()), "tenant_id": tenant_id, "user_id": user_id,
         "title": title, "body": body, "link": link, "kind": "info", "category": dedupe_key or "event",
-        "entity_type": "event_task", "entity_id": entity_id, "is_read": False, "created_at": _now(),
+        "entity_type": entity_type, "entity_id": entity_id, "is_read": False, "created_at": _now(),
     })
 
 
@@ -183,22 +193,53 @@ async def create_event(data: EventIn, current_user: dict = Depends(get_current_u
     return doc
 
 
+def _budget_state(ev: dict) -> str:
+    return ev.get("budget_state") or "draft"
+
+
+async def _budget_transitions_for_user(sm: dict, ev: dict, current_user: dict, tenant_id: str) -> list:
+    kinds = {a.get("key"): a.get("kind", "neutral") for a in sm.get("actions") or []}
+    state = _budget_state(ev)
+    out = []
+    for t in sm.get("transitions") or []:
+        if (t.get("from_state") or None) != state:
+            continue
+        if not await user_can_trigger(t, current_user, tenant_id, ev.get("created_by")):
+            continue
+        out.append({
+            "action_key": t.get("action_key"),
+            "label": t.get("action_label") or t.get("action_key"),
+            "kind": kinds.get(t.get("action_key"), "neutral"),
+            "comment_required": bool(t.get("comment_required")),
+            "to_state": t.get("to_state"),
+        })
+    return out
+
+
 @router.get("/{event_id}")
 async def get_event_detail(event_id: str, current_user: dict = Depends(get_current_user)):
-    _ = current_user
     tenant_id = get_current_tenant_id()
     ev = await _get_event(tenant_id, event_id)
     stakeholders = await db.event_stakeholders.find({"tenant_id": tenant_id, "event_id": event_id}, {"_id": 0}).to_list(200)
     tasks = await db.event_tasks.find({"tenant_id": tenant_id, "event_id": event_id}, {"_id": 0}).sort("start_date", 1).to_list(1000)
     budget_items = await db.event_budget_items.find({"tenant_id": tenant_id, "event_id": event_id}, {"_id": 0}).to_list(500)
     await _generate_reminders(tenant_id, ev, tasks)
+    sm = await ensure_default_event_budget_sm(tenant_id)
+    b_state = _budget_state(ev)
+    state_def = find_state(sm, b_state) or {"key": b_state, "label": b_state.replace("_", " ").title()}
     ev.update({
         "stakeholders": stakeholders,
         "tasks": tasks,
         "budget_items": budget_items,
         "progress": _progress(tasks),
         "budget_planned_total": sum(b.get("planned_amount") or 0 for b in budget_items),
+        "budget_approved_total": sum(b.get("approved_amount") or 0 for b in budget_items),
         "budget_actual_total": sum(b.get("actual_amount") or 0 for b in budget_items),
+        "budget_state": b_state,
+        "budget_state_label": state_def.get("label"),
+        "budget_state_color": state_def.get("color"),
+        "budget_transitions": await _budget_transitions_for_user(sm, ev, current_user, tenant_id),
+        "budget_history": ev.get("budget_history") or [],
         "scopes": DEFAULT_SCOPES,
     })
     return ev
@@ -413,7 +454,9 @@ async def delete_task_file(event_id: str, tid: str, file_id: str, current_user: 
 async def add_budget_item(event_id: str, data: BudgetItemIn, current_user: dict = Depends(get_current_user)):
     _ = current_user
     tenant_id = get_current_tenant_id()
-    await _get_event(tenant_id, event_id)
+    ev = await _get_event(tenant_id, event_id)
+    if _budget_state(ev) != "draft":
+        raise HTTPException(409, f"Budget is locked ({_budget_state(ev).replace('_', ' ')}). Reopen to draft to add lines.")
     if not data.category.strip():
         raise HTTPException(400, "Category is required")
     doc = data.dict()
@@ -427,10 +470,26 @@ async def add_budget_item(event_id: str, data: BudgetItemIn, current_user: dict 
 async def update_budget_item(event_id: str, bid: str, data: BudgetItemIn, current_user: dict = Depends(get_current_user)):
     _ = current_user
     tenant_id = get_current_tenant_id()
-    res = await db.event_budget_items.update_one(
-        {"tenant_id": tenant_id, "event_id": event_id, "id": bid}, {"$set": data.dict()})
-    if res.matched_count == 0:
+    ev = await _get_event(tenant_id, event_id)
+    existing = await db.event_budget_items.find_one({"tenant_id": tenant_id, "event_id": event_id, "id": bid}, {"_id": 0})
+    if not existing:
         raise HTTPException(404, "Budget item not found")
+    state = _budget_state(ev)
+    if state == "pending_approval":
+        raise HTTPException(409, "Budget is pending approval — lines are locked.")
+    updates = data.dict()
+    if state == "approved":
+        # Only the actual amount may be recorded once approved.
+        for k in ("category", "description", "vendor", "planned_amount"):
+            if updates.get(k) != existing.get(k):
+                raise HTTPException(409, "Budget is approved — only the actual amount can be recorded. Reopen the budget to change plans.")
+        updates = {"actual_amount": updates.get("actual_amount")}
+    elif state == "rejected":
+        raise HTTPException(409, "Budget was rejected — reopen it as draft to make changes.")
+    else:
+        updates.pop("approved_amount", None)  # approved amount is set via the approval workflow
+    await db.event_budget_items.update_one(
+        {"tenant_id": tenant_id, "event_id": event_id, "id": bid}, {"$set": updates})
     return await db.event_budget_items.find_one({"tenant_id": tenant_id, "id": bid}, {"_id": 0})
 
 
@@ -438,7 +497,78 @@ async def update_budget_item(event_id: str, bid: str, data: BudgetItemIn, curren
 async def delete_budget_item(event_id: str, bid: str, current_user: dict = Depends(get_current_user)):
     _ = current_user
     tenant_id = get_current_tenant_id()
+    ev = await _get_event(tenant_id, event_id)
+    if _budget_state(ev) != "draft":
+        raise HTTPException(409, f"Budget is locked ({_budget_state(ev).replace('_', ' ')}). Reopen to draft to delete lines.")
     res = await db.event_budget_items.delete_one({"tenant_id": tenant_id, "event_id": event_id, "id": bid})
     if res.deleted_count == 0:
         raise HTTPException(404, "Budget item not found")
     return {"deleted": True}
+
+
+# ── Budget approval workflow (state machine driven) ──────────
+
+@router.post("/{event_id}/budget/transition")
+async def budget_transition(event_id: str, data: BudgetTransitionIn, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    ev = await _get_event(tenant_id, event_id)
+    sm = await ensure_default_event_budget_sm(tenant_id)
+    current = _budget_state(ev)
+    t = find_transition(sm, current, data.action_key)
+    if not t or (t.get("from_state") or None) != current:
+        raise HTTPException(400, f"Action '{data.action_key}' is not available from state '{current}'.")
+    if not await user_can_trigger(t, current_user, tenant_id, ev.get("created_by")):
+        raise HTTPException(403, "You don't have permission to perform this action.")
+    if t.get("comment_required") and not (data.comment or "").strip():
+        raise HTTPException(400, "A comment is required for this action.")
+    items = await db.event_budget_items.find({"tenant_id": tenant_id, "event_id": event_id}, {"_id": 0}).to_list(500)
+    if data.action_key == "submit" and not items:
+        raise HTTPException(400, "Add at least one budget line before submitting for approval.")
+    if data.action_key == "approve":
+        approvals = {a.get("id"): a.get("approved_amount") for a in (data.line_approvals or [])}
+        for it in items:
+            amt = approvals.get(it["id"])
+            if amt is None:
+                amt = it.get("approved_amount") if it.get("approved_amount") is not None else (it.get("planned_amount") or 0)
+            try:
+                amt = float(amt)
+            except (TypeError, ValueError):
+                raise HTTPException(400, f"Invalid approved amount for '{it.get('category')}'.")
+            if amt < 0:
+                raise HTTPException(400, "Approved amounts cannot be negative.")
+            await db.event_budget_items.update_one(
+                {"tenant_id": tenant_id, "event_id": event_id, "id": it["id"]},
+                {"$set": {"approved_amount": amt}})
+    entry = {
+        "id": str(uuid.uuid4()),
+        "action_key": data.action_key,
+        "action_label": t.get("action_label") or data.action_key,
+        "from_state": current,
+        "to_state": t["to_state"],
+        "comment": (data.comment or "").strip() or None,
+        "by": current_user.get("id"),
+        "by_name": current_user.get("name") or current_user.get("email"),
+        "at": _now(),
+    }
+    await db.event_journeys.update_one(
+        {"tenant_id": tenant_id, "id": event_id},
+        {"$set": {"budget_state": t["to_state"], "updated_at": _now()},
+         "$push": {"budget_history": entry}})
+    link = f"/events/{event_id}"
+    actor = current_user.get("name") or current_user.get("email")
+    if data.action_key == "submit":
+        approvers = await db.users.find({"tenant_id": tenant_id, "role": "Director"}, {"_id": 0, "id": 1}).to_list(100)
+        planned_total = sum(b.get("planned_amount") or 0 for b in items)
+        for u in approvers:
+            if u["id"] != current_user.get("id"):
+                await _notify(tenant_id, u["id"], f"Budget approval needed: {ev['name']}",
+                              f"{actor} submitted the event budget (₹{planned_total:,.0f} planned) for approval.",
+                              link, event_id, entity_type="event_budget")
+    elif data.action_key in ("approve", "reject") and ev.get("created_by") and ev["created_by"] != current_user.get("id"):
+        verb = "approved" if data.action_key == "approve" else "rejected"
+        body = f"{actor} {verb} the budget for event '{ev['name']}'."
+        if data.action_key == "reject" and entry["comment"]:
+            body += f" Reason: {entry['comment']}"
+        await _notify(tenant_id, ev["created_by"], f"Event budget {verb}: {ev['name']}",
+                      body, link, event_id, entity_type="event_budget")
+    return await get_event_detail(event_id, current_user)

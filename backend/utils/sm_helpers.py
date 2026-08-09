@@ -663,3 +663,72 @@ async def ensure_default_delivery_order_sm(tenant_id: str) -> dict:
     await db.state_machines.insert_one(doc)
     doc.pop("_id", None)
     return doc
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Default Event Budget approval lifecycle — seeded on first use.
+# Whole-budget approval: draft → pending_approval → approved / rejected.
+# Approve/Reject gated to Director (admins always bypass per framework rules).
+# ─────────────────────────────────────────────────────────────────────────────
+_DEFAULT_EB_STATES = [
+    {"key": "draft",            "label": "Draft",            "color": "#94a3b8", "is_initial": True,  "is_terminal": False},
+    {"key": "pending_approval", "label": "Pending Approval", "color": "#f59e0b", "is_initial": False, "is_terminal": False},
+    {"key": "approved",         "label": "Approved",         "color": "#10b981", "is_initial": False, "is_terminal": False},
+    {"key": "rejected",         "label": "Rejected",         "color": "#ef4444", "is_initial": False, "is_terminal": False},
+]
+
+_DEFAULT_EB_ACTIONS = [
+    {"key": "submit",  "label": "Submit for Approval", "kind": "neutral",  "description": "Send the event budget for approval."},
+    {"key": "approve", "label": "Approve Budget",      "kind": "positive", "description": "Approve the budget — sets the approved amount per line."},
+    {"key": "reject",  "label": "Reject Budget",       "kind": "negative", "description": "Reject the budget with a reason."},
+    {"key": "reopen",  "label": "Reopen as Draft",     "kind": "neutral",  "description": "Reopen the budget for editing."},
+]
+
+_DEFAULT_EB_TRANSITIONS = [
+    {"action_key": "submit",  "action_label": "Submit for Approval", "from_state": "draft",            "to_state": "pending_approval"},
+    {"action_key": "approve", "action_label": "Approve Budget",      "from_state": "pending_approval", "to_state": "approved", "allowed_role_keys": ["Director"]},
+    {"action_key": "reject",  "action_label": "Reject Budget",       "from_state": "pending_approval", "to_state": "rejected", "allowed_role_keys": ["Director"], "comment_required": True},
+    {"action_key": "reopen",  "action_label": "Reopen as Draft",     "from_state": "rejected",         "to_state": "draft"},
+    {"action_key": "reopen",  "action_label": "Reopen Budget",       "from_state": "approved",         "to_state": "draft", "allowed_role_keys": ["Director"]},
+]
+
+
+async def ensure_default_event_budget_sm(tenant_id: str) -> dict:
+    """If no state machine is attached to `event_budgets` for this tenant,
+    seed a default one. Returns the attached SM."""
+    sm = await get_attached_state_machine(tenant_id, "event_budgets")
+    if sm:
+        return sm
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "name": "Event Budget Approval (default)",
+        "code": "EB_DEFAULT_v1",
+        "description": "Auto-seeded default approval lifecycle for Event Budgets. Edit or clone in Admin → State Machines.",
+        "states": [dict(s) for s in _DEFAULT_EB_STATES],
+        "actions": [dict(a) for a in _DEFAULT_EB_ACTIONS],
+        "transitions": [
+            {
+                "auto_assign_mode": None,
+                "auto_assign_user_id": None,
+                "auto_assign_department_id": None,
+                "auto_assign_role": None,
+                "notify_all": True,
+                "comment_required": False,
+                "allowed_role_keys": [],
+                "allowed_department_ids": [],
+                "requestor_only": False,
+                **t,
+            }
+            for t in _DEFAULT_EB_TRANSITIONS
+        ],
+        "applied_to": ["event_budgets"],
+        "created_at": now,
+        "updated_at": now,
+        "created_by": "system",
+        "updated_by": "system",
+    }
+    await db.state_machines.insert_one(doc)
+    doc.pop("_id", None)
+    return doc

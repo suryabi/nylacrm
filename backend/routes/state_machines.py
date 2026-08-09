@@ -69,6 +69,7 @@ WORKFLOW_CATALOG = [
     {"key": "credit_notes", "label": "Debit / Credit Notes"},
     {"key": "settlements", "label": "Distributor Settlements"},
     {"key": "customer_returns", "label": "Customer Returns"},
+    {"key": "event_budgets", "label": "Event Budget Approvals"},
 ]
 
 
