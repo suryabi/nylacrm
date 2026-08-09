@@ -1,0 +1,23 @@
+{
+  "summary": "Comprehensive regression of redesigned EventDetail (Overview/Stakeholders/Plan/Budget) after visual rewrite. Backend: re-ran /app/backend/tests/test_event_journeys.py → 18/18 passed (baseline preserved). Frontend: full end-to-end Playwright walkthrough on public URL against a temporary event (TEST_EVT_346, deleted at end). Verified: (1) event-detail-page loads with stat strip + day-by-day schedule, (2) Stakeholders inline edit row with labeled h-10 inputs (measured offsetHeight=40px), external create/edit/delete with S.No, internal stakeholder auto-fills contact_name+email from Employee dropdown (40 employees listed), (3) Plan inline task create with labeled Task/Desc/Owner/Start/End/Depends-On/Status fields, S.No row, status change via view-row dropdown (persists), inline edit, paperclip file upload appears as task-file chip, delete via hover trash, (4) Budget: draft add-budget-line inline row (Category/Description/Vendor/Planned/Actual), footer totals update, inline edit persists (30,000), vendor bill upload chip appears (Receipt icon), Submit-for-Approval transition dialog with comment → state chip becomes 'Pending Approval', add button disappears, budget-lock-note shown; Approve dialog with per-line approved-amount inputs (28,000) → state 'Approved', Approval Trail lists both actions with user name (Surya Yadavalli) + timestamps + comments, (5) Event Report button downloads PDF (filename '... - Event Report.pdf'), (6) Edit Event dialog updates event name in header ('TEST_EVT_346_edited' visible in header per screenshot). No functionality regressed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_event_journeys.py",
+    "/app/test_reports/pytest/event_journeys_346.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "EventDetail.js is 903 lines — approaching the 700-line soft cap. Consider splitting each tab (StakeholdersTab / PlanTab / BudgetTab) and the two inline edit-row components into their own files for maintainability. Not blocking.",
+    "Delete buttons on hover rows do not have a dedicated data-testid (only the wrapping div is stylable). Tests currently locate them via a Tailwind color class selector. Add data-testid like `stakeholder-delete-{name}` / `task-delete-{name}` / `budget-delete-{category}` to HoverActions for robust future testing.",
+    "`downloadFile` / `downloadBudgetFile` / `downloadReport` do not check res.ok before creating a blob — a 4xx would still trigger a download of an error JSON. Minor UX polish."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100% of 11 requested flows"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water); /api/auth/login returns session_token → stored as localStorage.token by frontend.",
+  "seed_data_creation": "Created a single temp event id 594c487a-902b-451f-a57f-4902d1e65480 (name TEST_EVT_346 → TEST_EVT_346_edited) with attached stakeholders/task/budget-line/uploaded files, then deleted it via DELETE /api/events/{id} at the end (status 200). Protected events 'Annual Product Launch 2026' and 'test' NOT touched. Budget pending_approval on the protected event NOT modified.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend suite /app/backend/tests/test_event_journeys.py remains the regression source (18 tests). All EventDetail data-testids in the review-request list resolve correctly on the live page. For future runs, hover-only delete icons can be located by the pattern `[data-testid='stakeholder-row-{name}'] button.text-\\[\\#FF3B30\\]` (Tailwind red color class) — or main agent can add explicit delete testids as noted above. Edit-event verification should use a specific selector for the page header (e.g. inside `[data-testid='event-detail-page'] h1`), NOT `h1:first` (sidebar has an h1).",
+  "rca of the issue": "N/A — no functional issues found. All 11 review-request flows pass."
+}
