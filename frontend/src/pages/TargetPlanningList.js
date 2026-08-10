@@ -71,7 +71,7 @@ const getStatusBadge = (status) => {
     draft: 'bg-slate-50 text-slate-700 border border-slate-200/60',
     active: 'bg-emerald-50 text-emerald-700 border border-emerald-200/60',
     completed: 'bg-blue-50 text-blue-700 border border-blue-200/60',
-    inactive: 'bg-zinc-100 text-zinc-600 border border-zinc-200',
+    inactive: 'bg-red-100 text-red-700 border border-red-200',
     locked: 'bg-amber-50 text-amber-700 border border-amber-200/60'
   };
   return styles[status] || styles.draft;
@@ -493,7 +493,13 @@ export default function TargetPlanningList() {
             return (
               <div
                 key={plan.id}
-                className="group relative flex flex-col bg-white rounded-xl border border-zinc-200 p-6 cursor-pointer transition-all duration-200 hover:border-zinc-300 hover:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] hover:-translate-y-0.5"
+                className={`group relative flex flex-col rounded-xl border p-6 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 ${
+                  plan.status === 'active'
+                    ? 'bg-green-50/60 border-green-200 hover:border-green-300 hover:shadow-[0_4px_20px_-4px_rgba(22,163,74,0.15)]'
+                    : plan.status === 'inactive'
+                    ? 'bg-red-50/60 border-red-200 hover:border-red-300 hover:shadow-[0_4px_20px_-4px_rgba(220,38,38,0.12)]'
+                    : 'bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)]'
+                }`}
                 onClick={() => navigate(`/target-planning/${plan.id}`)}
                 data-testid={`plan-card-${plan.id}`}
               >

@@ -2318,3 +2318,6 @@ Test tenant sales-only deleted.
 - User feedback addressed: inline edit inputs enlarged h-8→h-10 (40px, text-[15px]) with visible uppercase field labels (Field component) on every stakeholder/task/budget edit field; view-mode phone/email text-xs→text-sm; wider min-width columns; larger scope/dependency chips.
 - Added delete-button data-testids (stakeholder-delete-*, task-delete-*, budget-delete-*) and res.ok checks on file/report downloads.
 - Tested: iteration_346.json — backend 18/18, frontend 11/11 flows pass. Temp test event created+deleted; real events untouched.
+
+## 2026-06 — Target Plan tile status tint
+- TargetPlanningList.js: plan cards now tinted by status — active = bg-green-50/60 + green border, inactive = bg-red-50/60 + red border (+ INACTIVE pill now red-tinted); draft/completed/locked stay white. Verified via screenshot with a temporarily-toggled plan (reverted to draft after).
