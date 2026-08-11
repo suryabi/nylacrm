@@ -27,8 +27,14 @@ COLL = "accounting_masters"
 ADMIN_ROLES = {"CEO", "Director", "System Admin", "Admin", "Vice President", "Head of Business"}
 
 
+def _is_accounting_dept(user: dict) -> bool:
+    d = user.get("department")
+    depts = d if isinstance(d, list) else [d or ""]
+    return any((x or "").strip().lower() in ("finance", "accounting") for x in depts)
+
+
 def _require_admin(user: dict):
-    if user.get("role") not in ADMIN_ROLES:
+    if user.get("role") not in ADMIN_ROLES and not _is_accounting_dept(user):
         raise HTTPException(status_code=403, detail="Only admins can configure accounting masters")
 
 

@@ -405,8 +405,19 @@ export const TenantConfigProvider = ({ children }) => {
     return modules[moduleKey] !== false;
   }, [modules, platformModules]);
 
+  // Accounting/Finance-department users own the Accounting workspace —
+  // accounting_* modules are granted by department, independent of role matrix.
+  const isAccountingDeptUser = useCallback(() => {
+    const d = user?.department;
+    const depts = (Array.isArray(d) ? d : [d || '']).map(x => (x || '').toLowerCase());
+    return depts.includes('finance') || depts.includes('accounting');
+  }, [user]);
+
   // Check if the current user's role has permission to view a module
   const hasRolePermission = useCallback((moduleKey) => {
+    if (moduleKey && moduleKey.startsWith('accounting_') && isAccountingDeptUser()) {
+      return true;
+    }
     // If no role permissions loaded, default to allowed (backwards compatible)
     if (!rolePermissions || Object.keys(rolePermissions).length === 0) {
       return true;
@@ -418,7 +429,7 @@ export const TenantConfigProvider = ({ children }) => {
       return true;
     }
     return modulePerms.view === true;
-  }, [rolePermissions]);
+  }, [rolePermissions, isAccountingDeptUser]);
 
   // Check a specific action (view/create/edit/delete) permission for a module.
   // Admin roles are always allowed. For non-admins, the action must be explicitly
@@ -427,11 +438,12 @@ export const TenantConfigProvider = ({ children }) => {
     const ADMIN_ROLES = ['ceo', 'director', 'system admin', 'system_admin', 'admin', 'tenant_admin'];
     const role = (user?.role || '').trim().toLowerCase();
     if (ADMIN_ROLES.includes(role)) return true;
+    if (moduleKey && moduleKey.startsWith('accounting_') && isAccountingDeptUser()) return true;
     if (!rolePermissions || Object.keys(rolePermissions).length === 0) return false;
     const modulePerms = rolePermissions[moduleKey];
     if (!modulePerms) return false;
     return modulePerms[action] === true;
-  }, [rolePermissions, user]);
+  }, [rolePermissions, user, isAccountingDeptUser]);
 
   // Check if a feature is available for the current tenant's industry
   const hasIndustryFeature = useCallback((featureKey) => {

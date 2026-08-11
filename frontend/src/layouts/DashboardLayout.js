@@ -482,6 +482,13 @@ export default function DashboardLayout({ children }) {
       return !item.roles || item.roles.includes(user?.role);
     }
     if (!isModuleEnabled(item.moduleKey)) return false;
+    // Accounting/Finance-department users always see Accounting menu items —
+    // department membership grants the workspace regardless of role matrix.
+    if (item.moduleKey.startsWith('accounting_')) {
+      const d = user?.department;
+      const depts = (Array.isArray(d) ? d : [d || '']).map(x => (x || '').toLowerCase());
+      if (depts.includes('finance') || depts.includes('accounting')) return true;
+    }
     const modulePerms = rolePermissions ? rolePermissions[item.moduleKey] : undefined;
     if (modulePerms !== undefined) {
       // Permissions UI has spoken about this module — respect strictly.

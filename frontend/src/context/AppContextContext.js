@@ -11,6 +11,9 @@ const ADMIN_ROLES = ['CEO', 'Director'];
 // Roles allowed in the Admin context (fleet, masters, settings, integrations)
 const ADMIN_CONTEXT_ROLES = ['CEO', 'Director', 'Admin', 'System Admin'];
 
+// Departments that own the Accounting workspace
+const ACCOUNTING_DEPTS = ['accounting', 'finance'];
+
 // Workspace → module-registry groups. A role-permission matrix VIEW grant on
 // any module inside these groups unlocks the workspace for that role.
 const WORKSPACE_GROUPS = {
@@ -42,6 +45,16 @@ export function AppContextProvider({ children }) {
   const { user } = useAuth();
   const { rolePermissions, isModuleEnabled } = useTenantConfig();
   const [currentContext, setCurrentContext] = useState('sales');
+
+  // Accounting/Finance-only department users (non-admin roles) are locked to
+  // the Accounting module exclusively.
+  const userDepts = (Array.isArray(user?.department) ? user.department : [user?.department || ''])
+    .map(d => (d || '').toLowerCase()).filter(Boolean);
+  const isAccountingOnlyUser = !!user
+    && user.role !== 'Distributor'
+    && !ADMIN_CONTEXT_ROLES.includes(user.role)
+    && userDepts.length > 0
+    && userDepts.every(d => ACCOUNTING_DEPTS.includes(d));
 
   // Tenant module config gate: a workspace only exists for this tenant if at
   // least one module inside its registry groups is enabled (Tenant Settings /
@@ -80,17 +93,23 @@ export function AppContextProvider({ children }) {
     if (user.role === 'Distributor') {
       return moduleId === 'distribution';
     }
+
+    // Accounting/Finance-only department users (non-admin roles) can ONLY
+    // access the Accounting module — nothing else.
+    if (isAccountingOnlyUser) {
+      return moduleId === 'accounting';
+    }
     
     // Admin context: fixed admin-capable roles, or an explicit matrix grant
     if (moduleId === 'admin') {
       return ADMIN_CONTEXT_ROLES.includes(user.role) || matrixGrantsWorkspace('admin');
     }
 
-    // Accounting context: admin-capable roles OR users in the accounting department
+    // Accounting context: admin-capable roles OR users in the accounting/finance department
     if (moduleId === 'accounting') {
       if (ADMIN_CONTEXT_ROLES.includes(user.role)) return true;
       const depts = Array.isArray(user.department) ? user.department.map(d => d?.toLowerCase()) : [(user.department || '').toLowerCase()];
-      if (depts.includes('accounting') || depts.includes('both') || depts.includes('all')) return true;
+      if (depts.some(d => ACCOUNTING_DEPTS.includes(d)) || depts.includes('both') || depts.includes('all')) return true;
       return matrixGrantsWorkspace('accounting');
     }
 
@@ -164,6 +183,12 @@ export function AppContextProvider({ children }) {
     const depts = Array.isArray(user.department) ? user.department.map(d => d?.toLowerCase()) : [(user.department || '').toLowerCase()];
     
     // Dedicated single-department teams land directly in their own module.
+    // Accounting/Finance users (no sales) go straight to the Accounting module.
+    if (depts.some(d => ACCOUNTING_DEPTS.includes(d)) && !depts.includes('sales')) {
+      setCurrentContext('accounting');
+      return;
+    }
+
     // Marketing-only users (no sales) go straight to the Marketing module —
     // checked before admin-role defaulting so a Marketing-only lead lands there too.
     if (depts.includes('marketing') && !depts.includes('sales')) {
@@ -213,6 +238,7 @@ export function AppContextProvider({ children }) {
     getAccessibleModules,
     modules: MODULES,
     isDistributorUser: isDistributorUser(),
+    isAccountingOnlyUser,
     getDistributorId: getDistributorId(),
   };
   

@@ -2321,3 +2321,14 @@ Test tenant sales-only deleted.
 
 ## 2026-06 — Target Plan tile status tint
 - TargetPlanningList.js: plan cards now tinted by status — active = bg-green-50/60 + green border, inactive = bg-red-50/60 + red border (+ INACTIVE pill now red-tinted); draft/completed/locked stay white. Verified via screenshot with a temporarily-toggled plan (reverted to draft after).
+
+## 2026-06 — Finance/Accounting department → exclusive Accounting module access
+- Bug: Finance-dept users saw empty sidebar + Access Denied on accounting pages; landed on Sales /home; could URL-jump into Sales pages.
+- Fixes:
+  - AppContextContext.js: ACCOUNTING_DEPTS=['accounting','finance']; isAccountingOnlyUser (non-admin, all depts in acct set) → only 'accounting' workspace; accounting workspace granted to finance/accounting depts; default context → accounting.
+  - TenantConfigContext.js: hasRolePermission + hasActionPermission return true for accounting_* keys for acct-dept users (dept overrides role matrix default-deny).
+  - DashboardLayout.js canSeeItem: accounting_* nav items visible for acct-dept users.
+  - App.js ProtectedRoute: accounting-only users hitting non-accounting moduleKey routes → <Navigate to /accounting/dashboard>.
+  - Login.js landingRouteFor: finance/accounting (no sales) → /accounting/dashboard.
+  - Backend accounting_entities/masters/transactions.py: _require_admin also allows finance/accounting department users (_is_accounting_dept).
+- Verified via screenshots (finance.user@nylaairwater.earth) + curl (masters 200, vendor create/delete 200 as finance user; was 403). Admin regression checked (lands /home, full access).

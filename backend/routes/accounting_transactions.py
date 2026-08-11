@@ -48,8 +48,14 @@ _CREDIT_TYPES = {"deposit", "sales_without_invoices", "interest_income", "owner_
 _DEBIT_TYPES = {"expense", "withdrawal", "card_payment", "owner_drawings", "supplier_payment", "vendor_payment"}
 
 
+def _is_accounting_dept(user: dict) -> bool:
+    d = user.get("department")
+    depts = d if isinstance(d, list) else [d or ""]
+    return any((x or "").strip().lower() in ("finance", "accounting") for x in depts)
+
+
 def _require_admin(user: dict):
-    if user.get("role") not in ADMIN_ROLES:
+    if user.get("role") not in ADMIN_ROLES and not _is_accounting_dept(user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
 

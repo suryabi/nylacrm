@@ -64,3 +64,10 @@
 ## Billing demo tenant (SaaS Phase 3)
 - Tenant: billing-test | Login: admin@billing-test.com / billingtest123 (X-Tenant-ID: billing-test)
 - Has an active paid "pro" subscription ($10, 1 seat) — used to demo Platform Admin revenue metrics. Stripe test mode (sk_test_emergent), card 4242 4242 4242 4242.
+
+## Finance Department User (Accounting-module-only access testing)
+- Email: finance.user@nylaairwater.earth
+- Password: test123
+- Tenant ID: nyla-air-water
+- Role: "User", Department: ["Finance"]
+- Expected: lands on /accounting/dashboard after login, sees ONLY the Accounting module (Dashboard, Transactions, Accounting Masters, Income Masters, Vendors, Employees). Any other module page (e.g. /leads) redirects back to /accounting/dashboard. Can create/edit accounting records (dept-based backend grant).

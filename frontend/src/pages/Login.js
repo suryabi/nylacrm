@@ -30,6 +30,8 @@ const landingRouteFor = (u) => {
   const depts = Array.isArray(u.department)
     ? u.department.map((d) => (d || '').toLowerCase())
     : [(u.department || '').toLowerCase()];
+  // Accounting/Finance users (no sales) land in the Accounting module.
+  if ((depts.includes('finance') || depts.includes('accounting')) && !depts.includes('sales')) return '/accounting/dashboard';
   // Marketing-only users go straight to the Marketing module (Design Requests).
   if (depts.includes('marketing') && !depts.includes('sales')) return '/marketing-requests';
   return '/home';

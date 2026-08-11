@@ -185,7 +185,7 @@ function ActivityTrackerWrapper({ children }) {
 function ProtectedRoute({ children, moduleKey, appModule }) {
   const { user, loading } = useAuth();
   const { isModuleEnabled, hasRolePermission, loading: configLoading, tenantConfig } = useTenantConfig();
-  const { canAccessSales, canAccessProduction, canAccessDistribution, canAccessMarketing } = useAppContext();
+  const { canAccessSales, canAccessProduction, canAccessDistribution, canAccessMarketing, isAccountingOnlyUser } = useAppContext();
   const location = useLocation();
 
   if (loading || configLoading) {
@@ -259,6 +259,12 @@ function ProtectedRoute({ children, moduleKey, appModule }) {
         </div>
       </DashboardLayout>
     );
+  }
+
+  // Accounting/Finance-only department users are locked to the Accounting
+  // module — redirect any other module page to their Accounting dashboard.
+  if (moduleKey && isAccountingOnlyUser && !moduleKey.startsWith('accounting_')) {
+    return <Navigate to="/accounting/dashboard" replace />;
   }
 
   // Enforce role-permission at route level (URL-jump protection).
