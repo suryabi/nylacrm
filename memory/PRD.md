@@ -2332,3 +2332,12 @@ Test tenant sales-only deleted.
   - Login.js landingRouteFor: finance/accounting (no sales) → /accounting/dashboard.
   - Backend accounting_entities/masters/transactions.py: _require_admin also allows finance/accounting department users (_is_accounting_dept).
 - Verified via screenshots (finance.user@nylaairwater.earth) + curl (masters 200, vendor create/delete 200 as finance user; was 403). Admin regression checked (lands /home, full access).
+
+## 2026-06 — Water Intelligence module (NEW, tested)
+- Daily water-industry news engine: Google News RSS per topic (13 default topics + custom feeds) → dedupe (normalized-title hash + URL, 30-day window) → GPT-5.5 (Emergent LLM key, emergentintegrations, batches of 8) scores 0-100 / categorizes / writes original headline+summary+why-it-matters+keywords → min_score (default 70) gate → pending_approval / rejected(low_relevance).
+- Workflow: pending_approval → approved → published (+ reject/resubmit/unpublish). Manage roles: CEO/Director/Admin/System Admin/VP/Head of Business/Marketing Manager.
+- Files: /app/backend/routes/water_intelligence.py (router /api/water-intelligence + public /api/public/water-news), /app/frontend/src/pages/WaterIntelligence.js, nav in both Sales+Marketing sidebars (moduleKey water_intelligence), route in App.js, role model keys added.
+- Scheduler: in-process loop, daily at configurable IST time (settings schedule_hour/minute, default 05:30), marks orphaned 'running' runs as failed on startup, Run Now button (409 guard).
+- Public API: GET /api/public/water-news?category=&region=&q=&page=&limit= — published articles only, no auth, for website consumption.
+- Tested: iteration_347 — 19/19 backend pytest + all UI flows. Live pipeline run: 254 fetched, 17 dupes, 40 AI-reviewed, 23 kept. requirements.txt updated (feedparser).
+- LESSON REPEATED: two parallel search_replace edits to App.js raced — lazy import lost, route kept → runtime 'WaterIntelligence is not defined'. Fixed by re-adding import. Never parallel-edit the same file.

@@ -150,6 +150,7 @@ export const MODULE_REGISTRY = [
       { key: 'marketing_calendar', label: 'Content Calendar', description: 'Plan & schedule marketing content' },
       { key: 'marketing_events', label: 'Events', description: 'Event journeys — planning, stakeholders & budget' },
       { key: 'marketing_masters', label: 'Marketing Masters', description: 'Categories, platforms & event types' },
+      { key: 'water_intelligence', label: 'Water Intelligence', description: 'Daily AI-curated water industry news & insights' },
     ],
   },
   {

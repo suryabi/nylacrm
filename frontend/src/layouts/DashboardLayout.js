@@ -21,7 +21,7 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes, TabletSmartphone, Radio, GlassWater, Cog,
-  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Bell, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus, PanelLeftClose, PanelLeftOpen, Printer, Mail, Share2, MessageSquareWarning, RotateCcw, TrendingUp, Banknote, Globe2
+  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Bell, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus, PanelLeftClose, PanelLeftOpen, Printer, Mail, Share2, MessageSquareWarning, RotateCcw, TrendingUp, Banknote, Globe2, Newspaper
 } from 'lucide-react';
 
 const NYLA_LOGO = null;
@@ -59,6 +59,7 @@ const salesNavigationGroups = [
     title: 'Lead & Sales Operations',
     items: [
       { name: 'Lead Discovery', href: '/lead-discovery', icon: Search, moduleKey: 'lead_discovery', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
+      { name: 'Water Intelligence', href: '/water-intelligence', icon: Newspaper, moduleKey: 'water_intelligence', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Target Planning', href: '/target-planning', icon: Target, moduleKey: 'target_planning', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Performance Tracker', href: '/performance', icon: BarChart3, moduleKey: 'performance_tracker', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Investor Dashboard', href: '/investor-dashboard', icon: LineChart, moduleKey: 'investor_dashboard', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Investor'] },
@@ -246,6 +247,7 @@ const marketingNavigationGroups = [
       { name: 'Design Requests', href: '/design-requests-new', icon: Sparkles, moduleKey: 'design_requests_new', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator', 'Production Manager', 'Production Supervisor', 'Production Staff'] },
       { name: 'Print Requests', href: '/print-requests', icon: Printer, moduleKey: 'print_requests', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator', 'Production Manager', 'Production Supervisor', 'Production Staff'] },
       { name: 'Content Calendar', href: '/marketing-calendar', icon: CalendarRange, moduleKey: 'marketing_calendar', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
+      { name: 'Water Intelligence', href: '/water-intelligence', icon: Newspaper, moduleKey: 'water_intelligence', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
       { name: 'Events', href: '/events', icon: CalendarDays, moduleKey: 'marketing_events', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
       { name: 'Masters', href: '/marketing-masters', icon: Layers, moduleKey: 'marketing_masters', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
     ]

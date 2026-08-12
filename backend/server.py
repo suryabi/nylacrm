@@ -11115,6 +11115,11 @@ async def startup_event():
     a background task rather than awaited on the critical startup path (a slow
     or unreachable database must never stall the app from serving)."""
     asyncio.create_task(_ensure_txn_indexes_bg())
+    try:
+        from routes.water_intelligence import scheduler_loop as _water_intel_scheduler
+        asyncio.create_task(_water_intel_scheduler())
+    except Exception as e:
+        logger.error(f"Failed to start Water Intelligence scheduler: {e}")
 
 
 async def _ensure_txn_indexes_bg():

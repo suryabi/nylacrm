@@ -1,0 +1,25 @@
+{
+  "summary": "Full-stack testing of the new Water Intelligence module (Nyla Air Water CRM). Backend: created /app/backend/tests/test_water_intelligence.py with 20 pytest cases → 19 passed, 1 skipped (run_now-conflict guard skipped intentionally because no pipeline was running and triggering GPT-5.5 was disallowed). Covered: list/filter/pagination, stats, runs, GET/PUT settings incl. clamped bounds (schedule_hour clamped to 23, minute→59, min_score→100), edit article (headline round-trip + invalid category=400), full transition cycle approve→publish→unpublish→reject→resubmit, invalid-state transitions (400), unknown action (400), RBAC 403 for finance user on POST /run, PUT /settings and POST /{id}/transition, public /api/public/water-news with NO auth header returning only published articles (no _id or tenant_id leaked) + category/q filters. Frontend: Playwright walkthrough on the public URL — admin login → /water-intelligence loads with all 5 status tabs (Pending 22 / Approved 0 / Published 1 / Rejected 17 / All 40), wi-run-now-btn, wi-settings-btn, wi-runs-btn, wi-search-input, wi-category-filter all present. Article card #94 (AWG/USA) shown with score badge, category chip, region, source date, expand toggle, summary paragraphs, 'Why it matters' callout, keyword chips, source link, and action buttons (wi-approve/reject/edit/delete-{id}) all resolve. Edit dialog has all 7 wi-edit-* testids. Settings dialog has wi-topic-input, wi-add-feed-btn, wi-min-score-input, wi-max-articles-input, wi-schedule-toggle, wi-schedule-hour/minute, wi-settings-save. Runs dialog lists the two prior runs with fetched/duplicates/reviewed/kept/low-score counts. Sidebar shows 'Water Intelligence' (Lead & Sales Operations group) for admin. Finance user (finance.user@nylaairwater.earth) is redirected from /water-intelligence to /accounting/dashboard and does NOT see the Water Intelligence sidebar link. No functional issues found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_water_intelligence.py",
+    "/app/test_reports/pytest/water_intelligence.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "run_pipeline() writes the entire run dict back with $set including all fields — if a future field is added it will overwrite in-flight scheduler writes. Consider using explicit field list. Not blocking.",
+    "AI parsing uses re.search(r'\\[.*\\]', text, re.S) which greedy-matches; if GPT wraps output in ```json fences with square brackets in prose earlier, this could mis-parse. A tighter parser or json.loads on the raw text with fallback would be safer.",
+    "Public API returns relevance_score to unauthenticated visitors — probably fine but consider whether internal AI score should be exposed on the public website.",
+    "Scheduler loop uses in-process asyncio.sleep(60) — if the process is scaled horizontally, multiple workers would each run the daily pipeline. Guarded only by last_scheduled_run_date write which is not atomic with a check. For single-worker deploys it's fine.",
+    "water_intelligence.py is 529 lines — acceptable; splitting collection/ai/pipeline into a service module could improve testability."
+  ],
+  "updated_files": ["/app/backend/tests/test_water_intelligence.py"],
+  "success_rate": {"backend": "100% (19/19 executed, 1 skipped by design)", "frontend": "100% of requested UI flows verified"},
+  "test_credentials": "Admin: surya.yadavalli@nylaairwater.earth / test123 (returns session_token stored as localStorage.token). Finance: finance.user@nylaairwater.earth / test123 (locked to Accounting module).",
+  "seed_data_creation": "None. All existing 40 articles preserved. During transition-cycle test, the last pending article was walked through approve→publish→unpublish→reject→resubmit and left in pending_approval (net-zero state change). Edit test reverted headline to original.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression file: /app/backend/tests/test_water_intelligence.py (20 tests). The Run Now guard test auto-skips when no pipeline is running to avoid 5x GPT-5.5 calls (~2min + real spend); to explicitly exercise the 409, POST /api/water-intelligence/run once and immediately POST again — the second call should return 409. Existing state at end of run: Pending 22, Approved 0, Published 1, Rejected 17. One published article: 'New material extracts drinking water from very dry air' (AWG/Germany).",
+  "rca of the issue": "N/A — no issues found. All 11 review-request flows pass end-to-end."
+}
