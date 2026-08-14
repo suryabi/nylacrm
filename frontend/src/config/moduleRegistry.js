@@ -108,6 +108,7 @@ export const MODULE_REGISTRY = [
       { key: 'production_batches', label: 'Production Batches', description: 'Batch creation & tracking' },
       { key: 'qc_station', label: 'QC Station', description: 'Tablet QC rejection tracking (Face ID kiosk)' },
       { key: 'qc_live_board', label: 'QC Live Board', description: 'Real-time QC monitoring board' },
+      { key: 'qc_tests', label: 'QC Tests', description: 'Per-batch quality test log with retests' },
       { key: 'qc_routes', label: 'QC Routes', description: 'QC route configuration' },
       { key: 'qc_team', label: 'QC Team', description: 'QC operator management' },
       { key: 'rejection_reasons', label: 'Rejection Reasons', description: 'Rejection reason master' },

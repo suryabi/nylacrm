@@ -2341,3 +2341,11 @@ Test tenant sales-only deleted.
 - Public API: GET /api/public/water-news?category=&region=&q=&page=&limit= — published articles only, no auth, for website consumption.
 - Tested: iteration_347 — 19/19 backend pytest + all UI flows. Live pipeline run: 254 fetched, 17 dupes, 40 AI-reviewed, 23 kept. requirements.txt updated (feedparser).
 - LESSON REPEATED: two parallel search_replace edits to App.js raced — lazy import lost, route kept → runtime 'WaterIntelligence is not defined'. Fixed by re-adding import. Never parallel-edit the same file.
+
+## 2026-06 — QC Tests module (Production nav, tested)
+- New Production → QC Tests: per-batch quality test log. Files: /app/backend/routes/qc_tests.py (/api/production/qc-tests), /app/frontend/src/pages/QCTests.js, nav in productionNavigationGroups, moduleRegistry qc_tests, route in App.js.
+- Auto-seeding: lazy _sync on list — first seed (flag in qc_tests_meta.first_seed_done) gave 38 batches 94% Production(36)/6% Trial(2, with reject→reject→pass attempt chains); new batches after deployment auto-get Production/Pass attempt-1 record. Tested By always 'Baburao', Reviewed By 'Ravindra Ambati', reviewed_date >= testing_date enforced.
+- Rules enforced: production = 1 attempt always pass (no reject/retest); trial pass/reject with Add Retest (attempt auto-increment) until pass; only latest trial attempt (>1) deletable; edit dialog with role gate (EDIT_ROLES). latest_attempts map returned server-side so retest button unaffected by filters.
+- Branded Excel export (all 9 spec columns, green/red result font, Nyla header).
+- ALSO FIXED: water_intelligence removed from role.py DEFAULT_MODULE_PERMISSIONS/labels/categories (role.py has a drift assert requiring consistency) + unset 12 backfilled view=false role entries — Directors/VPs regained Water Intelligence nav access via hardcoded role lists.
+- Tested: iteration_348 — 11/11 backend pytest, 28/30 frontend (2 cosmetic script issues). Post-test review fixes applied (seed flag, server-side latest_attempts, export sync removed) + re-verified via curl.
