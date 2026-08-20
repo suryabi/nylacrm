@@ -1275,6 +1275,10 @@ ${googleMapsLink}`;
         onboarded_month: onboardedMonth ? parseInt(onboardedMonth) : null,
         onboarded_year: onboardedYear ? parseInt(onboardedYear) : null,
         ...onbForm,
+        approx_monthly_consumption: onbForm.approx_monthly_consumption !== '' && onbForm.approx_monthly_consumption != null
+          ? parseInt(onbForm.approx_monthly_consumption) : null,
+        first_order_quantity: onbForm.first_order_quantity !== '' && onbForm.first_order_quantity != null
+          ? parseInt(onbForm.first_order_quantity) : null,
       });
       toast.success('Onboarding details updated');
       setOnbEditing(false);
@@ -2163,8 +2167,9 @@ ${googleMapsLink}`;
                 <div className="space-y-2">
                   <Label>Approx. Monthly Consumption (bottles)</Label>
                   <Input
+                    type="number" min="0" step="1" inputMode="numeric"
                     value={onbForm.approx_monthly_consumption}
-                    onChange={(e) => setOnbForm((p) => ({ ...p, approx_monthly_consumption: e.target.value }))}
+                    onChange={(e) => setOnbForm((p) => ({ ...p, approx_monthly_consumption: e.target.value.replace(/[^0-9]/g, '') }))}
                     placeholder="e.g. 600"
                     data-testid="edit-approx-monthly-consumption"
                   />
@@ -2172,8 +2177,9 @@ ${googleMapsLink}`;
                 <div className="space-y-2">
                   <Label>First Order Quantity (bottles)</Label>
                   <Input
+                    type="number" min="0" step="1" inputMode="numeric"
                     value={onbForm.first_order_quantity}
-                    onChange={(e) => setOnbForm((p) => ({ ...p, first_order_quantity: e.target.value }))}
+                    onChange={(e) => setOnbForm((p) => ({ ...p, first_order_quantity: e.target.value.replace(/[^0-9]/g, '') }))}
                     placeholder="e.g. 240"
                     data-testid="edit-first-order-quantity"
                   />

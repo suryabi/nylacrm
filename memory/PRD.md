@@ -2376,3 +2376,8 @@ Test tenant sales-only deleted.
 - AccountsList.js: Onboarding column in list view + badge on card view — days contract→first delivery, green ≤7 / amber 8–15 / red >15; "Nd+" suffix while awaiting delivery. Helper onboardingAgeing() module-level; Clock icon imported.
 - AccountDetail.js labels updated: "Approx. Monthly Consumption (bottles)", "First Order Quantity (bottles)" in both edit + view modes; placeholders now numeric-only.
 - Verified via screenshots (list Onboarding column shows 5d badge; detail labels show (bottles)).
+
+## 2026-06 — Bottle fields numeric validation
+- approx_monthly_consumption + first_order_quantity now Optional[int] ge=0 in AccountUpdate (422 on strings/negatives); frontend inputs type=number with digit-only sanitization, parseInt/null on save.
+- Data migration ran: 1 account with string values ("600 bottles / month"→600, "240 bottles"→240) converted to ints.
+- Verified: numeric PUT 200, string PUT 422, negative PUT 422.

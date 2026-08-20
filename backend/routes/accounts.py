@@ -168,8 +168,8 @@ class AccountUpdate(BaseModel):
     onboarded_year: Optional[int] = None
     # ── Onboarding & First Order section ──
     contract_signed_date: Optional[str] = None
-    approx_monthly_consumption: Optional[str] = None
-    first_order_quantity: Optional[str] = None
+    approx_monthly_consumption: Optional[int] = Field(default=None, ge=0)
+    first_order_quantity: Optional[int] = Field(default=None, ge=0)
     first_order_confirmation_date: Optional[str] = None
     first_order_delivery_date: Optional[str] = None
     delivery_contact_name: Optional[str] = None
