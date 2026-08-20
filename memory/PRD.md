@@ -2361,3 +2361,8 @@ Test tenant sales-only deleted.
 - New GET /api/accounts/export/excel (in accounts.py, before /stats/summary): branded 3-column export — Outlet Name (account_name), City, Business Category (category, fallback business_category). Respects search/territory/state/city filters.
 - Download Excel button in AccountsList.js toolbar (data-testid accounts-download-excel-btn), passes current filters.
 - Verified: curl export (correct header + rows + Nyla branding) and button rendered on page.
+
+## 2026-06 — Account Detail: Onboarding & First Order section
+- New card on AccountDetail.js after Account Information: Actual Onboarded Month/Year (MOVED from Account Information edit/view), Contract Signed Date, Approx. Monthly Consumption, First Order Quantity, First Order Confirmation Date, First Order Delivery Date. 3-column grid, own Edit/Save (handleSaveOnboarding), shadcn Calendar+Popover date pickers (DateField helper component; shadcn calendar imported as CalendarPicker since lucide Calendar icon name taken).
+- Backend: AccountUpdate model + 5 new optional str fields (accounts.py). PUT /api/accounts/{id} passes them through.
+- Verified: PUT round-trip via curl, view mode + edit mode + calendar popover screenshots on test account 'Drive Folder Test Lead' (demo values left populated).

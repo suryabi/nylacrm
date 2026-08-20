@@ -166,7 +166,12 @@ class AccountUpdate(BaseModel):
     delivery_address: Optional[DeliveryAddress] = None
     onboarded_month: Optional[int] = None
     onboarded_year: Optional[int] = None
-    # ── Customer's Delivery & Accounting section ──
+    # ── Onboarding & First Order section ──
+    contract_signed_date: Optional[str] = None
+    approx_monthly_consumption: Optional[str] = None
+    first_order_quantity: Optional[str] = None
+    first_order_confirmation_date: Optional[str] = None
+    first_order_delivery_date: Optional[str] = None
     delivery_contact_name: Optional[str] = None
     delivery_contact_phone: Optional[str] = None
     billing_address: Optional[BillingAddress] = None

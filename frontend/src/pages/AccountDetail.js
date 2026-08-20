@@ -38,6 +38,8 @@ import {
   DialogFooter,
 } from '../components/ui/dialog';
 import { Checkbox } from '../components/ui/checkbox';
+import { Calendar as CalendarPicker } from '../components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import LogoUploader from '../components/LogoUploader';
 import SkuBottleDesignCell from '../components/SkuBottleDesignCell';
 import ExpenseRequestSection from '../components/ExpenseRequestSection';
@@ -278,6 +280,30 @@ const contractStatusConfig = {
   'rejected': { label: 'Rejected', color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
 };
 
+function DateField({ label, value, onChange, testId }) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" className="w-full justify-start text-left font-normal h-10" data-testid={testId}>
+            <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
+            {value ? format(new Date(value), 'dd MMM yyyy') : <span className="text-muted-foreground">Pick a date</span>}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <CalendarPicker
+            mode="single"
+            selected={value ? new Date(value) : undefined}
+            onSelect={(d) => onChange(d ? format(d, 'yyyy-MM-dd') : '')}
+            initialFocus
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 export default function AccountDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -324,6 +350,12 @@ export default function AccountDetail() {
   const [skuPricing, setSkuPricing] = useState([]);
   const [onboardedMonth, setOnboardedMonth] = useState('');
   const [onboardedYear, setOnboardedYear] = useState('');
+  const [onbEditing, setOnbEditing] = useState(false);
+  const [onbSaving, setOnbSaving] = useState(false);
+  const [onbForm, setOnbForm] = useState({
+    contract_signed_date: '', approx_monthly_consumption: '', first_order_quantity: '',
+    first_order_confirmation_date: '', first_order_delivery_date: '',
+  });
   const [includeInGopMetrics, setIncludeInGopMetrics] = useState(true);
   const [businessCategory, setBusinessCategory] = useState('');
   const [businessCategories, setBusinessCategories] = useState([]);
@@ -901,6 +933,13 @@ ${googleMapsLink}`;
       setSkuPricing(data.sku_pricing || []);
       setOnboardedMonth(data.onboarded_month || '');
       setOnboardedYear(data.onboarded_year || '');
+      setOnbForm({
+        contract_signed_date: data.contract_signed_date || '',
+        approx_monthly_consumption: data.approx_monthly_consumption || '',
+        first_order_quantity: data.first_order_quantity || '',
+        first_order_confirmation_date: data.first_order_confirmation_date || '',
+        first_order_delivery_date: data.first_order_delivery_date || '',
+      });
       setBusinessCategory(data.category || data.business_category || data.lead_business_category || '');
       setAssignedTo(data.assigned_to || '');
       // Seed the activation modal's `billedBy` radio from whatever's already
@@ -1216,8 +1255,6 @@ ${googleMapsLink}`;
         next_follow_up: nextFollowUp || null,
         assigned_to: assignedTo,
         sku_pricing: skuPricing.map((r) => ({ ...r, mrp: (r.mrp === '' || r.mrp == null) ? null : r.mrp })),
-        onboarded_month: onboardedMonth ? parseInt(onboardedMonth) : null,
-        onboarded_year: onboardedYear ? parseInt(onboardedYear) : null,
         include_in_gop_metrics: includeInGopMetrics,
       });
       toast.success('Account updated successfully');
@@ -1228,6 +1265,24 @@ ${googleMapsLink}`;
       toast.error('Failed to update account');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveOnboarding = async () => {
+    setOnbSaving(true);
+    try {
+      await accountsAPI.update(id, {
+        onboarded_month: onboardedMonth ? parseInt(onboardedMonth) : null,
+        onboarded_year: onboardedYear ? parseInt(onboardedYear) : null,
+        ...onbForm,
+      });
+      toast.success('Onboarding details updated');
+      setOnbEditing(false);
+      fetchAccount();
+    } catch (error) {
+      toast.error('Failed to update onboarding details');
+    } finally {
+      setOnbSaving(false);
     }
   };
 
@@ -1941,32 +1996,6 @@ ${googleMapsLink}`;
                     data-testid="edit-follow-up-date"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Actual Onboarded Month</Label>
-                  <Select value={onboardedMonth ? String(onboardedMonth) : ''} onValueChange={setOnboardedMonth}>
-                    <SelectTrigger data-testid="edit-onboarded-month">
-                      <SelectValue placeholder="Select month" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[{v:'1',l:'January'},{v:'2',l:'February'},{v:'3',l:'March'},{v:'4',l:'April'},{v:'5',l:'May'},{v:'6',l:'June'},{v:'7',l:'July'},{v:'8',l:'August'},{v:'9',l:'September'},{v:'10',l:'October'},{v:'11',l:'November'},{v:'12',l:'December'}].map(m => (
-                        <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Actual Onboarded Year</Label>
-                  <Select value={onboardedYear ? String(onboardedYear) : ''} onValueChange={setOnboardedYear}>
-                    <SelectTrigger data-testid="edit-onboarded-year">
-                      <SelectValue placeholder="Select year" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[2024, 2025, 2026, 2027].map(y => (
-                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
                 <div className="md:col-span-2 flex items-start justify-between gap-4 p-4 rounded-lg border bg-muted/30">
                   <div className="space-y-1">
                     <Label htmlFor="include-gop-toggle" className="text-sm font-medium">
@@ -2032,14 +2061,6 @@ ${googleMapsLink}`;
                   <p className="text-sm text-muted-foreground">Next Follow-up</p>
                   <p className="font-medium">{account.next_follow_up || '-'}</p>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Actual Onboarded</p>
-                  <p className="font-medium" data-testid="account-onboarded-display">
-                    {account.onboarded_month && account.onboarded_year
-                      ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][account.onboarded_month - 1]} ${account.onboarded_year}`
-                      : '-'}
-                  </p>
-                </div>
                 {getAccountLogoSrc() && (
                   <div className="md:col-span-2 pt-4 border-t">
                     <p className="text-sm text-muted-foreground mb-2">Account Logo</p>
@@ -2085,6 +2106,121 @@ ${googleMapsLink}`;
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+          </Card>
+
+          {/* Onboarding & First Order */}
+          <Card className="p-6" data-testid="onboarding-first-order-card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <FileCheck className="h-5 w-5 text-primary" /> Onboarding &amp; First Order
+              </h3>
+              {onbEditing ? (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => { setOnbEditing(false); fetchAccount(); }} data-testid="onb-cancel-btn">Cancel</Button>
+                  <Button size="sm" onClick={handleSaveOnboarding} disabled={onbSaving} data-testid="onb-save-btn">
+                    {onbSaving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />} Save
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => setOnbEditing(true)} data-testid="onb-edit-btn">
+                  <Pencil className="h-4 w-4 mr-1" /> Edit
+                </Button>
+              )}
+            </div>
+            {onbEditing ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Actual Onboarded Month</Label>
+                  <Select value={onboardedMonth ? String(onboardedMonth) : ''} onValueChange={setOnboardedMonth}>
+                    <SelectTrigger data-testid="edit-onboarded-month">
+                      <SelectValue placeholder="Select month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[{v:'1',l:'January'},{v:'2',l:'February'},{v:'3',l:'March'},{v:'4',l:'April'},{v:'5',l:'May'},{v:'6',l:'June'},{v:'7',l:'July'},{v:'8',l:'August'},{v:'9',l:'September'},{v:'10',l:'October'},{v:'11',l:'November'},{v:'12',l:'December'}].map(m => (
+                        <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Actual Onboarded Year</Label>
+                  <Select value={onboardedYear ? String(onboardedYear) : ''} onValueChange={setOnboardedYear}>
+                    <SelectTrigger data-testid="edit-onboarded-year">
+                      <SelectValue placeholder="Select year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[2024, 2025, 2026, 2027].map(y => (
+                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <DateField label="Contract Signed Date" testId="edit-contract-signed-date"
+                  value={onbForm.contract_signed_date}
+                  onChange={(v) => setOnbForm((p) => ({ ...p, contract_signed_date: v }))} />
+                <div className="space-y-2">
+                  <Label>Approx. Monthly Consumption</Label>
+                  <Input
+                    value={onbForm.approx_monthly_consumption}
+                    onChange={(e) => setOnbForm((p) => ({ ...p, approx_monthly_consumption: e.target.value }))}
+                    placeholder="e.g. 600 bottles / month"
+                    data-testid="edit-approx-monthly-consumption"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>First Order Quantity</Label>
+                  <Input
+                    value={onbForm.first_order_quantity}
+                    onChange={(e) => setOnbForm((p) => ({ ...p, first_order_quantity: e.target.value }))}
+                    placeholder="e.g. 240 bottles"
+                    data-testid="edit-first-order-quantity"
+                  />
+                </div>
+                <DateField label="First Order Confirmation Date" testId="edit-first-order-confirmation-date"
+                  value={onbForm.first_order_confirmation_date}
+                  onChange={(v) => setOnbForm((p) => ({ ...p, first_order_confirmation_date: v }))} />
+                <DateField label="First Order Delivery Date" testId="edit-first-order-delivery-date"
+                  value={onbForm.first_order_delivery_date}
+                  onChange={(v) => setOnbForm((p) => ({ ...p, first_order_delivery_date: v }))} />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Actual Onboarded</p>
+                  <p className="font-medium" data-testid="account-onboarded-display">
+                    {account.onboarded_month && account.onboarded_year
+                      ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][account.onboarded_month - 1]} ${account.onboarded_year}`
+                      : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Contract Signed Date</p>
+                  <p className="font-medium" data-testid="account-contract-signed-display">
+                    {account.contract_signed_date ? format(new Date(account.contract_signed_date), 'dd MMM yyyy') : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Approx. Monthly Consumption</p>
+                  <p className="font-medium" data-testid="account-monthly-consumption-display">{account.approx_monthly_consumption || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">First Order Quantity</p>
+                  <p className="font-medium" data-testid="account-first-order-qty-display">{account.first_order_quantity || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">First Order Confirmation Date</p>
+                  <p className="font-medium" data-testid="account-first-order-confirmation-display">
+                    {account.first_order_confirmation_date ? format(new Date(account.first_order_confirmation_date), 'dd MMM yyyy') : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">First Order Delivery Date</p>
+                  <p className="font-medium" data-testid="account-first-order-delivery-display">
+                    {account.first_order_delivery_date ? format(new Date(account.first_order_delivery_date), 'dd MMM yyyy') : '-'}
+                  </p>
+                </div>
               </div>
             )}
           </Card>
