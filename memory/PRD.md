@@ -2371,3 +2371,8 @@ Test tenant sales-only deleted.
 - AccountDetail Onboarding & First Order card: "Onboarding Ageing" badge = days from contract_signed_date → first_order_delivery_date (or today with "awaiting first delivery" if not delivered). Colors: ≤7d green, 8–15d amber, >15d red.
 - Accounts Excel export now has 7 columns: Outlet Name, City, Business Category, Contract Signed Date, First Order Confirmation Date, First Order Delivery Date, Onboarding Ageing (Days).
 - Verified: export via curl (ageing=5 computed for test account), badge screenshot ("5 days", green).
+
+## 2026-06 — Accounts list ageing badge + bottle unit labels
+- AccountsList.js: Onboarding column in list view + badge on card view — days contract→first delivery, green ≤7 / amber 8–15 / red >15; "Nd+" suffix while awaiting delivery. Helper onboardingAgeing() module-level; Clock icon imported.
+- AccountDetail.js labels updated: "Approx. Monthly Consumption (bottles)", "First Order Quantity (bottles)" in both edit + view modes; placeholders now numeric-only.
+- Verified via screenshots (list Onboarding column shows 5d badge; detail labels show (bottles)).

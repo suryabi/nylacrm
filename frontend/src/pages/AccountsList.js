@@ -26,7 +26,7 @@ import {
 } from '../components/ui/select';
 import { 
   Search, Building2, ChevronLeft, ChevronRight, Loader2, 
-  Filter, Users, Calendar, Phone, User, MapPin, LayoutGrid, List, Image as ImageIcon, Download, Layers, Trash2, Award, Package
+  Filter, Users, Calendar, Phone, User, MapPin, LayoutGrid, List, Image as ImageIcon, Download, Layers, Trash2, Award, Package, Clock
 } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 import html2canvas from 'html2canvas';
@@ -76,6 +76,20 @@ function calculateAccountAge(createdAt) {
     return diffMonths === 1 ? '1 month' : `${diffMonths} months`;
   } catch { return '-'; }
 }
+
+const onboardingAgeing = (account) => {
+  if (!account?.contract_signed_date) return null;
+  const start = new Date(account.contract_signed_date);
+  const end = account.first_order_delivery_date ? new Date(account.first_order_delivery_date) : new Date();
+  const days = Math.max(0, Math.round((end - start) / 86400000));
+  const done = !!account.first_order_delivery_date;
+  const cls = days <= 7
+    ? 'bg-green-50 text-green-700 border-green-300'
+    : days <= 15
+      ? 'bg-amber-50 text-amber-800 border-amber-300'
+      : 'bg-red-50 text-red-700 border-red-300';
+  return { days, done, cls };
+};
 
 export default function AccountsList() {
   const { user } = useAuth();
@@ -494,6 +508,16 @@ export default function AccountsList() {
                         {account.sales_person_name && <span className="flex items-center gap-1"><Users className="h-3 w-3 text-blue-500" />{account.sales_person_name}</span>}
                       </div>
                       {account.category && <Badge variant="outline" className="text-[10px] border-slate-200 bg-slate-50 dark:bg-slate-800">{account.category}</Badge>}
+                      {(() => {
+                        const ag = onboardingAgeing(account);
+                        if (!ag) return null;
+                        return (
+                          <Badge variant="outline" className={`text-[10px] font-semibold ${ag.cls}`}
+                            title={ag.done ? 'Onboarding: contract signed → first delivery' : 'Contract signed, awaiting first delivery'}>
+                            <Clock className="h-2.5 w-2.5 mr-0.5" />{ag.days}d{ag.done ? '' : '+'}
+                          </Badge>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))}
@@ -515,6 +539,7 @@ export default function AccountsList() {
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Location</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Sales Contact</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Financials</th>
+                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Onboarding</th>
                       {canDelete && (
                         <th className="text-center py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Actions</th>
                       )}
@@ -644,6 +669,19 @@ export default function AccountsList() {
                               })()}
                             </div>
                           </div>
+                        </td>
+                        <td className="py-5 px-5" data-testid={`account-row-onboarding-${account.account_id}`}>
+                          {(() => {
+                            const ag = onboardingAgeing(account);
+                            if (!ag) return <span className="text-slate-400">-</span>;
+                            return (
+                              <Badge variant="outline" className={`text-xs font-semibold ${ag.cls}`}
+                                title={ag.done ? 'Contract signed → first delivery' : 'Contract signed, awaiting first delivery'}>
+                                <Clock className="h-3 w-3 mr-1" />
+                                {ag.days}d{ag.done ? '' : '+'}
+                              </Badge>
+                            );
+                          })()}
                         </td>
                         {canDelete && (
                           <td className="py-5 px-5 text-center">

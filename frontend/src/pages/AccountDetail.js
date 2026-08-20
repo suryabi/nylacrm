@@ -2161,20 +2161,20 @@ ${googleMapsLink}`;
                   value={onbForm.contract_signed_date}
                   onChange={(v) => setOnbForm((p) => ({ ...p, contract_signed_date: v }))} />
                 <div className="space-y-2">
-                  <Label>Approx. Monthly Consumption</Label>
+                  <Label>Approx. Monthly Consumption (bottles)</Label>
                   <Input
                     value={onbForm.approx_monthly_consumption}
                     onChange={(e) => setOnbForm((p) => ({ ...p, approx_monthly_consumption: e.target.value }))}
-                    placeholder="e.g. 600 bottles / month"
+                    placeholder="e.g. 600"
                     data-testid="edit-approx-monthly-consumption"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>First Order Quantity</Label>
+                  <Label>First Order Quantity (bottles)</Label>
                   <Input
                     value={onbForm.first_order_quantity}
                     onChange={(e) => setOnbForm((p) => ({ ...p, first_order_quantity: e.target.value }))}
-                    placeholder="e.g. 240 bottles"
+                    placeholder="e.g. 240"
                     data-testid="edit-first-order-quantity"
                   />
                 </div>
@@ -2202,11 +2202,11 @@ ${googleMapsLink}`;
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Approx. Monthly Consumption</p>
+                  <p className="text-sm text-muted-foreground">Approx. Monthly Consumption (bottles)</p>
                   <p className="font-medium" data-testid="account-monthly-consumption-display">{account.approx_monthly_consumption || '-'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">First Order Quantity</p>
+                  <p className="text-sm text-muted-foreground">First Order Quantity (bottles)</p>
                   <p className="font-medium" data-testid="account-first-order-qty-display">{account.first_order_quantity || '-'}</p>
                 </div>
                 <div>
