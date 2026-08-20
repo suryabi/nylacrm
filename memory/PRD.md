@@ -2349,3 +2349,10 @@ Test tenant sales-only deleted.
 - Branded Excel export (all 9 spec columns, green/red result font, Nyla header).
 - ALSO FIXED: water_intelligence removed from role.py DEFAULT_MODULE_PERMISSIONS/labels/categories (role.py has a drift assert requiring consistency) + unset 12 backfilled view=false role entries — Directors/VPs regained Water Intelligence nav access via hardcoded role lists.
 - Tested: iteration_348 — 11/11 backend pytest, 28/30 frontend (2 cosmetic script issues). Post-test review fixes applied (seed flag, server-side latest_attempts, export sync removed) + re-verified via curl.
+
+## 2026-06 — Global Stock Dashboard unit mismatch fix (WH Stock/Available)
+- Bug (user-reported, seen on production): Received/Delivered shown in crates, but WH. Stock & Available showed raw bottle counts in the crates view.
+- Root cause: global_stock_dashboard.py step 1 passed distributor_stock.quantity as crates= to bump(). But distributor_stock.quantity is stored in BASE UNITS (bottles) — verified all writers: shipment delivery _apply_stock_on_delivery $inc by item bottle qty (delivery items show packages=1 × packaging_units=24 → quantity=24), stock-out deduction, reversal all use bottle quantities. factory_warehouse_stock (units=) was already correct.
+- Fix: bump(..., "on_hand", units=r.get("quantity")) — available derives from on_hand so both fixed; Excel export uses same agg.
+- Verified via API consistency check across all warehouses (on_hand_crates × upc == on_hand_units) + screenshots of both crates/units views.
+- Production still has the bug until user redeploys.

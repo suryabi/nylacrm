@@ -168,10 +168,12 @@ async def _build_dashboard(tenant_id: str) -> dict:
         if warehouse_name:
             m.setdefault("warehouse_name", warehouse_name)
 
-    # 1. On hand — distributor warehouses (CRATES)
+    # 1. On hand — distributor warehouses. `distributor_stock.quantity` is in
+    #    BASE UNITS (bottles): every writer (shipment delivery, stock-out
+    #    deduction, reversals) increments it with item base-unit quantities.
     for r in dist_rows:
         bump(r.get("distributor_location_id"), r.get("sku_id"), r.get("child_sku_id"),
-             "on_hand", crates=r.get("quantity") or 0,
+             "on_hand", units=r.get("quantity") or 0,
              sku_name=r.get("sku_name"), child_name=r.get("child_sku_name"),
              warehouse_name=r.get("location_name"))
 
