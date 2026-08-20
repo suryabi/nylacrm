@@ -510,6 +510,73 @@ async def get_accounts(
     )
 
 
+@router.get("/export/excel")
+async def export_accounts_excel(
+    search: Optional[str] = None,
+    territory: Optional[str] = None,
+    state: Optional[str] = None,
+    city: Optional[str] = None,
+    account_type: Optional[str] = None,
+    category: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Branded Excel export of accounts — Outlet Name, City, Business Category."""
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    from fastapi.responses import StreamingResponse
+    from utils.excel_branding import brand_workbook
+
+    tdb = get_tdb()
+    query = {}
+    if search:
+        query['$or'] = [
+            {'account_name': {'$regex': search, '$options': 'i'}},
+            {'account_id': {'$regex': search, '$options': 'i'}},
+            {'contact_name': {'$regex': search, '$options': 'i'}}
+        ]
+    if territory:
+        query['territory'] = territory
+    if state:
+        query['state'] = state
+    if city:
+        query['city'] = city
+    if account_type:
+        query['account_type'] = account_type
+    if category:
+        query['category'] = category
+
+    accounts = await tdb.accounts.find(
+        query, {'_id': 0, 'account_name': 1, 'city': 1, 'category': 1, 'business_category': 1}
+    ).sort('account_name', 1).to_list(10000)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Accounts"
+    ws.append(["Outlet Name", "City", "Business Category"])
+    for c in ws[1]:
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill(start_color="003048", end_color="003048", fill_type="solid")
+    for a in accounts:
+        ws.append([
+            a.get('account_name') or '',
+            a.get('city') or '',
+            a.get('category') or a.get('business_category') or '',
+        ])
+    for col, width in zip("ABC", [40, 22, 24]):
+        ws.column_dimensions[col].width = width
+    brand_workbook(wb)
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f"Accounts - {datetime.now().strftime('%Y-%m-%d')}.xlsx"
+    return StreamingResponse(
+        buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 @router.get("/stats/summary")
 async def get_accounts_stats(
     territory: Optional[str] = None,

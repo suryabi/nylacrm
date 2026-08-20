@@ -2356,3 +2356,8 @@ Test tenant sales-only deleted.
 - Fix: bump(..., "on_hand", units=r.get("quantity")) — available derives from on_hand so both fixed; Excel export uses same agg.
 - Verified via API consistency check across all warehouses (on_hand_crates × upc == on_hand_units) + screenshots of both crates/units views.
 - Production still has the bug until user redeploys.
+
+## 2026-06 — Accounts page Excel download
+- New GET /api/accounts/export/excel (in accounts.py, before /stats/summary): branded 3-column export — Outlet Name (account_name), City, Business Category (category, fallback business_category). Respects search/territory/state/city filters.
+- Download Excel button in AccountsList.js toolbar (data-testid accounts-download-excel-btn), passes current filters.
+- Verified: curl export (correct header + rows + Nyla branding) and button rendered on page.

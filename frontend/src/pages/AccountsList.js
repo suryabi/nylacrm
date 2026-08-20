@@ -146,6 +146,27 @@ export default function AccountsList() {
     finally { setDownloadingPdf(false); }
   };
 
+  const downloadExcel = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      if (searchTerm) params.append('search', searchTerm);
+      if (territoryFilter !== 'all') params.append('territory', territoryFilter);
+      if (stateFilter !== 'all') params.append('state', stateFilter);
+      if (cityFilter !== 'all') params.append('city', cityFilter);
+      const response = await axios.get(`${API_URL}/accounts/export/excel?${params}`, {
+        headers: { Authorization: `Bearer ${token}` }, responseType: 'blob', withCredentials: true,
+      });
+      const url = URL.createObjectURL(response.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Accounts - ${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Excel downloaded');
+    } catch { toast.error('Failed to download Excel'); }
+  };
+
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
     try {
@@ -357,6 +378,16 @@ export default function AccountsList() {
             Showing <span className="font-semibold text-slate-800 dark:text-white">{accounts.length}</span> of <span className="font-semibold text-slate-800 dark:text-white">{totalCount}</span> accounts
           </p>
           <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadExcel}
+              disabled={loading || totalCount === 0}
+              className="h-9 px-4 border-emerald-200 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
+              data-testid="accounts-download-excel-btn"
+            >
+              <Download className="h-4 w-4 mr-2" />Download Excel
+            </Button>
             <div className="flex items-center bg-white dark:bg-slate-800 rounded-xl p-1 shadow-sm border border-slate-200 dark:border-slate-700">
               <Button 
                 variant={viewMode === 'list' ? 'default' : 'ghost'} 
