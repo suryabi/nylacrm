@@ -2221,6 +2221,28 @@ ${googleMapsLink}`;
                     {account.first_order_delivery_date ? format(new Date(account.first_order_delivery_date), 'dd MMM yyyy') : '-'}
                   </p>
                 </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Onboarding Ageing</p>
+                  {(() => {
+                    if (!account.contract_signed_date) return <p className="font-medium" data-testid="account-onboarding-ageing-display">-</p>;
+                    const start = new Date(account.contract_signed_date);
+                    const end = account.first_order_delivery_date ? new Date(account.first_order_delivery_date) : new Date();
+                    const days = Math.max(0, Math.round((end - start) / 86400000));
+                    const done = !!account.first_order_delivery_date;
+                    const cls = days <= 7
+                      ? 'bg-green-50 text-green-700 border-green-300'
+                      : days <= 15
+                        ? 'bg-amber-50 text-amber-800 border-amber-300'
+                        : 'bg-red-50 text-red-700 border-red-300';
+                    return (
+                      <span className={`inline-flex items-center gap-1 mt-0.5 px-2.5 py-1 rounded-md border text-sm font-semibold ${cls}`} data-testid="account-onboarding-ageing-display">
+                        <Clock className="h-3.5 w-3.5" />
+                        {days} {days === 1 ? 'day' : 'days'}{done ? '' : ' — awaiting first delivery'}
+                      </span>
+                    );
+                  })()}
+                  <p className="text-xs text-muted-foreground mt-1">Contract signed → first delivery</p>
+                </div>
               </div>
             )}
           </Card>

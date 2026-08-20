@@ -2366,3 +2366,8 @@ Test tenant sales-only deleted.
 - New card on AccountDetail.js after Account Information: Actual Onboarded Month/Year (MOVED from Account Information edit/view), Contract Signed Date, Approx. Monthly Consumption, First Order Quantity, First Order Confirmation Date, First Order Delivery Date. 3-column grid, own Edit/Save (handleSaveOnboarding), shadcn Calendar+Popover date pickers (DateField helper component; shadcn calendar imported as CalendarPicker since lucide Calendar icon name taken).
 - Backend: AccountUpdate model + 5 new optional str fields (accounts.py). PUT /api/accounts/{id} passes them through.
 - Verified: PUT round-trip via curl, view mode + edit mode + calendar popover screenshots on test account 'Drive Folder Test Lead' (demo values left populated).
+
+## 2026-06 — Onboarding Ageing + expanded Accounts export
+- AccountDetail Onboarding & First Order card: "Onboarding Ageing" badge = days from contract_signed_date → first_order_delivery_date (or today with "awaiting first delivery" if not delivered). Colors: ≤7d green, 8–15d amber, >15d red.
+- Accounts Excel export now has 7 columns: Outlet Name, City, Business Category, Contract Signed Date, First Order Confirmation Date, First Order Delivery Date, Onboarding Ageing (Days).
+- Verified: export via curl (ageing=5 computed for test account), badge screenshot ("5 days", green).

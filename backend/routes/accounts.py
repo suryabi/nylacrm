@@ -552,13 +552,24 @@ async def export_accounts_excel(
         query['category'] = category
 
     accounts = await tdb.accounts.find(
-        query, {'_id': 0, 'account_name': 1, 'city': 1, 'category': 1, 'business_category': 1}
+        query, {'_id': 0, 'account_name': 1, 'city': 1, 'category': 1, 'business_category': 1,
+                'contract_signed_date': 1, 'first_order_confirmation_date': 1, 'first_order_delivery_date': 1}
     ).sort('account_name', 1).to_list(10000)
+
+    def _ageing(a):
+        cs, fd = a.get('contract_signed_date'), a.get('first_order_delivery_date')
+        if not cs or not fd:
+            return ''
+        try:
+            return (datetime.strptime(fd[:10], '%Y-%m-%d') - datetime.strptime(cs[:10], '%Y-%m-%d')).days
+        except Exception:
+            return ''
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Accounts"
-    ws.append(["Outlet Name", "City", "Business Category"])
+    ws.append(["Outlet Name", "City", "Business Category", "Contract Signed Date",
+               "First Order Confirmation Date", "First Order Delivery Date", "Onboarding Ageing (Days)"])
     for c in ws[1]:
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = PatternFill(start_color="003048", end_color="003048", fill_type="solid")
@@ -567,8 +578,12 @@ async def export_accounts_excel(
             a.get('account_name') or '',
             a.get('city') or '',
             a.get('category') or a.get('business_category') or '',
+            a.get('contract_signed_date') or '',
+            a.get('first_order_confirmation_date') or '',
+            a.get('first_order_delivery_date') or '',
+            _ageing(a),
         ])
-    for col, width in zip("ABC", [40, 22, 24]):
+    for col, width in zip("ABCDEFG", [40, 22, 24, 20, 26, 24, 24]):
         ws.column_dimensions[col].width = width
     brand_workbook(wb)
 
