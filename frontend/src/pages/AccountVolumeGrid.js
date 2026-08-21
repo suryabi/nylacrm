@@ -538,6 +538,20 @@ export default function AccountVolumeGrid() {
                 <Label>Formula</Label>
                 <Input className="mt-1 h-10 rounded-sm font-mono text-sm" placeholder="e.g. =Expected Monthly Volume * 12" value={newCol.formula}
                   onChange={(e) => setNewCol((p) => ({ ...p, formula: e.target.value }))} data-testid="vg-new-col-formula" />
+                {newCol.formula.trim() && (() => {
+                  const sample = sortedRows.find((r) => r.expected_monthly_volume_crates != null) || sortedRows[0];
+                  if (!sample) return null;
+                  const res = evalFormula(newCol.formula, formulaContext(sample, customCols));
+                  return res != null ? (
+                    <p className="text-xs mt-1.5 font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-sm px-2 py-1.5" data-testid="vg-formula-preview">
+                      Preview — {sample.account_name}: <span className="font-mono font-bold">{res.toLocaleString('en-IN')}</span>
+                    </p>
+                  ) : (
+                    <p className="text-xs mt-1.5 font-medium text-red-600 bg-red-50 border border-red-200 rounded-sm px-2 py-1.5" data-testid="vg-formula-preview">
+                      Can't compute yet — check column names and syntax
+                    </p>
+                  );
+                })()}
                 <p className="text-xs text-slate-500 mt-1.5">
                   Google-Sheets style: optional leading =, + − * / ^ %, comparisons, and functions SUM, AVERAGE, MIN, MAX, ROUND, ABS, IF.
                   Blank cells count as 0. e.g. <span className="font-mono">=IF(Expected Monthly Volume &gt; 100, Expected Monthly Volume * 12, 0)</span>.

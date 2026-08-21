@@ -2422,3 +2422,7 @@ Test tenant sales-only deleted.
   operators + - * / ^ %, comparisons (> < >= <= = <>), functions SUM/AVERAGE/AVG/MIN/MAX/ROUND/ABS/IF.
   Safety: unknown identifiers rejected via charset validation after stripping known fn names; eval sandboxed (no builtins).
 - 14-case backend test suite ALL_PASS (incl. __import__ injection rejected). E2E: formula column created via API rendered 2400 in grid summary + Excel totals. Add Column dialog help text updated with Sheets syntax examples.
+
+## 2026-06 — Formula live preview in Add Column dialog
+- While typing a formula, a live preview evaluates it against a sample account (first row with expected volume set): green box "Preview — {account}: {result}" (vg-formula-preview) or red "Can't compute yet — check column names and syntax" for invalid input.
+- Verified via browser: "=ROUND(expected monthly volume * 12, 0)" → "Preview — Bangalore Tech Park: 2,400"; "=badcolumn * 12" → error state.
