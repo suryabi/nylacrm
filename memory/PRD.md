@@ -2483,3 +2483,8 @@ Test tenant sales-only deleted.
 - New /app/frontend/src/components/widgets/WaterNewsWidget.js: fetches GET /api/public/water-news?limit=6 (public endpoint, no permission gate) → up to 6 published articles as cards: category badge, date, headline, summary (line-clamp-3), expandable "Why it matters", source link. Auto-hides when nothing published.
 - Mounted on HomeDashboard after DistributorMessagesCard (testid home-water-news-widget).
 - Verified via browser: 3 published articles render, expand/collapse works, source links external.
+
+## 2026-06 — Home Water Brief redesigned (compact rotating strip)
+- New authenticated endpoint GET /api/water-intelligence/home-feed (any logged-in user, declared before /{article_id}): approved + published articles, public-safe fields, sorted by published/approved date.
+- WaterNewsWidget rewritten: 46px-tall strip — left Nyla-blue accent bar + gradient, "Water Brief" label, category pill, auto-rotating headline (6s, pauses on hover), counter + prev/next arrows, animated progress dots; click headline to expand details inline (summary, Why it matters, source link). Auto-hides when nothing approved/published.
+- Verified: endpoint returns approved+published (4 articles); browser — collapsed height 46px, rotation nav works, details expand.

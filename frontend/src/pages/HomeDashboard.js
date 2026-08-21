@@ -370,7 +370,7 @@ export default function HomeDashboard() {
             <DistributorMessagesCard />
           </section>
 
-          {/* Published water-industry news — visible to every user */}
+          {/* Water Brief — approved & published news, compact rotating strip */}
           <section className="mb-6 sm:mb-8">
             <WaterNewsWidget />
           </section>

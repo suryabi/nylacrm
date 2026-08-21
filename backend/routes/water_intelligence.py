@@ -373,6 +373,19 @@ async def list_articles(
     return {"articles": docs, "total": total, "page": page, "limit": limit}
 
 
+@router.get("/home-feed")
+async def home_feed(limit: int = Query(8, ge=1, le=20), current_user: dict = Depends(get_current_user)):
+    """Approved + published articles for the home page — any authenticated user."""
+    tenant_id = get_current_tenant_id()
+    docs = await db[ARTICLES].find(
+        {"tenant_id": tenant_id, "status": {"$in": ["approved", "published"]}},
+        {"_id": 0, "id": 1, "headline": 1, "summary": 1, "why_it_matters": 1, "category": 1,
+         "region": 1, "source_name": 1, "source_url": 1, "status": 1,
+         "published_at": 1, "approved_at": 1, "created_at": 1},
+    ).sort([("published_at", -1), ("approved_at", -1), ("created_at", -1)]).limit(limit).to_list(limit)
+    return {"articles": docs}
+
+
 @router.get("/stats")
 async def stats(current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
