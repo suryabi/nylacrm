@@ -8,7 +8,7 @@ const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-di
 export const WaterNewsWidget = () => {
   const [articles, setArticles] = useState([]);
   const [idx, setIdx] = useState(0);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const hoverRef = useRef(false);
 
   useEffect(() => {
@@ -27,8 +27,6 @@ export const WaterNewsWidget = () => {
     }, 6000);
     return () => clearInterval(t);
   }, [articles.length]);
-
-  useEffect(() => { setOpen(false); }, [idx]);
 
   if (articles.length === 0) return null;
   const a = articles[idx];
@@ -68,15 +66,15 @@ export const WaterNewsWidget = () => {
         </button>
 
         {/* Nav */}
-        <div className="flex items-center gap-1 shrink-0">
-          <span className="text-[11px] text-slate-400 tabular-nums mr-1 hidden sm:inline">{idx + 1}/{articles.length}</span>
-          <button className="p-1 rounded-md text-slate-400 hover:text-[#002FA7] hover:bg-[#002FA7]/10 transition-colors"
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-xs text-slate-500 font-medium tabular-nums mr-0.5 hidden sm:inline">{idx + 1}/{articles.length}</span>
+          <button className="h-8 w-8 flex items-center justify-center rounded-full border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-600 text-[#002FA7] shadow-sm hover:bg-[#002FA7] hover:text-white hover:border-[#002FA7] transition-colors"
             onClick={() => setIdx((i) => (i - 1 + articles.length) % articles.length)} data-testid="home-news-prev">
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft style={{ height: 18, width: 18 }} />
           </button>
-          <button className="p-1 rounded-md text-slate-400 hover:text-[#002FA7] hover:bg-[#002FA7]/10 transition-colors"
+          <button className="h-8 w-8 flex items-center justify-center rounded-full border border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-600 text-[#002FA7] shadow-sm hover:bg-[#002FA7] hover:text-white hover:border-[#002FA7] transition-colors"
             onClick={() => setIdx((i) => (i + 1) % articles.length)} data-testid="home-news-next">
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight style={{ height: 18, width: 18 }} />
           </button>
         </div>
       </div>

@@ -2491,3 +2491,8 @@ Test tenant sales-only deleted.
 
 ## 2026-06 — Distributor Messages tile removed from Home
 - HomeDashboard.js: DistributorMessagesCard section + import removed (component file kept; still used elsewhere if any). Verified via browser: tile gone, Water Brief + rest of home intact.
+
+## 2026-06 — Water Brief: expanded by default + prominent arrows
+- Details (summary / why-it-matters / source) open by default and stay open while rotating (removed collapse-on-idx effect); user can still collapse via headline chevron.
+- Prev/next now 32px circular buttons: white with slate border + blue chevron, fill Nyla blue on hover.
+- Verified via browser: open on load, stays open after next-click.
