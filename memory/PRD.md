@@ -2393,3 +2393,8 @@ Test tenant sales-only deleted.
 - Column resizing: drag handle on right edge of each header (vg-resize-{col}); widths persisted in localStorage volume_grid_col_widths; table-layout fixed + colgroup; all cells whitespace-normal break-words (auto word wrap).
 - Manual spreadsheet rows: Add Row button (vg-add-row-btn) → POST /manual-rows (volume_grid_manual_rows collection); editable name/expected volume/custom values via PUT /manual-rows/{id}; amber-tinted rows with hover trash delete; included in summary totals; auto-save on Enter/blur like other cells.
 - Verified: curl (manual row CRUD, biweekly 40 from 80) + screenshot (summary totals 280/140/3360, resized wrapped column). Test data cleaned (manual row + leftover 'First Consignment' test column deleted).
+
+## 2026-06 — Volume Grid branded Excel export
+- GET /api/account-volume-grid/export/excel: Nyla-branded workbook — header, blue TOTAL row (sums + avg frequency), all base columns + custom columns with formula values computed server-side (_eval_formula: word-boundary name substitution, charset-restricted eval). Respects territory/state/city/search filters.
+- Excel button on grid page (vg-download-excel-btn) passes active filters.
+- Verified via curl: header + TOTAL (avg 10 days, 73/100/200, Annual Volume 2400) + data rows with computed formula column.

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Checkbox } from '../components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Table2, RefreshCw, Columns3, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Sigma } from 'lucide-react';
+import { Table2, RefreshCw, Columns3, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Sigma, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
@@ -281,6 +281,26 @@ export default function AccountVolumeGrid() {
           <p className="text-slate-500 text-sm mt-1">Spreadsheet-style view of account volumes — click a highlighted cell to edit. Delivery data updates automatically.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" className="rounded-sm" onClick={async () => {
+            try {
+              const params = new URLSearchParams();
+              if (search.trim()) params.set('search', search.trim());
+              if (territoryFilter !== 'all') params.set('territory', territoryFilter);
+              if (stateFilter !== 'all') params.set('state', stateFilter);
+              if (cityFilter !== 'all') params.set('city', cityFilter);
+              const r = await fetch(`${API_URL}/api/account-volume-grid/export/excel?${params}`, { headers: authHeaders() });
+              if (!r.ok) throw new Error('Export failed');
+              const blob = await r.blob();
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = `Account Volume Tracking - ${new Date().toISOString().slice(0, 10)}.xlsx`;
+              a.click();
+              URL.revokeObjectURL(a.href);
+              toast.success('Excel downloaded');
+            } catch (e) { toast.error(e.message); }
+          }} data-testid="vg-download-excel-btn">
+            <Download className="h-4 w-4 mr-1.5" /> Excel
+          </Button>
           <Button variant="outline" className="rounded-sm" onClick={addRow} data-testid="vg-add-row-btn">
             <Plus className="h-4 w-4 mr-1.5" /> Add Row
           </Button>

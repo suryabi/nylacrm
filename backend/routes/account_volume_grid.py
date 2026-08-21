@@ -142,6 +142,112 @@ async def get_grid(
     return {"rows": rows, "custom_columns": config.get("columns") or [], "total": len(rows)}
 
 
+def _eval_formula(formula: str, ctx: dict):
+    expr = formula or ""
+    for name in sorted(ctx, key=len, reverse=True):
+        v = ctx[name]
+        sub = "None" if v in (None, "") else f"({float(v)})"
+        expr = re.sub(rf"(?<!\w){re.escape(name)}(?!\w)", sub, expr)
+    check = expr.replace("None", "")
+    if not re.fullmatch(r"[0-9+\-*/(). ]*", check):
+        return None
+    if "None" in expr:
+        return None
+    try:
+        val = eval(expr, {"__builtins__": {}}, {})  # noqa: S307 — charset-restricted arithmetic only
+        if isinstance(val, (int, float)) and val == val and abs(val) != float("inf"):
+            return round(val, 2)
+    except Exception:
+        pass
+    return None
+
+
+@router.get("/export/excel")
+async def export_excel(
+    territory: Optional[str] = None, state: Optional[str] = None,
+    city: Optional[str] = None, search: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    from fastapi.responses import StreamingResponse
+    from utils.excel_branding import brand_workbook
+
+    data = await get_grid(territory=territory, state=state, city=city, search=search, current_user=current_user)
+    rows, custom_cols = data["rows"], data["custom_columns"]
+
+    def ctx_for(r):
+        ctx = {
+            "Expected Monthly Volume": r.get("expected_monthly_volume_crates"),
+            "Bi-weekly Volume": r.get("biweekly_volume_crates"),
+            "Last Order Quantity": r.get("last_order_quantity"),
+            "Average Order Frequency": r.get("avg_order_frequency_days"),
+        }
+        for c in custom_cols:
+            if c["type"] == "number":
+                ctx[c["name"]] = (r.get("custom_values") or {}).get(c["id"])
+        return ctx
+
+    headers = ["Account Name", "Territory", "State", "City", "Contract Signed Date",
+               "Avg Order Frequency (Days)", "First Delivery Date", "Latest Delivery Date",
+               "Last Order Quantity", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)"] \
+        + [c["name"] for c in custom_cols]
+
+    def row_values(r):
+        base = [r.get("account_name") or "", r.get("territory") or "", r.get("state") or "",
+                r.get("city") or "", r.get("contract_signed_date") or "",
+                r.get("avg_order_frequency_days"), r.get("first_delivery_date") or "",
+                r.get("latest_delivery_date") or "", r.get("last_order_quantity"),
+                r.get("biweekly_volume_crates"), r.get("expected_monthly_volume_crates")]
+        for c in custom_cols:
+            if c["type"] == "formula":
+                base.append(_eval_formula(c.get("formula"), ctx_for(r)))
+            else:
+                base.append((r.get("custom_values") or {}).get(c["id"]))
+        return base
+
+    all_values = [row_values(r) for r in rows]
+
+    # Totals: sum numeric columns; average for frequency (index 5)
+    totals = [f"TOTAL — {len(rows)} rows", "", "", "", ""]
+    for i in range(5, len(headers)):
+        nums = [v[i] for v in all_values if isinstance(v[i], (int, float))]
+        if not nums:
+            totals.append("")
+        elif i == 5:
+            totals.append(f"avg {round(sum(nums) / len(nums))} days")
+        else:
+            totals.append(round(sum(nums), 2))
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Volume Tracking"
+    ws.append(headers)
+    for c in ws[1]:
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill(start_color="003048", end_color="003048", fill_type="solid")
+    ws.append(totals)
+    for c in ws[2]:
+        c.font = Font(bold=True, color="002FA7")
+        c.fill = PatternFill(start_color="E8EDFB", end_color="E8EDFB", fill_type="solid")
+    for v in all_values:
+        ws.append(v)
+    widths = [34, 16, 16, 16, 18, 22, 16, 16, 16, 20, 26] + [18] * len(custom_cols)
+    for idx, w in enumerate(widths, start=1):
+        ws.column_dimensions[ws.cell(row=1, column=idx).column_letter].width = w
+    brand_workbook(wb)
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f"Account Volume Tracking - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}.xlsx"
+    return StreamingResponse(
+        buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 class RowUpdate(BaseModel):
     expected_monthly_volume_crates: Optional[float] = Field(default=None, ge=0)
     custom_values: Optional[Dict[str, Any]] = None
