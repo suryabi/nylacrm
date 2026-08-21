@@ -24,7 +24,7 @@ const BASE_COLUMNS = [
   { key: 'order_count', label: 'No. of Orders', type: 'number' },
   { key: 'first_delivery_date', label: 'First Delivery Date', type: 'date' },
   { key: 'latest_delivery_date', label: 'Latest Delivery Date', type: 'date' },
-  { key: 'last_order_quantity', label: 'Last Order Quantity', type: 'number' },
+  { key: 'last_order_quantity', label: 'Last Order Quantity (Crates)', type: 'number' },
   { key: 'biweekly_volume_crates', label: 'Bi-weekly Volume (Crates)', type: 'number' },
   { key: 'expected_monthly_volume_crates', label: 'Expected Monthly Volume (Crates)', type: 'number', editable: true },
 ];

@@ -2432,3 +2432,9 @@ Test tenant sales-only deleted.
 - New base column "No. of Orders" (order_count, completed deliveries to date) — grid + Excel export (inserted at index 6; export total_indexes now {10,11}, custom offset 12); usable in formulas as "Number of Orders" (frontend ctx + backend ctx_for).
 - Avg Order Frequency was already computed in days (delivery span / (n-1)); label now explicitly "Average Order Frequency (Days)" in grid (export already had it).
 - Verified via browser: drag No. of Orders before Contract Signed Date → order persists after reload; counts 0/1/10 match export; export headers/totals validated via curl.
+
+## 2026-06 — Last Order Quantity converted to crates
+- Was raw delivery total_quantity (bottles). Now: per-delivery items (distributor_delivery_items) converted via master_skus bottles_per_crate (packaging_config production default fallback), summed → crates, rounded to 2dp.
+- Legacy deliveries without item docs: bottles ÷ tenant's most common bottles_per_crate (default_bpc).
+- Labels now "Last Order Quantity (Crates)" in grid + Excel export.
+- Verified: Citadel 12 bottles→0.5, Empire 1 bottle→0.04, Toopa→5.0 crates (grid API + export both checked).

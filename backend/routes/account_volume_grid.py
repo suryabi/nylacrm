@@ -80,7 +80,7 @@ async def get_grid(
     acc_ids = [a["id"] for a in accounts] + [a.get("account_id") for a in accounts if a.get("account_id")]
     deliveries = await db.distributor_deliveries.find(
         {"tenant_id": tenant_id, "status": {"$in": DONE_STATUSES}, "account_id": {"$in": acc_ids}},
-        {"_id": 0, "account_id": 1, "delivered_at": 1, "delivery_date": 1,
+        {"_id": 0, "id": 1, "account_id": 1, "delivered_at": 1, "delivery_date": 1,
          "created_at": 1, "total_quantity": 1}
     ).to_list(20000)
 
@@ -89,14 +89,45 @@ async def get_grid(
         dt = _parse_dt(d.get("delivered_at") or d.get("delivery_date") or d.get("created_at"))
         if not dt:
             continue
-        by_acc.setdefault(d["account_id"], []).append((dt, d.get("total_quantity") or 0))
+        by_acc.setdefault(d["account_id"], []).append((dt, d.get("total_quantity") or 0, d.get("id")))
+
+    # Convert delivery quantities (bottles) → crates using master_skus bottles_per_crate
+    delivery_ids = [d.get("id") for d in deliveries if d.get("id")]
+    crates_by_delivery: Dict[str, float] = {}
+    if delivery_ids:
+        items = await db.distributor_delivery_items.find(
+            {"delivery_id": {"$in": delivery_ids}},
+            {"_id": 0, "delivery_id": 1, "sku_id": 1, "quantity": 1}).to_list(50000)
+        sku_ids = list({i.get("sku_id") for i in items if i.get("sku_id")})
+        upc: Dict[str, int] = {}
+        if sku_ids:
+            async for ms in db.master_skus.find(
+                    {"id": {"$in": sku_ids}},
+                    {"_id": 0, "id": 1, "bottles_per_crate": 1, "packaging_config": 1}):
+                bpc = ms.get("bottles_per_crate")
+                if not bpc:
+                    pc = (ms.get("packaging_config") or {}).get("production") or []
+                    default = next((p for p in pc if p.get("is_default")), None)
+                    if default:
+                        bpc = default.get("units") or default.get("units_per_package")
+                if bpc:
+                    upc[ms["id"]] = bpc
+        for i in items:
+            n = upc.get(i.get("sku_id")) or 1
+            crates_by_delivery[i["delivery_id"]] = crates_by_delivery.get(i["delivery_id"], 0) + (i.get("quantity") or 0) / n
+    default_bpc = max(set(upc.values()), key=list(upc.values()).count) if crates_by_delivery and upc else 1
 
     rows = []
     for a in accounts:
         dels = sorted(by_acc.get(a["id"], []) + by_acc.get(a.get("account_id"), []), key=lambda x: x[0])
         first_dt = dels[0][0] if dels else None
         last_dt = dels[-1][0] if dels else None
-        last_qty = dels[-1][1] if dels else None
+        last_qty = None
+        if dels:
+            last_crates = crates_by_delivery.get(dels[-1][2])
+            if last_crates is None:  # legacy delivery without item docs: bottles ÷ typical crate size
+                last_crates = (dels[-1][1] or 0) / default_bpc
+            last_qty = round(last_crates, 2)
         freq = None
         if len(dels) >= 2:
             span_days = (dels[-1][0].replace(tzinfo=None) - dels[0][0].replace(tzinfo=None)).days
@@ -210,7 +241,7 @@ async def export_excel(
 
     headers = ["Account Name", "Territory", "State", "City", "Contract Signed Date",
                "Avg Order Frequency (Days)", "No. of Orders", "First Delivery Date", "Latest Delivery Date",
-               "Last Order Quantity", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)"] \
+               "Last Order Quantity (Crates)", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)"] \
         + [c["name"] for c in custom_cols]
 
     def row_values(r):
