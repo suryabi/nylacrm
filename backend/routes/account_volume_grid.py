@@ -479,6 +479,10 @@ async def delete_column(column_id: str, current_user: dict = Depends(get_current
 class PlanRequest(BaseModel):
     truck_capacity_crates: float = Field(gt=0, le=100000)
     ai_insights: bool = True
+    territory: Optional[str] = None
+    state: Optional[str] = None
+    city: Optional[str] = None
+    search: Optional[str] = None
 
 
 @router.post("/consignment-plan")
@@ -488,7 +492,8 @@ async def consignment_plan(payload: PlanRequest, current_user: dict = Depends(ge
     from datetime import timedelta
 
     capacity = payload.truck_capacity_crates
-    data = await get_grid(current_user=current_user)
+    data = await get_grid(territory=payload.territory, state=payload.state,
+                          city=payload.city, search=payload.search, current_user=current_user)
     today = datetime.now(timezone.utc).replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
 
     profiles = []
@@ -559,6 +564,8 @@ async def consignment_plan(payload: PlanRequest, current_user: dict = Depends(ge
     rows.sort(key=lambda r: (-(r["consignment_1"]), -(r["consignment_2"]), -(r["consignment_3"])))
 
     result = {"truck_capacity_crates": capacity, "generated_at": _now(),
+              "filters": {"territory": payload.territory, "state": payload.state,
+                          "city": payload.city, "search": payload.search},
               "rows": rows, "consignments": consignments, "ai_summary": None, "ai_notes": {}}
 
     if payload.ai_insights:
@@ -587,3 +594,82 @@ async def consignment_plan(payload: PlanRequest, current_user: dict = Depends(ge
         except Exception:
             result["ai_summary"] = None  # plan still valid without AI narrative
     return result
+
+
+class PlanExportRequest(BaseModel):
+    plan: Dict[str, Any]
+
+
+@router.post("/consignment-plan/export")
+async def export_consignment_plan(payload: PlanExportRequest, current_user: dict = Depends(get_current_user)):
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from fastapi.responses import StreamingResponse
+    from utils.excel_branding import brand_workbook
+
+    plan = payload.plan
+    rows = plan.get("rows") or []
+    cons = plan.get("consignments") or []
+    if not rows or len(cons) != 3:
+        raise HTTPException(status_code=400, detail="Invalid plan payload")
+    cap = plan.get("truck_capacity_crates")
+    filters = plan.get("filters") or {}
+    notes = plan.get("ai_notes") or {}
+
+    def dmy(s):
+        dt = _parse_dt(s)
+        return dt.strftime("%d-%b-%Y") if dt else ""
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Consignment Plan"
+
+    scope = " · ".join(f"{k.title()}: {v}" for k, v in filters.items() if v) or "All accounts"
+    ws.append([f"Truck capacity: {cap} crates · {scope} · Generated: {datetime.now(timezone.utc).strftime('%d-%b-%Y')}"])
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=10)
+    ws.cell(row=1, column=1).font = Font(italic=True, color="555555")
+
+    headers = ["Account", "Monthly (Crates)", "Frequency (Days)", "Last Order", "Expected Next Order",
+               "Typical Order (Crates)"] \
+        + [f"Consignment {c['consignment']} — {dmy(c.get('suggested_date'))}" for c in cons] + ["Planner Note"]
+    ws.append(headers)
+    for c in ws[2]:
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill(start_color="003048", end_color="003048", fill_type="solid")
+
+    totals = [f"TOTAL — {len(rows)} accounts", "", "", "", "", ""] \
+        + [f"{c.get('total_crates')} / {c.get('capacity_crates')} ({c.get('utilization_percent')}%)" for c in cons] + [""]
+    ws.append(totals)
+    for c in ws[3]:
+        c.font = Font(bold=True, color="002FA7")
+        c.fill = PatternFill(start_color="E8EDFB", end_color="E8EDFB", fill_type="solid")
+
+    for r in rows:
+        ws.append([r.get("account_name"), r.get("monthly_consumption_crates"), r.get("order_frequency_days"),
+                   dmy(r.get("last_order_date")), dmy(r.get("expected_next_order_date")),
+                   r.get("typical_order_crates"),
+                   r.get("consignment_1") or "", r.get("consignment_2") or "", r.get("consignment_3") or "",
+                   notes.get(r.get("account_name")) or ""])
+
+    if plan.get("ai_summary"):
+        ws.append([])
+        ws.append([f"Planner Insight: {plan['ai_summary']}"])
+        row_n = ws.max_row
+        ws.merge_cells(start_row=row_n, start_column=1, end_row=row_n, end_column=10)
+        ws.cell(row=row_n, column=1).alignment = Alignment(wrap_text=True, vertical="top")
+        ws.cell(row=row_n, column=1).font = Font(italic=True, color="002FA7")
+        ws.row_dimensions[row_n].height = 45
+
+    for idx, w in enumerate([34, 16, 16, 14, 18, 18, 22, 22, 22, 40], start=1):
+        ws.column_dimensions[ws.cell(row=2, column=idx).column_letter].width = w
+    brand_workbook(wb)
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f"Consignment Plan - {datetime.now(timezone.utc).strftime('%Y-%m-%d')}.xlsx"
+    return StreamingResponse(
+        buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )

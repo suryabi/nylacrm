@@ -309,12 +309,35 @@ export default function AccountVolumeGrid() {
     try {
       const r = await fetch(`${API_URL}/api/account-volume-grid/consignment-plan`, {
         method: 'POST', headers: authHeaders(),
-        body: JSON.stringify({ truck_capacity_crates: cap }),
+        body: JSON.stringify({
+          truck_capacity_crates: cap,
+          territory: territoryFilter !== 'all' ? territoryFilter : null,
+          state: stateFilter !== 'all' ? stateFilter : null,
+          city: cityFilter !== 'all' ? cityFilter : null,
+          search: search.trim() || null,
+        }),
       });
       if (!r.ok) throw new Error((await r.json()).detail || 'Planning failed');
       setPlan(await r.json());
     } catch (e) { toast.error(e.message); }
     setPlanLoading(false);
+  };
+
+  const exportPlan = async () => {
+    if (!plan) return;
+    try {
+      const r = await fetch(`${API_URL}/api/account-volume-grid/consignment-plan/export`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ plan }),
+      });
+      if (!r.ok) throw new Error('Export failed');
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `Consignment Plan - ${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success('Consignment plan downloaded');
+    } catch (e) { toast.error(e.message); }
   };
 
   const availableStates = getStateNamesByTerritoryName ? getStateNamesByTerritoryName(territoryFilter === 'all' ? null : territoryFilter) : [];
@@ -580,7 +603,7 @@ export default function AccountVolumeGrid() {
           <div className="flex items-center gap-2 mr-auto">
             <Truck className="h-4 w-4 text-[#002FA7]" />
             <h2 className="text-base font-bold text-slate-900">Consignment Planner</h2>
-            <span className="text-xs text-slate-500 hidden md:inline">Plans the next 3 truckloads from ordering patterns</span>
+            <span className="text-xs text-slate-500 hidden md:inline">Plans the next 3 truckloads from ordering patterns — follows the filters above</span>
           </div>
           <div className="relative">
             <Truck className="h-4 w-4 absolute left-2.5 top-2.5 text-slate-400" />
@@ -593,6 +616,11 @@ export default function AccountVolumeGrid() {
             {planLoading && <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />}
             {planLoading ? 'Planning…' : 'Generate Plan'}
           </Button>
+          {plan && (
+            <Button variant="outline" className="rounded-sm" onClick={exportPlan} data-testid="vg-planner-export">
+              <Download className="h-4 w-4 mr-1.5" /> Excel
+            </Button>
+          )}
         </div>
 
         {plan && (

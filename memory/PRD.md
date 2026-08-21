@@ -2467,3 +2467,8 @@ Test tenant sales-only deleted.
 - Each consignment now carries suggested_date = earliest due date among served accounts (clamped to today, strictly increasing across consignments; next date advances by each account's frequency after service).
 - Shown in consignment summary cards (vg-planner-date-{n}) and under each Consignment column header in the plan table.
 - Verified: API (21/26/31 Aug spacing follows 5-day dominant cadence) + browser (cards + table headers show dates).
+
+## 2026-06 — Planner city scoping + branded Excel export
+- Consignment planner now honors the page's Territory/State/City/search filters (was previously planning across ALL accounts). PlanRequest carries filters → get_grid; response echoes "filters"; planner subtitle notes "follows the filters above".
+- POST /api/account-volume-grid/consignment-plan/export {plan} → branded xlsx "Consignment Plan - date.xlsx": scope/capacity info line, dark headers with "Consignment N — DD-Mon-YYYY", blue TOTAL row (totals/capacity/utilization per consignment), data rows incl. Planner Note column (AI notes), Planner Insight merged footer. Excel button (vg-planner-export) appears after a plan is generated.
+- Verified: city=Hyderabad plan returns only Hyderabad accounts (Toopa, Citadel; 4/20 crates 20% — honest under-utilization + AI flags it); export 200 with correct structure; browser E2E with State→City filters + plan + export button.
