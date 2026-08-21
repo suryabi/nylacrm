@@ -2443,3 +2443,8 @@ Test tenant sales-only deleted.
 - Two new base columns: "Last 4 Delivery Dates" (DD-MON-YYYY, newest first, one per line) and "Last 4 Delivery Qty (Crates)" (same line order). Frontend type 'list' renders each entry as block span; Excel joins with \n + wrap_text alignment (cols J/K, indexes 9/10; export total_indexes now {12,13}, custom offset 14).
 - Crate conversion fallback made account-local: legacy deliveries without item docs use the mode of bottles_per_crate from that account's own itemized deliveries (bpc_by_delivery → acc_bpc), falling back to global mode. Fixes non-determinism where filtered vs full grid gave different values (Toopa 0.5 vs 1.0 → now consistently 1.0, its SKU is 12/crate).
 - Verified: grid API (full + filtered identical), Excel export line breaks + wrap, browser screenshot shows stacked dates/quantities.
+
+## 2026-06 — Last Ordered SKU column
+- New base column "Last Ordered SKU" (parent SKU name(s) from the most recent delivery's items; multiple SKUs comma-joined; legacy deliveries without item docs show blank).
+- Grid (after Last Order Quantity) + Excel export (index 12; total_indexes now {13,14}, custom offset 15).
+- Verified via grid API + export: Empire "Nyla – 330 ml / Silver", Toopa "Nyla – 600 ml / Silver".

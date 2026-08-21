@@ -95,10 +95,11 @@ async def get_grid(
     delivery_ids = [d.get("id") for d in deliveries if d.get("id")]
     crates_by_delivery: Dict[str, float] = {}
     bpc_by_delivery: Dict[str, list] = {}
+    skus_by_delivery: Dict[str, list] = {}
     if delivery_ids:
         items = await db.distributor_delivery_items.find(
             {"delivery_id": {"$in": delivery_ids}},
-            {"_id": 0, "delivery_id": 1, "sku_id": 1, "quantity": 1}).to_list(50000)
+            {"_id": 0, "delivery_id": 1, "sku_id": 1, "sku_name": 1, "quantity": 1}).to_list(50000)
         sku_ids = list({i.get("sku_id") for i in items if i.get("sku_id")})
         upc: Dict[str, int] = {}
         if sku_ids:
@@ -117,6 +118,8 @@ async def get_grid(
             n = upc.get(i.get("sku_id"))
             if n:
                 bpc_by_delivery.setdefault(i["delivery_id"], []).append(n)
+            if i.get("sku_name") and i["sku_name"] not in skus_by_delivery.setdefault(i["delivery_id"], []):
+                skus_by_delivery[i["delivery_id"]].append(i["sku_name"])
             crates_by_delivery[i["delivery_id"]] = crates_by_delivery.get(i["delivery_id"], 0) + (i.get("quantity") or 0) / (n or 1)
     default_bpc = max(set(upc.values()), key=list(upc.values()).count) if crates_by_delivery and upc else 1
 
@@ -141,6 +144,7 @@ async def get_grid(
             if last_crates is None:  # legacy delivery without item docs: bottles ÷ typical crate size
                 last_crates = (dels[-1][1] or 0) / acc_bpc
             last_qty = round(last_crates, 2)
+        last_sku = ", ".join(skus_by_delivery.get(dels[-1][2], [])) or None if dels else None
         freq = None
         if len(dels) >= 2:
             span_days = (dels[-1][0].replace(tzinfo=None) - dels[0][0].replace(tzinfo=None)).days
@@ -157,6 +161,7 @@ async def get_grid(
             "first_delivery_date": first_dt.strftime("%Y-%m-%d") if first_dt else None,
             "latest_delivery_date": last_dt.strftime("%Y-%m-%d") if last_dt else None,
             "last_order_quantity": last_qty,
+            "last_order_sku": last_sku,
             "recent_delivery_dates": recent_dates,
             "recent_delivery_crates": recent_crates,
             "expected_monthly_volume_crates": emv,
@@ -180,6 +185,7 @@ async def get_grid(
             "contract_signed_date": None, "avg_order_frequency_days": None,
             "order_count": 0, "first_delivery_date": None, "latest_delivery_date": None,
             "last_order_quantity": None,
+            "last_order_sku": None,
             "recent_delivery_dates": [], "recent_delivery_crates": [],
             "expected_monthly_volume_crates": emv,
             "biweekly_volume_crates": round(emv / 2, 1) if isinstance(emv, (int, float)) else None,
@@ -258,7 +264,7 @@ async def export_excel(
     headers = ["Account Name", "Territory", "State", "City", "Contract Signed Date",
                "Avg Order Frequency (Days)", "No. of Orders", "First Delivery Date", "Latest Delivery Date",
                "Last 4 Delivery Dates", "Last 4 Delivery Qty (Crates)",
-               "Last Order Quantity (Crates)", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)"] \
+               "Last Order Quantity (Crates)", "Last Ordered SKU", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)"] \
         + [c["name"] for c in custom_cols]
 
     def row_values(r):
@@ -268,7 +274,7 @@ async def export_excel(
                 r.get("latest_delivery_date") or "",
                 "\n".join(r.get("recent_delivery_dates") or []),
                 "\n".join(str(c) for c in (r.get("recent_delivery_crates") or [])),
-                r.get("last_order_quantity"),
+                r.get("last_order_quantity"), r.get("last_order_sku") or "",
                 r.get("biweekly_volume_crates"), r.get("expected_monthly_volume_crates")]
         for c in custom_cols:
             if c["type"] == "formula":
@@ -281,10 +287,10 @@ async def export_excel(
 
     # Totals: only Bi-weekly, Expected Monthly, and custom columns opted into totals
     totals = [f"TOTAL — {len(rows)} rows"] + [""] * (len(headers) - 1)
-    total_indexes = {12, 13}  # Bi-weekly, Expected Monthly
+    total_indexes = {13, 14}  # Bi-weekly, Expected Monthly
     for j, c in enumerate(custom_cols):
         if c.get("include_in_total"):
-            total_indexes.add(14 + j)
+            total_indexes.add(15 + j)
     for i in sorted(total_indexes):
         nums = [v[i] for v in all_values if isinstance(v[i], (int, float))]
         if nums:
@@ -307,7 +313,7 @@ async def export_excel(
     for row_cells in ws.iter_rows(min_row=3, min_col=10, max_col=11):
         for c in row_cells:
             c.alignment = wrap
-    widths = [34, 16, 16, 16, 18, 22, 14, 16, 16, 16, 16, 16, 20, 26] + [18] * len(custom_cols)
+    widths = [34, 16, 16, 16, 18, 22, 14, 16, 16, 16, 16, 16, 24, 20, 26] + [18] * len(custom_cols)
     for idx, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=idx).column_letter].width = w
     brand_workbook(wb)
