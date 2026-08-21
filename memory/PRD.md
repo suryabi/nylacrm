@@ -2448,3 +2448,10 @@ Test tenant sales-only deleted.
 - New base column "Last Ordered SKU" (parent SKU name(s) from the most recent delivery's items; multiple SKUs comma-joined; legacy deliveries without item docs show blank).
 - Grid (after Last Order Quantity) + Excel export (index 12; total_indexes now {13,14}, custom offset 15).
 - Verified via grid API + export: Empire "Nyla – 330 ml / Silver", Toopa "Nyla – 600 ml / Silver".
+
+## 2026-06 — AI Consignment Planner (Volume Tracking page)
+- POST /api/account-volume-grid/consignment-plan {truck_capacity_crates} → plans next 3 truckloads.
+- Deterministic engine: per-account profile (monthly consumption = expected volume or derived typical*30/freq; typical order = mean of last-4 delivery crates or monthly/2; freq = avg order frequency or 15d fallback; expected next order = last delivery + freq, today if none). 3 sequential simulations: sort by (next due date asc, monthly desc), allocate min(round(typical), remaining capacity) as whole crates, advance served account's next date by its frequency; top-up until truck full. Never exceeds capacity.
+- AI layer: gpt-5.5 via emergentintegrations LlmChat + EMERGENT_LLM_KEY (same pattern as water_intelligence) → {"summary", "notes":{account: short note}}; plan degrades gracefully without AI on failure.
+- UI: section below the grid (vg-planner-section): Truck capacity input (vg-planner-capacity) + Generate (vg-planner-generate); AI Insight banner (vg-planner-summary); 3 consignment cards with total/capacity + utilization% + accounts served; plan table (vg-planner-table) Account (+AI note) | Monthly | Frequency | Last Order | Expected Next Order | Typical Order | C1 | C2 | C3.
+- Verified: curl (60-crate plan: 60/60/60 at 100%, urgency-first ordering, AI summary+notes returned, ~15s); browser E2E (input → generate → cards/table/insight rendered); capacity 0 → 422; no auth → 401/403.

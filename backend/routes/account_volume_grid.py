@@ -473,3 +473,108 @@ async def delete_column(column_id: str, current_user: dict = Depends(get_current
         {"tenant_id": tenant_id, f"volume_grid_values.{column_id}": {"$exists": True}},
         {"$unset": {f"volume_grid_values.{column_id}": ""}})
     return {"deleted": True}
+
+
+# ── AI Consignment Planner ─────────────────────────────────────────────
+class PlanRequest(BaseModel):
+    truck_capacity_crates: float = Field(gt=0, le=100000)
+    ai_insights: bool = True
+
+
+@router.post("/consignment-plan")
+async def consignment_plan(payload: PlanRequest, current_user: dict = Depends(get_current_user)):
+    import os
+    import json as _json
+    from datetime import timedelta
+
+    capacity = payload.truck_capacity_crates
+    data = await get_grid(current_user=current_user)
+    today = datetime.now(timezone.utc).replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
+
+    profiles = []
+    for r in data["rows"]:
+        monthly = r.get("expected_monthly_volume_crates")
+        recents = [c for c in (r.get("recent_delivery_crates") or []) if isinstance(c, (int, float)) and c > 0]
+        typical = round(sum(recents) / len(recents), 2) if recents else (round(monthly / 2, 2) if monthly else None)
+        if not typical:
+            continue
+        freq = r.get("avg_order_frequency_days")
+        monthly_est = monthly if monthly else (round(typical * 30 / freq, 1) if freq and freq > 0 else round(typical * 2, 1))
+        freq_est = freq if freq and freq > 0 else 15
+        last_dt = _parse_dt(r.get("latest_delivery_date"))
+        next_dt = (last_dt.replace(tzinfo=None) + timedelta(days=freq_est)) if last_dt else today
+        profiles.append({
+            "account_name": r.get("account_name"),
+            "monthly_consumption_crates": monthly_est,
+            "last_order_date": r.get("latest_delivery_date"),
+            "last_order_quantity_crates": r.get("last_order_quantity"),
+            "order_frequency_days": freq_est,
+            "typical_order_crates": typical,
+            "expected_next_order_date": next_dt.strftime("%Y-%m-%d"),
+            "_next": next_dt,
+            "alloc": [0, 0, 0],
+        })
+
+    if not profiles:
+        raise HTTPException(status_code=400, detail="No accounts with volume data to plan. Set Expected Monthly Volume first.")
+
+    # Sequential simulation of 3 truckloads: most-due customers first, top-up with next-soonest
+    consignments = []
+    for k in range(3):
+        remaining = capacity
+        total = 0.0
+        served = []
+        for p in sorted(profiles, key=lambda x: (x["_next"], -x["monthly_consumption_crates"])):
+            if remaining <= 0:
+                break
+            want = max(1, round(p["typical_order_crates"]))
+            alloc = min(want, int(remaining))
+            if alloc <= 0:
+                continue
+            p["alloc"][k] = alloc
+            p["_next"] = max(p["_next"], today) + timedelta(days=p["order_frequency_days"])
+            remaining -= alloc
+            total += alloc
+            served.append(p["account_name"])
+        consignments.append({
+            "consignment": k + 1,
+            "total_crates": round(total, 2),
+            "capacity_crates": capacity,
+            "utilization_percent": round(total / capacity * 100, 1),
+            "accounts_served": len(served),
+        })
+
+    rows = [{k: v for k, v in p.items() if k != "_next"} for p in profiles]
+    for r in rows:
+        r["consignment_1"], r["consignment_2"], r["consignment_3"] = r.pop("alloc")
+    rows.sort(key=lambda r: (-(r["consignment_1"]), -(r["consignment_2"]), -(r["consignment_3"])))
+
+    result = {"truck_capacity_crates": capacity, "generated_at": _now(),
+              "rows": rows, "consignments": consignments, "ai_summary": None, "ai_notes": {}}
+
+    if payload.ai_insights:
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            api_key = os.environ.get("EMERGENT_LLM_KEY")
+            if api_key:
+                chat = LlmChat(
+                    api_key=api_key,
+                    session_id=f"consignment-plan-{uuid.uuid4()}",
+                    system_message=(
+                        "You are a beverage distribution planning analyst for Nyla Air Water. "
+                        "You receive a computed 3-consignment truck allocation plan. Reply ONLY with JSON: "
+                        '{"summary": "3-4 sentence executive insight about the plan, risks and utilization", '
+                        '"notes": {"<account_name>": "one short note (max 12 words) on why/when to deliver"}}. '
+                        "Notes only for accounts with allocations."
+                    ),
+                ).with_model("openai", "gpt-5.5")
+                resp = await chat.send_message(UserMessage(text=_json.dumps(
+                    {"truck_capacity_crates": capacity, "plan_rows": rows, "consignment_totals": consignments})))
+                text = re.sub(r"^```(?:json)?\s*|\s*```$", "", str(resp).strip())
+                m = re.search(r"\{.*\}", text, re.S)
+                parsed = _json.loads(m.group(0) if m else text)
+                result["ai_summary"] = parsed.get("summary")
+                result["ai_notes"] = parsed.get("notes") or {}
+        except Exception:
+            result["ai_summary"] = None  # plan still valid without AI narrative
+    return result

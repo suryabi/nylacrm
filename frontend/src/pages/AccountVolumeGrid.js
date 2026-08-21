@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Checkbox } from '../components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Table2, RefreshCw, Columns3, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Sigma, Download } from 'lucide-react';
+import { Table2, RefreshCw, Columns3, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Sigma, Download, Sparkles, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
@@ -110,6 +110,9 @@ export default function AccountVolumeGrid() {
   const [editCell, setEditCell] = useState(null); // {rowId, colKey|colId, value}
   const [showAddCol, setShowAddCol] = useState(false);
   const [newCol, setNewCol] = useState({ name: '', type: 'text', formula: '', includeInTotal: false });
+  const [truckCapacity, setTruckCapacity] = useState('');
+  const [plan, setPlan] = useState(null);
+  const [planLoading, setPlanLoading] = useState(false);
   const { territories, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
 
   const load = useCallback(async () => {
@@ -296,6 +299,21 @@ export default function AccountVolumeGrid() {
       setHidden((p) => p.filter((k) => k !== col.key));
       load();
     } catch { toast.error('Delete failed'); }
+  };
+
+  const generatePlan = async () => {
+    const cap = parseFloat(truckCapacity);
+    if (!cap || cap <= 0) { toast.error('Enter truck capacity in crates'); return; }
+    setPlanLoading(true);
+    try {
+      const r = await fetch(`${API_URL}/api/account-volume-grid/consignment-plan`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ truck_capacity_crates: cap }),
+      });
+      if (!r.ok) throw new Error((await r.json()).detail || 'Planning failed');
+      setPlan(await r.json());
+    } catch (e) { toast.error(e.message); }
+    setPlanLoading(false);
   };
 
   const availableStates = getStateNamesByTerritoryName ? getStateNamesByTerritoryName(territoryFilter === 'all' ? null : territoryFilter) : [];
@@ -554,6 +572,78 @@ export default function AccountVolumeGrid() {
           </table>
         </div>
       )}
+
+      {/* AI Consignment Planner */}
+      <div className="bg-white border border-slate-200 rounded-sm" data-testid="vg-planner-section">
+        <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-slate-200">
+          <div className="flex items-center gap-2 mr-auto">
+            <Sparkles className="h-4 w-4 text-[#002FA7]" />
+            <h2 className="text-base font-bold text-slate-900">AI Consignment Planner</h2>
+            <span className="text-xs text-slate-500 hidden md:inline">Plans the next 3 truckloads from ordering patterns</span>
+          </div>
+          <div className="relative">
+            <Truck className="h-4 w-4 absolute left-2.5 top-2.5 text-slate-400" />
+            <Input type="number" min="1" className="h-9 pl-8 w-52 rounded-sm" placeholder="Truck capacity (crates)"
+              value={truckCapacity} onChange={(e) => setTruckCapacity(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') generatePlan(); }}
+              data-testid="vg-planner-capacity" />
+          </div>
+          <Button className="rounded-sm bg-[#002FA7] hover:bg-[#00227A] text-white" onClick={generatePlan} disabled={planLoading} data-testid="vg-planner-generate">
+            {planLoading ? <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1.5" />}
+            {planLoading ? 'Planning…' : 'Generate Plan'}
+          </Button>
+        </div>
+
+        {plan && (
+          <div className="p-4 space-y-4" data-testid="vg-planner-result">
+            {plan.ai_summary && (
+              <div className="bg-[#002FA7]/5 border border-[#002FA7]/20 rounded-sm px-4 py-3 text-sm text-slate-700 leading-relaxed" data-testid="vg-planner-summary">
+                <span className="font-semibold text-[#002FA7]">AI Insight: </span>{plan.ai_summary}
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-3">
+              {plan.consignments.map((c) => (
+                <div key={c.consignment} className="border border-slate-200 rounded-sm px-3 py-2" data-testid={`vg-planner-consignment-${c.consignment}`}>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Consignment {c.consignment}</p>
+                  <p className="text-lg font-bold text-slate-900 tabular-nums">{c.total_crates.toLocaleString('en-IN')} <span className="text-xs font-normal text-slate-500">/ {c.capacity_crates.toLocaleString('en-IN')} crates</span></p>
+                  <p className={`text-xs font-medium ${c.utilization_percent >= 90 ? 'text-emerald-700' : 'text-amber-700'}`}>{c.utilization_percent}% utilized · {c.accounts_served} accounts</p>
+                </div>
+              ))}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid="vg-planner-table">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    {['Account', 'Monthly (Crates)', 'Frequency (Days)', 'Last Order', 'Expected Next Order', 'Typical Order (Crates)', 'Consignment 1', 'Consignment 2', 'Consignment 3'].map((h) => (
+                      <th key={h} className={TH}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {plan.rows.map((r) => (
+                    <tr key={r.account_name} className="border-b border-slate-100 hover:bg-slate-50/70" data-testid={`vg-planner-row-${r.account_name}`}>
+                      <td className="px-3 py-2 font-semibold text-slate-900">
+                        {r.account_name}
+                        {plan.ai_notes?.[r.account_name] && (
+                          <p className="text-[11px] text-slate-400 font-normal max-w-[260px]">{plan.ai_notes[r.account_name]}</p>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 tabular-nums text-slate-700">{r.monthly_consumption_crates?.toLocaleString('en-IN') ?? '—'}</td>
+                      <td className="px-3 py-2 tabular-nums text-slate-700">{r.order_frequency_days ?? '—'}</td>
+                      <td className="px-3 py-2 tabular-nums text-slate-700">{r.last_order_date ? fmt(r.last_order_date) : '—'}</td>
+                      <td className="px-3 py-2 tabular-nums text-slate-700">{fmt(r.expected_next_order_date)}</td>
+                      <td className="px-3 py-2 tabular-nums text-slate-700">{r.typical_order_crates?.toLocaleString('en-IN')}</td>
+                      {[r.consignment_1, r.consignment_2, r.consignment_3].map((v, i) => (
+                        <td key={i} className={`px-3 py-2 tabular-nums font-semibold ${v > 0 ? 'text-[#002FA7]' : 'text-slate-300'}`}>{v > 0 ? v.toLocaleString('en-IN') : '—'}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Add Column dialog */}
       <Dialog open={showAddCol} onOpenChange={setShowAddCol}>
