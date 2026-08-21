@@ -2500,3 +2500,8 @@ Test tenant sales-only deleted.
 ## 2026-06 — Volume grid: Contract Signed Date → On-boarded Date
 - Column renamed and re-sourced: now shows accounts.activated_at (set by the account activation flow/checklist) instead of contract_signed_date. Key renamed contract_signed_date → onboarded_date in grid API, frontend BASE_COLUMNS, and Excel export header.
 - Verified: grid API returns activation dates (Citadel 16-May, Ohris 14-May, Toopa 13-May); export header "On-boarded Date". No leftover contract_signed_date references in the module.
+
+## 2026-06 — Water Brief "new" badge
+- Tracks water_brief_last_seen in localStorage; articles newer than last visit get: pulsing dot + "N new" next to the Water Brief label (home-news-new-badge) and a small blue dot before each unseen headline (home-news-new-dot). Badge shows for the current visit, clears on next visit. First-ever visit shows no badge (no baseline).
+- Gotcha fixed: React StrictMode double-ran the effect — second run read the just-written timestamp and cleared newIds; guarded with initRef.
+- Verified in browser: seeded old last_seen → "4 new" + dot; after reload badge gone.

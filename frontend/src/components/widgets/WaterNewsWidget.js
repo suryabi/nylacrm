@@ -9,14 +9,27 @@ export const WaterNewsWidget = () => {
   const [articles, setArticles] = useState([]);
   const [idx, setIdx] = useState(0);
   const [open, setOpen] = useState(true);
+  const [newIds, setNewIds] = useState(new Set());
   const hoverRef = useRef(false);
+  const initRef = useRef(false);
 
   useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
     fetch(`${API_URL}/api/water-intelligence/home-feed?limit=8`, {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     })
       .then((r) => (r.ok ? r.json() : { articles: [] }))
-      .then((d) => setArticles(d.articles || []))
+      .then((d) => {
+        const list = d.articles || [];
+        setArticles(list);
+        const lastSeen = localStorage.getItem('water_brief_last_seen');
+        if (lastSeen) {
+          const fresh = new Set(list.filter((a) => (a.published_at || a.approved_at || a.created_at || '') > lastSeen).map((a) => a.id));
+          setNewIds(fresh);
+        }
+        localStorage.setItem('water_brief_last_seen', new Date().toISOString());
+      })
       .catch(() => {});
   }, []);
 
@@ -44,6 +57,15 @@ export const WaterNewsWidget = () => {
         <div className="flex items-center gap-1.5 shrink-0">
           <Droplets className="h-4 w-4 text-[#002FA7]" />
           <span className="text-[11px] font-bold uppercase tracking-wider text-[#002FA7] hidden sm:inline">Water Brief</span>
+          {newIds.size > 0 && (
+            <span className="flex items-center gap-1" data-testid="home-news-new-badge">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#002FA7] opacity-60" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#002FA7]" />
+              </span>
+              <span className="text-[10px] font-semibold text-[#002FA7]">{newIds.size} new</span>
+            </span>
+          )}
         </div>
         <span className="h-4 w-px bg-slate-200 dark:bg-slate-700 shrink-0 hidden sm:block" />
 
@@ -56,6 +78,7 @@ export const WaterNewsWidget = () => {
           title={open ? 'Hide details' : 'Show details'}
         >
           <span className="flex items-center gap-2 min-w-0">
+            {newIds.has(a.id) && <span className="shrink-0 h-1.5 w-1.5 rounded-full bg-[#002FA7]" data-testid="home-news-new-dot" title="New since your last visit" />}
             {a.category && (
               <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#002FA7] bg-[#002FA7]/10 rounded-full px-2 py-0.5">{a.category}</span>
             )}
