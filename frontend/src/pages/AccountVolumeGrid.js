@@ -605,7 +605,10 @@ export default function AccountVolumeGrid() {
             <div className="grid grid-cols-3 gap-3">
               {plan.consignments.map((c) => (
                 <div key={c.consignment} className="border border-slate-200 rounded-sm px-3 py-2" data-testid={`vg-planner-consignment-${c.consignment}`}>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Consignment {c.consignment}</p>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Consignment {c.consignment}</p>
+                    <p className="text-xs font-semibold text-[#002FA7]" data-testid={`vg-planner-date-${c.consignment}`}>{fmt(c.suggested_date)}</p>
+                  </div>
                   <p className="text-lg font-bold text-slate-900 tabular-nums">{c.total_crates.toLocaleString('en-IN')} <span className="text-xs font-normal text-slate-500">/ {c.capacity_crates.toLocaleString('en-IN')} crates</span></p>
                   <p className={`text-xs font-medium ${c.utilization_percent >= 90 ? 'text-emerald-700' : 'text-amber-700'}`}>{c.utilization_percent}% utilized · {c.accounts_served} accounts</p>
                 </div>
@@ -615,8 +618,14 @@ export default function AccountVolumeGrid() {
               <table className="w-full text-sm" data-testid="vg-planner-table">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50">
-                    {[['Account', 'text-left'], ['Monthly (Crates)', 'text-right'], ['Frequency (Days)', 'text-right'], ['Last Order', 'text-left'], ['Expected Next Order', 'text-left'], ['Typical Order (Crates)', 'text-right'], ['Consignment 1', 'text-right'], ['Consignment 2', 'text-right'], ['Consignment 3', 'text-right']].map(([h, al]) => (
+                    {[['Account', 'text-left'], ['Monthly (Crates)', 'text-right'], ['Frequency (Days)', 'text-right'], ['Last Order', 'text-left'], ['Expected Next Order', 'text-left'], ['Typical Order (Crates)', 'text-right']].map(([h, al]) => (
                       <th key={h} className={`${TH} ${al}`}>{h}</th>
+                    ))}
+                    {plan.consignments.map((c) => (
+                      <th key={c.consignment} className={`${TH} text-right`}>
+                        Consignment {c.consignment}
+                        <span className="block text-[10px] font-medium normal-case text-[#002FA7]">{fmt(c.suggested_date)}</span>
+                      </th>
                     ))}
                   </tr>
                 </thead>

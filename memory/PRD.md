@@ -2462,3 +2462,8 @@ Test tenant sales-only deleted.
 - Consignment Planner de-AI'd visually: Sparkles icons removed (Truck icon instead), renamed "Consignment Planner", banner label "Planner Insight"; planner table zebra + right-aligned numerics with per-header alignment.
 - Containers upgraded to rounded-md shadow-sm.
 - Verified via browser screenshots (grid top + planner with generated 60-crate plan); no lucide-sparkles in this module (remaining 3 on page are global assistant widgets).
+
+## 2026-06 — Consignment suggested dates
+- Each consignment now carries suggested_date = earliest due date among served accounts (clamped to today, strictly increasing across consignments; next date advances by each account's frequency after service).
+- Shown in consignment summary cards (vg-planner-date-{n}) and under each Consignment column header in the plan table.
+- Verified: API (21/26/31 Aug spacing follows 5-day dominant cadence) + browser (cards + table headers show dates).

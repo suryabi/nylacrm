@@ -520,10 +520,12 @@ async def consignment_plan(payload: PlanRequest, current_user: dict = Depends(ge
 
     # Sequential simulation of 3 truckloads: most-due customers first, top-up with next-soonest
     consignments = []
+    prev_date = None
     for k in range(3):
         remaining = capacity
         total = 0.0
         served = []
+        due_dates = []
         for p in sorted(profiles, key=lambda x: (x["_next"], -x["monthly_consumption_crates"])):
             if remaining <= 0:
                 break
@@ -532,12 +534,19 @@ async def consignment_plan(payload: PlanRequest, current_user: dict = Depends(ge
             if alloc <= 0:
                 continue
             p["alloc"][k] = alloc
+            due_dates.append(max(p["_next"], today))
             p["_next"] = max(p["_next"], today) + timedelta(days=p["order_frequency_days"])
             remaining -= alloc
             total += alloc
             served.append(p["account_name"])
+        # Suggested dispatch date = earliest due date among served accounts, strictly after previous consignment
+        sug = min(due_dates) if due_dates else today
+        if prev_date and sug <= prev_date:
+            sug = prev_date + timedelta(days=1)
+        prev_date = sug
         consignments.append({
             "consignment": k + 1,
+            "suggested_date": sug.strftime("%Y-%m-%d"),
             "total_crates": round(total, 2),
             "capacity_crates": capacity,
             "utilization_percent": round(total / capacity * 100, 1),
