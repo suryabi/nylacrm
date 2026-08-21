@@ -142,20 +142,38 @@ async def get_grid(
     return {"rows": rows, "custom_columns": config.get("columns") or [], "total": len(rows)}
 
 
+_FORMULA_FNS = {
+    "SUM": lambda *a: sum(float(x or 0) for x in a),
+    "AVERAGE": lambda *a: (sum(float(x or 0) for x in a) / len(a)) if a else 0,
+    "AVG": lambda *a: (sum(float(x or 0) for x in a) / len(a)) if a else 0,
+    "MIN": lambda *a: min(float(x or 0) for x in a),
+    "MAX": lambda *a: max(float(x or 0) for x in a),
+    "ROUND": lambda x, n=0: round(float(x), int(n)),
+    "ABS": lambda x: abs(float(x)),
+    "IF": lambda c, t, f=0: t if c else f,
+}
+_FN_NAMES = "|".join(_FORMULA_FNS)
+
+
 def _eval_formula(formula: str, ctx: dict):
-    expr = formula or ""
+    expr = (formula or "").strip()
+    if expr.startswith("="):
+        expr = expr[1:]
     for name in sorted(ctx, key=len, reverse=True):
         v = ctx[name]
-        sub = "None" if v in (None, "") else f"({float(v)})"
-        expr = re.sub(rf"(?<!\w){re.escape(name)}(?!\w)", sub, expr)
-    check = expr.replace("None", "")
-    if not re.fullmatch(r"[0-9+\-*/(). ]*", check):
-        return None
-    if "None" in expr:
+        sub = "0" if v in (None, "") else f"({float(v)})"
+        expr = re.sub(rf"(?<!\w){re.escape(name)}(?!\w)", sub, expr, flags=re.IGNORECASE)
+    expr = re.sub(rf"\b({_FN_NAMES})\s*\(", lambda m: m.group(1).upper() + "(", expr, flags=re.IGNORECASE)
+    expr = expr.replace("^", "**").replace("<>", "!=")
+    expr = re.sub(r"(?<![<>=!*])=(?!=)", "==", expr)
+    expr = re.sub(r"(\d+(?:\.\d+)?)\s*%", r"(\1/100)", expr)
+    stripped = re.sub(rf"\b({_FN_NAMES})\b", "", expr)
+    if not re.fullmatch(r"[0-9+\-*/()., <>=!\s]*", stripped):
         return None
     try:
-        val = eval(expr, {"__builtins__": {}}, {})  # noqa: S307 — charset-restricted arithmetic only
-        if isinstance(val, (int, float)) and val == val and abs(val) != float("inf"):
+        val = eval(expr, {"__builtins__": {}}, dict(_FORMULA_FNS))  # noqa: S307 — charset-restricted
+        val = float(val)
+        if val == val and abs(val) != float("inf"):
             return round(val, 2)
     except Exception:
         pass

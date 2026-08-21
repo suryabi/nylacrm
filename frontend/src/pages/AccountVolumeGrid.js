@@ -41,19 +41,41 @@ const formulaContext = (row, customCols) => {
   return ctx;
 };
 
+const FN = {
+  SUM: (...a) => a.reduce((x, y) => x + (Number(y) || 0), 0),
+  AVERAGE: (...a) => (a.length ? a.reduce((x, y) => x + (Number(y) || 0), 0) / a.length : 0),
+  AVG: (...a) => FN.AVERAGE(...a),
+  MIN: (...a) => Math.min(...a.map((v) => Number(v) || 0)),
+  MAX: (...a) => Math.max(...a.map((v) => Number(v) || 0)),
+  ROUND: (x, n = 0) => Math.round(Number(x) * 10 ** n) / 10 ** n,
+  ABS: (x) => Math.abs(Number(x)),
+  IF: (c, t, f = 0) => (c ? t : f),
+};
+const FN_NAMES = 'SUM|AVERAGE|AVG|MIN|MAX|ROUND|ABS|IF';
+
 const evalFormula = (formula, ctx) => {
   if (!formula) return null;
-  let expr = formula;
+  let expr = String(formula).trim();
+  if (expr.startsWith('=')) expr = expr.slice(1); // Google-Sheets style "=" prefix
   Object.keys(ctx).sort((a, b) => b.length - a.length).forEach((name) => {
     const v = ctx[name];
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    expr = expr.replace(new RegExp(`(?<![\\w])${escaped}(?![\\w])`, 'g'), v == null || v === '' ? 'NaN' : `(${Number(v)})`);
+    // case-insensitive column reference; blank cells count as 0 (like Sheets)
+    expr = expr.replace(new RegExp(`(?<![\\w])${escaped}(?![\\w])`, 'gi'), v == null || v === '' ? '0' : `(${Number(v)})`);
   });
-  if (!/^[0-9+\-*/(). NaN]*$/.test(expr.replace(/NaN/g, ''))) return null;
+  expr = expr
+    .replace(new RegExp(`\\b(${FN_NAMES})\\s*\\(`, 'gi'), (m, f) => `${f.toUpperCase()}(`)
+    .replace(/\^/g, '**')
+    .replace(/<>/g, '!=')
+    .replace(/(?<![<>=!*])=(?!=)/g, '==')
+    .replace(/(\d+(?:\.\d+)?)\s*%/g, '($1/100)');
+  const stripped = expr.replace(new RegExp(`\\b(${FN_NAMES})\\b`, 'g'), '');
+  if (!/^[0-9+\-*/()., <>=!\s]*$/.test(stripped)) return null;
   try {
     // eslint-disable-next-line no-new-func
-    const result = Function(`"use strict"; return (${expr});`)();
-    return Number.isFinite(result) ? Math.round(result * 100) / 100 : null;
+    const result = Function(...Object.keys(FN), `"use strict"; return (${expr});`)(...Object.values(FN));
+    const num = Number(result);
+    return Number.isFinite(num) ? Math.round(num * 100) / 100 : null;
   } catch { return null; }
 };
 
@@ -514,10 +536,12 @@ export default function AccountVolumeGrid() {
             {newCol.type === 'formula' && (
               <div>
                 <Label>Formula</Label>
-                <Input className="mt-1 h-10 rounded-sm font-mono text-sm" placeholder="e.g. Expected Monthly Volume * 12" value={newCol.formula}
+                <Input className="mt-1 h-10 rounded-sm font-mono text-sm" placeholder="e.g. =Expected Monthly Volume * 12" value={newCol.formula}
                   onChange={(e) => setNewCol((p) => ({ ...p, formula: e.target.value }))} data-testid="vg-new-col-formula" />
                 <p className="text-xs text-slate-500 mt-1.5">
-                  Reference columns by name with + − × ÷ and brackets. Available: Expected Monthly Volume, Bi-weekly Volume,
+                  Google-Sheets style: optional leading =, + − * / ^ %, comparisons, and functions SUM, AVERAGE, MIN, MAX, ROUND, ABS, IF.
+                  Blank cells count as 0. e.g. <span className="font-mono">=IF(Expected Monthly Volume &gt; 100, Expected Monthly Volume * 12, 0)</span>.
+                  Columns: Expected Monthly Volume, Bi-weekly Volume,
                   Last Order Quantity, Average Order Frequency{customCols.filter((c) => c.type === 'number').map((c) => `, ${c.name}`).join('')}
                 </p>
               </div>

@@ -2414,3 +2414,11 @@ Test tenant sales-only deleted.
 - Frozen on horizontal scroll: Account Name column (sticky left-0; z-30 in header/summary, z-10 in body; opaque bg white / #FDF6E7 for manual rows, group-hover bg-slate-50, inset right shadow).
 - Correct preview URL is design-workflow-hub-11.preview.emergentagent.com (frontend/.env) — earlier "warehouse-qc-engine" URL is stale, serves wake-servers mock. localhost:3000 login fails due to CORS+credentials (expected, not a bug).
 - Verified via browser automation on real preview: after scrollTop=400/scrollLeft=500, header offset 1px, summary offset 53px (=header height), account column left offset 1px; screenshot confirms pinned panes.
+
+## 2026-06 — Volume Grid: Google-Sheets-style formula engine (bug fix + upgrade)
+- Root cause of "formulas not working": old engine required exact-case column names and bare arithmetic only; "=" prefix, lowercase names, functions, and blank cells all silently returned null.
+- New engine (mirrored in AccountVolumeGrid.js evalFormula + backend _eval_formula for Excel export):
+  optional leading "=", case-insensitive column references, blank cells = 0 (Sheets behavior),
+  operators + - * / ^ %, comparisons (> < >= <= = <>), functions SUM/AVERAGE/AVG/MIN/MAX/ROUND/ABS/IF.
+  Safety: unknown identifiers rejected via charset validation after stripping known fn names; eval sandboxed (no builtins).
+- 14-case backend test suite ALL_PASS (incl. __import__ injection rejected). E2E: formula column created via API rendered 2400 in grid summary + Excel totals. Add Column dialog help text updated with Sheets syntax examples.
