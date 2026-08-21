@@ -2478,3 +2478,8 @@ Test tenant sales-only deleted.
 - Allocation: effective capacity per consignment = min(truck capacity, remaining stock); stock depletes across the 3 consignments; per-consignment stock_limited flag; response includes warehouse_stock_crates + stock_remaining_after_plan; both fed to the AI prompt.
 - UI: stock line above cards (vg-planner-stock) "Warehouse stock: X · After this plan: Y" + amber "Plan limited by available stock" badge (vg-planner-stock-warning) when capped. Excel info line includes warehouse stock.
 - Verified: API (stock 2930.8 → 2750.8 after 180-crate plan; capacity-400 plan depletes 315), browser (stock line + AI insight references stock), export info line includes stock. Stock-limited branch is simple min() arithmetic (not triggerable with current 2.9k-crate stock without mutating data).
+
+## 2026-06 — Water news on every user's home page
+- New /app/frontend/src/components/widgets/WaterNewsWidget.js: fetches GET /api/public/water-news?limit=6 (public endpoint, no permission gate) → up to 6 published articles as cards: category badge, date, headline, summary (line-clamp-3), expandable "Why it matters", source link. Auto-hides when nothing published.
+- Mounted on HomeDashboard after DistributorMessagesCard (testid home-water-news-widget).
+- Verified via browser: 3 published articles render, expand/collapse works, source links external.

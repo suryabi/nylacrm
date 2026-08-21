@@ -27,6 +27,7 @@ import {
 } from '../components/widgets';
 import DistributorMessagesCard from '../components/DistributorMessagesCard';
 import PendingApprovalsWidget from '../components/widgets/PendingApprovalsWidget';
+import WaterNewsWidget from '../components/widgets/WaterNewsWidget';
 // Quote widgets temporarily disabled - uncomment to re-enable
 // import WaterQuoteWidget from '../components/widgets/WaterQuoteWidget';
 // import SalesQuoteWidget from '../components/widgets/SalesQuoteWidget';
@@ -367,6 +368,11 @@ export default function HomeDashboard() {
           {/* Distributor messages alert (suppliers only — auto-hides for others) */}
           <section className="mb-6 sm:mb-8">
             <DistributorMessagesCard />
+          </section>
+
+          {/* Published water-industry news — visible to every user */}
+          <section className="mb-6 sm:mb-8">
+            <WaterNewsWidget />
           </section>
 
           {/* Reorderable widgets — order saved per user */}
