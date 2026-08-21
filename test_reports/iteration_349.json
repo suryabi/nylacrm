@@ -1,0 +1,41 @@
+{
+  "summary": "Full-stack testing of the new Account Volume Tracking Grid (Sales module). Backend: created /app/backend/tests/test_account_volume_grid.py with 15 pytest cases — 14 pass, 1 FAILS revealing a real bug (DELETE /api/account-volume-grid/columns/{unknown-id} returns 200 instead of 404). Verified: GET returns 13 accounts + Annual Volume formula column; Empire Restaurant metrics correct (avg 5 days, first 2026-05-10, latest 2026-06-25, last qty 1); Bangalore Tech Park EMV=200, biweekly=100; search + state filters honored; PUT sets/clears expected_monthly_volume_crates and biweekly recomputes; PUT with -10 → 422; PUT to unknown account → 404; POST duplicate name → 400, invalid type → 400, formula-without-formula → 400; POST/DELETE of TEST_* columns cleaned up (Annual Volume preserved). Frontend Playwright (single script, all 20+ assertions pass): /account-volume-grid renders with 9 visible headers (8 base + Annual Volume) and 13 rows; Empire and BTP row values match backend; sort toggles row order (Toopa→Bangalore Tech Park on desc) and arrow icon updates; inline edit vg-edit-expected_monthly_volume_crates-EMPI-BEN-A26-001 → type 50 + Enter saves, GET confirms EMV=50 biweekly=25; clearing saves null; Columns menu hides first_delivery_date, localStorage['volume_grid_hidden_columns']=[\"first_delivery_date\"], persists after reload, restores on re-check; Add Column dialog creates FORMULA 'TESTUI_Formula = Last Order Quantity * 2' and Empire row renders 2 in that cell; duplicate 'Annual Volume' → sonner toast 'A column with this name already exists' + backend 400; Annual Volume = 2,400 for BTP; TESTUI_Formula deleted via trash icon; Sidebar shows 'Volume Tracking' under Core (Sales module); /accounts still loads with Onboarding badge column ('5d' visible). Cleanup: TESTUI_Formula removed, Empire EMV restored to null (was null originally), BTP=200 untouched, Annual Volume column preserved.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "DELETE /api/account-volume-grid/columns/{column_id}",
+        "issue": "Returns 200 for unknown column IDs instead of the spec-required 404. Root cause: in routes/account_volume_grid.py delete_column(), the update sets `$set: {updated_at: now}` alongside `$pull`, so mongo's modified_count is >0 even when the $pull matched nothing — the `if res.modified_count == 0: 404` guard never triggers. Fix: pre-check with a find_one for the column id in config.columns, OR drop the $set updated_at from the same call and rely purely on $pull's array modification. Reproduce: `curl -X DELETE $URL/api/account-volume-grid/columns/nope-id` → 200 {\"deleted\":true}."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_account_volume_grid.py",
+    "/app/test_reports/pytest/account_volume_grid.xml"
+  ],
+  "action_items": [
+    "Fix DELETE /api/account-volume-grid/columns/{id} to return 404 for unknown ids (either split the $pull and $set updated_at into two ops with a pre-check, or use a find_one guard before update_one)."
+  ],
+  "critical_code_review_comments": [
+    "routes/account_volume_grid.py delete_column: `modified_count==0` check is defeated by co-located `$set updated_at`; unknown ids silently succeed (see backend_issues.minor above).",
+    "PUT /rows/{account_id} `custom_values` is merged via {**existing, **payload} — no validation that the payload keys correspond to defined custom column ids. A stale/deleted column id from the client can still write arbitrary keys into account.volume_grid_values and remain there after the column is deleted, effectively creating orphan data. Consider filtering by known column ids from volume_grid_config, or purging keys on column delete.",
+    "Frontend evalFormula uses `new Function(...)` on a regex-guarded expression. The guard `/^[0-9+\\-*/(). NaN]*$/` (after stripping NaN) is safe for the shipped column names, but any future custom-column name containing operator characters could inject an expression. Consider a proper mini-parser or shunting-yard for math evaluation.",
+    "Frontend column-name resolution in formulaContext uses `expr.split(name).join(...)` — this is a substring replace, so a column named 'Volume' would also match inside 'Expected Monthly Volume'. The sort-by-length-desc partially mitigates but doesn't fully protect. Word-boundary tokenization would be safer.",
+    "Backend does not enforce RBAC on POST/DELETE /columns or PUT /rows — any authenticated user (including non-admin/sales roles) can add/delete tenant-wide columns. If Volume Tracking is admin/sales-only per Sales module gating, add a role check on the mutating routes."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_account_volume_grid.py"
+  ],
+  "success_rate": {"backend": "93% (14/15) — 1 real backend bug in DELETE /columns", "frontend": "100% — every spec-required flow passed"},
+  "test_credentials": "Admin: surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water). session_token used as Bearer.",
+  "seed_data_creation": "None persisted. During tests created TEST_Number_Col + TEST_Formula (pytest) and TESTUI_Formula (playwright) — all deleted at end. Set Empire Restaurant expected_monthly_volume_crates to 50 briefly, then cleared to null (its original value). Bangalore Tech Park EMV left at 200 as required. 'Annual Volume' formula column left intact.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Regression file: /app/backend/tests/test_account_volume_grid.py (15 tests, ~7s). test_delete_unknown_column_404 will keep failing until main agent patches routes/account_volume_grid.py delete_column(). Frontend flow validated end-to-end via a single Playwright script (login → grid → Empire+BTP metrics → sort → inline edit + clear → column hide/reload persistence → formula col + duplicate 400 + delete → Accounts regression). Sidebar link 'Volume Tracking' confirmed under Core group between Accounts and Account GOP Metrics.",
+  "rca of the issue": "DELETE /api/account-volume-grid/columns/{column_id} unknown-id bug: the endpoint issues one update_one({tenant_id}, {$pull:{columns:{id:column_id}}, $set:{updated_at:now}}). MongoDB counts the $set as a modification of the parent config doc regardless of whether $pull matched, so update_result.modified_count is 1 and the code returns {deleted:true}. Mitigation: (a) before the update, `col = await db[CONFIG].find_one({tenant_id, 'columns.id': column_id})` and raise 404 if None; OR (b) inspect the array before/after via a two-step read-then-update; OR (c) drop the redundant `$set updated_at` in this call and use only $pull — then modified_count truly reflects whether an element was removed."
+}

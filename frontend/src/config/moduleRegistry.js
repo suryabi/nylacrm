@@ -14,6 +14,7 @@ export const MODULE_REGISTRY = [
       { key: 'leads', label: 'Leads', description: 'Lead management and tracking' },
       { key: 'pipeline', label: 'Pipeline', description: 'Visual sales pipeline (Kanban)' },
       { key: 'accounts', label: 'Accounts', description: 'Customer account management' },
+      { key: 'account_volume_grid', label: 'Volume Tracking', description: 'Spreadsheet-style account volume grid' },
       { key: 'account_gop_metrics', label: 'Account GOP Metrics', description: 'Account SKU pricing & GOP metrics' },
       { key: 'invoices', label: 'Invoices', description: 'Invoice management' },
       { key: 'customer_returns', label: 'Customer Returns', description: 'Customer return processing (Sales / Production / Distribution)' },

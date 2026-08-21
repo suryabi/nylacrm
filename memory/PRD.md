@@ -2381,3 +2381,9 @@ Test tenant sales-only deleted.
 - approx_monthly_consumption + first_order_quantity now Optional[int] ge=0 in AccountUpdate (422 on strings/negatives); frontend inputs type=number with digit-only sanitization, parseInt/null on save.
 - Data migration ran: 1 account with string values ("600 bottles / month"→600, "240 bottles"→240) converted to ints.
 - Verified: numeric PUT 200, string PUT 422, negative PUT 422.
+
+## 2026-06 — Account Volume Tracking Grid (Sales module, tested)
+- New Sales → Volume Tracking (/account-volume-grid): spreadsheet-style grid. Files: /app/backend/routes/account_volume_grid.py, /app/frontend/src/pages/AccountVolumeGrid.js, nav after Accounts, moduleRegistry account_volume_grid, route in App.js.
+- Base columns: Account Name, Contract Signed Date, Average Order Frequency (avg days between completed deliveries: span/(n-1)), First/Latest Delivery Date, Last Order Quantity, Bi-weekly Volume (=EMV/2, computed), Expected Monthly Volume (Crates, inline editable, stored on account.expected_monthly_volume_crates).
+- Custom columns (text/number/date/formula) in volume_grid_config; values in account.volume_grid_values; formula eval client-side (word-boundary name substitution + regex-guarded Function eval). Column hide/unhide persisted in localStorage. Click-header sorting. Territory/State/City cascading filters via useMasterLocations (like Leads). 'Annual Volume' formula column (EMV*12) left as a live example; Bangalore Tech Park EMV=200 demo value.
+- Tested: iteration_349 (backend 14/15, frontend 100%) → fixed all findings: DELETE /columns unknown id now 404 (find_one pre-check) + purges orphaned values from accounts; PUT custom_values filtered to known column ids (unknown → 400); RBAC _require_edit (sales+admin roles) on all mutations (finance user 403 verified); formula replacement uses word boundaries. Regression pytest 15/15 pass.
