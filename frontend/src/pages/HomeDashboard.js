@@ -25,7 +25,6 @@ import {
   NewMeetingDialog,
   MeetingDetailDialog
 } from '../components/widgets';
-import DistributorMessagesCard from '../components/DistributorMessagesCard';
 import PendingApprovalsWidget from '../components/widgets/PendingApprovalsWidget';
 import WaterNewsWidget from '../components/widgets/WaterNewsWidget';
 // Quote widgets temporarily disabled - uncomment to re-enable
@@ -363,11 +362,6 @@ export default function HomeDashboard() {
           {/* Pending Approvals — auto-hides when nothing needs the user's action */}
           <section className="mb-6 sm:mb-8">
             <PendingApprovalsWidget />
-          </section>
-
-          {/* Distributor messages alert (suppliers only — auto-hides for others) */}
-          <section className="mb-6 sm:mb-8">
-            <DistributorMessagesCard />
           </section>
 
           {/* Water Brief — approved & published news, compact rotating strip */}

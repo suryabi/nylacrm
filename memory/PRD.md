@@ -2488,3 +2488,6 @@ Test tenant sales-only deleted.
 - New authenticated endpoint GET /api/water-intelligence/home-feed (any logged-in user, declared before /{article_id}): approved + published articles, public-safe fields, sorted by published/approved date.
 - WaterNewsWidget rewritten: 46px-tall strip — left Nyla-blue accent bar + gradient, "Water Brief" label, category pill, auto-rotating headline (6s, pauses on hover), counter + prev/next arrows, animated progress dots; click headline to expand details inline (summary, Why it matters, source link). Auto-hides when nothing approved/published.
 - Verified: endpoint returns approved+published (4 articles); browser — collapsed height 46px, rotation nav works, details expand.
+
+## 2026-06 — Distributor Messages tile removed from Home
+- HomeDashboard.js: DistributorMessagesCard section + import removed (component file kept; still used elsewhere if any). Verified via browser: tile gone, Water Brief + rest of home intact.
