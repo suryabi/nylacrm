@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Checkbox } from '../components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Table2, RefreshCw, Columns3, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Sigma, Download, Sparkles, Truck } from 'lucide-react';
+import { Table2, RefreshCw, Columns3, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Sigma, Download, Truck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
@@ -86,7 +86,8 @@ const evalFormula = (formula, ctx) => {
 };
 
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
-const TH = 'px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap select-none';
+const TH = 'px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap select-none';
+const numericCol = (c) => c.type === 'number' || c.key === 'recent_delivery_crates' || (c.custom && (c.custom.type === 'number' || c.custom.type === 'formula'));
 
 export default function AccountVolumeGrid() {
   const [rows, setRows] = useState([]);
@@ -358,7 +359,7 @@ export default function AccountVolumeGrid() {
     }
     return (
       <button
-        className="w-full text-left px-1.5 py-0.5 -mx-1.5 rounded-sm hover:bg-[#002FA7]/5 hover:ring-1 hover:ring-[#002FA7]/30 tabular-nums cursor-text min-h-[24px]"
+        className={`w-full px-1.5 py-0.5 -mx-1.5 rounded-sm hover:bg-[#002FA7]/5 hover:ring-1 hover:ring-[#002FA7]/30 tabular-nums cursor-text min-h-[24px] ${numericCol(col) ? 'text-right' : 'text-left'}`}
         onClick={() => setEditCell({ rowId: row.account_id, col, value: raw ?? '' })}
         data-testid={`vg-edit-${col.key}-${row.account_code || row.account_id}`}
         title="Click to edit"
@@ -482,7 +483,7 @@ export default function AccountVolumeGrid() {
       {loading ? (
         <div className="flex items-center justify-center py-20 text-slate-500"><RefreshCw className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-sm overflow-auto max-h-[calc(100vh-260px)]" data-testid="vg-scroll-container">
+        <div className="bg-white border border-slate-200 rounded-md shadow-sm overflow-auto max-h-[calc(100vh-260px)]" data-testid="vg-scroll-container">
           <table className="w-full text-sm" style={{ tableLayout: 'fixed' }} data-testid="vg-table">
             <colgroup>
               {visibleColumns.map((c) => (
@@ -493,7 +494,7 @@ export default function AccountVolumeGrid() {
               <tr ref={headerRowRef} className="border-b border-slate-200 bg-slate-50">
                 {visibleColumns.map((c) => (
                   <th key={c.key}
-                    className={`${TH} cursor-pointer hover:text-[#002FA7] sticky top-0 bg-slate-50 shadow-[inset_0_-1px_0_#e2e8f0] ${c.key === 'account_name' ? 'left-0 z-30' : 'z-20'}`}
+                    className={`${TH} ${numericCol(c) ? 'text-right' : 'text-left'} cursor-pointer hover:text-[#002FA7] sticky top-0 bg-slate-50 shadow-[inset_0_-1px_0_#e2e8f0] ${c.key === 'account_name' ? 'left-0 z-30' : 'z-20'}`}
                     onClick={() => toggleSort(c.key)}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => { e.preventDefault(); if (dragColRef.current) moveColumn(dragColRef.current, c.key); dragColRef.current = null; }}
@@ -521,7 +522,7 @@ export default function AccountVolumeGrid() {
               <tr className="border-b-2 border-[#002FA7]/30" data-testid="vg-summary-row">
                 {visibleColumns.map((c) => (
                   <td key={c.key} style={{ top: headerH }}
-                    className={`px-3 py-2 text-sm font-bold text-[#002FA7] tabular-nums whitespace-normal break-words sticky bg-[#E9EEF9] shadow-[inset_0_-2px_0_rgba(0,47,167,0.3)] ${c.key === 'account_name' ? 'left-0 z-30' : 'z-20'}`}
+                    className={`px-3 py-2 text-sm font-bold text-[#002FA7] tabular-nums whitespace-normal break-words sticky bg-[#E9EEF9] shadow-[inset_0_-2px_0_rgba(0,47,167,0.3)] ${numericCol(c) ? 'text-right' : 'text-left'} ${c.key === 'account_name' ? 'left-0 z-30' : 'z-20'}`}
                     data-testid={`vg-summary-${c.key}`}>
                     {typeof summaryFor(c) === 'number' ? summaryFor(c).toLocaleString('en-IN') : summaryFor(c)}
                   </td>
@@ -532,10 +533,10 @@ export default function AccountVolumeGrid() {
               {sortedRows.length === 0 && (
                 <tr><td colSpan={visibleColumns.length} className="px-4 py-12 text-center text-slate-500" data-testid="vg-empty">No accounts match the current filters.</td></tr>
               )}
-              {sortedRows.map((row) => (
-                <tr key={row.account_id} className={`border-b border-slate-100 hover:bg-slate-50/70 transition-colors group ${row.is_manual ? 'bg-amber-50/30' : ''}`} data-testid={`vg-row-${row.account_code || row.account_id}`}>
+              {sortedRows.map((row, ri) => (
+                <tr key={row.account_id} className={`border-b border-slate-100 transition-colors group ${row.is_manual ? 'bg-amber-50/40' : ri % 2 ? 'bg-slate-50/60' : 'bg-white'} hover:bg-[#EFF3FB]`} data-testid={`vg-row-${row.account_code || row.account_id}`}>
                   {visibleColumns.map((c) => (
-                    <td key={c.key} className={`px-3 py-2 align-top whitespace-normal break-words ${c.key === 'account_name' ? `font-semibold text-slate-900 sticky left-0 z-10 ${row.is_manual ? 'bg-[#FDF6E7]' : 'bg-white'} group-hover:bg-slate-50 shadow-[inset_-1px_0_0_#e2e8f0]` : 'text-slate-700'}`}>
+                    <td key={c.key} className={`px-3 py-2 align-top whitespace-normal break-words ${numericCol(c) ? 'text-right' : ''} ${c.key === 'account_name' ? `font-semibold text-slate-900 sticky left-0 z-10 ${row.is_manual ? 'bg-[#FDF6E7]' : ri % 2 ? 'bg-[#F7F9FC]' : 'bg-white'} group-hover:bg-[#EFF3FB] shadow-[inset_-1px_0_0_#e2e8f0]` : 'text-slate-700'}`}>
                       {c.key === 'account_name' ? (
                         row.is_manual ? (
                           <div className="flex items-start justify-between gap-1">
@@ -574,11 +575,11 @@ export default function AccountVolumeGrid() {
       )}
 
       {/* AI Consignment Planner */}
-      <div className="bg-white border border-slate-200 rounded-sm" data-testid="vg-planner-section">
+      <div className="bg-white border border-slate-200 rounded-md shadow-sm" data-testid="vg-planner-section">
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-slate-200">
           <div className="flex items-center gap-2 mr-auto">
-            <Sparkles className="h-4 w-4 text-[#002FA7]" />
-            <h2 className="text-base font-bold text-slate-900">AI Consignment Planner</h2>
+            <Truck className="h-4 w-4 text-[#002FA7]" />
+            <h2 className="text-base font-bold text-slate-900">Consignment Planner</h2>
             <span className="text-xs text-slate-500 hidden md:inline">Plans the next 3 truckloads from ordering patterns</span>
           </div>
           <div className="relative">
@@ -589,7 +590,7 @@ export default function AccountVolumeGrid() {
               data-testid="vg-planner-capacity" />
           </div>
           <Button className="rounded-sm bg-[#002FA7] hover:bg-[#00227A] text-white" onClick={generatePlan} disabled={planLoading} data-testid="vg-planner-generate">
-            {planLoading ? <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1.5" />}
+            {planLoading && <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" />}
             {planLoading ? 'Planning…' : 'Generate Plan'}
           </Button>
         </div>
@@ -598,7 +599,7 @@ export default function AccountVolumeGrid() {
           <div className="p-4 space-y-4" data-testid="vg-planner-result">
             {plan.ai_summary && (
               <div className="bg-[#002FA7]/5 border border-[#002FA7]/20 rounded-sm px-4 py-3 text-sm text-slate-700 leading-relaxed" data-testid="vg-planner-summary">
-                <span className="font-semibold text-[#002FA7]">AI Insight: </span>{plan.ai_summary}
+                <span className="font-semibold text-[#002FA7]">Planner Insight: </span>{plan.ai_summary}
               </div>
             )}
             <div className="grid grid-cols-3 gap-3">
@@ -614,27 +615,27 @@ export default function AccountVolumeGrid() {
               <table className="w-full text-sm" data-testid="vg-planner-table">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50">
-                    {['Account', 'Monthly (Crates)', 'Frequency (Days)', 'Last Order', 'Expected Next Order', 'Typical Order (Crates)', 'Consignment 1', 'Consignment 2', 'Consignment 3'].map((h) => (
-                      <th key={h} className={TH}>{h}</th>
+                    {[['Account', 'text-left'], ['Monthly (Crates)', 'text-right'], ['Frequency (Days)', 'text-right'], ['Last Order', 'text-left'], ['Expected Next Order', 'text-left'], ['Typical Order (Crates)', 'text-right'], ['Consignment 1', 'text-right'], ['Consignment 2', 'text-right'], ['Consignment 3', 'text-right']].map(([h, al]) => (
+                      <th key={h} className={`${TH} ${al}`}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {plan.rows.map((r) => (
-                    <tr key={r.account_name} className="border-b border-slate-100 hover:bg-slate-50/70" data-testid={`vg-planner-row-${r.account_name}`}>
+                  {plan.rows.map((r, ri) => (
+                    <tr key={r.account_name} className={`border-b border-slate-100 hover:bg-[#EFF3FB] transition-colors ${ri % 2 ? 'bg-slate-50/60' : 'bg-white'}`} data-testid={`vg-planner-row-${r.account_name}`}>
                       <td className="px-3 py-2 font-semibold text-slate-900">
                         {r.account_name}
                         {plan.ai_notes?.[r.account_name] && (
                           <p className="text-[11px] text-slate-400 font-normal max-w-[260px]">{plan.ai_notes[r.account_name]}</p>
                         )}
                       </td>
-                      <td className="px-3 py-2 tabular-nums text-slate-700">{r.monthly_consumption_crates?.toLocaleString('en-IN') ?? '—'}</td>
-                      <td className="px-3 py-2 tabular-nums text-slate-700">{r.order_frequency_days ?? '—'}</td>
+                      <td className="px-3 py-2 tabular-nums text-slate-700 text-right">{r.monthly_consumption_crates?.toLocaleString('en-IN') ?? '—'}</td>
+                      <td className="px-3 py-2 tabular-nums text-slate-700 text-right">{r.order_frequency_days ?? '—'}</td>
                       <td className="px-3 py-2 tabular-nums text-slate-700">{r.last_order_date ? fmt(r.last_order_date) : '—'}</td>
                       <td className="px-3 py-2 tabular-nums text-slate-700">{fmt(r.expected_next_order_date)}</td>
-                      <td className="px-3 py-2 tabular-nums text-slate-700">{r.typical_order_crates?.toLocaleString('en-IN')}</td>
+                      <td className="px-3 py-2 tabular-nums text-slate-700 text-right">{r.typical_order_crates?.toLocaleString('en-IN')}</td>
                       {[r.consignment_1, r.consignment_2, r.consignment_3].map((v, i) => (
-                        <td key={i} className={`px-3 py-2 tabular-nums font-semibold ${v > 0 ? 'text-[#002FA7]' : 'text-slate-300'}`}>{v > 0 ? v.toLocaleString('en-IN') : '—'}</td>
+                        <td key={i} className={`px-3 py-2 tabular-nums font-semibold text-right ${v > 0 ? 'text-[#002FA7]' : 'text-slate-300'}`}>{v > 0 ? v.toLocaleString('en-IN') : '—'}</td>
                       ))}
                     </tr>
                   ))}

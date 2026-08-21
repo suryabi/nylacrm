@@ -2455,3 +2455,10 @@ Test tenant sales-only deleted.
 - AI layer: gpt-5.5 via emergentintegrations LlmChat + EMERGENT_LLM_KEY (same pattern as water_intelligence) → {"summary", "notes":{account: short note}}; plan degrades gracefully without AI on failure.
 - UI: section below the grid (vg-planner-section): Truck capacity input (vg-planner-capacity) + Generate (vg-planner-generate); AI Insight banner (vg-planner-summary); 3 consignment cards with total/capacity + utilization% + accounts served; plan table (vg-planner-table) Account (+AI note) | Monthly | Frequency | Last Order | Expected Next Order | Typical Order | C1 | C2 | C3.
 - Verified: curl (60-crate plan: 60/60/60 at 100%, urgency-first ordering, AI summary+notes returned, ~15s); browser E2E (input → generate → cards/table/insight rendered); capacity 0 → 422; no auth → 401/403.
+
+## 2026-06 — Volume Tracking visual polish
+- Zebra striping: even rows white, odd rows slate-50/60; manual rows amber; hover #EFF3FB; frozen Account Name cell background synced per stripe (opaque #F7F9FC / white / #FDF6E7).
+- All numeric columns right-aligned (headers, summary, cells, editable buttons, last-4-qty list) via numericCol() helper; TH const no longer hardcodes text-left.
+- Consignment Planner de-AI'd visually: Sparkles icons removed (Truck icon instead), renamed "Consignment Planner", banner label "Planner Insight"; planner table zebra + right-aligned numerics with per-header alignment.
+- Containers upgraded to rounded-md shadow-sm.
+- Verified via browser screenshots (grid top + planner with generated 60-crate plan); no lucide-sparkles in this module (remaining 3 on page are global assistant widgets).
