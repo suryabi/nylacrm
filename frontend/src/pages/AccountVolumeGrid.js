@@ -14,6 +14,7 @@ import { useMasterLocations } from '../hooks/useMasterLocations';
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 const LS_KEY = 'volume_grid_hidden_columns';
+const LS_WIDTHS = 'volume_grid_col_widths';
 
 const BASE_COLUMNS = [
   { key: 'account_name', label: 'Account Name', type: 'text' },
@@ -71,6 +72,9 @@ export default function AccountVolumeGrid() {
   const [hidden, setHidden] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch { return []; }
   });
+  const [colWidths, setColWidths] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(LS_WIDTHS)) || {}; } catch { return {}; }
+  });
   const [editCell, setEditCell] = useState(null); // {rowId, colKey|colId, value}
   const [showAddCol, setShowAddCol] = useState(false);
   const [newCol, setNewCol] = useState({ name: '', type: 'text', formula: '' });
@@ -94,6 +98,44 @@ export default function AccountVolumeGrid() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => { localStorage.setItem(LS_KEY, JSON.stringify(hidden)); }, [hidden]);
+  useEffect(() => { localStorage.setItem(LS_WIDTHS, JSON.stringify(colWidths)); }, [colWidths]);
+
+  // Column resize (drag the handle at the right edge of a header)
+  const startResize = (e, colKey) => {
+    e.preventDefault(); e.stopPropagation();
+    const startX = e.clientX;
+    const th = e.target.closest('th');
+    const startW = th ? th.offsetWidth : 150;
+    const onMove = (ev) => {
+      const w = Math.max(70, startW + (ev.clientX - startX));
+      setColWidths((p) => ({ ...p, [colKey]: w }));
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
+  const addRow = async () => {
+    try {
+      const r = await fetch(`${API_URL}/api/account-volume-grid/manual-rows`, { method: 'POST', headers: authHeaders() });
+      if (!r.ok) throw new Error((await r.json()).detail || 'Failed to add row');
+      const d = await r.json();
+      await load();
+      setEditCell({ rowId: d.id, col: { key: 'account_name', type: 'text' }, value: '' });
+      toast.success('Row added — type a name and press Enter');
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const deleteManualRow = async (row) => {
+    if (!window.confirm(`Delete row "${row.account_name || 'Untitled'}"?`)) return;
+    try {
+      await fetch(`${API_URL}/api/account-volume-grid/manual-rows/${row.account_id}`, { method: 'DELETE', headers: authHeaders() });
+      load();
+    } catch { toast.error('Delete failed'); }
+  };
 
   const allColumns = useMemo(() => ([
     ...BASE_COLUMNS,
@@ -124,20 +166,38 @@ export default function AccountVolumeGrid() {
 
   const toggleSort = (key) => setSort((p) => ({ key, dir: p.key === key && p.dir === 'asc' ? 'desc' : 'asc' }));
 
+  // Summary totals per visible column (sum volumes; average for order frequency)
+  const summaryFor = useCallback((col) => {
+    if (col.key === 'account_name') return `TOTAL — ${sortedRows.length} rows`;
+    if (col.type === 'date' || col.type === 'text' || col.custom?.type === 'text' || col.custom?.type === 'date') return '';
+    const vals = sortedRows.map((r) => cellValue(r, col)).filter((v) => typeof v === 'number' && Number.isFinite(v));
+    if (vals.length === 0) return '';
+    if (col.key === 'avg_order_frequency_days') {
+      return `avg ${Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)} days`;
+    }
+    const sum = vals.reduce((a, b) => a + b, 0);
+    return Math.round(sum * 100) / 100;
+  }, [sortedRows, cellValue]);
+
   const saveCell = async () => {
     if (!editCell) return;
     const { rowId, col, value } = editCell;
+    const row = rows.find((r) => r.account_id === rowId);
+    const isManual = row?.is_manual || col.key === 'account_name';
     const body = {};
-    if (col.key === 'expected_monthly_volume_crates') {
+    if (col.key === 'account_name') {
+      body.account_name = value;
+    } else if (col.key === 'expected_monthly_volume_crates') {
       if (value === '') body.clear_expected = true;
       else body.expected_monthly_volume_crates = parseFloat(value);
     } else if (col.custom) {
       body.custom_values = { [col.custom.id]: col.custom.type === 'number' ? (value === '' ? null : parseFloat(value)) : value };
     }
+    const url = isManual
+      ? `${API_URL}/api/account-volume-grid/manual-rows/${rowId}`
+      : `${API_URL}/api/account-volume-grid/rows/${rowId}`;
     try {
-      const r = await fetch(`${API_URL}/api/account-volume-grid/rows/${rowId}`, {
-        method: 'PUT', headers: authHeaders(), body: JSON.stringify(body),
-      });
+      const r = await fetch(url, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(body) });
       if (!r.ok) throw new Error((await r.json()).detail || 'Save failed');
       setEditCell(null);
       load();
@@ -221,6 +281,9 @@ export default function AccountVolumeGrid() {
           <p className="text-slate-500 text-sm mt-1">Spreadsheet-style view of account volumes — click a highlighted cell to edit. Delivery data updates automatically.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" className="rounded-sm" onClick={addRow} data-testid="vg-add-row-btn">
+            <Plus className="h-4 w-4 mr-1.5" /> Add Row
+          </Button>
           {/* Columns visibility */}
           <Popover>
             <PopoverTrigger asChild>
@@ -291,19 +354,38 @@ export default function AccountVolumeGrid() {
         <div className="flex items-center justify-center py-20 text-slate-500"><RefreshCw className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-sm overflow-x-auto">
-          <table className="w-full text-sm" data-testid="vg-table">
+          <table className="w-full text-sm" style={{ tableLayout: 'fixed' }} data-testid="vg-table">
+            <colgroup>
+              {visibleColumns.map((c) => (
+                <col key={c.key} style={{ width: colWidths[c.key] ? `${colWidths[c.key]}px` : (c.key === 'account_name' ? '220px' : '150px') }} />
+              ))}
+            </colgroup>
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 sticky top-0">
+              <tr className="border-b border-slate-200 bg-slate-50">
                 {visibleColumns.map((c) => (
-                  <th key={c.key} className={`${TH} cursor-pointer hover:text-[#002FA7]`} onClick={() => toggleSort(c.key)} data-testid={`vg-th-${c.key}`}>
-                    <span className="inline-flex items-center gap-1">
+                  <th key={c.key} className={`${TH} relative cursor-pointer hover:text-[#002FA7]`} onClick={() => toggleSort(c.key)} data-testid={`vg-th-${c.key}`}>
+                    <span className="inline-flex items-center gap-1 whitespace-normal break-words leading-tight">
                       {c.label}
-                      {c.custom?.type === 'formula' && <Sigma className="h-3 w-3 text-indigo-500" />}
+                      {c.custom?.type === 'formula' && <Sigma className="h-3 w-3 text-indigo-500 shrink-0" />}
                       {sort.key === c.key
-                        ? (sort.dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
-                        : <ArrowUpDown className="h-3 w-3 opacity-30" />}
+                        ? (sort.dir === 'asc' ? <ArrowUp className="h-3 w-3 shrink-0" /> : <ArrowDown className="h-3 w-3 shrink-0" />)
+                        : <ArrowUpDown className="h-3 w-3 opacity-30 shrink-0" />}
                     </span>
+                    <span
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-[#002FA7]/40 active:bg-[#002FA7]"
+                      onMouseDown={(e) => startResize(e, c.key)}
+                      onClick={(e) => e.stopPropagation()}
+                      data-testid={`vg-resize-${c.key}`}
+                    />
                   </th>
+                ))}
+              </tr>
+              {/* Summary row */}
+              <tr className="border-b-2 border-[#002FA7]/30 bg-[#002FA7]/5" data-testid="vg-summary-row">
+                {visibleColumns.map((c) => (
+                  <td key={c.key} className="px-3 py-2 text-sm font-bold text-[#002FA7] tabular-nums whitespace-normal break-words" data-testid={`vg-summary-${c.key}`}>
+                    {typeof summaryFor(c) === 'number' ? summaryFor(c).toLocaleString('en-IN') : summaryFor(c)}
+                  </td>
                 ))}
               </tr>
             </thead>
@@ -312,14 +394,36 @@ export default function AccountVolumeGrid() {
                 <tr><td colSpan={visibleColumns.length} className="px-4 py-12 text-center text-slate-500" data-testid="vg-empty">No accounts match the current filters.</td></tr>
               )}
               {sortedRows.map((row) => (
-                <tr key={row.account_id} className="border-b border-slate-100 hover:bg-slate-50/70 transition-colors" data-testid={`vg-row-${row.account_code || row.account_id}`}>
+                <tr key={row.account_id} className={`border-b border-slate-100 hover:bg-slate-50/70 transition-colors group ${row.is_manual ? 'bg-amber-50/30' : ''}`} data-testid={`vg-row-${row.account_code || row.account_id}`}>
                   {visibleColumns.map((c) => (
-                    <td key={c.key} className={`px-3 py-2 whitespace-nowrap ${c.key === 'account_name' ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
+                    <td key={c.key} className={`px-3 py-2 align-top whitespace-normal break-words ${c.key === 'account_name' ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
                       {c.key === 'account_name' ? (
-                        <div>
-                          {row.account_name}
-                          <p className="text-[11px] text-slate-400 font-normal">{[row.city, row.state].filter(Boolean).join(', ')}</p>
-                        </div>
+                        row.is_manual ? (
+                          <div className="flex items-start justify-between gap-1">
+                            {editCell && editCell.rowId === row.account_id && editCell.col.key === 'account_name' ? (
+                              <Input autoFocus className="h-8 rounded-sm text-sm px-2" value={editCell.value}
+                                onChange={(e) => setEditCell((p) => ({ ...p, value: e.target.value }))}
+                                onBlur={saveCell}
+                                onKeyDown={(e) => { if (e.key === 'Enter') saveCell(); if (e.key === 'Escape') setEditCell(null); }}
+                                data-testid="vg-cell-input" />
+                            ) : (
+                              <button className="text-left px-1.5 py-0.5 -mx-1.5 rounded-sm hover:bg-[#002FA7]/5 hover:ring-1 hover:ring-[#002FA7]/30 cursor-text break-words min-h-[24px] flex-1"
+                                onClick={() => setEditCell({ rowId: row.account_id, col: { key: 'account_name', type: 'text' }, value: row.account_name || '' })}
+                                data-testid={`vg-edit-account_name-${row.account_id}`}>
+                                {row.account_name || <span className="text-slate-300">Type a name…</span>}
+                              </button>
+                            )}
+                            <button className="text-red-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity mt-1 shrink-0"
+                              onClick={() => deleteManualRow(row)} data-testid={`vg-delete-row-${row.account_id}`}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div>
+                            {row.account_name}
+                            <p className="text-[11px] text-slate-400 font-normal">{[row.city, row.state].filter(Boolean).join(', ')}</p>
+                          </div>
+                        )
                       ) : renderCell(row, c)}
                     </td>
                   ))}

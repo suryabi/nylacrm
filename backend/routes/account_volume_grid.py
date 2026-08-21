@@ -14,6 +14,7 @@ from database import db
 router = APIRouter(prefix="/account-volume-grid", tags=["Account Volume Grid"])
 
 CONFIG = "volume_grid_config"
+MANUAL = "volume_grid_manual_rows"
 DONE_STATUSES = ["delivered", "complete"]
 
 EDIT_ROLES = {"ceo", "director", "admin", "system admin", "vice president",
@@ -118,6 +119,26 @@ async def get_grid(
         })
 
     config = await _get_config(tenant_id)
+
+    # Manual (spreadsheet-style) rows — free rows not tied to an account
+    mq = {"tenant_id": tenant_id}
+    if search:
+        mq["account_name"] = {"$regex": re.escape(search), "$options": "i"}
+    manual = await db[MANUAL].find(mq, {"_id": 0}).sort("created_at", 1).to_list(1000)
+    for m in manual:
+        emv = m.get("expected_monthly_volume_crates")
+        rows.append({
+            "account_id": m["id"], "account_code": None, "is_manual": True,
+            "account_name": m.get("account_name") or "",
+            "territory": None, "state": None, "city": None,
+            "contract_signed_date": None, "avg_order_frequency_days": None,
+            "order_count": 0, "first_delivery_date": None, "latest_delivery_date": None,
+            "last_order_quantity": None,
+            "expected_monthly_volume_crates": emv,
+            "biweekly_volume_crates": round(emv / 2, 1) if isinstance(emv, (int, float)) else None,
+            "custom_values": m.get("custom_values") or {},
+        })
+
     return {"rows": rows, "custom_columns": config.get("columns") or [], "total": len(rows)}
 
 
@@ -149,6 +170,60 @@ async def update_row(account_id: str, payload: RowUpdate, current_user: dict = D
         upd["volume_grid_values"] = merged
     await db.accounts.update_one({"id": account_id, "tenant_id": tenant_id}, {"$set": upd})
     return {"saved": True}
+
+
+class ManualRowUpdate(BaseModel):
+    account_name: Optional[str] = None
+    expected_monthly_volume_crates: Optional[float] = Field(default=None, ge=0)
+    clear_expected: bool = False
+    custom_values: Optional[Dict[str, Any]] = None
+
+
+@router.post("/manual-rows")
+async def add_manual_row(current_user: dict = Depends(get_current_user)):
+    _require_edit(current_user)
+    tenant_id = get_current_tenant_id()
+    doc = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "account_name": "",
+           "expected_monthly_volume_crates": None, "custom_values": {},
+           "created_by": current_user.get("name"), "created_at": _now(), "updated_at": _now()}
+    await db[MANUAL].insert_one({**doc})
+    doc.pop("_id", None)
+    return doc
+
+
+@router.put("/manual-rows/{row_id}")
+async def update_manual_row(row_id: str, payload: ManualRowUpdate, current_user: dict = Depends(get_current_user)):
+    _require_edit(current_user)
+    tenant_id = get_current_tenant_id()
+    row = await db[MANUAL].find_one({"id": row_id, "tenant_id": tenant_id}, {"_id": 0, "custom_values": 1})
+    if not row:
+        raise HTTPException(status_code=404, detail="Row not found")
+    upd = {"updated_at": _now()}
+    if payload.account_name is not None:
+        upd["account_name"] = payload.account_name.strip()
+    if payload.clear_expected:
+        upd["expected_monthly_volume_crates"] = None
+    elif payload.expected_monthly_volume_crates is not None:
+        upd["expected_monthly_volume_crates"] = payload.expected_monthly_volume_crates
+    if payload.custom_values is not None:
+        config = await _get_config(tenant_id)
+        known_ids = {c["id"] for c in config.get("columns") or []}
+        incoming = {k: v for k, v in payload.custom_values.items() if k in known_ids}
+        if payload.custom_values and not incoming:
+            raise HTTPException(status_code=400, detail="Unknown custom column")
+        upd["custom_values"] = {**(row.get("custom_values") or {}), **incoming}
+    await db[MANUAL].update_one({"id": row_id, "tenant_id": tenant_id}, {"$set": upd})
+    return {"saved": True}
+
+
+@router.delete("/manual-rows/{row_id}")
+async def delete_manual_row(row_id: str, current_user: dict = Depends(get_current_user)):
+    _require_edit(current_user)
+    tenant_id = get_current_tenant_id()
+    res = await db[MANUAL].delete_one({"id": row_id, "tenant_id": tenant_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Row not found")
+    return {"deleted": True}
 
 
 class ColumnIn(BaseModel):
