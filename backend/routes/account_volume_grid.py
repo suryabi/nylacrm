@@ -201,6 +201,7 @@ async def export_excel(
             "Bi-weekly Volume": r.get("biweekly_volume_crates"),
             "Last Order Quantity": r.get("last_order_quantity"),
             "Average Order Frequency": r.get("avg_order_frequency_days"),
+            "Number of Orders": r.get("order_count"),
         }
         for c in custom_cols:
             if c["type"] == "number":
@@ -208,14 +209,14 @@ async def export_excel(
         return ctx
 
     headers = ["Account Name", "Territory", "State", "City", "Contract Signed Date",
-               "Avg Order Frequency (Days)", "First Delivery Date", "Latest Delivery Date",
+               "Avg Order Frequency (Days)", "No. of Orders", "First Delivery Date", "Latest Delivery Date",
                "Last Order Quantity", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)"] \
         + [c["name"] for c in custom_cols]
 
     def row_values(r):
         base = [r.get("account_name") or "", r.get("territory") or "", r.get("state") or "",
                 r.get("city") or "", r.get("contract_signed_date") or "",
-                r.get("avg_order_frequency_days"), r.get("first_delivery_date") or "",
+                r.get("avg_order_frequency_days"), r.get("order_count"), r.get("first_delivery_date") or "",
                 r.get("latest_delivery_date") or "", r.get("last_order_quantity"),
                 r.get("biweekly_volume_crates"), r.get("expected_monthly_volume_crates")]
         for c in custom_cols:
@@ -229,10 +230,10 @@ async def export_excel(
 
     # Totals: only Bi-weekly, Expected Monthly, and custom columns opted into totals
     totals = [f"TOTAL — {len(rows)} rows"] + [""] * (len(headers) - 1)
-    total_indexes = {9, 10}  # Bi-weekly, Expected Monthly
+    total_indexes = {10, 11}  # Bi-weekly, Expected Monthly
     for j, c in enumerate(custom_cols):
         if c.get("include_in_total"):
-            total_indexes.add(11 + j)
+            total_indexes.add(12 + j)
     for i in sorted(total_indexes):
         nums = [v[i] for v in all_values if isinstance(v[i], (int, float))]
         if nums:
@@ -251,7 +252,7 @@ async def export_excel(
         c.fill = PatternFill(start_color="E8EDFB", end_color="E8EDFB", fill_type="solid")
     for v in all_values:
         ws.append(v)
-    widths = [34, 16, 16, 16, 18, 22, 16, 16, 16, 20, 26] + [18] * len(custom_cols)
+    widths = [34, 16, 16, 16, 18, 22, 14, 16, 16, 16, 20, 26] + [18] * len(custom_cols)
     for idx, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=idx).column_letter].width = w
     brand_workbook(wb)

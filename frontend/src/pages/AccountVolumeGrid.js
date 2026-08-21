@@ -15,11 +15,13 @@ const API_URL = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 const LS_KEY = 'volume_grid_hidden_columns';
 const LS_WIDTHS = 'volume_grid_col_widths';
+const LS_ORDER = 'volume_grid_col_order';
 
 const BASE_COLUMNS = [
   { key: 'account_name', label: 'Account Name', type: 'text' },
   { key: 'contract_signed_date', label: 'Contract Signed Date', type: 'date' },
-  { key: 'avg_order_frequency_days', label: 'Average Order Frequency', type: 'number' },
+  { key: 'avg_order_frequency_days', label: 'Average Order Frequency (Days)', type: 'number' },
+  { key: 'order_count', label: 'No. of Orders', type: 'number' },
   { key: 'first_delivery_date', label: 'First Delivery Date', type: 'date' },
   { key: 'latest_delivery_date', label: 'Latest Delivery Date', type: 'date' },
   { key: 'last_order_quantity', label: 'Last Order Quantity', type: 'number' },
@@ -34,6 +36,7 @@ const formulaContext = (row, customCols) => {
     'Bi-weekly Volume': row.biweekly_volume_crates,
     'Last Order Quantity': row.last_order_quantity,
     'Average Order Frequency': row.avg_order_frequency_days,
+    'Number of Orders': row.order_count,
   };
   (customCols || []).forEach((c) => {
     if (c.type === 'number') ctx[c.name] = row.custom_values?.[c.id];
@@ -97,6 +100,10 @@ export default function AccountVolumeGrid() {
   const [colWidths, setColWidths] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_WIDTHS)) || {}; } catch { return {}; }
   });
+  const [colOrder, setColOrder] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(LS_ORDER)) || []; } catch { return []; }
+  });
+  const dragColRef = useRef(null);
   const [editCell, setEditCell] = useState(null); // {rowId, colKey|colId, value}
   const [showAddCol, setShowAddCol] = useState(false);
   const [newCol, setNewCol] = useState({ name: '', type: 'text', formula: '', includeInTotal: false });
@@ -121,6 +128,7 @@ export default function AccountVolumeGrid() {
 
   useEffect(() => { localStorage.setItem(LS_KEY, JSON.stringify(hidden)); }, [hidden]);
   useEffect(() => { localStorage.setItem(LS_WIDTHS, JSON.stringify(colWidths)); }, [colWidths]);
+  useEffect(() => { localStorage.setItem(LS_ORDER, JSON.stringify(colOrder)); }, [colOrder]);
 
   // Freeze panes: measure header row height so the summary row can stick just below it
   const headerRowRef = useRef(null);
@@ -171,11 +179,29 @@ export default function AccountVolumeGrid() {
     } catch { toast.error('Delete failed'); }
   };
 
-  const allColumns = useMemo(() => ([
-    ...BASE_COLUMNS,
-    ...customCols.map((c) => ({ key: `custom_${c.id}`, label: c.name, type: c.type, custom: c })),
-  ]), [customCols]);
+  const allColumns = useMemo(() => {
+    const base = [
+      ...BASE_COLUMNS,
+      ...customCols.map((c) => ({ key: `custom_${c.id}`, label: c.name, type: c.type, custom: c })),
+    ];
+    if (!colOrder.length) return base;
+    const known = colOrder.filter((k) => base.some((c) => c.key === k));
+    const ordered = [...known, ...base.map((c) => c.key).filter((k) => !known.includes(k))];
+    const byKey = Object.fromEntries(base.map((c) => [c.key, c]));
+    const cols = ordered.map((k) => byKey[k]);
+    // Account Name stays frozen first
+    return [cols.find((c) => c.key === 'account_name'), ...cols.filter((c) => c.key !== 'account_name')];
+  }, [customCols, colOrder]);
   const visibleColumns = allColumns.filter((c) => !hidden.includes(c.key));
+
+  const moveColumn = (fromKey, toKey) => {
+    if (fromKey === toKey || fromKey === 'account_name' || toKey === 'account_name') return;
+    const keys = allColumns.map((c) => c.key);
+    const from = keys.indexOf(fromKey);
+    keys.splice(from, 1);
+    keys.splice(keys.indexOf(toKey) + (from <= keys.indexOf(toKey) ? 1 : 0), 0, fromKey);
+    setColOrder(keys);
+  };
 
   const cellValue = useCallback((row, col) => {
     if (col.custom) {
@@ -437,8 +463,16 @@ export default function AccountVolumeGrid() {
             <thead>
               <tr ref={headerRowRef} className="border-b border-slate-200 bg-slate-50">
                 {visibleColumns.map((c) => (
-                  <th key={c.key} className={`${TH} cursor-pointer hover:text-[#002FA7] sticky top-0 bg-slate-50 shadow-[inset_0_-1px_0_#e2e8f0] ${c.key === 'account_name' ? 'left-0 z-30' : 'z-20'}`} onClick={() => toggleSort(c.key)} data-testid={`vg-th-${c.key}`}>
-                    <span className="inline-flex items-center gap-1 whitespace-normal break-words leading-tight">
+                  <th key={c.key}
+                    className={`${TH} cursor-pointer hover:text-[#002FA7] sticky top-0 bg-slate-50 shadow-[inset_0_-1px_0_#e2e8f0] ${c.key === 'account_name' ? 'left-0 z-30' : 'z-20'}`}
+                    onClick={() => toggleSort(c.key)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => { e.preventDefault(); if (dragColRef.current) moveColumn(dragColRef.current, c.key); dragColRef.current = null; }}
+                    data-testid={`vg-th-${c.key}`}>
+                    <span
+                      draggable={c.key !== 'account_name'}
+                      onDragStart={(e) => { dragColRef.current = c.key; e.dataTransfer.effectAllowed = 'move'; }}
+                      className={`inline-flex items-center gap-1 whitespace-normal break-words leading-tight ${c.key !== 'account_name' ? 'cursor-move' : ''}`}>
                       {c.label}
                       {c.custom?.type === 'formula' && <Sigma className="h-3 w-3 text-indigo-500 shrink-0" />}
                       {sort.key === c.key
@@ -556,7 +590,7 @@ export default function AccountVolumeGrid() {
                   Google-Sheets style: optional leading =, + − * / ^ %, comparisons, and functions SUM, AVERAGE, MIN, MAX, ROUND, ABS, IF.
                   Blank cells count as 0. e.g. <span className="font-mono">=IF(Expected Monthly Volume &gt; 100, Expected Monthly Volume * 12, 0)</span>.
                   Columns: Expected Monthly Volume, Bi-weekly Volume,
-                  Last Order Quantity, Average Order Frequency{customCols.filter((c) => c.type === 'number').map((c) => `, ${c.name}`).join('')}
+                  Last Order Quantity, Average Order Frequency, Number of Orders{customCols.filter((c) => c.type === 'number').map((c) => `, ${c.name}`).join('')}
                 </p>
               </div>
             )}

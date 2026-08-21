@@ -2426,3 +2426,9 @@ Test tenant sales-only deleted.
 ## 2026-06 — Formula live preview in Add Column dialog
 - While typing a formula, a live preview evaluates it against a sample account (first row with expected volume set): green box "Preview — {account}: {result}" (vg-formula-preview) or red "Can't compute yet — check column names and syntax" for invalid input.
 - Verified via browser: "=ROUND(expected monthly volume * 12, 0)" → "Preview — Bangalore Tech Park: 2,400"; "=badcolumn * 12" → error state.
+
+## 2026-06 — Volume Grid: column reordering + No. of Orders + Days labeling
+- Drag any header (except frozen Account Name) onto another to rearrange columns; order persisted in localStorage volume_grid_col_order (per browser); moveColumn/allColumns ordering in AccountVolumeGrid.js; header label span draggable (cursor-move).
+- New base column "No. of Orders" (order_count, completed deliveries to date) — grid + Excel export (inserted at index 6; export total_indexes now {10,11}, custom offset 12); usable in formulas as "Number of Orders" (frontend ctx + backend ctx_for).
+- Avg Order Frequency was already computed in days (delivery span / (n-1)); label now explicitly "Average Order Frequency (Days)" in grid (export already had it).
+- Verified via browser: drag No. of Orders before Contract Signed Date → order persists after reload; counts 0/1/10 match export; export headers/totals validated via curl.
