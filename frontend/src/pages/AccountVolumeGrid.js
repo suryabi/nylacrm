@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -77,7 +77,7 @@ export default function AccountVolumeGrid() {
   });
   const [editCell, setEditCell] = useState(null); // {rowId, colKey|colId, value}
   const [showAddCol, setShowAddCol] = useState(false);
-  const [newCol, setNewCol] = useState({ name: '', type: 'text', formula: '' });
+  const [newCol, setNewCol] = useState({ name: '', type: 'text', formula: '', includeInTotal: false });
   const { territories, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
 
   const load = useCallback(async () => {
@@ -99,6 +99,18 @@ export default function AccountVolumeGrid() {
 
   useEffect(() => { localStorage.setItem(LS_KEY, JSON.stringify(hidden)); }, [hidden]);
   useEffect(() => { localStorage.setItem(LS_WIDTHS, JSON.stringify(colWidths)); }, [colWidths]);
+
+  // Freeze panes: measure header row height so the summary row can stick just below it
+  const headerRowRef = useRef(null);
+  const [headerH, setHeaderH] = useState(41);
+  useEffect(() => {
+    if (!headerRowRef.current) return;
+    const ro = new ResizeObserver(() => {
+      if (headerRowRef.current) setHeaderH(headerRowRef.current.getBoundingClientRect().height);
+    });
+    ro.observe(headerRowRef.current);
+    return () => ro.disconnect();
+  });
 
   // Column resize (drag the handle at the right edge of a header)
   const startResize = (e, colKey) => {
@@ -166,18 +178,26 @@ export default function AccountVolumeGrid() {
 
   const toggleSort = (key) => setSort((p) => ({ key, dir: p.key === key && p.dir === 'asc' ? 'desc' : 'asc' }));
 
-  // Summary totals per visible column (sum volumes; average for order frequency)
+  // Summary totals: only Bi-weekly, Expected Monthly and custom columns opted into totals
   const summaryFor = useCallback((col) => {
     if (col.key === 'account_name') return `TOTAL — ${sortedRows.length} rows`;
-    if (col.type === 'date' || col.type === 'text' || col.custom?.type === 'text' || col.custom?.type === 'date') return '';
+    const inTotal = col.key === 'biweekly_volume_crates' || col.key === 'expected_monthly_volume_crates' || col.custom?.include_in_total;
+    if (!inTotal) return '';
     const vals = sortedRows.map((r) => cellValue(r, col)).filter((v) => typeof v === 'number' && Number.isFinite(v));
     if (vals.length === 0) return '';
-    if (col.key === 'avg_order_frequency_days') {
-      return `avg ${Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)} days`;
-    }
     const sum = vals.reduce((a, b) => a + b, 0);
     return Math.round(sum * 100) / 100;
   }, [sortedRows, cellValue]);
+
+  const toggleColumnTotal = async (col, value) => {
+    try {
+      const r = await fetch(`${API_URL}/api/account-volume-grid/columns/${col.custom.id}`, {
+        method: 'PUT', headers: authHeaders(), body: JSON.stringify({ include_in_total: value }),
+      });
+      if (!r.ok) throw new Error((await r.json()).detail || 'Update failed');
+      load();
+    } catch (e) { toast.error(e.message); }
+  };
 
   const saveCell = async () => {
     if (!editCell) return;
@@ -208,12 +228,12 @@ export default function AccountVolumeGrid() {
     try {
       const r = await fetch(`${API_URL}/api/account-volume-grid/columns`, {
         method: 'POST', headers: authHeaders(),
-        body: JSON.stringify({ name: newCol.name, type: newCol.type, formula: newCol.type === 'formula' ? newCol.formula : null }),
+        body: JSON.stringify({ name: newCol.name, type: newCol.type, formula: newCol.type === 'formula' ? newCol.formula : null, include_in_total: !!newCol.includeInTotal }),
       });
       if (!r.ok) throw new Error((await r.json()).detail || 'Failed to add column');
       toast.success(`Column "${newCol.name}" added`);
       setShowAddCol(false);
-      setNewCol({ name: '', type: 'text', formula: '' });
+      setNewCol({ name: '', type: 'text', formula: '', includeInTotal: false });
       load();
     } catch (e) { toast.error(e.message); }
   };
@@ -324,9 +344,21 @@ export default function AccountVolumeGrid() {
                       {c.custom?.type === 'formula' && <Sigma className="h-3 w-3 text-indigo-500" />}
                     </label>
                     {c.custom && (
-                      <button className="text-red-400 hover:text-red-600" onClick={() => deleteColumn(c)} data-testid={`vg-col-delete-${c.key}`}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <span className="flex items-center gap-2 shrink-0">
+                        {(c.custom.type === 'number' || c.custom.type === 'formula') && (
+                          <label className="flex items-center gap-1 text-[11px] text-slate-500 cursor-pointer" title="Include in totals row">
+                            <Checkbox
+                              checked={!!c.custom.include_in_total}
+                              onCheckedChange={(v) => toggleColumnTotal(c, !!v)}
+                              data-testid={`vg-col-total-toggle-${c.key}`}
+                            />
+                            Σ
+                          </label>
+                        )}
+                        <button className="text-red-400 hover:text-red-600" onClick={() => deleteColumn(c)} data-testid={`vg-col-delete-${c.key}`}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </span>
                     )}
                   </div>
                 ))}
@@ -373,7 +405,7 @@ export default function AccountVolumeGrid() {
       {loading ? (
         <div className="flex items-center justify-center py-20 text-slate-500"><RefreshCw className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-sm overflow-x-auto">
+        <div className="bg-white border border-slate-200 rounded-sm overflow-auto max-h-[calc(100vh-260px)]" data-testid="vg-scroll-container">
           <table className="w-full text-sm" style={{ tableLayout: 'fixed' }} data-testid="vg-table">
             <colgroup>
               {visibleColumns.map((c) => (
@@ -381,9 +413,9 @@ export default function AccountVolumeGrid() {
               ))}
             </colgroup>
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
+              <tr ref={headerRowRef} className="border-b border-slate-200 bg-slate-50">
                 {visibleColumns.map((c) => (
-                  <th key={c.key} className={`${TH} relative cursor-pointer hover:text-[#002FA7]`} onClick={() => toggleSort(c.key)} data-testid={`vg-th-${c.key}`}>
+                  <th key={c.key} className={`${TH} cursor-pointer hover:text-[#002FA7] sticky top-0 bg-slate-50 shadow-[inset_0_-1px_0_#e2e8f0] ${c.key === 'account_name' ? 'left-0 z-30' : 'z-20'}`} onClick={() => toggleSort(c.key)} data-testid={`vg-th-${c.key}`}>
                     <span className="inline-flex items-center gap-1 whitespace-normal break-words leading-tight">
                       {c.label}
                       {c.custom?.type === 'formula' && <Sigma className="h-3 w-3 text-indigo-500 shrink-0" />}
@@ -400,10 +432,12 @@ export default function AccountVolumeGrid() {
                   </th>
                 ))}
               </tr>
-              {/* Summary row */}
-              <tr className="border-b-2 border-[#002FA7]/30 bg-[#002FA7]/5" data-testid="vg-summary-row">
+              {/* Summary row — frozen below the header */}
+              <tr className="border-b-2 border-[#002FA7]/30" data-testid="vg-summary-row">
                 {visibleColumns.map((c) => (
-                  <td key={c.key} className="px-3 py-2 text-sm font-bold text-[#002FA7] tabular-nums whitespace-normal break-words" data-testid={`vg-summary-${c.key}`}>
+                  <td key={c.key} style={{ top: headerH }}
+                    className={`px-3 py-2 text-sm font-bold text-[#002FA7] tabular-nums whitespace-normal break-words sticky bg-[#E9EEF9] shadow-[inset_0_-2px_0_rgba(0,47,167,0.3)] ${c.key === 'account_name' ? 'left-0 z-30' : 'z-20'}`}
+                    data-testid={`vg-summary-${c.key}`}>
                     {typeof summaryFor(c) === 'number' ? summaryFor(c).toLocaleString('en-IN') : summaryFor(c)}
                   </td>
                 ))}
@@ -416,7 +450,7 @@ export default function AccountVolumeGrid() {
               {sortedRows.map((row) => (
                 <tr key={row.account_id} className={`border-b border-slate-100 hover:bg-slate-50/70 transition-colors group ${row.is_manual ? 'bg-amber-50/30' : ''}`} data-testid={`vg-row-${row.account_code || row.account_id}`}>
                   {visibleColumns.map((c) => (
-                    <td key={c.key} className={`px-3 py-2 align-top whitespace-normal break-words ${c.key === 'account_name' ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
+                    <td key={c.key} className={`px-3 py-2 align-top whitespace-normal break-words ${c.key === 'account_name' ? `font-semibold text-slate-900 sticky left-0 z-10 ${row.is_manual ? 'bg-[#FDF6E7]' : 'bg-white'} group-hover:bg-slate-50 shadow-[inset_-1px_0_0_#e2e8f0]` : 'text-slate-700'}`}>
                       {c.key === 'account_name' ? (
                         row.is_manual ? (
                           <div className="flex items-start justify-between gap-1">
@@ -487,6 +521,16 @@ export default function AccountVolumeGrid() {
                   Last Order Quantity, Average Order Frequency{customCols.filter((c) => c.type === 'number').map((c) => `, ${c.name}`).join('')}
                 </p>
               </div>
+            )}
+            {(newCol.type === 'number' || newCol.type === 'formula') && (
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <Checkbox
+                  checked={!!newCol.includeInTotal}
+                  onCheckedChange={(v) => setNewCol((p) => ({ ...p, includeInTotal: !!v }))}
+                  data-testid="vg-new-col-include-total"
+                />
+                Include in totals row
+              </label>
             )}
             <div className="flex justify-end gap-2">
               <Button variant="outline" className="rounded-sm" onClick={() => setShowAddCol(false)}>Cancel</Button>

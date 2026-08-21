@@ -2398,3 +2398,12 @@ Test tenant sales-only deleted.
 - GET /api/account-volume-grid/export/excel: Nyla-branded workbook — header, blue TOTAL row (sums + avg frequency), all base columns + custom columns with formula values computed server-side (_eval_formula: word-boundary name substitution, charset-restricted eval). Respects territory/state/city/search filters.
 - Excel button on grid page (vg-download-excel-btn) passes active filters.
 - Verified via curl: header + TOTAL (avg 10 days, 73/100/200, Annual Volume 2400) + data rows with computed formula column.
+
+
+## 2026-06 — Volume Grid totals refined (user request)
+- "Annual Volume" custom formula column removed (deleted via API from volume_grid_config).
+- Totals row (grid + Excel) now sums ONLY: Bi-weekly Volume, Expected Monthly Volume, and custom number/formula columns where include_in_total=true (user's choice). No avg frequency / last order qty summaries anymore.
+- Backend: ColumnIn.include_in_total (only honored for number/formula types); PUT /api/account-volume-grid/columns/{id} {include_in_total} toggle (RBAC via _require_edit); export totals use index set {9,10} + opted-in custom columns.
+- Frontend (AccountVolumeGrid.js): summaryFor checks include_in_total; Add Column dialog "Include in totals row" checkbox (vg-new-col-include-total) for number/formula; Columns popover per-custom-column Σ toggle (vg-col-total-toggle-{key}) calling toggleColumnTotal.
+- Verified via curl against live preview API: totals now 100/200 only; temp formula column with include_in_total=true added 400 to totals; PUT toggle off removed it; cleanup done. Frontend compiles clean (only pre-existing face-api warnings).
+- NOTE: screenshot automation browser cannot reach the external preview backend in this fork (serves stale "wake servers" page → login fails in browser only). All verification done via real API calls; UI logic is thin render layer over verified data.

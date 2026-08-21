@@ -209,16 +209,16 @@ async def export_excel(
 
     all_values = [row_values(r) for r in rows]
 
-    # Totals: sum numeric columns; average for frequency (index 5)
-    totals = [f"TOTAL — {len(rows)} rows", "", "", "", ""]
-    for i in range(5, len(headers)):
+    # Totals: only Bi-weekly, Expected Monthly, and custom columns opted into totals
+    totals = [f"TOTAL — {len(rows)} rows"] + [""] * (len(headers) - 1)
+    total_indexes = {9, 10}  # Bi-weekly, Expected Monthly
+    for j, c in enumerate(custom_cols):
+        if c.get("include_in_total"):
+            total_indexes.add(11 + j)
+    for i in sorted(total_indexes):
         nums = [v[i] for v in all_values if isinstance(v[i], (int, float))]
-        if not nums:
-            totals.append("")
-        elif i == 5:
-            totals.append(f"avg {round(sum(nums) / len(nums))} days")
-        else:
-            totals.append(round(sum(nums), 2))
+        if nums:
+            totals[i] = round(sum(nums), 2)
 
     wb = Workbook()
     ws = wb.active
@@ -336,6 +336,7 @@ class ColumnIn(BaseModel):
     name: str
     type: str  # text | number | date | formula
     formula: Optional[str] = None
+    include_in_total: bool = False
 
 
 @router.post("/columns")
@@ -353,10 +354,28 @@ async def add_column(payload: ColumnIn, current_user: dict = Depends(get_current
     if any(c["name"].lower() == name.lower() for c in config.get("columns") or []):
         raise HTTPException(status_code=400, detail="A column with this name already exists")
     col = {"id": str(uuid.uuid4()), "name": name, "type": payload.type,
-           "formula": (payload.formula or "").strip() or None, "created_at": _now()}
+           "formula": (payload.formula or "").strip() or None,
+           "include_in_total": bool(payload.include_in_total) and payload.type in ("number", "formula"),
+           "created_at": _now()}
     await db[CONFIG].update_one({"tenant_id": tenant_id},
                                 {"$push": {"columns": col}, "$set": {"updated_at": _now()}})
     return col
+
+
+class ColumnToggleTotal(BaseModel):
+    include_in_total: bool
+
+
+@router.put("/columns/{column_id}")
+async def update_column(column_id: str, payload: ColumnToggleTotal, current_user: dict = Depends(get_current_user)):
+    _require_edit(current_user)
+    tenant_id = get_current_tenant_id()
+    res = await db[CONFIG].update_one(
+        {"tenant_id": tenant_id, "columns.id": column_id},
+        {"$set": {"columns.$.include_in_total": payload.include_in_total, "updated_at": _now()}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Column not found")
+    return {"saved": True}
 
 
 @router.delete("/columns/{column_id}")
