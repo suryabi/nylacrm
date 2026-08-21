@@ -2472,3 +2472,9 @@ Test tenant sales-only deleted.
 - Consignment planner now honors the page's Territory/State/City/search filters (was previously planning across ALL accounts). PlanRequest carries filters → get_grid; response echoes "filters"; planner subtitle notes "follows the filters above".
 - POST /api/account-volume-grid/consignment-plan/export {plan} → branded xlsx "Consignment Plan - date.xlsx": scope/capacity info line, dark headers with "Consignment N — DD-Mon-YYYY", blue TOTAL row (totals/capacity/utilization per consignment), data rows incl. Planner Note column (AI notes), Planner Insight merged footer. Excel button (vg-planner-export) appears after a plan is generated.
 - Verified: city=Hyderabad plan returns only Hyderabad accounts (Toopa, Citadel; 4/20 crates 20% — honest under-utilization + AI flags it); export 200 with correct structure; browser E2E with State→City filters + plan + export button.
+
+## 2026-06 — Planner considers warehouse stock
+- consignment_plan now reads factory_warehouse_stock (quantity>0, bottles→crates via row bottles_per_crate or master_skus fallback) → warehouse_stock_crates.
+- Allocation: effective capacity per consignment = min(truck capacity, remaining stock); stock depletes across the 3 consignments; per-consignment stock_limited flag; response includes warehouse_stock_crates + stock_remaining_after_plan; both fed to the AI prompt.
+- UI: stock line above cards (vg-planner-stock) "Warehouse stock: X · After this plan: Y" + amber "Plan limited by available stock" badge (vg-planner-stock-warning) when capped. Excel info line includes warehouse stock.
+- Verified: API (stock 2930.8 → 2750.8 after 180-crate plan; capacity-400 plan depletes 315), browser (stock line + AI insight references stock), export info line includes stock. Stock-limited branch is simple min() arithmetic (not triggerable with current 2.9k-crate stock without mutating data).

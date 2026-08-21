@@ -625,6 +625,15 @@ export default function AccountVolumeGrid() {
 
         {plan && (
           <div className="p-4 space-y-4" data-testid="vg-planner-result">
+            {plan.warehouse_stock_crates != null && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-600" data-testid="vg-planner-stock">
+                <span>Warehouse stock: <span className="font-bold text-slate-900 tabular-nums">{plan.warehouse_stock_crates.toLocaleString('en-IN')}</span> crates</span>
+                <span>After this plan: <span className="font-bold text-slate-900 tabular-nums">{plan.stock_remaining_after_plan.toLocaleString('en-IN')}</span> crates</span>
+                {plan.consignments.some((c) => c.stock_limited) && (
+                  <Badge className="bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-100" data-testid="vg-planner-stock-warning">Plan limited by available stock</Badge>
+                )}
+              </div>
+            )}
             {plan.ai_summary && (
               <div className="bg-[#002FA7]/5 border border-[#002FA7]/20 rounded-sm px-4 py-3 text-sm text-slate-700 leading-relaxed" data-testid="vg-planner-summary">
                 <span className="font-semibold text-[#002FA7]">Planner Insight: </span>{plan.ai_summary}

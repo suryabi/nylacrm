@@ -523,11 +523,37 @@ async def consignment_plan(payload: PlanRequest, current_user: dict = Depends(ge
     if not profiles:
         raise HTTPException(status_code=400, detail="No accounts with volume data to plan. Set Expected Monthly Volume first.")
 
+    # Available warehouse stock (crates) — plan can never ship more than what's in stock
+    tenant_id = get_current_tenant_id()
+    stock_rows = await db.factory_warehouse_stock.find(
+        {"tenant_id": tenant_id, "quantity": {"$gt": 0}},
+        {"_id": 0, "sku_id": 1, "quantity": 1, "bottles_per_crate": 1}).to_list(8000)
+    missing_bpc = list({s["sku_id"] for s in stock_rows if not s.get("bottles_per_crate") and s.get("sku_id")})
+    stock_bpc: Dict[str, int] = {}
+    if missing_bpc:
+        async for ms in db.master_skus.find({"id": {"$in": missing_bpc}},
+                                            {"_id": 0, "id": 1, "bottles_per_crate": 1, "packaging_config": 1}):
+            bpc = ms.get("bottles_per_crate")
+            if not bpc:
+                pc = (ms.get("packaging_config") or {}).get("production") or []
+                default = next((p for p in pc if p.get("is_default")), None)
+                if default:
+                    bpc = default.get("units") or default.get("units_per_package")
+            if bpc:
+                stock_bpc[ms["id"]] = bpc
+    stock_crates = 0.0
+    for s in stock_rows:
+        bpc = s.get("bottles_per_crate") or stock_bpc.get(s.get("sku_id")) or 1
+        stock_crates += (s.get("quantity") or 0) / bpc
+    stock_crates = round(stock_crates, 1)
+
     # Sequential simulation of 3 truckloads: most-due customers first, top-up with next-soonest
     consignments = []
     prev_date = None
+    stock_remaining = stock_crates
     for k in range(3):
-        remaining = capacity
+        effective_cap = min(capacity, max(stock_remaining, 0))
+        remaining = effective_cap
         total = 0.0
         served = []
         due_dates = []
@@ -549,6 +575,7 @@ async def consignment_plan(payload: PlanRequest, current_user: dict = Depends(ge
         if prev_date and sug <= prev_date:
             sug = prev_date + timedelta(days=1)
         prev_date = sug
+        stock_remaining = round(stock_remaining - total, 1)
         consignments.append({
             "consignment": k + 1,
             "suggested_date": sug.strftime("%Y-%m-%d"),
@@ -556,6 +583,7 @@ async def consignment_plan(payload: PlanRequest, current_user: dict = Depends(ge
             "capacity_crates": capacity,
             "utilization_percent": round(total / capacity * 100, 1),
             "accounts_served": len(served),
+            "stock_limited": effective_cap < capacity,
         })
 
     rows = [{k: v for k, v in p.items() if k != "_next"} for p in profiles]
@@ -564,6 +592,8 @@ async def consignment_plan(payload: PlanRequest, current_user: dict = Depends(ge
     rows.sort(key=lambda r: (-(r["consignment_1"]), -(r["consignment_2"]), -(r["consignment_3"])))
 
     result = {"truck_capacity_crates": capacity, "generated_at": _now(),
+              "warehouse_stock_crates": stock_crates,
+              "stock_remaining_after_plan": max(stock_remaining, 0),
               "filters": {"territory": payload.territory, "state": payload.state,
                           "city": payload.city, "search": payload.search},
               "rows": rows, "consignments": consignments, "ai_summary": None, "ai_notes": {}}
@@ -585,7 +615,9 @@ async def consignment_plan(payload: PlanRequest, current_user: dict = Depends(ge
                     ),
                 ).with_model("openai", "gpt-5.5")
                 resp = await chat.send_message(UserMessage(text=_json.dumps(
-                    {"truck_capacity_crates": capacity, "plan_rows": rows, "consignment_totals": consignments})))
+                    {"truck_capacity_crates": capacity, "warehouse_stock_crates": stock_crates,
+                     "stock_remaining_after_plan": max(stock_remaining, 0),
+                     "plan_rows": rows, "consignment_totals": consignments})))
                 text = re.sub(r"^```(?:json)?\s*|\s*```$", "", str(resp).strip())
                 m = re.search(r"\{.*\}", text, re.S)
                 parsed = _json.loads(m.group(0) if m else text)
@@ -626,7 +658,8 @@ async def export_consignment_plan(payload: PlanExportRequest, current_user: dict
     ws.title = "Consignment Plan"
 
     scope = " · ".join(f"{k.title()}: {v}" for k, v in filters.items() if v) or "All accounts"
-    ws.append([f"Truck capacity: {cap} crates · {scope} · Generated: {datetime.now(timezone.utc).strftime('%d-%b-%Y')}"])
+    stock_info = f" · Warehouse stock: {plan.get('warehouse_stock_crates')} crates" if plan.get("warehouse_stock_crates") is not None else ""
+    ws.append([f"Truck capacity: {cap} crates{stock_info} · {scope} · Generated: {datetime.now(timezone.utc).strftime('%d-%b-%Y')}"])
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=10)
     ws.cell(row=1, column=1).font = Font(italic=True, color="555555")
 
