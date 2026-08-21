@@ -72,7 +72,7 @@ async def get_grid(
 
     accounts = await db.accounts.find(q, {
         "_id": 0, "id": 1, "account_id": 1, "account_name": 1, "territory": 1,
-        "state": 1, "city": 1, "contract_signed_date": 1,
+        "state": 1, "city": 1, "activated_at": 1,
         "expected_monthly_volume_crates": 1, "volume_grid_values": 1,
     }).sort("account_name", 1).to_list(5000)
 
@@ -155,7 +155,7 @@ async def get_grid(
             "account_code": a.get("account_id"),
             "account_name": a.get("account_name"),
             "territory": a.get("territory"), "state": a.get("state"), "city": a.get("city"),
-            "contract_signed_date": (a.get("contract_signed_date") or "")[:10] or None,
+            "onboarded_date": (a.get("activated_at") or "")[:10] or None,
             "avg_order_frequency_days": freq,
             "order_count": len(dels),
             "first_delivery_date": first_dt.strftime("%Y-%m-%d") if first_dt else None,
@@ -182,7 +182,7 @@ async def get_grid(
             "account_id": m["id"], "account_code": None, "is_manual": True,
             "account_name": m.get("account_name") or "",
             "territory": None, "state": None, "city": None,
-            "contract_signed_date": None, "avg_order_frequency_days": None,
+            "onboarded_date": None, "avg_order_frequency_days": None,
             "order_count": 0, "first_delivery_date": None, "latest_delivery_date": None,
             "last_order_quantity": None,
             "last_order_sku": None,
@@ -261,7 +261,7 @@ async def export_excel(
                 ctx[c["name"]] = (r.get("custom_values") or {}).get(c["id"])
         return ctx
 
-    headers = ["Account Name", "Territory", "State", "City", "Contract Signed Date",
+    headers = ["Account Name", "Territory", "State", "City", "On-boarded Date",
                "Avg Order Frequency (Days)", "No. of Orders", "First Delivery Date", "Latest Delivery Date",
                "Last 4 Delivery Dates", "Last 4 Delivery Qty (Crates)",
                "Last Order Quantity (Crates)", "Last Ordered SKU", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)"] \
@@ -269,7 +269,7 @@ async def export_excel(
 
     def row_values(r):
         base = [r.get("account_name") or "", r.get("territory") or "", r.get("state") or "",
-                r.get("city") or "", r.get("contract_signed_date") or "",
+                r.get("city") or "", r.get("onboarded_date") or "",
                 r.get("avg_order_frequency_days"), r.get("order_count"), r.get("first_delivery_date") or "",
                 r.get("latest_delivery_date") or "",
                 "\n".join(r.get("recent_delivery_dates") or []),

@@ -2496,3 +2496,7 @@ Test tenant sales-only deleted.
 - Details (summary / why-it-matters / source) open by default and stay open while rotating (removed collapse-on-idx effect); user can still collapse via headline chevron.
 - Prev/next now 32px circular buttons: white with slate border + blue chevron, fill Nyla blue on hover.
 - Verified via browser: open on load, stays open after next-click.
+
+## 2026-06 — Volume grid: Contract Signed Date → On-boarded Date
+- Column renamed and re-sourced: now shows accounts.activated_at (set by the account activation flow/checklist) instead of contract_signed_date. Key renamed contract_signed_date → onboarded_date in grid API, frontend BASE_COLUMNS, and Excel export header.
+- Verified: grid API returns activation dates (Citadel 16-May, Ohris 14-May, Toopa 13-May); export header "On-boarded Date". No leftover contract_signed_date references in the module.

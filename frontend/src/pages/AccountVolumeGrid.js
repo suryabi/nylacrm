@@ -19,7 +19,7 @@ const LS_ORDER = 'volume_grid_col_order';
 
 const BASE_COLUMNS = [
   { key: 'account_name', label: 'Account Name', type: 'text' },
-  { key: 'contract_signed_date', label: 'Contract Signed Date', type: 'date' },
+  { key: 'onboarded_date', label: 'On-boarded Date', type: 'date' },
   { key: 'avg_order_frequency_days', label: 'Average Order Frequency (Days)', type: 'number' },
   { key: 'order_count', label: 'No. of Orders', type: 'number' },
   { key: 'first_delivery_date', label: 'First Delivery Date', type: 'date' },
