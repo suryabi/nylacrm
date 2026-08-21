@@ -94,6 +94,7 @@ async def get_grid(
     # Convert delivery quantities (bottles) → crates using master_skus bottles_per_crate
     delivery_ids = [d.get("id") for d in deliveries if d.get("id")]
     crates_by_delivery: Dict[str, float] = {}
+    bpc_by_delivery: Dict[str, list] = {}
     if delivery_ids:
         items = await db.distributor_delivery_items.find(
             {"delivery_id": {"$in": delivery_ids}},
@@ -113,8 +114,10 @@ async def get_grid(
                 if bpc:
                     upc[ms["id"]] = bpc
         for i in items:
-            n = upc.get(i.get("sku_id")) or 1
-            crates_by_delivery[i["delivery_id"]] = crates_by_delivery.get(i["delivery_id"], 0) + (i.get("quantity") or 0) / n
+            n = upc.get(i.get("sku_id"))
+            if n:
+                bpc_by_delivery.setdefault(i["delivery_id"], []).append(n)
+            crates_by_delivery[i["delivery_id"]] = crates_by_delivery.get(i["delivery_id"], 0) + (i.get("quantity") or 0) / (n or 1)
     default_bpc = max(set(upc.values()), key=list(upc.values()).count) if crates_by_delivery and upc else 1
 
     rows = []
@@ -123,10 +126,20 @@ async def get_grid(
         first_dt = dels[0][0] if dels else None
         last_dt = dels[-1][0] if dels else None
         last_qty = None
+        acc_bpcs = [b for _, _, did in dels for b in bpc_by_delivery.get(did, [])]
+        acc_bpc = max(set(acc_bpcs), key=acc_bpcs.count) if acc_bpcs else default_bpc
+        recent = dels[-4:][::-1]  # last 4 deliveries, newest first
+        recent_dates, recent_crates = [], []
+        for dt_i, qty_i, did_i in recent:
+            cr = crates_by_delivery.get(did_i)
+            if cr is None:
+                cr = (qty_i or 0) / acc_bpc
+            recent_dates.append(dt_i.strftime("%d-%b-%Y"))
+            recent_crates.append(round(cr, 2))
         if dels:
             last_crates = crates_by_delivery.get(dels[-1][2])
             if last_crates is None:  # legacy delivery without item docs: bottles ÷ typical crate size
-                last_crates = (dels[-1][1] or 0) / default_bpc
+                last_crates = (dels[-1][1] or 0) / acc_bpc
             last_qty = round(last_crates, 2)
         freq = None
         if len(dels) >= 2:
@@ -144,6 +157,8 @@ async def get_grid(
             "first_delivery_date": first_dt.strftime("%Y-%m-%d") if first_dt else None,
             "latest_delivery_date": last_dt.strftime("%Y-%m-%d") if last_dt else None,
             "last_order_quantity": last_qty,
+            "recent_delivery_dates": recent_dates,
+            "recent_delivery_crates": recent_crates,
             "expected_monthly_volume_crates": emv,
             "biweekly_volume_crates": round(emv / 2, 1) if isinstance(emv, (int, float)) else None,
             "custom_values": a.get("volume_grid_values") or {},
@@ -165,6 +180,7 @@ async def get_grid(
             "contract_signed_date": None, "avg_order_frequency_days": None,
             "order_count": 0, "first_delivery_date": None, "latest_delivery_date": None,
             "last_order_quantity": None,
+            "recent_delivery_dates": [], "recent_delivery_crates": [],
             "expected_monthly_volume_crates": emv,
             "biweekly_volume_crates": round(emv / 2, 1) if isinstance(emv, (int, float)) else None,
             "custom_values": m.get("custom_values") or {},
@@ -219,7 +235,7 @@ async def export_excel(
 ):
     from io import BytesIO
     from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill
+    from openpyxl.styles import Font, PatternFill, Alignment
     from fastapi.responses import StreamingResponse
     from utils.excel_branding import brand_workbook
 
@@ -241,6 +257,7 @@ async def export_excel(
 
     headers = ["Account Name", "Territory", "State", "City", "Contract Signed Date",
                "Avg Order Frequency (Days)", "No. of Orders", "First Delivery Date", "Latest Delivery Date",
+               "Last 4 Delivery Dates", "Last 4 Delivery Qty (Crates)",
                "Last Order Quantity (Crates)", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)"] \
         + [c["name"] for c in custom_cols]
 
@@ -248,7 +265,10 @@ async def export_excel(
         base = [r.get("account_name") or "", r.get("territory") or "", r.get("state") or "",
                 r.get("city") or "", r.get("contract_signed_date") or "",
                 r.get("avg_order_frequency_days"), r.get("order_count"), r.get("first_delivery_date") or "",
-                r.get("latest_delivery_date") or "", r.get("last_order_quantity"),
+                r.get("latest_delivery_date") or "",
+                "\n".join(r.get("recent_delivery_dates") or []),
+                "\n".join(str(c) for c in (r.get("recent_delivery_crates") or [])),
+                r.get("last_order_quantity"),
                 r.get("biweekly_volume_crates"), r.get("expected_monthly_volume_crates")]
         for c in custom_cols:
             if c["type"] == "formula":
@@ -261,10 +281,10 @@ async def export_excel(
 
     # Totals: only Bi-weekly, Expected Monthly, and custom columns opted into totals
     totals = [f"TOTAL — {len(rows)} rows"] + [""] * (len(headers) - 1)
-    total_indexes = {10, 11}  # Bi-weekly, Expected Monthly
+    total_indexes = {12, 13}  # Bi-weekly, Expected Monthly
     for j, c in enumerate(custom_cols):
         if c.get("include_in_total"):
-            total_indexes.add(12 + j)
+            total_indexes.add(14 + j)
     for i in sorted(total_indexes):
         nums = [v[i] for v in all_values if isinstance(v[i], (int, float))]
         if nums:
@@ -283,7 +303,11 @@ async def export_excel(
         c.fill = PatternFill(start_color="E8EDFB", end_color="E8EDFB", fill_type="solid")
     for v in all_values:
         ws.append(v)
-    widths = [34, 16, 16, 16, 18, 22, 14, 16, 16, 16, 20, 26] + [18] * len(custom_cols)
+    wrap = Alignment(wrap_text=True, vertical="top")
+    for row_cells in ws.iter_rows(min_row=3, min_col=10, max_col=11):
+        for c in row_cells:
+            c.alignment = wrap
+    widths = [34, 16, 16, 16, 18, 22, 14, 16, 16, 16, 16, 16, 20, 26] + [18] * len(custom_cols)
     for idx, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=idx).column_letter].width = w
     brand_workbook(wb)

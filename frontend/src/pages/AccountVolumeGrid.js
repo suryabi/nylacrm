@@ -24,6 +24,8 @@ const BASE_COLUMNS = [
   { key: 'order_count', label: 'No. of Orders', type: 'number' },
   { key: 'first_delivery_date', label: 'First Delivery Date', type: 'date' },
   { key: 'latest_delivery_date', label: 'Latest Delivery Date', type: 'date' },
+  { key: 'recent_delivery_dates', label: 'Last 4 Delivery Dates', type: 'list' },
+  { key: 'recent_delivery_crates', label: 'Last 4 Delivery Qty (Crates)', type: 'list' },
   { key: 'last_order_quantity', label: 'Last Order Quantity (Crates)', type: 'number' },
   { key: 'biweekly_volume_crates', label: 'Bi-weekly Volume (Crates)', type: 'number' },
   { key: 'expected_monthly_volume_crates', label: 'Expected Monthly Volume (Crates)', type: 'number', editable: true },
@@ -319,6 +321,14 @@ export default function AccountVolumeGrid() {
     }
 
     let display;
+    if (col.type === 'list') {
+      const arr = Array.isArray(raw) ? raw : [];
+      return arr.length === 0 ? <span className="tabular-nums">—</span> : (
+        <span className="tabular-nums leading-relaxed">
+          {arr.map((v, i) => <span key={i} className="block whitespace-nowrap">{typeof v === 'number' ? v.toLocaleString('en-IN') : v}</span>)}
+        </span>
+      );
+    }
     if (col.type === 'date') display = fmt(raw);
     else if (col.key === 'avg_order_frequency_days') display = raw != null ? `${raw} days` : '—';
     else if (raw == null || raw === '') display = '—';

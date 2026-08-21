@@ -2438,3 +2438,8 @@ Test tenant sales-only deleted.
 - Legacy deliveries without item docs: bottles ÷ tenant's most common bottles_per_crate (default_bpc).
 - Labels now "Last Order Quantity (Crates)" in grid + Excel export.
 - Verified: Citadel 12 bottles→0.5, Empire 1 bottle→0.04, Toopa→5.0 crates (grid API + export both checked).
+
+## 2026-06 — Last 4 delivery dates + quantities columns
+- Two new base columns: "Last 4 Delivery Dates" (DD-MON-YYYY, newest first, one per line) and "Last 4 Delivery Qty (Crates)" (same line order). Frontend type 'list' renders each entry as block span; Excel joins with \n + wrap_text alignment (cols J/K, indexes 9/10; export total_indexes now {12,13}, custom offset 14).
+- Crate conversion fallback made account-local: legacy deliveries without item docs use the mode of bottles_per_crate from that account's own itemized deliveries (bpc_by_delivery → acc_bpc), falling back to global mode. Fixes non-determinism where filtered vs full grid gave different values (Toopa 0.5 vs 1.0 → now consistently 1.0, its SKU is 12/crate).
+- Verified: grid API (full + filtered identical), Excel export line breaks + wrap, browser screenshot shows stacked dates/quantities.
