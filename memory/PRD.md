@@ -2407,3 +2407,10 @@ Test tenant sales-only deleted.
 - Frontend (AccountVolumeGrid.js): summaryFor checks include_in_total; Add Column dialog "Include in totals row" checkbox (vg-new-col-include-total) for number/formula; Columns popover per-custom-column Σ toggle (vg-col-total-toggle-{key}) calling toggleColumnTotal.
 - Verified via curl against live preview API: totals now 100/200 only; temp formula column with include_in_total=true added 400 to totals; PUT toggle off removed it; cleanup done. Frontend compiles clean (only pre-existing face-api warnings).
 - NOTE: screenshot automation browser cannot reach the external preview backend in this fork (serves stale "wake servers" page → login fails in browser only). All verification done via real API calls; UI logic is thin render layer over verified data.
+
+## 2026-06 — Volume Grid freeze panes (Excel-style)
+- Scroll container (vg-scroll-container): overflow-auto, max-h calc(100vh-260px).
+- Frozen on vertical scroll: header row (th sticky top-0) + summary row (td sticky, top = measured header height via ResizeObserver headerRowRef/headerH, opaque bg #E9EEF9, inset shadows replace non-sticky borders).
+- Frozen on horizontal scroll: Account Name column (sticky left-0; z-30 in header/summary, z-10 in body; opaque bg white / #FDF6E7 for manual rows, group-hover bg-slate-50, inset right shadow).
+- Correct preview URL is design-workflow-hub-11.preview.emergentagent.com (frontend/.env) — earlier "warehouse-qc-engine" URL is stale, serves wake-servers mock. localhost:3000 login fails due to CORS+credentials (expected, not a bug).
+- Verified via browser automation on real preview: after scrollTop=400/scrollLeft=500, header offset 1px, summary offset 53px (=header height), account column left offset 1px; screenshot confirms pinned panes.
