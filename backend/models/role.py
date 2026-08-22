@@ -16,6 +16,7 @@ DEFAULT_MODULE_PERMISSIONS = {
     "leads": {"view": True, "create": True, "edit": True, "delete": False},
     "pipeline": {"view": True, "create": False, "edit": True, "delete": False},
     "accounts": {"view": True, "create": True, "edit": True, "delete": False},
+    "account_volume_grid": {"view": True, "create": False, "edit": False, "delete": False},
     "account_gop_metrics": {"view": True, "create": False, "edit": False, "delete": False},
     "customer_complaints": {"view": False, "create": False, "edit": False, "delete": False},
     "task_categories": {"view": False, "create": False, "edit": False, "delete": False},
@@ -303,7 +304,7 @@ def get_default_roles(tenant_id: str) -> List[dict]:
 
 # Module categories for UI grouping
 MODULE_CATEGORIES = {
-    "Core": ["home", "dashboard", "leads", "pipeline", "accounts", "account_gop_metrics", "contacts", "invoices", "sales_portal"],
+    "Core": ["home", "dashboard", "leads", "pipeline", "accounts", "account_volume_grid", "account_gop_metrics", "contacts", "invoices", "sales_portal"],
     "Reports": ["report_sales_overview", "report_revenue", "report_revenue_analytics", "report_sku_performance", "report_resource_performance", "report_account_performance"],
     "Operations": ["lead_discovery", "target_planning", "performance_tracker", "investor_dashboard", "daily_status", "meeting_minutes", "personal_calendar", "status_summary", "customer_complaints", "task_categories"],
     "Tools": ["cogs_calculator", "transport_calculator", "sku_management", "bottle_preview", "lead_scoring_model", "gamma_generator"],
@@ -330,6 +331,7 @@ MODULE_LABELS = {
     "leads": "Leads",
     "pipeline": "Pipeline",
     "accounts": "Accounts",
+    "account_volume_grid": "Volume Tracking",
     "account_gop_metrics": "Account GOP Metrics",
     "customer_complaints": "Tasks - Internal",
     "task_categories": "Task Categories (Tasks - Internal)",

@@ -2517,3 +2517,8 @@ Test tenant sales-only deleted.
 - Frontend nested rendering: StyledActivityDisplay + compact renderer in DailyStatusUpdate.js and BulletedContent in StatusSummary.js render /^\s+- / lines as indented "–" sub-bullets (ds-sub-bullet / ss-sub-bullet). convertToBulletFormat preserves sub-bullet indentation (was trimming it — that bug hid the nesting on first test).
 - Verified E2E in browser: Fetch Activities → nested list on Daily Status; posted status → Status Summary shows same nesting (3 sub-bullets). Test activities + test status cleaned up after.
 - Note: statuses saved BEFORE this change keep the old method-grouped format (renderers still support it).
+
+## 2026-06 — Volume Tracking now in Role Management matrix
+- Root cause of "not visible in tenant settings": Role Management UI loads modules from BACKEND models/role.py (MODULE_CATEGORIES/MODULE_LABELS via GET /api/roles), not the frontend moduleRegistry. Added account_volume_grid to Core category, label "Volume Tracking", and DEFAULT_MODULE_PERMISSIONS (view-only default) — role.py has a drift assertion that requires all three.
+- Existing roles auto-backfill the new key on GET /api/roles (Admin got full access; others view-only default until edited).
+- Verified: /api/roles returns the module + label; Tenant Settings → Roles → Core shows "Volume Tracking" row with all four checkboxes (screenshot).
