@@ -2505,3 +2505,9 @@ Test tenant sales-only deleted.
 - Tracks water_brief_last_seen in localStorage; articles newer than last visit get: pulsing dot + "N new" next to the Water Brief label (home-news-new-badge) and a small blue dot before each unseen headline (home-news-new-dot). Badge shows for the current visit, clears on next visit. First-ever visit shows no badge (no baseline).
 - Gotcha fixed: React StrictMode double-ran the effect — second run read the just-written timestamp and cleared newIds; guarded with initRef.
 - Verified in browser: seeded old last_seen → "4 new" + dot; after reload badge gone.
+
+## 2026-06 — Volume Tracking under RBAC (backend enforcement)
+- Frontend was already gated (route moduleKey account_volume_grid + Role Management registry "Volume Tracking" + sidebar roles). Added backend enforcement in account_volume_grid.py:
+  _module_perms() reads db.roles permissions for the user's role; _require_view (grid GET → inherited by Excel export + consignment plan via internal get_grid call; plan export explicit); _require_edit now async: role matrix edit/create wins, legacy EDIT_ROLES fallback when module absent from matrix; ADMIN_ROLES always allowed.
+- Semantics mirror frontend: module missing from role matrix → allow (backwards compatible); explicit view:false → 403 everywhere; view-only → mutations 403.
+- Verified via curl with Creative Director account: default allow 200 → deny view 403 (grid/export/plan) → view-only grid 200 + mutate 403 → admin 200. Role restored (module key unset) after test.

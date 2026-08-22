@@ -22,7 +22,38 @@ EDIT_ROLES = {"ceo", "director", "admin", "system admin", "vice president",
               "partner - sales", "sales partner", "sales rep"}
 
 
-def _require_edit(user: dict):
+ADMIN_ROLES = {"ceo", "director", "system admin", "system_admin", "admin", "tenant_admin", "owner"}
+MODULE_KEY = "account_volume_grid"
+
+
+async def _module_perms(user: dict):
+    """Role-matrix permissions for this module from Role Management (db.roles)."""
+    role = (user.get("role") or "").strip()
+    if not role:
+        return None
+    doc = await db.roles.find_one(
+        {"tenant_id": get_current_tenant_id(), "name": role}, {"_id": 0, "permissions": 1})
+    return ((doc or {}).get("permissions") or {}).get(MODULE_KEY)
+
+
+async def _require_view(user: dict):
+    if (user.get("role") or "").strip().lower() in ADMIN_ROLES:
+        return
+    mp = await _module_perms(user)
+    if mp is None:  # module not configured in role matrix — allow (matches frontend default)
+        return
+    if mp.get("view") is not True:
+        raise HTTPException(status_code=403, detail="Your role does not have access to Volume Tracking")
+
+
+async def _require_edit(user: dict):
+    if (user.get("role") or "").strip().lower() in ADMIN_ROLES:
+        return
+    mp = await _module_perms(user)
+    if mp is not None:
+        if mp.get("edit") is True or mp.get("create") is True:
+            return
+        raise HTTPException(status_code=403, detail="Your role does not have edit access to Volume Tracking")
     if (user.get("role") or "").strip().lower() not in EDIT_ROLES:
         raise HTTPException(status_code=403, detail="Sales/Admin access required")
 
@@ -59,6 +90,7 @@ async def get_grid(
     city: Optional[str] = None, search: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
+    await _require_view(current_user)
     tenant_id = get_current_tenant_id()
     q = {"tenant_id": tenant_id}
     if territory:
@@ -336,7 +368,7 @@ class RowUpdate(BaseModel):
 
 @router.put("/rows/{account_id}")
 async def update_row(account_id: str, payload: RowUpdate, current_user: dict = Depends(get_current_user)):
-    _require_edit(current_user)
+    await _require_edit(current_user)
     tenant_id = get_current_tenant_id()
     acc = await db.accounts.find_one({"id": account_id, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "volume_grid_values": 1})
     if not acc:
@@ -367,7 +399,7 @@ class ManualRowUpdate(BaseModel):
 
 @router.post("/manual-rows")
 async def add_manual_row(current_user: dict = Depends(get_current_user)):
-    _require_edit(current_user)
+    await _require_edit(current_user)
     tenant_id = get_current_tenant_id()
     doc = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "account_name": "",
            "expected_monthly_volume_crates": None, "custom_values": {},
@@ -379,7 +411,7 @@ async def add_manual_row(current_user: dict = Depends(get_current_user)):
 
 @router.put("/manual-rows/{row_id}")
 async def update_manual_row(row_id: str, payload: ManualRowUpdate, current_user: dict = Depends(get_current_user)):
-    _require_edit(current_user)
+    await _require_edit(current_user)
     tenant_id = get_current_tenant_id()
     row = await db[MANUAL].find_one({"id": row_id, "tenant_id": tenant_id}, {"_id": 0, "custom_values": 1})
     if not row:
@@ -404,7 +436,7 @@ async def update_manual_row(row_id: str, payload: ManualRowUpdate, current_user:
 
 @router.delete("/manual-rows/{row_id}")
 async def delete_manual_row(row_id: str, current_user: dict = Depends(get_current_user)):
-    _require_edit(current_user)
+    await _require_edit(current_user)
     tenant_id = get_current_tenant_id()
     res = await db[MANUAL].delete_one({"id": row_id, "tenant_id": tenant_id})
     if res.deleted_count == 0:
@@ -421,7 +453,7 @@ class ColumnIn(BaseModel):
 
 @router.post("/columns")
 async def add_column(payload: ColumnIn, current_user: dict = Depends(get_current_user)):
-    _require_edit(current_user)
+    await _require_edit(current_user)
     tenant_id = get_current_tenant_id()
     if payload.type not in ("text", "number", "date", "formula"):
         raise HTTPException(status_code=400, detail="Invalid column type")
@@ -448,7 +480,7 @@ class ColumnToggleTotal(BaseModel):
 
 @router.put("/columns/{column_id}")
 async def update_column(column_id: str, payload: ColumnToggleTotal, current_user: dict = Depends(get_current_user)):
-    _require_edit(current_user)
+    await _require_edit(current_user)
     tenant_id = get_current_tenant_id()
     res = await db[CONFIG].update_one(
         {"tenant_id": tenant_id, "columns.id": column_id},
@@ -460,7 +492,7 @@ async def update_column(column_id: str, payload: ColumnToggleTotal, current_user
 
 @router.delete("/columns/{column_id}")
 async def delete_column(column_id: str, current_user: dict = Depends(get_current_user)):
-    _require_edit(current_user)
+    await _require_edit(current_user)
     tenant_id = get_current_tenant_id()
     exists = await db[CONFIG].find_one({"tenant_id": tenant_id, "columns.id": column_id}, {"_id": 1})
     if not exists:
@@ -634,6 +666,7 @@ class PlanExportRequest(BaseModel):
 
 @router.post("/consignment-plan/export")
 async def export_consignment_plan(payload: PlanExportRequest, current_user: dict = Depends(get_current_user)):
+    await _require_view(current_user)
     from io import BytesIO
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment
