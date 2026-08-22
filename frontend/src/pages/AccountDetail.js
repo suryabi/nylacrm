@@ -378,6 +378,9 @@ export default function AccountDetail() {
 
   // Account activation state
   const [activateDialogOpen, setActivateDialogOpen] = useState(false);
+  const [noGstConfirmed, setNoGstConfirmed] = useState(false);
+  const [noGstDialogOpen, setNoGstDialogOpen] = useState(false);
+  const [noGstVerifyChecked, setNoGstVerifyChecked] = useState(false);
   const [activating, setActivating] = useState(false);
   const [resyncing, setResyncing] = useState(false);
   const [activationChecks, setActivationChecks] = useState({
@@ -1449,6 +1452,8 @@ ${googleMapsLink}`;
       sku_prices_correct: false,
       delivery_contact_updated: false,
     });
+    setNoGstConfirmed(false);
+    setNoGstVerifyChecked(false);
     setActivateDialogOpen(true);
     // Re-fetch fresh activation status for the auto-validation badges
     try {
@@ -1496,7 +1501,9 @@ ${googleMapsLink}`;
     }
   };
 
-  const allChecksDone = Object.values(activationChecks).every(Boolean);
+  const allChecksDone = Object.entries(activationChecks).every(
+    ([k, v]) => v || (k === 'gst_updated' && noGstConfirmed)
+  );
 
   // One-click re-sync of the account's contact details to Zoho Books. Records
   // sync health (status / last-synced / error) on the account so the indicator
@@ -1525,7 +1532,7 @@ ${googleMapsLink}`;
     try {
       const { data } = await axios.post(
         `${API_URL}/accounts/${id}/activate`,
-        { ...activationChecks, billed_by: billedBy },
+        { ...activationChecks, gst_updated: activationChecks.gst_updated || noGstConfirmed, no_gst: noGstConfirmed, billed_by: billedBy },
         { withCredentials: true }
       );
       toast.success(data.message || 'Account activated.');
@@ -2059,6 +2066,12 @@ ${googleMapsLink}`;
                   <div>
                     <p className="text-sm text-muted-foreground">GST Number</p>
                     <p className="font-medium font-mono tracking-wider">{account.gst_number}</p>
+                  </div>
+                )}
+                {!account.gst_number && account.gst_unregistered && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">GST Number</p>
+                    <Badge variant="outline" className="mt-0.5 bg-blue-50 text-blue-800 border-blue-300" data-testid="account-gst-unregistered-badge">Unregistered</Badge>
                   </div>
                 )}
                 <div>
@@ -3874,6 +3887,39 @@ ${googleMapsLink}`;
       </Dialog>
 
       {/* ── Account Activation Checklist Dialog ── */}
+      {/* No-GST double confirmation */}
+      <Dialog open={noGstDialogOpen} onOpenChange={(o) => { setNoGstDialogOpen(o); if (!o && !noGstConfirmed) setNoGstConfirmed(false); }}>
+        <DialogContent className="max-w-md" data-testid="no-gst-confirm-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" /> Confirm: No GST Registration
+            </DialogTitle>
+            <DialogDescription>
+              You are about to activate <b>{account?.account_name}</b> without a GSTIN. The customer will be
+              created in Zoho Books as an <b>Unregistered Business</b> and all invoices will show GST as
+              "Unregistered". This cannot be applied retroactively to past invoices.
+            </DialogDescription>
+          </DialogHeader>
+          <label className="flex items-start gap-2.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 cursor-pointer">
+            <Checkbox checked={noGstVerifyChecked} onCheckedChange={(c) => setNoGstVerifyChecked(!!c)} className="mt-0.5" data-testid="no-gst-verify-checkbox" />
+            <span className="text-xs text-slate-700">
+              I have verified with the customer that they <b>do not</b> have a GST registration.
+            </span>
+          </label>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => { setNoGstDialogOpen(false); setNoGstConfirmed(false); }} data-testid="no-gst-cancel-btn">Cancel</Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={!noGstVerifyChecked}
+              onClick={() => { setNoGstConfirmed(true); setNoGstDialogOpen(false); }}
+              data-testid="no-gst-confirm-btn"
+            >
+              Confirm — No GST
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={activateDialogOpen} onOpenChange={setActivateDialogOpen}>
         <DialogContent className="sm:max-w-lg" data-testid="activate-account-dialog">
           <DialogHeader>
@@ -4006,18 +4052,21 @@ ${googleMapsLink}`;
               { key: 'logo_uploaded', label: 'Account logo is uploaded', helper: 'Upload the customer\u2019s logo under Account Logo (auto-validated).' },
             ].map((item) => {
               const ok = !!activationStatus[item.key];
+              const isGst = item.key === 'gst_updated';
               return (
+                <React.Fragment key={item.key}>
                 <label
-                  key={item.key}
                   className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
                     ok
                       ? 'border-emerald-200 bg-emerald-50 cursor-pointer hover:bg-emerald-100/60'
-                      : 'border-amber-200 bg-amber-50/60 cursor-not-allowed opacity-90'
+                      : isGst && noGstConfirmed
+                        ? 'border-blue-200 bg-blue-50/60'
+                        : 'border-amber-200 bg-amber-50/60 cursor-not-allowed opacity-90'
                   }`}
                   data-testid={`activation-check-${item.key}`}
                 >
                   <Checkbox
-                    checked={activationChecks[item.key]}
+                    checked={activationChecks[item.key] || (isGst && noGstConfirmed)}
                     disabled={!ok}
                     onCheckedChange={(checked) =>
                       setActivationChecks((prev) => ({ ...prev, [item.key]: !!checked }))
@@ -4031,6 +4080,10 @@ ${googleMapsLink}`;
                         <Badge variant="outline" className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300">
                           <CheckCircle className="h-2.5 w-2.5 mr-1" /> Verified
                         </Badge>
+                      ) : isGst && noGstConfirmed ? (
+                        <Badge variant="outline" className="text-[10px] bg-blue-100 text-blue-800 border-blue-300" data-testid="gst-unregistered-badge">
+                          <CheckCircle className="h-2.5 w-2.5 mr-1" /> Unregistered — confirmed
+                        </Badge>
                       ) : (
                         <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">
                           <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Missing
@@ -4040,6 +4093,27 @@ ${googleMapsLink}`;
                     <p className="text-[11px] text-muted-foreground mt-0.5">{item.helper}</p>
                   </div>
                 </label>
+                {isGst && !ok && (
+                  <div className={`ml-4 rounded-md border px-3 py-2 ${noGstConfirmed ? 'border-blue-200 bg-blue-50' : 'border-slate-200 bg-slate-50'}`} data-testid="no-gst-option">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <Checkbox
+                        checked={noGstConfirmed}
+                        onCheckedChange={(checked) => {
+                          if (checked) { setNoGstVerifyChecked(false); setNoGstDialogOpen(true); }
+                          else setNoGstConfirmed(false);
+                        }}
+                        className="mt-0.5"
+                        data-testid="no-gst-checkbox"
+                      />
+                      <span className="text-xs text-slate-700">
+                        <span className="font-medium">Customer has no GST registration.</span>{' '}
+                        Activate as an <b>Unregistered</b> customer — Zoho will be created as an Unregistered Business
+                        and invoices will show GST as "Unregistered". Requires double confirmation.
+                      </span>
+                    </label>
+                  </div>
+                )}
+                </React.Fragment>
               );
             })}
           </div>

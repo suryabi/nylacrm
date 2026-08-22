@@ -1572,6 +1572,10 @@ class ActivationChecklist(BaseModel):
     """Sales-confirmation checklist that must all be True before an account
     can be activated and synced to Zoho Books as a customer."""
     gst_updated: bool
+    # True when the user has double-confirmed the customer has NO GST
+    # registration — allows activation without a GSTIN; the Zoho contact is
+    # then created as an Unregistered Business.
+    no_gst: bool = False
     delivery_address_updated: bool
     sku_prices_correct: bool
     delivery_contact_updated: bool
@@ -1681,7 +1685,7 @@ async def activate_account(
     data before activating.
     """
     if not all([
-        checklist.gst_updated,
+        checklist.gst_updated or checklist.no_gst,
         checklist.delivery_address_updated,
         checklist.sku_prices_correct,
         checklist.delivery_contact_updated,
@@ -1712,8 +1716,10 @@ async def activate_account(
 
     # ── Auto-validate the 4 checklist items against actual account data ──
     failures: list = []
-    if not (account.get('gst_number') or '').strip():
-        failures.append('GST number is missing on the account. Upload the GST certificate first.')
+    has_gst = bool((account.get('gst_number') or '').strip())
+    gst_unregistered = bool(checklist.no_gst) and not has_gst
+    if not has_gst and not checklist.no_gst:
+        failures.append('GST number is missing on the account. Upload the GST certificate first, or confirm the customer has no GST registration.')
     da = account.get('delivery_address') or {}
     if not (da.get('address_line1') and da.get('city') and da.get('state') and da.get('pincode')):
         failures.append('Delivery address is incomplete (line 1, city, state and PIN are required).')
@@ -1836,6 +1842,8 @@ async def activate_account(
                 detail='Zoho Books is not connected for this tenant. Go to Settings → Integrations → Zoho Books and click Connect.'
             )
         try:
+            if gst_unregistered:
+                account['gst_unregistered'] = True  # → Zoho gst_treatment business_none
             zoho_contact_id = await zoho.upsert_contact(tenant_id, account)
         except Exception as e:
             await tdb.accounts.update_one(_account_match(account_id), {'$set': {
@@ -1854,6 +1862,7 @@ async def activate_account(
         'updated_at': now,
         'activation_checklist': checklist.model_dump(),
         'billed_by': billed_by,
+        'gst_unregistered': gst_unregistered,
     }
     if zoho_contact_id:
         update_doc['zoho_contact_id'] = zoho_contact_id

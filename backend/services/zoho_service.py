@@ -827,6 +827,28 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
         if place:
             payload["place_of_contact"] = place
             payload["place_of_contact_with_prefix"] = place
+    elif account.get("gst_unregistered"):
+        # Double-confirmed no-GST customer → Zoho "Unregistered Business".
+        payload["gst_treatment"] = "business_none"
+        STATE_NAME_TO_PLACE = {
+            "jammu and kashmir": "JK", "himachal pradesh": "HP", "punjab": "PB", "chandigarh": "CH",
+            "uttarakhand": "UK", "haryana": "HR", "delhi": "DL", "rajasthan": "RJ", "uttar pradesh": "UP",
+            "bihar": "BR", "sikkim": "SK", "arunachal pradesh": "AR", "nagaland": "NL", "manipur": "MN",
+            "mizoram": "MZ", "tripura": "TR", "meghalaya": "ME", "assam": "AS", "west bengal": "WB",
+            "jharkhand": "JH", "odisha": "OD", "chhattisgarh": "CG", "madhya pradesh": "MP",
+            "gujarat": "GJ", "maharashtra": "MH", "andhra pradesh": "AP", "karnataka": "KA",
+            "goa": "GA", "kerala": "KL", "tamil nadu": "TN", "puducherry": "PY", "telangana": "TS",
+            "ladakh": "LA",
+        }
+        state_name = (
+            ((account.get("delivery_address") or {}).get("state"))
+            or ((account.get("billing_address") or {}).get("state") if isinstance(account.get("billing_address"), dict) else None)
+            or account.get("state") or ""
+        ).strip().lower()
+        place = STATE_NAME_TO_PLACE.get(state_name)
+        if place:
+            payload["place_of_contact"] = place
+            payload["place_of_contact_with_prefix"] = place
 
     # ── Flatten our nested address dicts into Zoho's flat schema ──
     # Zoho's `billing_address` / `shipping_address` expect string fields:
