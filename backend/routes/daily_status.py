@@ -667,107 +667,88 @@ async def auto_populate_from_activities(
         
         lead_map = {l['id']: l.get('company') or l.get('name') for l in leads}
         
-        # Group activities by interaction method
-        grouped_activities = {
-            'customer_visit': [],
-            'phone_call': [],
-            'email': [],
-            'whatsapp': [],
-            'sms': [],
-            'other': []
+        # Resolve the acting user's display name (for "— who logged it" suffixes)
+        user_doc = await get_tdb().users.find_one({'id': fetch_user_id}, {'_id': 0, 'name': 1})
+        default_user_name = (user_doc or {}).get('name') or current_user.get('name') or ''
+
+        METHOD_LABELS = {
+            'customer_visit': 'Visit', 'phone_call': 'Call', 'call': 'Call',
+            'email': 'Email', 'whatsapp': 'WhatsApp', 'sms': 'SMS',
         }
-        
+
+        def _ist_time(iso_str):
+            try:
+                dt = datetime.fromisoformat((iso_str or '').replace('Z', '+00:00'))
+                ist = dt.astimezone(timezone(timedelta(hours=5, minutes=30)))
+                return ist.strftime('%I:%M %p').lstrip('0')
+            except Exception:
+                return ''
+
+        # Group activities BY LEAD so a lead with multiple same-day touchpoints
+        # (visits incl. geo-tracked, calls, messages) shows one entry with a
+        # bulleted list instead of scattered individual lines.
+        counts = {'customer_visit': 0, 'phone_call': 0, 'email': 0, 'whatsapp': 0, 'sms': 0, 'other': 0}
+        by_lead = {}  # lead_display -> list of (created_at, line)
         for activity in activities:
             lead_name = lead_map.get(activity['lead_id'], 'Unknown Lead')
-            description = activity.get('description') or ''
-            # Replace newlines with space to keep activity as single line
-            description = ' '.join(description.split('\n')).strip()
-            description = ' '.join(description.split())  # Normalize multiple spaces
+            description = ' '.join((activity.get('description') or '').split()).strip()
             interaction_method = (activity.get('interaction_method') or activity.get('activity_type') or '').lower()
-            
-            # Check if this activity was shared to linked leads
+            if interaction_method in ('phone_call', 'call'):
+                counts['phone_call'] += 1
+            elif interaction_method in counts:
+                counts[interaction_method] += 1
+            else:
+                counts['other'] += 1
+
             linked_lead_ids = activity_linked_leads.get(activity['id'], [])
             if linked_lead_ids:
-                # Group all lead names together (comma-separated)
                 linked_names = [lead_map.get(lid, 'Unknown') for lid in linked_lead_ids]
-                all_names = [lead_name] + linked_names
-                lead_display = ', '.join(all_names)
-                activity_text = f"{lead_display} - {description}" if description else lead_display
+                lead_display = ', '.join([lead_name] + linked_names)
             else:
-                activity_text = f"{lead_name} - {description}" if description else lead_name
-            
-            if interaction_method == 'customer_visit':
-                grouped_activities['customer_visit'].append(activity_text)
-            elif interaction_method in ['phone_call', 'call']:
-                grouped_activities['phone_call'].append(activity_text)
-            elif interaction_method == 'email':
-                grouped_activities['email'].append(activity_text)
-            elif interaction_method == 'whatsapp':
-                grouped_activities['whatsapp'].append(activity_text)
-            elif interaction_method == 'sms':
-                grouped_activities['sms'].append(activity_text)
-            else:
-                grouped_activities['other'].append(activity_text)
-        
-        # Build formatted text grouped by interaction type
+                lead_display = lead_name
+
+            method_label = METHOD_LABELS.get(interaction_method, 'Activity')
+            time_str = _ist_time(activity.get('created_at'))
+            who = activity.get('created_by_name') or default_user_name
+            parts = [p for p in [time_str, f"{method_label}: {description}" if description else method_label, who] if p]
+            by_lead.setdefault(lead_display, []).append((activity.get('created_at') or '', ' — '.join(parts)))
+
+        # Build formatted text: one bullet per lead; multi-activity leads get
+        # indented sub-bullets (chronological), single-activity leads stay on one line.
         formatted_sections = []
-        
-        # Summary counts
         summary_parts = []
-        if grouped_activities['customer_visit']:
-            summary_parts.append(f"Visits: {len(grouped_activities['customer_visit'])}")
-        if grouped_activities['phone_call']:
-            summary_parts.append(f"Calls: {len(grouped_activities['phone_call'])}")
-        messages_count = len(grouped_activities['email']) + len(grouped_activities['whatsapp']) + len(grouped_activities['sms'])
+        if counts['customer_visit']:
+            summary_parts.append(f"Visits: {counts['customer_visit']}")
+        if counts['phone_call']:
+            summary_parts.append(f"Calls: {counts['phone_call']}")
+        messages_count = counts['email'] + counts['whatsapp'] + counts['sms']
         if messages_count > 0:
             summary_parts.append(f"Messages: {messages_count}")
-        if grouped_activities['other']:
-            summary_parts.append(f"Other: {len(grouped_activities['other'])}")
-        
+        if counts['other']:
+            summary_parts.append(f"Other: {counts['other']}")
         summary_line = " | ".join(summary_parts) if summary_parts else "Activities logged"
-        # Use special markers for highlighting in frontend
         formatted_sections.append(f"[SUMMARY] {summary_line}")
-        
-        # Add grouped sections with special header markers
-        if grouped_activities['customer_visit']:
-            formatted_sections.append("\n[HEADER] CUSTOMER VISITS")
-            for item in grouped_activities['customer_visit']:
-                formatted_sections.append(f"• {item}")
-        
-        if grouped_activities['phone_call']:
-            formatted_sections.append("\n[HEADER] PHONE CALLS")
-            for item in grouped_activities['phone_call']:
-                formatted_sections.append(f"• {item}")
-        
-        if grouped_activities['email']:
-            formatted_sections.append("\n[HEADER] EMAILS")
-            for item in grouped_activities['email']:
-                formatted_sections.append(f"• {item}")
-        
-        if grouped_activities['whatsapp']:
-            formatted_sections.append("\n[HEADER] WHATSAPP")
-            for item in grouped_activities['whatsapp']:
-                formatted_sections.append(f"• {item}")
-        
-        if grouped_activities['sms']:
-            formatted_sections.append("\n[HEADER] SMS")
-            for item in grouped_activities['sms']:
-                formatted_sections.append(f"• {item}")
-        
-        if grouped_activities['other']:
-            formatted_sections.append("\n[HEADER] OTHER ACTIVITIES")
-            for item in grouped_activities['other']:
-                formatted_sections.append(f"• {item}")
-        
+
+        formatted_sections.append("\n[HEADER] LEAD ACTIVITY")
+        # Leads with the most touchpoints first
+        for lead_display, entries in sorted(by_lead.items(), key=lambda kv: (-len(kv[1]), kv[0].lower())):
+            entries.sort(key=lambda e: e[0])
+            if len(entries) == 1:
+                formatted_sections.append(f"• {lead_display} — {entries[0][1]}")
+            else:
+                formatted_sections.append(f"• {lead_display} ({len(entries)} activities)")
+                for _, line in entries:
+                    formatted_sections.append(f"  - {line}")
+
         formatted_text = '\n'.join(formatted_sections)
-        
+
         return {
             'formatted_text': formatted_text,
             'activity_count': len(activities),
             'leads_contacted': len(lead_map),
             'summary': {
-                'visits': len(grouped_activities['customer_visit']),
-                'calls': len(grouped_activities['phone_call']),
+                'visits': counts['customer_visit'],
+                'calls': counts['phone_call'],
                 'messages': messages_count
             }
         }

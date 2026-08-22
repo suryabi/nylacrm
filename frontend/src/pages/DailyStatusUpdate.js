@@ -35,6 +35,7 @@ const convertToBulletFormat = (text) => {
   if (!text || !text.trim()) return '';
   const lines = text.split(/\n/).filter(line => line.trim());
   return lines.map(line => {
+    if (/^\s+- /.test(line)) return line.replace(/\s+$/, ''); // keep nested sub-bullet indentation
     const trimmedLine = line.trim();
     if (trimmedLine.startsWith('[SUMMARY]') || trimmedLine.startsWith('[HEADER]')) return trimmedLine;
     if (trimmedLine.startsWith('•') || trimmedLine.startsWith('-') || trimmedLine.startsWith('*')) return trimmedLine;
@@ -144,6 +145,17 @@ const StyledActivityDisplay = ({ text, onChange }) => {
           );
         }
         
+        // Nested sub-bullet (same-day activities grouped under one lead)
+        if (/^\s+- /.test(line)) {
+          const subText = trimmedLine.replace(/^-\s*/, '');
+          return (
+            <div key={index} className="flex items-start gap-2 pl-8" data-testid="ds-sub-bullet">
+              <span className="text-primary/50 mt-0.5">–</span>
+              <span className="text-sm text-slate-600 dark:text-slate-300">{renderStyledActivityLine(subText)}</span>
+            </div>
+          );
+        }
+
         // Regular bullet items - with styled client name and status
         if (trimmedLine.startsWith('•')) {
           const itemText = trimmedLine.replace('•', '').trim();
@@ -254,6 +266,17 @@ const StyledContentDisplay = ({ text }) => {
           );
         }
         
+        // Nested sub-bullet (same-day activities grouped under one lead)
+        if (/^\s+- /.test(line)) {
+          const subText = trimmedLine.replace(/^-\s*/, '');
+          return (
+            <div key={index} className="flex items-start gap-1.5 text-xs pl-6" data-testid="ds-sub-bullet">
+              <span className="text-primary/50 mt-0.5">–</span>
+              <span className="leading-relaxed text-muted-foreground">{renderTextWithStatus(subText)}</span>
+            </div>
+          );
+        }
+
         // Regular bullet - with status highlighting
         const cleanLine = trimmedLine.replace(/^[•\-\*]\s*/, '').trim();
         return (

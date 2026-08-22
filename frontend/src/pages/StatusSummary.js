@@ -103,6 +103,17 @@ const BulletedContent = ({ text }) => {
           );
         }
         
+        // Nested sub-bullet (same-day activities grouped under one lead)
+        if (/^\s+- /.test(line)) {
+          const subText = trimmedLine.replace(/^-\s*/, '');
+          return (
+            <div key={index} className="flex items-start gap-2 text-sm pl-8" data-testid="ss-sub-bullet">
+              <span className="text-primary/50 mt-0.5">–</span>
+              <span className="text-sm text-muted-foreground">{renderStyledActivityLine(subText)}</span>
+            </div>
+          );
+        }
+
         // Regular bullet items — render client name + status with the same styling as Daily Status
         const cleanLine = trimmedLine.replace(/^[•\-\*]\s*/, '').trim();
         return (

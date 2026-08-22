@@ -2511,3 +2511,9 @@ Test tenant sales-only deleted.
   _module_perms() reads db.roles permissions for the user's role; _require_view (grid GET → inherited by Excel export + consignment plan via internal get_grid call; plan export explicit); _require_edit now async: role matrix edit/create wins, legacy EDIT_ROLES fallback when module absent from matrix; ADMIN_ROLES always allowed.
 - Semantics mirror frontend: module missing from role matrix → allow (backwards compatible); explicit view:false → 403 everywhere; view-only → mutations 403.
 - Verified via curl with Creative Director account: default allow 200 → deny view 403 (grid/export/plan) → view-only grid 200 + mutate 403 → admin 200. Role restored (module key unset) after test.
+
+## 2026-06 — Daily Status / Status Summary: per-lead grouped activity bullets
+- auto_populate_from_activities (daily_status.py) rewritten: groups same-day activities BY LEAD instead of by interaction method. Output: "[HEADER] LEAD ACTIVITY"; single-activity leads → "• Lead — 10:24 AM — Call: desc — User"; multi-activity leads → "• Lead (N activities)" + indented "  - time — Method: desc — User" sub-bullets (chronological, IST times, creator name; geo-tracked visits included since they land in activities). Summary counts line unchanged.
+- Frontend nested rendering: StyledActivityDisplay + compact renderer in DailyStatusUpdate.js and BulletedContent in StatusSummary.js render /^\s+- / lines as indented "–" sub-bullets (ds-sub-bullet / ss-sub-bullet). convertToBulletFormat preserves sub-bullet indentation (was trimming it — that bug hid the nesting on first test).
+- Verified E2E in browser: Fetch Activities → nested list on Daily Status; posted status → Status Summary shows same nesting (3 sub-bullets). Test activities + test status cleaned up after.
+- Note: statuses saved BEFORE this change keep the old method-grouped format (renderers still support it).
