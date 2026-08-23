@@ -2570,3 +2570,15 @@ Test tenant sales-only deleted.
 
 ## 2026-08 — Volume Tracking recency legend
 - Small legend row above the grid (below filters, data-testid vg-recency-legend): "Last order:" + four pills matching the tier styling (within 1 week / 2 weeks / 3 weeks / 4+ weeks ago). Verified by screenshot.
+
+## 2026-08 — Promo repair v3: false positives, duplicate challan numbers
+- User report (production): bottle-only "DC-2607-0011" shown as needing correction; 14 findings vs 13 lines; "all DCs flagged".
+- Root causes:
+  1. DUPLICATE CHALLAN NUMBERS: _generate_challan_number counted only legacy promo_dispatches (frozen at 5) while inserts go to distributor_deliveries → same numbers reissued (preview had DC-2606-0006 ×11; production has two different DC-2607-0011s). The flagged "DC-2607-0011" was the OTHER record (5-crate, DO-2026-0055), not the bottles-only one.
+  2. Over-aggressive name parsing: raw (\d+) regex could read "330ml Bottle" as 330 units.
+- Fixes:
+  - _generate_challan_number: max numeric suffix across BOTH collections + 1 (historic dupes left untouched — printed challans/Zoho refs).
+  - _pkg_units_from_name + delivery_orders._normalize_item_units + promo _resolve_units: pack size from name ONLY when it names a container (crate/case/carton/pack/box/tray/dozen), with volume tokens (ml/ltr/l/kg/g) stripped first.
+  - Repair resolve_upp: SKU packaging config is authoritative (explicit units=1 → trusted, skipped); config=1 vs container-name>1 contradiction → ambiguous (manual review, never auto-repaired). Returns (upp, force_ambiguous).
+  - Findings now carry recipient + delivery_date; UI shows them under the challan number for disambiguation.
+- Verified in preview: bottle-only challan NOT flagged, "330ml Bottle" NOT flagged, real 5-crate bug flagged (5→60) with recipient shown; challan generator returns unique max+1 across collections; DO create keeps "330ml Bottle" qty=3 unmultiplied while "12 Bottle Crate" 2→24 (PASS). Seeds cleaned up.

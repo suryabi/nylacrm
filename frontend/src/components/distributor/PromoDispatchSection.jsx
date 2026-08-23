@@ -1528,7 +1528,10 @@ export default function PromoDispatchSection({
                     <tbody>
                       {(repairScan.findings || []).map((f, i) => (
                         <tr key={i} className={`border-t ${f.ambiguous ? 'bg-amber-50' : ''}`} data-testid={`repair-finding-${i}`}>
-                          <td className="p-2 font-mono text-xs">{f.challan_number}</td>
+                          <td className="p-2 font-mono text-xs">
+                            {f.challan_number}
+                            <span className="block font-sans text-[10px] text-slate-500">{[f.recipient, f.delivery_date].filter(Boolean).join(' · ')}</span>
+                          </td>
                           <td className="p-2">{f.sku_name}</td>
                           <td className="p-2">{f.packaging}{f.ambiguous && <span className="block text-[10px] text-amber-700 font-medium">review manually — skipped</span>}</td>
                           <td className="p-2 text-right">{f.stored_quantity}</td>

@@ -144,9 +144,19 @@ async def delete_promo_reason(reason_id: str, current_user: dict = Depends(get_c
 
 # ───────────────────────────── Challan numbering ────────────────────────────
 async def _generate_challan_number(tenant_id: str) -> str:
+    """Next unique DC number. Takes the highest existing numeric suffix across
+    BOTH storage generations (legacy promo_dispatches + unified is_promo
+    deliveries) — the old count-based scheme only counted the legacy collection,
+    which froze the sequence and re-issued duplicate challan numbers."""
     ym = datetime.now(timezone.utc).strftime("%y%m")
-    count = await db.promo_dispatches.count_documents({"tenant_id": tenant_id})
-    return f"DC-{ym}-{count + 1:04d}"
+    max_seq = 0
+    for coll, q in ((db.promo_dispatches, {"tenant_id": tenant_id}),
+                    (db.distributor_deliveries, {"tenant_id": tenant_id, "is_promo": True})):
+        async for doc in coll.find(q, {"_id": 0, "challan_number": 1}):
+            m = re.match(r"^DC-\d{4}-(\d+)$", doc.get("challan_number") or "")
+            if m:
+                max_seq = max(max_seq, int(m.group(1)))
+    return f"DC-{ym}-{max_seq + 1:04d}"
 
 
 # ───────────────────────────── Promo dispatch ───────────────────────────────
@@ -619,10 +629,14 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
             match = next((p for p in pools if (p.get("packaging_type_name") or "").strip().lower() == tgt), None)
         if match and int(match.get("units_per_package") or 0) > 1:
             return int(match["units_per_package"]), match.get("packaging_type_name") or it.packaging_type_name, match.get("packaging_type_id") or it.packaging_type_id
-        # Last resort: pack size embedded in the packaging name ("12 Bottle Crate").
-        m = re.search(r"(\d+)", it.packaging_type_name or "")
-        if m and int(m.group(1)) > 1:
-            return int(m.group(1)), it.packaging_type_name, it.packaging_type_id
+        # Last resort: pack size embedded in a container-style packaging name
+        # ("12 Bottle Crate") — volume tokens stripped so "330ml Bottle" stays 1.
+        _nm = it.packaging_type_name or ""
+        if re.search(r"crate|case|carton|pack|box|tray|dozen", _nm, re.I):
+            _cleaned = re.sub(r"\d+(?:\.\d+)?\s*(?:ml|ltr|litre|liter|l|kg|gm|g)\b", " ", _nm, flags=re.I)
+            m = re.search(r"(\d+)", _cleaned)
+            if m and int(m.group(1)) > 1:
+                return int(m.group(1)), it.packaging_type_name, it.packaging_type_id
         return (upp or 1), it.packaging_type_name, it.packaging_type_id
 
     inserted_items: list[dict] = []
@@ -1146,7 +1160,13 @@ class RepairRequest(BaseModel):
 
 
 def _pkg_units_from_name(name: str) -> int:
-    m = re.search(r"(\d+)", name or "")
+    """Pack size from a packaging label — only when it clearly names a multi-unit
+    container ("12 Bottle Crate", "Pack of 6"). Volume tokens are stripped first
+    so "330ml Bottle" is never read as 330 units."""
+    if not name or not re.search(r"crate|case|carton|pack|box|tray|dozen", name, re.I):
+        return 0
+    cleaned = re.sub(r"\d+(?:\.\d+)?\s*(?:ml|ltr|litre|liter|l|kg|gm|g)\b", " ", name, flags=re.I)
+    m = re.search(r"(\d+)", cleaned)
     return int(m.group(1)) if m else 0
 
 
@@ -1164,22 +1184,39 @@ async def repair_promo_crate_units(payload: RepairRequest, current_user: dict = 
     async for ms in db.master_skus.find({}, {"_id": 0, "id": 1, "bottles_per_crate": 1, "packaging_config": 1}):
         sku_cfg[ms["id"]] = ms
 
-    def resolve_upp(item: dict) -> int:
+    def resolve_upp(item: dict):
+        """Returns (units_per_package, force_ambiguous). SKU packaging config is
+        authoritative; a config that says 1 while the label names a multi-unit
+        container is contradictory → manual review only."""
         upp = int(item.get("units_per_package") or 0)
         if upp > 1:
-            return upp
+            return upp, False
         name_units = _pkg_units_from_name(item.get("packaging_type_name") or "")
-        if name_units > 1:
-            return name_units
         ms = sku_cfg.get(item.get("sku_id")) or {}
+        cfg = None
+        tgt_name = (item.get("packaging_type_name") or "").strip().lower()
         for section in (ms.get("packaging_config") or {}).values():
             for p in (section or []):
-                if item.get("packaging_type_id") and p.get("packaging_type_id") == item.get("packaging_type_id"):
-                    return int(p.get("units") or p.get("units_per_package") or 0)
+                same_id = item.get("packaging_type_id") and p.get("packaging_type_id") == item.get("packaging_type_id")
+                same_name = tgt_name and (p.get("packaging_type_name") or "").strip().lower() == tgt_name
+                if same_id or same_name:
+                    val = int(p.get("units") or p.get("units_per_package") or 0)
+                    if val >= 1:
+                        cfg = val
+                        break
+            if cfg is not None:
+                break
+        if cfg is not None and cfg > 1:
+            return cfg, False
+        if cfg == 1:
+            # Config says single-unit — trust it unless the label contradicts it.
+            return (name_units, True) if name_units > 1 else (1, False)
+        if name_units > 1:
+            return name_units, False
         pkg_name = (item.get("packaging_type_name") or "").lower()
         if "crate" in pkg_name and ms.get("bottles_per_crate"):
-            return int(ms["bottles_per_crate"])
-        return 0
+            return int(ms["bottles_per_crate"]), False
+        return 0, False
 
     findings, applied, ambiguous_count = [], 0, 0
 
@@ -1195,7 +1232,7 @@ async def repair_promo_crate_units(payload: RepairRequest, current_user: dict = 
                 if qty <= 0:
                     continue
                 stored_upp = int(it.get("units_per_package") or 0)
-                upp = resolve_upp(it)
+                upp, force_ambiguous = resolve_upp(it)
                 if upp <= 1:
                     continue
                 packages = it.get("packages")
@@ -1207,12 +1244,15 @@ async def repair_promo_crate_units(payload: RepairRequest, current_user: dict = 
                 # Collapsed lines (upp stored as 1) that are a clean multiple of the
                 # pack size can't be told apart from genuine loose bottles →
                 # flag for manual review, never auto-repair.
-                ambiguous = stored_upp <= 1 and packages is not None and qty % upp == 0 and qty >= upp
+                ambiguous = force_ambiguous or (
+                    stored_upp <= 1 and packages is not None and qty % upp == 0 and qty >= upp)
                 correct_qty = qty * upp
                 delta = correct_qty - qty
                 stock_deducted = (d.get("status") in deducted_statuses)
                 findings.append({
                     "challan_number": d.get("challan_number"), "dispatch_id": d["id"],
+                    "recipient": d.get("contact_name") or d.get("recipient_name"),
+                    "delivery_date": (d.get("delivery_date") or d.get("created_at") or "")[:10],
                     "status": d.get("status"), "sku_name": it.get("sku_name"),
                     "packaging": it.get("packaging_type_name"), "stored_quantity": qty,
                     "correct_quantity_bottles": correct_qty, "missing_bottles": delta,

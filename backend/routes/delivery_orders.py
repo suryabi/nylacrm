@@ -185,8 +185,13 @@ async def _normalize_item_units(tenant_id: str, items: list) -> list:
             match = next((p for p in pools if (p.get("packaging_type_name") or "").strip().lower() == tgt), None)
         upp = int((match or {}).get("units_per_package") or (match or {}).get("units") or 0)
         if upp <= 1:
-            m = re.search(r"(\d+)", d.get("packaging_type_name") or "")
-            upp = int(m.group(1)) if m else 0
+            name = d.get("packaging_type_name") or ""
+            # Only trust a number in the label when it clearly names a multi-unit
+            # container; strip volume tokens so "330ml Bottle" never reads as 330.
+            if re.search(r"crate|case|carton|pack|box|tray|dozen", name, re.I):
+                cleaned = re.sub(r"\d+(?:\.\d+)?\s*(?:ml|ltr|litre|liter|l|kg|gm|g)\b", " ", name, flags=re.I)
+                m = re.search(r"(\d+)", cleaned)
+                upp = int(m.group(1)) if m else 0
         if upp > 1:
             d["quantity"] = int(d["quantity"]) * upp
             d["units_per_package"] = upp
