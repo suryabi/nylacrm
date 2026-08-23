@@ -472,6 +472,52 @@ class RealignRequest(BaseModel):
     apply: bool = False
     location_id: Optional[str] = None
     sku_id: Optional[str] = None
+    distributor_id: Optional[str] = None  # realign is always scoped per distributor
+
+
+async def _apply_child_delta(tenant_id: str, loc: dict, sku_id: str, child_id, delta: int,
+                             sku_name=None, child_name=None, now=None):
+    """Moves `delta` bottles into (+) or out of (−) one child's stock rows at a
+    warehouse. Negative deltas deduct largest-row-first; positive deltas credit
+    the aggregate (batch-less) row. Never touches other children."""
+    if not delta:
+        return
+    import uuid as _uuid
+    now = now or datetime.now(timezone.utc).isoformat()
+    is_factory = bool(loc.get("is_factory"))
+    coll = db.factory_warehouse_stock if is_factory else db.distributor_stock
+    loc_field = "warehouse_location_id" if is_factory else "distributor_location_id"
+    base = {"tenant_id": tenant_id, loc_field: loc["id"], "sku_id": sku_id}
+    if not is_factory:
+        base["distributor_id"] = loc.get("distributor_id")
+    child_q = {**base, "child_sku_id": child_id if child_id else {"$in": [None]}}
+    remaining = -delta if delta < 0 else 0
+    if delta < 0:
+        rows = await coll.find(child_q, {"_id": 0}).to_list(500)
+        for r in sorted(rows, key=lambda r: -(r.get("quantity") or 0)):
+            if remaining <= 0:
+                break
+            take = min(remaining, int(r.get("quantity") or 0))
+            if take <= 0:
+                continue
+            remaining -= take
+            await coll.update_one({"id": r["id"], "tenant_id": tenant_id},
+                                  {"$inc": {"quantity": -take}, "$set": {"updated_at": now}})
+    credit = delta if delta > 0 else -remaining  # leftover deficit lands on aggregate row
+    if credit:
+        on_insert = {"id": str(_uuid.uuid4()), "tenant_id": tenant_id, loc_field: loc["id"],
+                     "sku_id": sku_id, "child_sku_id": child_id, "batch_id": None, "created_at": now}
+        if not is_factory:
+            on_insert["distributor_id"] = loc.get("distributor_id")
+        set_fields = {"updated_at": now}
+        if sku_name:
+            set_fields["sku_name"] = sku_name
+        if child_name and child_id:
+            set_fields["child_sku_name"] = child_name
+        await coll.update_one(
+            {**child_q, "batch_id": {"$in": [None]}},
+            {"$inc": {"quantity": credit}, "$set": set_fields, "$setOnInsert": on_insert},
+            upsert=True)
 
 
 @router.post("/distributor/stock-child-realign")
@@ -609,6 +655,8 @@ async def stock_child_realign(payload: RealignRequest, current_user: dict = Depe
             continue
         if payload.sku_id and sku_id != payload.sku_id:
             continue
+        if payload.distributor_id and (locs.get(loc_id) or {}).get("distributor_id") != payload.distributor_id:
+            continue
         by_loc_sku.setdefault((loc_id, sku_id), set()).add(child_id)
 
     findings, applied = [], 0
@@ -658,52 +706,86 @@ async def stock_child_realign(payload: RealignRequest, current_user: dict = Depe
         findings.append(finding)
 
         if payload.apply:
-            is_factory = bool(loc.get("is_factory"))
+            changes = []
+            loc_doc = {"id": loc_id, **loc}
             for c, delta in deltas.items():
                 if delta == 0:
                     continue
-                key = (loc_id, sku_id, c)
-                if delta < 0:
-                    remaining = -delta
-                    for r in sorted(rows_by_key.get(key, []), key=lambda r: -(r.get("quantity") or 0)):
-                        if remaining <= 0:
-                            break
-                        take = min(remaining, int(r.get("quantity") or 0))
-                        if take <= 0:
-                            continue
-                        remaining -= take
-                        await getattr(db, r["_coll"]).update_one(
-                            {"id": r["id"], "tenant_id": tenant_id},
-                            {"$inc": {"quantity": -take}, "$set": {"updated_at": now}})
-                else:
-                    child_name = names.get((sku_id, c), {}).get("child_sku_name")
-                    if is_factory:
-                        stock_key = {"tenant_id": tenant_id, "warehouse_location_id": loc_id,
-                                     "sku_id": sku_id, "child_sku_id": c if c else {"$in": [None]},
-                                     "batch_id": {"$in": [None]}}
-                        on_insert = {"id": str(__import__("uuid").uuid4()), "tenant_id": tenant_id,
-                                     "warehouse_location_id": loc_id, "sku_id": sku_id,
-                                     "child_sku_id": c, "batch_id": None, "created_at": now}
-                        coll = db.factory_warehouse_stock
-                    else:
-                        stock_key = {"tenant_id": tenant_id,
-                                     "distributor_id": loc.get("distributor_id"),
-                                     "distributor_location_id": loc_id, "sku_id": sku_id,
-                                     "child_sku_id": c if c else {"$in": [None]},
-                                     "batch_id": {"$in": [None]}}
-                        on_insert = {"id": str(__import__("uuid").uuid4()), "tenant_id": tenant_id,
-                                     "distributor_id": loc.get("distributor_id"),
-                                     "distributor_location_id": loc_id, "sku_id": sku_id,
-                                     "child_sku_id": c, "batch_id": None, "created_at": now}
-                        coll = db.distributor_stock
-                    set_fields = {"updated_at": now, "sku_name": sku_name}
-                    if child_name and c:
-                        set_fields["child_sku_name"] = child_name
-                    await coll.update_one(
-                        stock_key,
-                        {"$inc": {"quantity": delta}, "$set": set_fields, "$setOnInsert": on_insert},
-                        upsert=True)
+                child_name = names.get((sku_id, c), {}).get("child_sku_name")
+                await _apply_child_delta(tenant_id, loc_doc, sku_id, c, delta,
+                                         sku_name=sku_name, child_name=child_name, now=now)
+                changes.append({"child_sku_id": c, "child_sku_name": child_name or ("Generic / Unbranded" if c is None else c),
+                                "delta": delta})
+            import uuid as _uuid
+            await db.stock_realign_log.insert_one({
+                "id": str(_uuid.uuid4()), "tenant_id": tenant_id,
+                "location_id": loc_id, "location_name": loc.get("location_name"),
+                "distributor_id": loc.get("distributor_id"),
+                "sku_id": sku_id, "sku_name": sku_name, "total": actual_total,
+                "changes": changes, "applied_at": now,
+                "applied_by": current_user.get("id"),
+                "applied_by_name": current_user.get("name") or current_user.get("email"),
+            })
             applied += 1
 
     return {"dry_run": not payload.apply, "skus_with_drift": len(findings),
             "realigned": applied, "findings": findings}
+
+
+class RealignHistoryRequest(BaseModel):
+    distributor_id: Optional[str] = None
+
+
+class RealignUndoRequest(BaseModel):
+    log_ids: Optional[list] = None      # undo only these applied realignments
+    distributor_id: Optional[str] = None
+
+
+@router.post("/distributor/stock-child-realign/history")
+async def stock_child_realign_history(payload: RealignHistoryRequest,
+                                      current_user: dict = Depends(get_current_user)):
+    if (current_user.get("role") or "").strip() not in _REALIGN_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Only CEO / Director / Admin can view realignments.")
+    tenant_id = get_current_tenant_id()
+    q = {"tenant_id": tenant_id}
+    if payload.distributor_id:
+        q["distributor_id"] = payload.distributor_id
+    logs = await db.stock_realign_log.find(q, {"_id": 0}).sort("applied_at", -1).to_list(500)
+    return {"logs": logs}
+
+
+@router.post("/distributor/stock-child-realign/undo")
+async def stock_child_realign_undo(payload: RealignUndoRequest,
+                                   current_user: dict = Depends(get_current_user)):
+    """Reverses applied realignments by applying the inverse per-child deltas.
+    The SKU total is preserved both ways, so undo restores the exact prior split."""
+    if (current_user.get("role") or "").strip() not in _REALIGN_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Only CEO / Director / Admin can undo realignments.")
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    q = {"tenant_id": tenant_id, "reverted_at": {"$exists": False}}
+    if payload.distributor_id:
+        q["distributor_id"] = payload.distributor_id
+    if payload.log_ids is not None:
+        q["id"] = {"$in": payload.log_ids}
+    logs = await db.stock_realign_log.find(q, {"_id": 0}).sort("applied_at", -1).to_list(500)
+    locs = {l["id"]: l for l in await db.distributor_locations.find(
+        {"tenant_id": tenant_id},
+        {"_id": 0, "id": 1, "location_name": 1, "distributor_id": 1, "is_factory": 1},
+    ).to_list(3000)}
+    reverted = 0
+    for log in logs:
+        loc = locs.get(log.get("location_id"))
+        if not loc:
+            continue
+        for ch in (log.get("changes") or []):
+            await _apply_child_delta(tenant_id, loc, log["sku_id"], ch.get("child_sku_id"),
+                                     -(int(ch.get("delta") or 0)),
+                                     sku_name=log.get("sku_name"),
+                                     child_name=ch.get("child_sku_name"), now=now)
+        await db.stock_realign_log.update_one(
+            {"id": log["id"], "tenant_id": tenant_id},
+            {"$set": {"reverted_at": now, "reverted_by": current_user.get("id"),
+                      "reverted_by_name": current_user.get("name") or current_user.get("email")}})
+        reverted += 1
+    return {"reverted": reverted}

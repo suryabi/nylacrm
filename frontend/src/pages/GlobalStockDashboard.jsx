@@ -47,23 +47,46 @@ export default function GlobalStockDashboard() {
   const [realignScan, setRealignScan] = useState(null);
   const [realignBusy, setRealignBusy] = useState(false);
   const [realigningSku, setRealigningSku] = useState(null);
+  const [realignDists, setRealignDists] = useState([]);
+  const [realignDistId, setRealignDistId] = useState('');
+  const [realignView, setRealignView] = useState('drift'); // 'drift' | 'history'
+  const [realignHistory, setRealignHistory] = useState(null);
 
-  const runRealign = useCallback(async (apply, scope = null) => {
+  const fetchRealignDists = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/distributors?page_size=100`, { headers: HEAD() });
+      setRealignDists(res.data.distributors || []);
+    } catch (e) { /* noop */ }
+  }, []);
+
+  const fetchRealignHistory = useCallback(async (distId) => {
+    try {
+      const res = await axios.post(`${API_URL}/api/distributor/stock-child-realign/history`,
+        { distributor_id: distId || null }, { headers: HEAD() });
+      setRealignHistory(res.data.logs || []);
+    } catch (e) { setRealignHistory([]); }
+  }, []);
+
+  const runRealign = useCallback(async (apply, scope = null, distId = null) => {
+    const distributorId = distId || realignDistId;
+    if (!distributorId) return;
     if (scope) setRealigningSku(`${scope.location_id}|${scope.sku_id}`); else setRealignBusy(true);
     try {
       const res = await axios.post(
         `${API_URL}/api/distributor/stock-child-realign`,
-        { apply, location_id: scope?.location_id || null, sku_id: scope?.sku_id || null },
+        { apply, location_id: scope?.location_id || null, sku_id: scope?.sku_id || null, distributor_id: distributorId },
         { headers: HEAD() }
       );
       if (apply) {
         toast.success(`Realigned ${res.data.realigned} SKU(s) — totals unchanged, split corrected`);
-        const r2 = await axios.post(`${API_URL}/api/distributor/stock-child-realign`, { apply: false }, { headers: HEAD() });
+        const r2 = await axios.post(`${API_URL}/api/distributor/stock-child-realign`,
+          { apply: false, distributor_id: distributorId }, { headers: HEAD() });
         setRealignScan(r2.data);
+        fetchRealignHistory(distributorId);
         fetchData();
       } else {
         setRealignScan(res.data);
-        if (res.data.skus_with_drift === 0) toast.info('No child-split drift found — all SKUs reconcile');
+        if (res.data.skus_with_drift === 0) toast.info('No child-split drift found for this distributor');
       }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Reconciliation failed');
@@ -71,7 +94,26 @@ export default function GlobalStockDashboard() {
       setRealignBusy(false);
       setRealigningSku(null);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [realignDistId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const runRealignUndo = useCallback(async (logIds = null) => {
+    if (!realignDistId) return;
+    setRealignBusy(true);
+    try {
+      const res = await axios.post(`${API_URL}/api/distributor/stock-child-realign/undo`,
+        { log_ids: logIds, distributor_id: realignDistId }, { headers: HEAD() });
+      toast.success(`Reverted ${res.data.reverted} realignment(s) — original split restored`);
+      await fetchRealignHistory(realignDistId);
+      const r2 = await axios.post(`${API_URL}/api/distributor/stock-child-realign`,
+        { apply: false, distributor_id: realignDistId }, { headers: HEAD() });
+      setRealignScan(r2.data);
+      fetchData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Undo failed');
+    } finally {
+      setRealignBusy(false);
+    }
+  }, [realignDistId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const exportExcel = useCallback(async () => {
     setExporting(true);
@@ -162,7 +204,7 @@ export default function GlobalStockDashboard() {
             >Units</button>
           </div>
           {isAdmin && (
-            <Button variant="outline" size="sm" onClick={() => { setRealignScan(null); setShowRealign(true); runRealign(false); }} data-testid="gsd-realign-btn">
+            <Button variant="outline" size="sm" onClick={() => { setRealignScan(null); setRealignHistory(null); setRealignDistId(''); setRealignView('drift'); setShowRealign(true); fetchRealignDists(); }} data-testid="gsd-realign-btn">
               <Scale className="h-4 w-4 mr-1.5 text-amber-600" /> Reconcile
             </Button>
           )}
@@ -318,12 +360,75 @@ export default function GlobalStockDashboard() {
               Reconcile Child-SKU Split
             </DialogTitle>
             <DialogDescription>
-              Rebuilds each SKU's branding split from the transaction history (shipments, deliveries,
-              transfers, factory returns, branding conversions) and realigns the warehouse rows to it.
-              The SKU total never changes — only the distribution across brandings.
+              Rebuilds each SKU's branding split from the transaction history for <b>one distributor at a time</b>.
+              The SKU total never changes — only the distribution across brandings. Every applied
+              realignment is logged and can be reversed from the History tab.
             </DialogDescription>
           </DialogHeader>
-          {realignBusy && !realignScan ? (
+          <div className="flex items-center gap-2 border-b pb-2 flex-wrap">
+            <select
+              className="h-8 text-sm border rounded-md px-2 bg-white min-w-[220px]"
+              value={realignDistId}
+              onChange={(e) => {
+                const v = e.target.value;
+                setRealignDistId(v);
+                setRealignScan(null);
+                setRealignHistory(null);
+                if (v) { runRealign(false, null, v); fetchRealignHistory(v); }
+              }}
+              data-testid="realign-dist-select"
+            >
+              <option value="">Select distributor…</option>
+              {realignDists.map((d) => (
+                <option key={d.id} value={d.id}>{d.distributor_name || d.name || d.id}</option>
+              ))}
+            </select>
+            <Button size="sm" variant={realignView === 'drift' ? 'secondary' : 'ghost'} className="h-7 text-xs"
+              onClick={() => setRealignView('drift')} data-testid="realign-tab-drift">Drift</Button>
+            <Button size="sm" variant={realignView === 'history' ? 'secondary' : 'ghost'} className="h-7 text-xs"
+              onClick={() => setRealignView('history')} data-testid="realign-tab-history">History (undo)</Button>
+          </div>
+          {!realignDistId ? (
+            <div className="text-center py-8 text-muted-foreground text-sm" data-testid="realign-pick-dist">
+              Pick a distributor to scan its warehouses.
+            </div>
+          ) : realignView === 'history' ? (
+            realignHistory == null ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : realignHistory.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground" data-testid="realign-history-empty">
+                <p className="font-medium text-slate-700">No realignments applied yet</p>
+                <p className="text-sm">Nothing to undo for this distributor.</p>
+              </div>
+            ) : (
+              <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+                {realignHistory.map((l, i) => (
+                  <div key={l.id} className={`border rounded-md px-3 py-2 flex items-start gap-3 ${l.reverted_at ? 'opacity-60' : ''}`} data-testid={`realign-log-${i}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium">{l.sku_name} <span className="text-xs text-slate-500">@ {l.location_name}</span></div>
+                      <div className="text-xs text-slate-500">
+                        {(l.changes || []).map((c) => `${c.child_sku_name} ${c.delta > 0 ? '+' : ''}${c.delta}`).join(' · ')}
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        {String(l.applied_at).slice(0, 16).replace('T', ' ')} by {l.applied_by_name}
+                        {l.reverted_at ? ` — REVERTED ${String(l.reverted_at).slice(0, 16).replace('T', ' ')}` : ''}
+                      </div>
+                    </div>
+                    {!l.reverted_at && (
+                      <Button size="sm" variant="outline"
+                        className="h-7 text-xs border-rose-300 text-rose-700 hover:bg-rose-50 shrink-0"
+                        disabled={realignBusy}
+                        onClick={() => runRealignUndo([l.id])}
+                        data-testid={`realign-undo-${i}`}
+                      >Undo</Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          ) : realignBusy && !realignScan ? (
             <div className="flex items-center justify-center py-10">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
@@ -383,7 +488,19 @@ export default function GlobalStockDashboard() {
           ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowRealign(false)} data-testid="realign-close-btn">Close</Button>
-            {realignScan?.dry_run && realignScan.skus_with_drift > 0 && (
+            {realignView === 'history' && realignDistId && (realignHistory || []).some((l) => !l.reverted_at) && (
+              <Button
+                variant="outline"
+                className="border-rose-300 text-rose-700 hover:bg-rose-50"
+                disabled={realignBusy}
+                onClick={() => runRealignUndo(null)}
+                data-testid="realign-undo-all-btn"
+              >
+                {realignBusy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Undo2 className="h-4 w-4 mr-2" />}
+                Undo All
+              </Button>
+            )}
+            {realignView === 'drift' && realignDistId && realignScan?.dry_run && realignScan.skus_with_drift > 0 && (
               <Button
                 className="bg-amber-600 hover:bg-amber-700"
                 disabled={realignBusy || realigningSku != null}
