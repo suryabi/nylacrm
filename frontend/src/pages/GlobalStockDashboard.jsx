@@ -51,6 +51,7 @@ export default function GlobalStockDashboard() {
   const [realignDistId, setRealignDistId] = useState('');
   const [realignView, setRealignView] = useState('drift'); // 'drift' | 'history'
   const [realignHistory, setRealignHistory] = useState(null);
+  const [includeBranding, setIncludeBranding] = useState(true);
 
   const fetchRealignDists = useCallback(async () => {
     try {
@@ -67,20 +68,21 @@ export default function GlobalStockDashboard() {
     } catch (e) { setRealignHistory([]); }
   }, []);
 
-  const runRealign = useCallback(async (apply, scope = null, distId = null) => {
+  const runRealign = useCallback(async (apply, scope = null, distId = null, inclBranding = null) => {
     const distributorId = distId || realignDistId;
+    const withBranding = inclBranding == null ? includeBranding : inclBranding;
     if (!distributorId) return;
     if (scope) setRealigningSku(`${scope.location_id}|${scope.sku_id}`); else setRealignBusy(true);
     try {
       const res = await axios.post(
         `${API_URL}/api/distributor/stock-child-realign`,
-        { apply, location_id: scope?.location_id || null, sku_id: scope?.sku_id || null, distributor_id: distributorId },
+        { apply, location_id: scope?.location_id || null, sku_id: scope?.sku_id || null, distributor_id: distributorId, include_branding: withBranding },
         { headers: HEAD() }
       );
       if (apply) {
         toast.success(`Realigned ${res.data.realigned} SKU(s) — totals unchanged, split corrected`);
         const r2 = await axios.post(`${API_URL}/api/distributor/stock-child-realign`,
-          { apply: false, distributor_id: distributorId }, { headers: HEAD() });
+          { apply: false, distributor_id: distributorId, include_branding: withBranding }, { headers: HEAD() });
         setRealignScan(r2.data);
         fetchRealignHistory(distributorId);
         fetchData();
@@ -94,7 +96,7 @@ export default function GlobalStockDashboard() {
       setRealignBusy(false);
       setRealigningSku(null);
     }
-  }, [realignDistId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [realignDistId, includeBranding]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runRealignUndo = useCallback(async (logIds = null) => {
     if (!realignDistId) return;
@@ -387,6 +389,17 @@ export default function GlobalStockDashboard() {
               onClick={() => setRealignView('drift')} data-testid="realign-tab-drift">Drift</Button>
             <Button size="sm" variant={realignView === 'history' ? 'secondary' : 'ghost'} className="h-7 text-xs"
               onClick={() => setRealignView('history')} data-testid="realign-tab-history">History (undo)</Button>
+            <label className="flex items-center gap-1.5 text-xs text-slate-600 ml-auto cursor-pointer select-none" data-testid="realign-branding-toggle">
+              <input
+                type="checkbox"
+                checked={includeBranding}
+                onChange={(e) => {
+                  setIncludeBranding(e.target.checked);
+                  if (realignDistId) runRealign(false, null, realignDistId, e.target.checked);
+                }}
+              />
+              Count branding conversions
+            </label>
           </div>
           {!realignDistId ? (
             <div className="text-center py-8 text-muted-foreground text-sm" data-testid="realign-pick-dist">
@@ -472,6 +485,12 @@ export default function GlobalStockDashboard() {
                               <td className="px-3 py-1.5">
                                 {c.child_sku_name}
                                 {c.reserved > 0 && <span className="ml-2 text-[10px] text-amber-600 font-medium">reserved {Number(c.reserved).toLocaleString('en-IN')}</span>}
+                                <span className="block text-[10px] text-slate-400">
+                                  {['received', 'delivered', 'transfer_out', 'factory_returns', 'branding']
+                                    .filter((k) => (c.flows?.[k] || 0) !== 0)
+                                    .map((k) => `${{ received: 'rec', delivered: 'del', transfer_out: 'xfer', factory_returns: 'fact.ret', branding: 'brand' }[k]} ${c.flows[k] > 0 && k === 'branding' ? '+' : ''}${Number(c.flows[k]).toLocaleString('en-IN')}`)
+                                    .join(' · ') || 'no transactions'}
+                                </span>
                               </td>
                               <td className="px-3 py-1.5 text-right text-slate-500">{Number(c.actual).toLocaleString('en-IN')}</td>
                               <td className="px-2 py-1.5 text-center text-slate-400">→</td>

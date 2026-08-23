@@ -473,6 +473,7 @@ class RealignRequest(BaseModel):
     location_id: Optional[str] = None
     sku_id: Optional[str] = None
     distributor_id: Optional[str] = None  # realign is always scoped per distributor
+    include_branding: bool = True  # count Branding-module conversions in the split
 
 
 async def _apply_child_delta(tenant_id: str, loc: dict, sku_id: str, child_id, delta: int,
@@ -566,11 +567,12 @@ async def stock_child_realign(payload: RealignRequest, current_user: dict = Depe
     # ── expected net flow per (loc, sku, child) ──────────────────────────
     flows: dict = {}
 
-    def flow(loc_id, sku_id, child_id, units, sku_name=None, child_name=None):
+    def flow(loc_id, sku_id, child_id, units, sku_name=None, child_name=None, comp="other"):
         if not loc_id or not sku_id:
             return
         key = (loc_id, sku_id, child_id or None)
-        flows[key] = flows.get(key, 0) + int(units or 0)
+        m = flows.setdefault(key, {})
+        m[comp] = m.get(comp, 0) + int(units or 0)
         note_names(sku_id, child_id, sku_name, child_name)
 
     # shipments in (distributor warehouses)
@@ -586,7 +588,7 @@ async def stock_child_realign(payload: RealignRequest, current_user: dict = Depe
             loc_id = s.get("distributor_location_id") or \
                 (default_loc_by_dist.get(s.get("distributor_id")) or {}).get("id")
             flow(loc_id, it.get("sku_id"), it.get("child_sku_id"), _item_units(it),
-                 it.get("sku_name"), it.get("child_sku_name"))
+                 it.get("sku_name"), it.get("child_sku_name"), comp="received")
 
     # deliveries out (incl. is_promo stock-outs — same collection)
     dels = {d["id"]: d for d in await db.distributor_deliveries.find(
@@ -599,7 +601,7 @@ async def stock_child_realign(payload: RealignRequest, current_user: dict = Depe
             if not d:
                 continue
             flow(d.get("distributor_location_id"), it.get("sku_id"), it.get("child_sku_id"),
-                 -_item_units(it), it.get("sku_name"), it.get("child_sku_name"))
+                 -_item_units(it), it.get("sku_name"), it.get("child_sku_name"), comp="delivered")
 
     # legacy promo dispatches (deducted at confirm; not in distributor_deliveries)
     legacy_promos = {p["id"]: p for p in await db.promo_dispatches.find(
@@ -614,7 +616,7 @@ async def stock_child_realign(payload: RealignRequest, current_user: dict = Depe
                 if not p:
                     continue
                 flow(p.get("distributor_location_id"), it.get("sku_id"), it.get("child_sku_id"),
-                     -_item_units(it), it.get("sku_name"), it.get("child_sku_name"))
+                     -_item_units(it), it.get("sku_name"), it.get("child_sku_name"), comp="delivered")
 
     # transfers (source −, dest +); item quantity is packages
     async for t in db.distributor_stock_transfers.find(
@@ -626,9 +628,9 @@ async def stock_child_realign(payload: RealignRequest, current_user: dict = Depe
                 upp = 0
             units = int(it.get("quantity") or 0) * (upp or 1)
             flow(t.get("source_location_id"), it.get("sku_id"), it.get("child_sku_id"),
-                 -units, it.get("sku_name"), it.get("child_sku_name"))
+                 -units, it.get("sku_name"), it.get("child_sku_name"), comp="transfer_out")
             flow(t.get("dest_location_id"), it.get("sku_id"), it.get("child_sku_id"),
-                 units, it.get("sku_name"), it.get("child_sku_name"))
+                 units, it.get("sku_name"), it.get("child_sku_name"), comp="received")
 
     # factory returns out
     async for fr in db.distributor_factory_returns.find(
@@ -637,15 +639,16 @@ async def stock_child_realign(payload: RealignRequest, current_user: dict = Depe
             (default_loc_by_dist.get(fr.get("distributor_id")) or {}).get("id")
         for it in (fr.get("items") or []):
             flow(loc_id, it.get("sku_id"), it.get("child_sku_id"),
-                 -(int(it.get("quantity") or 0)), it.get("sku_name"), it.get("child_sku_name"))
+                 -(int(it.get("quantity") or 0)), it.get("sku_name"), it.get("child_sku_name"),
+                 comp="factory_returns")
 
     # branding conversions (from −, to +)
     async for be in db.branding_entries.find({"tenant_id": tenant_id}, {"_id": 0}):
         qty = int(be.get("quantity") or 0)
         flow(be.get("warehouse_location_id"), be.get("sku_id"), be.get("from_child_sku_id"),
-             -qty, be.get("sku_name"), be.get("from_child_sku_name"))
+             -qty, be.get("sku_name"), be.get("from_child_sku_name"), comp="branding")
         flow(be.get("warehouse_location_id"), be.get("sku_id"), be.get("to_child_sku_id"),
-             qty, be.get("sku_name"), be.get("to_child_sku_name"))
+             qty, be.get("sku_name"), be.get("to_child_sku_name"), comp="branding")
 
     # ── open stock-outs (scheduled/confirmed — stock NOT yet deducted) ───
     # These don't change the physical split, but each child's realign target
@@ -682,7 +685,11 @@ async def stock_child_realign(payload: RealignRequest, current_user: dict = Depe
         if len(children) < 2:
             continue  # nothing to redistribute
         actual_total = sum(actual.get((loc_id, sku_id, c), 0) for c in children)
-        expected = {c: flows.get((loc_id, sku_id, c), 0) for c in children}
+
+        def net(c):
+            m = flows.get((loc_id, sku_id, c), {})
+            return sum(v for k, v in m.items() if payload.include_branding or k != "branding")
+        expected = {c: net(c) for c in children}
         residual = actual_total - sum(expected.values())
         expected[None] = expected.get(None, 0) + residual  # production / unexplained → Generic
         children = set(children) | {None}
@@ -740,6 +747,8 @@ async def stock_child_realign(payload: RealignRequest, current_user: dict = Depe
                 "target": expected[c],
                 "delta": deltas[c],
                 "reserved": res.get(c, 0),
+                "flows": {k: flows.get((loc_id, sku_id, c), {}).get(k, 0)
+                          for k in ("received", "delivered", "transfer_out", "factory_returns", "branding")},
             } for c in sorted(children, key=lambda c: (c is not None, str(c)))],
         }
         findings.append(finding)

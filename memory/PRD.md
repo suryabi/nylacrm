@@ -2617,3 +2617,11 @@ Test tenant sales-only deleted.
 - Verified from complete_delivery: stock rows are deducted ONLY at completion — open (draft/confirmed/scheduled/in_transit/delivery_assigned/delivery_scheduled/on_the_way) stock-outs have NOT touched physical rows, so they're correctly excluded from expected-flow subtraction.
 - Added safeguard: per-child realign target is floored at that child's open stock-out commitments (reserved), borrowing from Generic-first/largest-surplus donors; totals still preserved exactly. Findings include "reserved" per child; UI shows an amber "reserved n" hint.
 - Verified: open confirmed 30-generic stock-out lifted Generic target 24→30 (borrowed 6 from Child A), targets sum 216. Seeds cleaned.
+
+## 2026-08 — Realign v4: branding transparency + toggle (production incident follow-up)
+- Production incident: user applied realign; Generic went to 0 (300 rec / 15 del). Cause: branding_entries (Generic→branded conversions) counted in expected split, but production shipments already arrive child-attributed → branding entries double-counted the same movement. Instructed user to UNDO via History tab (restores exact prior split).
+- Fixes:
+  - flows now tracked per component (received / delivered / transfer_out / factory_returns / branding); each finding child includes a "flows" breakdown so the preview math is fully verifiable.
+  - RealignRequest.include_branding (default true): when false, branding conversions are excluded and targets equal pure received−delivered−returns. UI checkbox "Count branding conversions" (realign-branding-toggle) re-runs the preview on toggle; child rows show tiny breakdown line (rec/del/xfer/fact.ret/brand).
+- Verified: with branding A96/B96/G24; without branding A96/B60/G60 (pure rec−del); totals 216 both ways; UI toggle + dialog screenshot OK. Seeds cleaned.
+- PRODUCTION guidance: Undo the applied realignment first, redeploy, re-open Reconcile, UNTICK branding toggle to compare, verify per-child breakdown, then apply per-SKU only when numbers match physical reality.
