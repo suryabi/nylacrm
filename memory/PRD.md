@@ -2688,3 +2688,6 @@ Bug: values looked like bottles / inflated identical totals. Causes: (1) summed 
 
 ## 2026-08 — Stock at Hand now CHILD-SKU level
 Stock rows keyed (loc, sku_id, child_sku_id). For each item of the account's last delivery: use item.child_sku_id, else the account's own branded child (child_skus.customer_account_id + parent_sku_id), else Generic (child None) rows. Verified: branded child 240 bottles/24 → 10 crates for Fresh Mart (was 20 from parent total); unbranded Grand Hotel → generic 3 crates red. Extra seed: vgdemo-child + vgdemo-stock3.
+
+## 2026-08 — Stock at Hand: name-based child matching tier
+Matching priority per last-delivery item: (1) item.child_sku_id → (2) child_skus.customer_account_id link → (3) NAME match: stock child rows whose child_sku_name contains the account name (casefold, min 4 chars) — production children are named "SKU – AccountName" and often lack ID links → (4) Generic (child None). Name tier also rescues stale/mismatched ids (units==0 triggers it). Verified: unlinked child row "Demo 500ml – Demo Grand Hotel (Low Stock)" 96/12 → 8 crates picked over generic 3. Seed: vgdemo-stock4.

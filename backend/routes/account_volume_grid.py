@@ -167,6 +167,7 @@ async def get_grid(
     # "Stock at Warehouse" column (stock of the account's SKUs at the
     # warehouse that last served it).
     stock_units: Dict[tuple, int] = {}
+    stock_child_name: Dict[tuple, str] = {}
     stock_bpc: Dict[str, int] = {}
     all_locs = list({l for l in loc_by_delivery.values() if l})
     all_skus = list({s for ss in skuids_by_delivery.values() for s in ss})
@@ -175,9 +176,11 @@ async def get_grid(
                 {"tenant_id": tenant_id, "distributor_location_id": {"$in": all_locs},
                  "sku_id": {"$in": all_skus}},
                 {"_id": 0, "distributor_location_id": 1, "sku_id": 1, "quantity": 1,
-                 "bottles_per_crate": 1, "child_sku_id": 1}):
+                 "bottles_per_crate": 1, "child_sku_id": 1, "child_sku_name": 1}):
             k = (sr["distributor_location_id"], sr["sku_id"], sr.get("child_sku_id") or None)
             stock_units[k] = stock_units.get(k, 0) + int(sr.get("quantity") or 0)
+            if sr.get("child_sku_name"):
+                stock_child_name.setdefault(k, sr["child_sku_name"])
             try:
                 b = int(sr.get("bottles_per_crate") or 0)
                 if b > 0 and sr["sku_id"] not in stock_bpc:
@@ -188,9 +191,11 @@ async def get_grid(
                 {"tenant_id": tenant_id, "warehouse_location_id": {"$in": all_locs},
                  "sku_id": {"$in": all_skus}},
                 {"_id": 0, "warehouse_location_id": 1, "sku_id": 1, "quantity": 1,
-                 "bottles_per_crate": 1, "child_sku_id": 1}):
+                 "bottles_per_crate": 1, "child_sku_id": 1, "child_sku_name": 1}):
             k = (sr["warehouse_location_id"], sr["sku_id"], sr.get("child_sku_id") or None)
             stock_units[k] = stock_units.get(k, 0) + int(sr.get("quantity") or 0)
+            if sr.get("child_sku_name"):
+                stock_child_name.setdefault(k, sr["child_sku_name"])
             try:
                 b = int(sr.get("bottles_per_crate") or 0)
                 if b > 0 and sr["sku_id"] not in stock_bpc:
@@ -260,10 +265,21 @@ async def get_grid(
             # child branding, else the account's own branded child, else Generic
             pairs = childpairs_by_delivery.get(dels[-1][2], set())
             if loc and pairs:
+                an = (a.get("account_name") or "").strip().casefold()
                 total = 0.0
                 for sid, cid in pairs:
                     target = cid or acc_child.get((a["id"], sid))
-                    units = stock_units.get((loc, sid, target), 0) if target else stock_units.get((loc, sid, None), 0)
+                    units = stock_units.get((loc, sid, target), 0) if target else 0
+                    if units == 0:
+                        # name-based match: child rows named "... – <Account Name>"
+                        matched = [k for k in stock_units
+                                   if k[0] == loc and k[1] == sid and k[2]
+                                   and an and len(an) >= 4
+                                   and an in stock_child_name.get(k, "").casefold()]
+                        if matched:
+                            units = sum(stock_units[k] for k in matched)
+                        elif not target:
+                            units = stock_units.get((loc, sid, None), 0)
                     total += units / (upc.get(sid) or stock_bpc.get(sid) or default_bpc or 1)
                 wh_stock = round(total, 2)
         est = emv if isinstance(emv, (int, float)) else actual_monthly
