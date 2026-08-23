@@ -61,17 +61,30 @@ export default function PromoDispatchSection({
   const [showRepair, setShowRepair] = useState(false);
   const [repairScan, setRepairScan] = useState(null);
   const [repairBusy, setRepairBusy] = useState(false);
+  const [fixingItemId, setFixingItemId] = useState(null);
 
-  const runRepair = async (apply) => {
-    setRepairBusy(true);
+  const runRepair = async (apply, itemIds = null) => {
+    if (itemIds) setFixingItemId(itemIds[0]); else setRepairBusy(true);
     try {
       const res = await fetch(`${API_URL}/api/promo-deliveries/repair-crate-units`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apply }),
+        body: JSON.stringify({ apply, item_ids: itemIds }),
       });
       if (!res.ok) throw new Error((await res.json()).detail || 'Repair failed');
       const data = await res.json();
+      if (apply && itemIds) {
+        toast.success('Line corrected — stock adjusted');
+        fetchDispatches();
+        // refresh the preview so the fixed row disappears
+        const r2 = await fetch(`${API_URL}/api/promo-deliveries/repair-crate-units`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apply: false }),
+        });
+        if (r2.ok) setRepairScan(await r2.json());
+        return;
+      }
       setRepairScan(data);
       if (apply) {
         toast.success(`Repaired ${data.repaired} line(s) — stock corrected`);
@@ -83,6 +96,7 @@ export default function PromoDispatchSection({
       toast.error(e.message);
     } finally {
       setRepairBusy(false);
+      setFixingItemId(null);
     }
   };
 
@@ -1509,8 +1523,8 @@ export default function PromoDispatchSection({
               <div className="space-y-3">
                 <div className={`text-sm font-medium ${repairScan.dry_run ? 'text-amber-700' : 'text-emerald-700'}`} data-testid="repair-summary">
                   {repairScan.dry_run
-                    ? `Preview: ${repairScan.affected_lines - (repairScan.ambiguous || 0)} line(s) will be corrected${repairScan.ambiguous ? `, ${repairScan.ambiguous} flagged for manual review (not auto-changed)` : ''}. Nothing changed yet.`
-                    : `Done: ${repairScan.repaired} line(s) corrected and stock adjusted.${repairScan.ambiguous ? ` ${repairScan.ambiguous} flagged line(s) left untouched — review manually.` : ''}`}
+                    ? `Preview: ${repairScan.affected_lines - (repairScan.ambiguous || 0)} line(s) can be corrected${repairScan.ambiguous ? `, ${repairScan.ambiguous} flagged for manual review` : ''}. Fix rows individually, or Apply All (skips flagged rows). Nothing changed yet.`
+                    : `Done: ${repairScan.repaired} line(s) corrected and stock adjusted.${repairScan.ambiguous ? ` ${repairScan.ambiguous} flagged line(s) left untouched — fix them individually after review.` : ''}`}
                 </div>
                 <div className="max-h-72 overflow-y-auto border rounded-md">
                   <table className="w-full text-sm">
@@ -1523,6 +1537,7 @@ export default function PromoDispatchSection({
                         <th className="text-right p-2 font-semibold text-xs uppercase text-slate-600">Correct</th>
                         <th className="text-right p-2 font-semibold text-xs uppercase text-slate-600">Missing</th>
                         <th className="text-center p-2 font-semibold text-xs uppercase text-slate-600">Stock Adj.</th>
+                        <th className="text-center p-2 font-semibold text-xs uppercase text-slate-600">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1533,11 +1548,23 @@ export default function PromoDispatchSection({
                             <span className="block font-sans text-[10px] text-slate-500">{[f.recipient, f.delivery_date].filter(Boolean).join(' · ')}</span>
                           </td>
                           <td className="p-2">{f.sku_name}</td>
-                          <td className="p-2">{f.packaging}{f.ambiguous && <span className="block text-[10px] text-amber-700 font-medium">review manually — skipped</span>}</td>
+                          <td className="p-2">{f.packaging}{f.ambiguous && <span className="block text-[10px] text-amber-700 font-medium">needs review — use Fix to confirm</span>}</td>
                           <td className="p-2 text-right">{f.stored_quantity}</td>
                           <td className="p-2 text-right font-medium">{f.correct_quantity_bottles}</td>
                           <td className="p-2 text-right text-red-600 font-medium">{f.missing_bottles}</td>
                           <td className="p-2 text-center">{f.ambiguous ? '—' : f.stock_will_be_adjusted ? 'Yes' : 'No'}</td>
+                          <td className="p-2 text-center">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                              disabled={fixingItemId != null || repairBusy}
+                              onClick={() => runRepair(true, [f.item_id])}
+                              data-testid={`repair-fix-row-${i}`}
+                            >
+                              {fixingItemId === f.item_id ? <RefreshCw className="h-3 w-3 animate-spin" /> : 'Fix'}
+                            </Button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1555,8 +1582,8 @@ export default function PromoDispatchSection({
                 onClick={() => runRepair(true)}
                 data-testid="repair-apply-btn"
               >
-                {repairBusy ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Wrench className="h-4 w-4 mr-2" />}
-                Apply Repair
+                {fixingItemId || repairBusy ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Wrench className="h-4 w-4 mr-2" />}
+                Apply All
               </Button>
             )}
           </DialogFooter>

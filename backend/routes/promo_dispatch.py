@@ -19,7 +19,7 @@ Collections (kept separate from account deliveries to avoid any regression):
 """
 from fastapi import APIRouter, HTTPException, Depends, Response
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
 import logging
@@ -1157,6 +1157,7 @@ async def promo_challan_pdf(distributor_id: str, dispatch_id: str, current_user:
 # ─────────────────── Legacy crate-unit repair (admin, dry-run first) ───────────────────
 class RepairRequest(BaseModel):
     apply: bool = False
+    item_ids: Optional[List[str]] = None  # apply only these lines (per-row fix)
 
 
 def _pkg_units_from_name(name: str) -> int:
@@ -1250,6 +1251,7 @@ async def repair_promo_crate_units(payload: RepairRequest, current_user: dict = 
                 delta = correct_qty - qty
                 stock_deducted = (d.get("status") in deducted_statuses)
                 findings.append({
+                    "item_id": it["id"],
                     "challan_number": d.get("challan_number"), "dispatch_id": d["id"],
                     "recipient": d.get("contact_name") or d.get("recipient_name"),
                     "delivery_date": (d.get("delivery_date") or d.get("created_at") or "")[:10],
@@ -1260,8 +1262,13 @@ async def repair_promo_crate_units(payload: RepairRequest, current_user: dict = 
                 })
                 if ambiguous:
                     ambiguous_count += 1
-                    continue
-                if payload.apply:
+                # Bulk apply skips ambiguous lines; a targeted per-row fix
+                # (item_ids) is the user explicitly resolving that line.
+                if payload.item_ids is not None:
+                    apply_this = payload.apply and it["id"] in payload.item_ids
+                else:
+                    apply_this = payload.apply and not ambiguous
+                if apply_this:
                     await db.distributor_delivery_items.update_one(
                         {"id": it["id"], "tenant_id": tenant_id},
                         {"$set": {"quantity": correct_qty, "packages": qty, "units_per_package": upp,

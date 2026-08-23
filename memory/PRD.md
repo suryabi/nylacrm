@@ -2582,3 +2582,8 @@ Test tenant sales-only deleted.
   - Repair resolve_upp: SKU packaging config is authoritative (explicit units=1 → trusted, skipped); config=1 vs container-name>1 contradiction → ambiguous (manual review, never auto-repaired). Returns (upp, force_ambiguous).
   - Findings now carry recipient + delivery_date; UI shows them under the challan number for disambiguation.
 - Verified in preview: bottle-only challan NOT flagged, "330ml Bottle" NOT flagged, real 5-crate bug flagged (5→60) with recipient shown; challan generator returns unique max+1 across collections; DO create keeps "330ml Bottle" qty=3 unmultiplied while "12 Bottle Crate" 2→24 (PASS). Seeds cleaned up.
+
+## 2026-08 — Repair tool: per-row fix
+- RepairRequest gains item_ids (optional list). Bulk apply (no item_ids) still skips ambiguous lines; targeted apply (item_ids) applies exactly those lines INCLUDING ambiguous ones (explicit user confirmation). Findings include item_id.
+- UI: each preview row has a "Fix" button (repair-fix-row-{i}); on success re-runs dry-run to refresh the list; "Apply Repair" renamed "Apply All". Ambiguous note: "needs review — use Fix to confirm".
+- Verified: targeted fix corrected only row-item-1 (3→36, stock -33 only), others untouched; explicit fix on ambiguous line applied (24→288); remaining dry-run listed only leftover line; UI click-Fix corrected 7→84 and refreshed to no-issues. Seeds cleaned up.
