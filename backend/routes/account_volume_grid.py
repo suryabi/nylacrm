@@ -113,8 +113,9 @@ async def get_grid(
     deliveries = await db.distributor_deliveries.find(
         {"tenant_id": tenant_id, "status": {"$in": DONE_STATUSES}, "account_id": {"$in": acc_ids}},
         {"_id": 0, "id": 1, "account_id": 1, "delivered_at": 1, "delivery_date": 1,
-         "created_at": 1, "total_quantity": 1}
+         "created_at": 1, "total_quantity": 1, "distributor_location_id": 1}
     ).to_list(20000)
+    loc_by_delivery = {d["id"]: d.get("distributor_location_id") for d in deliveries if d.get("id")}
 
     by_acc: Dict[str, list] = {}
     for d in deliveries:
@@ -128,12 +129,13 @@ async def get_grid(
     crates_by_delivery: Dict[str, float] = {}
     bpc_by_delivery: Dict[str, list] = {}
     skus_by_delivery: Dict[str, list] = {}
+    skuids_by_delivery: Dict[str, set] = {}
+    upc: Dict[str, int] = {}
     if delivery_ids:
         items = await db.distributor_delivery_items.find(
             {"delivery_id": {"$in": delivery_ids}},
             {"_id": 0, "delivery_id": 1, "sku_id": 1, "sku_name": 1, "quantity": 1}).to_list(50000)
         sku_ids = list({i.get("sku_id") for i in items if i.get("sku_id")})
-        upc: Dict[str, int] = {}
         if sku_ids:
             async for ms in db.master_skus.find(
                     {"id": {"$in": sku_ids}},
@@ -152,8 +154,28 @@ async def get_grid(
                 bpc_by_delivery.setdefault(i["delivery_id"], []).append(n)
             if i.get("sku_name") and i["sku_name"] not in skus_by_delivery.setdefault(i["delivery_id"], []):
                 skus_by_delivery[i["delivery_id"]].append(i["sku_name"])
+            if i.get("sku_id"):
+                skuids_by_delivery.setdefault(i["delivery_id"], set()).add(i["sku_id"])
             crates_by_delivery[i["delivery_id"]] = crates_by_delivery.get(i["delivery_id"], 0) + (i.get("quantity") or 0) / (n or 1)
     default_bpc = max(set(upc.values()), key=list(upc.values()).count) if crates_by_delivery and upc else 1
+
+    # Current warehouse stock (units) per (location, sku) — for the
+    # "Stock at Warehouse" column (stock of the account's SKUs at the
+    # warehouse that last served it).
+    stock_units: Dict[tuple, int] = {}
+    all_locs = list({l for l in loc_by_delivery.values() if l})
+    all_skus = list({s for ss in skuids_by_delivery.values() for s in ss})
+    if all_locs and all_skus:
+        async for sr in db.distributor_stock.find(
+                {"tenant_id": tenant_id, "distributor_location_id": {"$in": all_locs},
+                 "sku_id": {"$in": all_skus}}, {"_id": 0, "distributor_location_id": 1, "sku_id": 1, "quantity": 1}):
+            k = (sr["distributor_location_id"], sr["sku_id"])
+            stock_units[k] = stock_units.get(k, 0) + int(sr.get("quantity") or 0)
+        async for sr in db.factory_warehouse_stock.find(
+                {"tenant_id": tenant_id, "warehouse_location_id": {"$in": all_locs},
+                 "sku_id": {"$in": all_skus}}, {"_id": 0, "warehouse_location_id": 1, "sku_id": 1, "quantity": 1}):
+            k = (sr["warehouse_location_id"], sr["sku_id"])
+            stock_units[k] = stock_units.get(k, 0) + int(sr.get("quantity") or 0)
 
     rows = []
     for a in accounts:
@@ -199,6 +221,21 @@ async def get_grid(
             else:
                 consumption_in_days = 30 - days_elapsed
         emv = a.get("expected_monthly_volume_crates")
+        # Stock at the warehouse that last served this account, for the SKUs
+        # it has ordered. Red-flag when below half the estimated monthly
+        # consumption (Expected Monthly Volume, else Actual Monthly Consumption).
+        wh_stock = None
+        if dels:
+            loc = loc_by_delivery.get(dels[-1][2])
+            acc_skus = {s for _, _, did in dels for s in skuids_by_delivery.get(did, set())}
+            if loc and acc_skus:
+                wh_stock = round(sum(
+                    stock_units.get((loc, sid), 0) / (upc.get(sid) or default_bpc or 1)
+                    for sid in acc_skus), 2)
+        est = emv if isinstance(emv, (int, float)) else actual_monthly
+        low_stock = bool(
+            wh_stock is not None and isinstance(est, (int, float)) and est > 0 and wh_stock < est / 2
+        )
         rows.append({
             "account_id": a["id"],
             "account_code": a.get("account_id"),
@@ -217,6 +254,8 @@ async def get_grid(
             "biweekly_volume_crates": round(emv / 2, 1) if isinstance(emv, (int, float)) else None,
             "actual_monthly_consumption_crates": actual_monthly,
             "consumption_available_in_days": consumption_in_days,
+            "warehouse_stock_crates": wh_stock,
+            "low_warehouse_stock": low_stock,
             "custom_values": a.get("volume_grid_values") or {},
         })
 
@@ -242,6 +281,8 @@ async def get_grid(
             "biweekly_volume_crates": round(emv / 2, 1) if isinstance(emv, (int, float)) else None,
             "actual_monthly_consumption_crates": None,
             "consumption_available_in_days": None,
+            "warehouse_stock_crates": None,
+            "low_warehouse_stock": False,
             "custom_values": m.get("custom_values") or {},
         })
 
@@ -309,6 +350,7 @@ async def export_excel(
             "Average Order Frequency": r.get("avg_order_frequency_days"),
             "Number of Orders": r.get("order_count"),
             "Actual Monthly Consumption": r.get("actual_monthly_consumption_crates"),
+            "Stock at Warehouse": r.get("warehouse_stock_crates"),
         }
         for c in custom_cols:
             if c["type"] == "number":
@@ -319,7 +361,7 @@ async def export_excel(
                "Avg Order Frequency (Days)", "No. of Orders", "First Delivery Date", "Latest Delivery Date",
                "Last 4 Delivery Dates", "Last 4 Delivery Qty (Crates)",
                "Last Order Quantity (Crates)", "Last Ordered SKU", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)",
-               "Actual Monthly Consumption (Crates)"] \
+               "Actual Monthly Consumption (Crates)", "Stock at Warehouse (Crates)"] \
         + [c["name"] for c in custom_cols]
 
     def row_values(r):
@@ -332,7 +374,8 @@ async def export_excel(
                 r.get("last_order_quantity"), r.get("last_order_sku") or "",
                 r.get("biweekly_volume_crates"), r.get("expected_monthly_volume_crates"),
                 r.get("actual_monthly_consumption_crates") if r.get("actual_monthly_consumption_crates") is not None
-                else (f"Available in {r['consumption_available_in_days']} days" if r.get("consumption_available_in_days") is not None else "")]
+                else (f"Available in {r['consumption_available_in_days']} days" if r.get("consumption_available_in_days") is not None else ""),
+                r.get("warehouse_stock_crates")]
         for c in custom_cols:
             if c["type"] == "formula":
                 base.append(_eval_formula(c.get("formula"), ctx_for(r)))
@@ -347,7 +390,7 @@ async def export_excel(
     total_indexes = {13, 14, 15}  # Bi-weekly, Expected Monthly, Actual Monthly Consumption
     for j, c in enumerate(custom_cols):
         if c.get("include_in_total"):
-            total_indexes.add(16 + j)
+            total_indexes.add(17 + j)
     for i in sorted(total_indexes):
         nums = [v[i] for v in all_values if isinstance(v[i], (int, float))]
         if nums:
@@ -366,11 +409,19 @@ async def export_excel(
         c.fill = PatternFill(start_color="E8EDFB", end_color="E8EDFB", fill_type="solid")
     for v in all_values:
         ws.append(v)
+    # Red-flag low warehouse stock (< half estimated monthly consumption)
+    low_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+    low_font = Font(bold=True, color="B91C1C")
+    for i, r in enumerate(rows):
+        if r.get("low_warehouse_stock"):
+            cell = ws.cell(row=3 + i, column=16)
+            cell.fill = low_fill
+            cell.font = low_font
     wrap = Alignment(wrap_text=True, vertical="top")
     for row_cells in ws.iter_rows(min_row=3, min_col=10, max_col=11):
         for c in row_cells:
             c.alignment = wrap
-    widths = [34, 16, 16, 16, 18, 22, 14, 16, 16, 16, 16, 16, 24, 20, 26, 28] + [18] * len(custom_cols)
+    widths = [34, 16, 16, 16, 18, 22, 14, 16, 16, 16, 16, 16, 24, 20, 26, 28, 24] + [18] * len(custom_cols)
     for idx, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=idx).column_letter].width = w
     brand_workbook(wb)

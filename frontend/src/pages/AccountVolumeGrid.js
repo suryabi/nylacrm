@@ -31,6 +31,7 @@ const BASE_COLUMNS = [
   { key: 'biweekly_volume_crates', label: 'Bi-weekly Volume (Crates)', type: 'number' },
   { key: 'expected_monthly_volume_crates', label: 'Expected Monthly Volume (Crates)', type: 'number', editable: true },
   { key: 'actual_monthly_consumption_crates', label: 'Actual Monthly Consumption (Crates)', type: 'number' },
+  { key: 'warehouse_stock_crates', label: 'Stock at Warehouse (Crates)', type: 'number' },
 ];
 
 // Names usable inside formulas → row value resolver
@@ -42,6 +43,7 @@ const formulaContext = (row, customCols) => {
     'Average Order Frequency': row.avg_order_frequency_days,
     'Number of Orders': row.order_count,
     'Actual Monthly Consumption': row.actual_monthly_consumption_crates,
+    'Stock at Warehouse': row.warehouse_stock_crates,
   };
   (customCols || []).forEach((c) => {
     if (c.type === 'number') ctx[c.name] = row.custom_values?.[c.id];
@@ -633,7 +635,8 @@ export default function AccountVolumeGrid() {
               {sortedRows.map((row, ri) => (
                 <tr key={row.account_id} className={`border-b border-slate-100 transition-colors group ${row.is_manual ? 'bg-amber-50/40' : ri % 2 ? 'bg-slate-50/60' : 'bg-white'} hover:bg-[#EFF3FB]`} data-testid={`vg-row-${row.account_code || row.account_id}`}>
                   {visibleColumns.map((c) => (
-                    <td key={c.key} className={`px-3 py-2 align-top whitespace-normal break-words ${numericCol(c) ? 'text-right' : ''} ${c.key === 'account_name' ? `font-semibold text-slate-900 sticky left-0 z-10 ${row.is_manual ? 'bg-[#FDF6E7]' : ri % 2 ? 'bg-[#F7F9FC]' : 'bg-white'} group-hover:bg-[#EFF3FB] shadow-[inset_-1px_0_0_#e2e8f0]` : 'text-slate-700'}`}>
+                    <td key={c.key} className={`px-3 py-2 align-top whitespace-normal break-words ${numericCol(c) ? 'text-right' : ''} ${c.key === 'warehouse_stock_crates' && row.low_warehouse_stock ? 'bg-red-100 text-red-700 font-semibold' : ''} ${c.key === 'account_name' ? `font-semibold text-slate-900 sticky left-0 z-10 ${row.is_manual ? 'bg-[#FDF6E7]' : ri % 2 ? 'bg-[#F7F9FC]' : 'bg-white'} group-hover:bg-[#EFF3FB] shadow-[inset_-1px_0_0_#e2e8f0]` : 'text-slate-700'}`}
+                      data-testid={c.key === 'warehouse_stock_crates' ? `vg-whstock-${row.account_code || row.account_id}${row.low_warehouse_stock ? '-low' : ''}` : undefined}>
                       {c.key === 'account_name' ? (
                         row.is_manual ? (
                           <div className="flex items-start justify-between gap-1">
