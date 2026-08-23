@@ -11,7 +11,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/colla
 import { toast } from 'sonner';
 import {
   Plus, Trash2, Gift, RefreshCw, Package, FileText, X, Download, ChevronDown,
-  AlertCircle, Settings2, Users, Ban, ShieldCheck, CheckCircle2, Undo2,
+  AlertCircle, Settings2, Users, Ban, ShieldCheck, CheckCircle2, Undo2, Wrench,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { groupByDateDesc } from '../../utils/dateGrouping';
@@ -56,6 +56,35 @@ export default function PromoDispatchSection({
   const [loading, setLoading] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
   const [retryingId, setRetryingId] = useState(null);
+
+  // Legacy crate-unit repair (admin-only)
+  const [showRepair, setShowRepair] = useState(false);
+  const [repairScan, setRepairScan] = useState(null);
+  const [repairBusy, setRepairBusy] = useState(false);
+
+  const runRepair = async (apply) => {
+    setRepairBusy(true);
+    try {
+      const res = await fetch(`${API_URL}/api/promo-deliveries/repair-crate-units`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apply }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || 'Repair failed');
+      const data = await res.json();
+      setRepairScan(data);
+      if (apply) {
+        toast.success(`Repaired ${data.repaired} line(s) — stock corrected`);
+        fetchDispatches();
+      } else if (data.affected_lines === 0) {
+        toast.info('No legacy unit issues found — all promo dispatches are correct');
+      }
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setRepairBusy(false);
+    }
+  };
 
   // Create dialog
   const [showDialog, setShowDialog] = useState(false);
@@ -582,6 +611,16 @@ export default function PromoDispatchSection({
               </button>
             </CollapsibleTrigger>
             <div className="flex items-center gap-2">
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  onClick={() => { setRepairScan(null); setShowRepair(true); runRepair(false); }}
+                  data-testid="repair-crate-units-btn"
+                >
+                  <Wrench className="h-4 w-4 mr-2" />
+                  Repair Units
+                </Button>
+              )}
               {isAdmin && (
                 <Button
                   variant="outline"
@@ -1437,6 +1476,85 @@ export default function PromoDispatchSection({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowReasonsMgr(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Legacy crate-unit repair dialog */}
+      <Dialog open={showRepair} onOpenChange={setShowRepair}>
+        <DialogContent className="max-w-2xl" data-testid="repair-units-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wrench className="h-5 w-5 text-amber-600" />
+              Repair Legacy Crate Units
+            </DialogTitle>
+            <DialogDescription>
+              Finds old promo stock-outs where a crate was deducted as 1 bottle, converts them to bottles
+              and deducts the missing stock. Review the preview below, then apply.
+            </DialogDescription>
+          </DialogHeader>
+          {repairBusy && !repairScan ? (
+            <div className="flex items-center justify-center py-10">
+              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : repairScan ? (
+            repairScan.affected_lines === 0 ? (
+              <div className="text-center py-8 text-muted-foreground" data-testid="repair-no-issues">
+                <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-emerald-500" />
+                <p className="font-medium text-slate-700">No unit issues found</p>
+                <p className="text-sm">All promotional dispatch quantities are already recorded in bottles.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className={`text-sm font-medium ${repairScan.dry_run ? 'text-amber-700' : 'text-emerald-700'}`} data-testid="repair-summary">
+                  {repairScan.dry_run
+                    ? `Preview: ${repairScan.affected_lines} line(s) will be corrected. Nothing changed yet.`
+                    : `Done: ${repairScan.repaired} line(s) corrected and stock adjusted.`}
+                </div>
+                <div className="max-h-72 overflow-y-auto border rounded-md">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 sticky top-0">
+                      <tr>
+                        <th className="text-left p-2 font-semibold text-xs uppercase text-slate-600">Challan</th>
+                        <th className="text-left p-2 font-semibold text-xs uppercase text-slate-600">SKU</th>
+                        <th className="text-left p-2 font-semibold text-xs uppercase text-slate-600">Packaging</th>
+                        <th className="text-right p-2 font-semibold text-xs uppercase text-slate-600">Stored</th>
+                        <th className="text-right p-2 font-semibold text-xs uppercase text-slate-600">Correct</th>
+                        <th className="text-right p-2 font-semibold text-xs uppercase text-slate-600">Missing</th>
+                        <th className="text-center p-2 font-semibold text-xs uppercase text-slate-600">Stock Adj.</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(repairScan.findings || []).map((f, i) => (
+                        <tr key={i} className="border-t" data-testid={`repair-finding-${i}`}>
+                          <td className="p-2 font-mono text-xs">{f.challan_number}</td>
+                          <td className="p-2">{f.sku_name}</td>
+                          <td className="p-2">{f.packaging}</td>
+                          <td className="p-2 text-right">{f.stored_quantity}</td>
+                          <td className="p-2 text-right font-medium">{f.correct_quantity_bottles}</td>
+                          <td className="p-2 text-right text-red-600 font-medium">{f.missing_bottles}</td>
+                          <td className="p-2 text-center">{f.stock_will_be_adjusted ? 'Yes' : 'No'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRepair(false)} data-testid="repair-close-btn">Close</Button>
+            {repairScan?.dry_run && repairScan.affected_lines > 0 && (
+              <Button
+                className="bg-amber-600 hover:bg-amber-700"
+                disabled={repairBusy}
+                onClick={() => runRepair(true)}
+                data-testid="repair-apply-btn"
+              >
+                {repairBusy ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Wrench className="h-4 w-4 mr-2" />}
+                Apply Repair
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

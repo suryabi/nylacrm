@@ -2534,3 +2534,10 @@ Test tenant sales-only deleted.
 - Backend list_articles: aggregation adds collected_date (created_at[:10]) and sorts {collected_date: -1, relevance_score: -1, created_at: -1} — newest day first, ranked by relevance within each day. Pagination unchanged.
 - Frontend WaterIntelligence.js: date group headers ("SUN, 23 AUG, 2026 — ranked by relevance", wi-date-group-{date}) inserted whenever the day changes in the list.
 - Verified: API order (23 Aug: 94→92→90→88…) + browser screenshot shows header and descending rank badges.
+
+## 2026-08 — Promo Stock-Out legacy crate-unit repair (production tally issue)
+- Root cause (explained to user first, as asked): dispatches created BEFORE the 29-Jun unit fix stored crate quantity as raw package count (quantity=1, upp missing) — stock deducted 1 bottle instead of 12. New dispatches fine; old ledger never repaired.
+- Backend (promo_dispatch.py): POST /api/promo-deliveries/repair-crate-units {apply} — admin-only, tenant-wide scan of promo_dispatches + distributor_delivery_items. Detects lines where packaging says Crate/Pack-N (regex on name, else SKU packaging_config / bottles_per_crate) but stored quantity == package count. Dry-run returns findings (challan, sku, packaging, stored, correct, missing). Apply: item quantity→bottles + upp/packages set, dispatch total_quantity recomputed, missing bottles deducted from factory_warehouse_stock/distributor_stock (only when status in dispatched/delivered/completed), item stamped unit_repair_applied_at (idempotent).
+- Frontend (PromoDispatchSection.jsx): admin "Repair Units" button (repair-crate-units-btn) next to Reasons → dialog auto-runs dry-run, shows preview table (repair-finding-N), Apply Repair (repair-apply-btn) only shown for dry-run with findings.
+- Verified in preview with seeded legacy record: dry-run found only the broken line (no false positives on real data), apply corrected 1→12 + stock 100→89, rerun = no-op; UI dialog E2E via screenshot. Test data cleaned up.
+- PRODUCTION: user must redeploy, then click Repair Units → review preview → Apply on production. Preview fix is NOT live in production until redeployed.
