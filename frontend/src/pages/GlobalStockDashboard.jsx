@@ -53,6 +53,25 @@ export default function GlobalStockDashboard() {
   const [realignHistory, setRealignHistory] = useState(null);
   const [includeBranding, setIncludeBranding] = useState(true);
   const [brandingScan, setBrandingScan] = useState(null);
+  const [trace, setTrace] = useState(null);
+  const [traceLoading, setTraceLoading] = useState(false);
+  const [showTrace, setShowTrace] = useState(false);
+
+  const fetchTrace = useCallback(async (locationId, skuId) => {
+    setShowTrace(true);
+    setTraceLoading(true);
+    setTrace(null);
+    try {
+      const res = await axios.get(`${API_URL}/api/distributor/global-stock-dashboard/trace`,
+        { params: { location_id: locationId, sku_id: skuId }, headers: HEAD() });
+      setTrace(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Trace failed');
+      setShowTrace(false);
+    } finally {
+      setTraceLoading(false);
+    }
+  }, []);
 
   const fetchBrandingCleanup = useCallback(async (distId) => {
     try {
@@ -346,6 +365,17 @@ export default function GlobalStockDashboard() {
                                       {s.children.length} child
                                     </Badge>
                                   )}
+                                  {isAdmin && (
+                                    <button
+                                      type="button"
+                                      title="Trace stock movements — explains any Wh. Stock vs column mismatch"
+                                      className="ml-1 p-0.5 rounded text-slate-300 hover:text-cyan-600 hover:bg-cyan-50"
+                                      onClick={(e) => { e.stopPropagation(); fetchTrace(w.location_id, s.sku_id); }}
+                                      data-testid={`gsd-trace-btn-${w.location_id}-${s.sku_id}`}
+                                    >
+                                      <Search className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
                                 </span>
                               </td>
                               {METRIC_DEFS.map(({ key, color }) => (
@@ -623,6 +653,98 @@ export default function GlobalStockDashboard() {
                 Realign All
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stock Trace dialog */}
+      <Dialog open={showTrace} onOpenChange={setShowTrace}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto" data-testid="trace-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-cyan-600" />
+              Stock Trace {trace ? `— ${trace.sku_name || 'SKU'} @ ${trace.warehouse_name}` : ''}
+            </DialogTitle>
+            <DialogDescription>
+              Every stock movement with the units shown in the dashboard column vs the units the
+              physical stock actually moved. Mismatched lines explain Wh. Stock drift.
+            </DialogDescription>
+          </DialogHeader>
+          {traceLoading && (
+            <div className="flex items-center justify-center py-10 text-slate-400">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Tracing movements…
+            </div>
+          )}
+          {trace && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                <div className="rounded border bg-slate-50 p-2">
+                  <p className="text-[10px] uppercase tracking-wider text-slate-400">Expected (columns)</p>
+                  <p className="font-semibold" data-testid="trace-expected">{fmt(trace.expected_units)} u</p>
+                  <p className="text-[10px] text-slate-400">Received − Delivered − Transfer − Fact. Ret.</p>
+                </div>
+                <div className="rounded border bg-cyan-50 border-cyan-200 p-2">
+                  <p className="text-[10px] uppercase tracking-wider text-cyan-600">Actual Wh. Stock</p>
+                  <p className="font-semibold text-cyan-700" data-testid="trace-onhand">{fmt(trace.on_hand_units)} u</p>
+                </div>
+                <div className={`rounded border p-2 ${trace.difference_units === 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+                  <p className="text-[10px] uppercase tracking-wider text-slate-500">Difference</p>
+                  <p className={`font-semibold ${trace.difference_units === 0 ? 'text-emerald-700' : 'text-rose-700'}`} data-testid="trace-diff">
+                    {trace.difference_units > 0 ? '+' : ''}{fmt(trace.difference_units)} u
+                  </p>
+                </div>
+                <div className="rounded border bg-amber-50 border-amber-200 p-2">
+                  <p className="text-[10px] uppercase tracking-wider text-amber-600">From mismatched lines</p>
+                  <p className="font-semibold text-amber-700" data-testid="trace-mismatch">
+                    {fmt(trace.mismatch_units)} u <span className="text-[10px] font-normal">({trace.mismatch_count} line{trace.mismatch_count === 1 ? '' : 's'})</span>
+                  </p>
+                </div>
+              </div>
+              {trace.factory_note && (
+                <p className="text-xs text-slate-500 bg-slate-50 border rounded p-2">{trace.factory_note}</p>
+              )}
+              {trace.untracked_units !== 0 && !trace.is_factory && (
+                <p className="text-xs text-slate-600 bg-violet-50 border border-violet-200 rounded p-2">
+                  <span className="font-medium">{trace.untracked_units > 0 ? '+' : ''}{fmt(trace.untracked_units)} units</span>{' '}
+                  are not explained by any movement listed here — likely legacy operations, admin migrations or manual edits.
+                </p>
+              )}
+              <div className="border rounded overflow-x-auto">
+                <table className="w-full text-xs min-w-[640px]">
+                  <thead>
+                    <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-400 border-b">
+                      <th className="text-left py-1.5 px-2">Date</th>
+                      <th className="text-left py-1.5 px-2">Type</th>
+                      <th className="text-left py-1.5 px-2">Ref</th>
+                      <th className="text-left py-1.5 px-2">Detail</th>
+                      <th className="text-right py-1.5 px-2">Column units</th>
+                      <th className="text-right py-1.5 px-2">Stock moved</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trace.events.length === 0 && (
+                      <tr><td colSpan={6} className="text-center py-6 text-slate-400">No movements found</td></tr>
+                    )}
+                    {trace.events.map((e, i) => (
+                      <tr key={i} className={`border-b last:border-0 ${e.mismatch ? 'bg-amber-50' : ''}`}
+                        data-testid={`trace-event-${i}`}>
+                        <td className="py-1.5 px-2 whitespace-nowrap text-slate-500">{(e.date || '').slice(0, 10) || '—'}</td>
+                        <td className="py-1.5 px-2 whitespace-nowrap">{e.type}</td>
+                        <td className="py-1.5 px-2 whitespace-nowrap font-mono text-[11px]">{e.ref || '—'}</td>
+                        <td className="py-1.5 px-2 text-slate-500">{e.detail}</td>
+                        <td className="py-1.5 px-2 text-right">{e.column ? fmt(e.column_units) : '—'}</td>
+                        <td className={`py-1.5 px-2 text-right font-medium ${e.mismatch ? 'text-amber-700' : ''}`}>
+                          {fmt(e.stock_units)}{e.mismatch && ' ⚠'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTrace(false)} data-testid="trace-close-btn">Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

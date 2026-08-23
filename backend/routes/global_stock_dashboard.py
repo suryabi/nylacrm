@@ -971,3 +971,180 @@ async def branding_cleanup_restore(payload: BrandingCleanupActionRequest,
         await db.branding_entries_removed.delete_one({"id": eid, "tenant_id": tenant_id})
         restored += 1
     return {"restored": restored}
+
+
+# ─────────────────────────── Stock Trace (diagnostic) ───────────────────────
+# Explains WHY a SKU's Wh. Stock differs from Received − Delivered − Transfer
+# Out − Factory Ret. Every dashboard column converts item quantities to base
+# units via packaging heuristics, but the PHYSICAL stock ledger moves the raw
+# item `quantity`. Lines stored the old way (quantity = crates/packages with
+# packaging_units set) therefore deducted/credited FEWER units than the column
+# shows — the trace lists each movement with BOTH numbers and flags mismatches.
+
+@router.get("/distributor/global-stock-dashboard/trace")
+async def stock_trace(location_id: str, sku_id: str,
+                      current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    loc = await db.distributor_locations.find_one(
+        {"id": location_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not loc:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+    is_factory = bool(loc.get("is_factory"))
+
+    stock_coll = db.factory_warehouse_stock if is_factory else db.distributor_stock
+    loc_field = "warehouse_location_id" if is_factory else "distributor_location_id"
+    rows = await stock_coll.find(
+        {"tenant_id": tenant_id, loc_field: location_id, "sku_id": sku_id},
+        {"_id": 0, "quantity": 1, "child_sku_id": 1, "child_sku_name": 1,
+         "batch_code": 1, "updated_at": 1},
+    ).to_list(500)
+    on_hand = sum(int(r.get("quantity") or 0) for r in rows)
+
+    events = []  # each: date,type,ref,detail,column,column_units,stock_units,mismatch
+    col = {"received": 0, "delivered": 0, "reserved": 0, "sent": 0, "factory_returns": 0}
+    ledger = 0  # sum of physical stock effects we can attribute
+
+    def ev(date, typ, ref, detail, column, column_units, stock_units):
+        nonlocal ledger
+        if column:
+            col[column] += abs(column_units)
+        ledger += stock_units
+        events.append({
+            "date": date, "type": typ, "ref": ref, "detail": detail,
+            "column": column, "column_units": column_units,
+            "stock_units": stock_units,
+            "mismatch": abs(column_units) != abs(stock_units) and column is not None,
+        })
+
+    sku_name = None
+
+    # 1. Stock-in shipments (Received)
+    ships = {s["id"]: s for s in await db.distributor_shipments.find(
+        {"tenant_id": tenant_id, "status": "delivered",
+         "distributor_location_id": location_id},
+        {"_id": 0, "id": 1, "shipment_number": 1, "delivered_at": 1, "updated_at": 1,
+         "shipment_date": 1},
+    ).to_list(10000)}
+    if ships:
+        async for it in db.distributor_shipment_items.find(
+                {"tenant_id": tenant_id, "sku_id": sku_id,
+                 "shipment_id": {"$in": list(ships.keys())}}, {"_id": 0}):
+            s = ships[it["shipment_id"]]
+            sku_name = sku_name or it.get("sku_name")
+            cu = _item_units(it)
+            raw = int(it.get("quantity") or 0)
+            ev(s.get("shipment_date") or s.get("delivered_at") or s.get("updated_at"),
+               "Stock In", s.get("shipment_number"),
+               it.get("child_sku_name") or "Generic", "received", cu, raw)
+
+    # 2. Deliveries — delivered (−), reserved (0 effect), reversed (net 0)
+    dels = {d["id"]: d for d in await db.distributor_deliveries.find(
+        {"tenant_id": tenant_id, "distributor_location_id": location_id,
+         "status": {"$in": list(DELIVERED_STATUSES | RESERVED_STATUSES | {"reversed", "cancelled"})}},
+        {"_id": 0, "id": 1, "delivery_number": 1, "challan_number": 1, "status": 1,
+         "delivery_date": 1, "is_promo": 1, "account_name": 1},
+    ).to_list(20000)}
+    if dels:
+        async for it in db.distributor_delivery_items.find(
+                {"tenant_id": tenant_id, "sku_id": sku_id,
+                 "delivery_id": {"$in": list(dels.keys())}}, {"_id": 0}):
+            d = dels[it["delivery_id"]]
+            sku_name = sku_name or it.get("sku_name")
+            cu = _item_units(it)
+            raw = int(it.get("quantity") or 0)
+            st = d.get("status")
+            ref = d.get("delivery_number") or d.get("challan_number")
+            who = d.get("account_name") or (it.get("child_sku_name") or "")
+            typ = "Promo Stock Out" if d.get("is_promo") else "Stock Out"
+            if st in DELIVERED_STATUSES:
+                ev(d.get("delivery_date"), typ, ref, who, "delivered", -cu, -raw)
+            elif st in RESERVED_STATUSES:
+                ev(d.get("delivery_date"), f"{typ} (open)", ref,
+                   f"{who} — reserved, stock not yet deducted", "reserved", -cu, 0)
+            else:
+                ev(d.get("delivery_date"), f"{typ} ({st})", ref,
+                   f"{who} — deducted then restored on {st}", None, 0, 0)
+
+    # 3. Legacy promo dispatches — deduct stock but appear in NO column
+    legacy = await db.promo_dispatches.find(
+        {"tenant_id": tenant_id, "distributor_location_id": location_id,
+         "status": {"$nin": ["draft", "cancelled", "reversed"]}},
+        {"_id": 0, "id": 1, "challan_number": 1, "dispatch_date": 1, "created_at": 1},
+    ).to_list(10000)
+    lg = {p["id"]: p for p in legacy}
+    if lg:
+        async for it in db.promo_dispatch_items.find(
+                {"tenant_id": tenant_id, "sku_id": sku_id,
+                 "dispatch_id": {"$in": list(lg.keys())}}, {"_id": 0}):
+            p = lg[it["dispatch_id"]]
+            raw = int(it.get("quantity") or 0)
+            ev(p.get("dispatch_date") or p.get("created_at"), "Promo (legacy)",
+               p.get("challan_number"),
+               "deducted stock — shown in NO dashboard column", None, 0, -raw)
+
+    # 4. Transfers (units already base bottles on both sides)
+    async for t in db.distributor_stock_transfers.find(
+            {"tenant_id": tenant_id, "status": "completed",
+             "$or": [{"source_location_id": location_id},
+                     {"dest_location_id": location_id}]}, {"_id": 0}):
+        for it in (t.get("items") or []):
+            if it.get("sku_id") != sku_id:
+                continue
+            qty = int(it.get("quantity") or 0)
+            upp = int(it.get("units_per_package") or 0) or 1
+            units = qty * upp
+            if t.get("source_location_id") == location_id:
+                ev(t.get("transfer_date") or t.get("created_at"), "Transfer Out",
+                   t.get("transfer_number"), it.get("child_sku_name") or "", "sent", -units, -units)
+            else:
+                ev(t.get("transfer_date") or t.get("created_at"), "Transfer In",
+                   t.get("transfer_number"), it.get("child_sku_name") or "", "received", units, units)
+
+    # 5. Factory returns (−raw)
+    async for fr in db.distributor_factory_returns.find(
+            {"tenant_id": tenant_id, "status": {"$nin": ["cancelled", "draft"]},
+             "distributor_location_id": location_id}, {"_id": 0}):
+        for it in (fr.get("items") or []):
+            if it.get("sku_id") != sku_id:
+                continue
+            raw = int(it.get("quantity") or 0)
+            ev(fr.get("return_date") or fr.get("created_at"), "Factory Return",
+               fr.get("return_number"), it.get("child_sku_name") or "",
+               "factory_returns", -raw, -raw)
+
+    # 6. Net-zero movers (info only): branding conversions + realign log
+    async for be in db.branding_entries.find(
+            {"tenant_id": tenant_id, "sku_id": sku_id,
+             "distributor_location_id": location_id}, {"_id": 0}):
+        ev(be.get("entry_date") or be.get("created_at"), "Branding Conversion",
+           be.get("id", "")[:8],
+           f"{int(be.get('quantity') or 0)} u moved Generic → {be.get('child_sku_name') or 'branded'} (net 0)",
+           None, 0, 0)
+    async for rl in db.stock_realign_log.find(
+            {"tenant_id": tenant_id, "sku_id": sku_id, "location_id": location_id,
+             "undone_at": {"$exists": False}}, {"_id": 0}):
+        ev(rl.get("applied_at"), "Child Realign", rl.get("id", "")[:8],
+           "split corrected between child rows (net 0)", None, 0, 0)
+
+    events.sort(key=lambda e: str(e.get("date") or ""))
+    expected = col["received"] - col["delivered"] - col["sent"] - col["factory_returns"]
+    mismatch_units = sum(abs(abs(e["column_units"]) - abs(e["stock_units"]))
+                         for e in events if e["mismatch"])
+    return {
+        "warehouse_name": loc.get("location_name"),
+        "is_factory": is_factory,
+        "sku_id": sku_id,
+        "sku_name": sku_name,
+        "on_hand_units": on_hand,
+        "columns": col,
+        "expected_units": expected,
+        "difference_units": on_hand - expected,
+        "ledger_units": ledger,
+        "untracked_units": on_hand - ledger,
+        "mismatch_units": mismatch_units,
+        "mismatch_count": sum(1 for e in events if e["mismatch"]),
+        "events": events,
+        "rows": rows,
+        "factory_note": ("Factory warehouses count current production stock as Received, "
+                         "so Stock In events above only cover transfers.") if is_factory else None,
+    }
