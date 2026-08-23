@@ -2546,3 +2546,8 @@ Test tenant sales-only deleted.
 - User request: green background if last order within 2 weeks, else red — on Latest Delivery Date + Last Order Quantity, and on the most recent date/qty line inside Last 4 Delivery Dates / Qty columns.
 - Frontend-only (AccountVolumeGrid.js): orderRecencyClass(row) — ≤14 days from latest_delivery_date → bg-emerald-100, else bg-red-100; null (neutral) when never ordered. Applied in renderCell to RECENCY_COLS and to index-0 line of the two list columns (backend sends lists newest-first). data-testid="vg-recency-{colKey}".
 - Verified by screenshot: red highlights on stale accounts, only first line highlighted in Last-4 columns, no-order rows neutral.
+
+## 2026-08 — Recency highlighting v2: 4-tier subtle pills
+- User feedback: full backgrounds too disturbing. Replaced with contemporary status-dot pills (rounded-full, 10% tint bg + small solid dot): ≤7d dark green (emerald-700), ≤14d light green (emerald-400/500), ≤21d amber, >21d red. Same 4 spots (latest date, last qty, first line of both Last-4 columns); never-ordered rows neutral.
+- AccountVolumeGrid.js: orderRecency(row) returns {pill,dot}; RecencyPill component; data-testid vg-recency-{colKey} unchanged.
+- Verified by screenshot (red tier live on preview data; other tiers same code path).

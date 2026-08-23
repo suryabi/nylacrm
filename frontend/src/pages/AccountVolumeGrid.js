@@ -86,12 +86,24 @@ const evalFormula = (formula, ctx) => {
 };
 
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
-// green if last order within 14 days (active customer), red otherwise; null when never ordered
-const orderRecencyClass = (row) => {
+// order-recency tiers: ≤1wk dark green · ≤2wk light green · ≤3wk amber · older red
+const orderRecency = (row) => {
   if (!row.latest_delivery_date) return null;
   const days = (Date.now() - new Date(row.latest_delivery_date).getTime()) / 86400000;
-  return days <= 14 ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900';
+  if (days <= 7) return { pill: 'bg-emerald-700/10 text-emerald-900', dot: 'bg-emerald-700' };
+  if (days <= 14) return { pill: 'bg-emerald-500/10 text-emerald-700', dot: 'bg-emerald-400' };
+  if (days <= 21) return { pill: 'bg-amber-500/10 text-amber-800', dot: 'bg-amber-500' };
+  return { pill: 'bg-red-500/10 text-red-700', dot: 'bg-red-500' };
 };
+const RecencyPill = ({ recency, colKey, children }) => (
+  <span
+    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 ${recency.pill}`}
+    data-testid={`vg-recency-${colKey}`}
+  >
+    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${recency.dot}`} />
+    {children}
+  </span>
+);
 const RECENCY_COLS = ['latest_delivery_date', 'last_order_quantity'];
 const TH = 'px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap select-none';
 const numericCol = (c) => c.type === 'number' || c.key === 'recent_delivery_crates' || (c.custom && (c.custom.type === 'number' || c.custom.type === 'formula'));
@@ -373,14 +385,17 @@ export default function AccountVolumeGrid() {
     let display;
     if (col.type === 'list') {
       const arr = Array.isArray(raw) ? raw : [];
-      const listRecency = (col.key === 'recent_delivery_dates' || col.key === 'recent_delivery_crates') ? orderRecencyClass(row) : null;
+      const listRecency = (col.key === 'recent_delivery_dates' || col.key === 'recent_delivery_crates') ? orderRecency(row) : null;
       return arr.length === 0 ? <span className="tabular-nums">—</span> : (
         <span className="tabular-nums leading-relaxed">
-          {arr.map((v, i) => (
-            <span key={i} className={`block whitespace-nowrap ${i === 0 && listRecency ? `${listRecency} rounded-sm px-1 -mx-1` : ''}`} data-testid={i === 0 && listRecency ? `vg-recency-${col.key}` : undefined}>
-              {typeof v === 'number' ? v.toLocaleString('en-IN') : v}
-            </span>
-          ))}
+          {arr.map((v, i) => {
+            const text = typeof v === 'number' ? v.toLocaleString('en-IN') : v;
+            return (
+              <span key={i} className="block whitespace-nowrap">
+                {i === 0 && listRecency ? <RecencyPill recency={listRecency} colKey={col.key}>{text}</RecencyPill> : text}
+              </span>
+            );
+          })}
         </span>
       );
     }
@@ -390,15 +405,11 @@ export default function AccountVolumeGrid() {
     else display = typeof raw === 'number' ? raw.toLocaleString('en-IN') : String(raw);
 
     if (!editable) {
-      const recency = RECENCY_COLS.includes(col.key) ? orderRecencyClass(row) : null;
-      return (
-        <span
-          className={`${col.custom?.type === 'formula' ? 'text-indigo-700 font-medium ' : ''}tabular-nums${recency ? ` ${recency} rounded-sm px-1.5 py-0.5` : ''}`}
-          data-testid={recency ? `vg-recency-${col.key}` : undefined}
-        >
-          {display}
-        </span>
-      );
+      const recency = RECENCY_COLS.includes(col.key) ? orderRecency(row) : null;
+      if (recency) {
+        return <RecencyPill recency={recency} colKey={col.key}><span className="tabular-nums">{display}</span></RecencyPill>;
+      }
+      return <span className={col.custom?.type === 'formula' ? 'text-indigo-700 font-medium tabular-nums' : 'tabular-nums'}>{display}</span>;
     }
     return (
       <button
