@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Checkbox } from '../components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Table2, RefreshCw, Columns3, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Sigma, Download, Truck, Info } from 'lucide-react';
+import { Table2, RefreshCw, Columns3, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Sigma, Download, Truck, Info, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
@@ -123,6 +123,7 @@ export default function AccountVolumeGrid() {
   const [territoryFilter, setTerritoryFilter] = useState('all');
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
+  const [attentionOnly, setAttentionOnly] = useState(false);
   const [sort, setSort] = useState({ key: 'account_name', dir: 'asc' });
   const [hidden, setHidden] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_KEY)) || DEFAULT_HIDDEN; } catch { return DEFAULT_HIDDEN; }
@@ -246,7 +247,10 @@ export default function AccountVolumeGrid() {
 
   const sortedRows = useMemo(() => {
     const col = allColumns.find((c) => c.key === sort.key) || BASE_COLUMNS[0];
-    const arr = [...rows].sort((a, b) => {
+    const base = attentionOnly
+      ? rows.filter((r) => r.low_warehouse_stock || (r.account_age_days != null && r.account_age_days <= 7))
+      : rows;
+    const arr = [...base].sort((a, b) => {
       const va = cellValue(a, col); const vb = cellValue(b, col);
       if (va == null && vb == null) return 0;
       if (va == null) return 1;
@@ -255,7 +259,7 @@ export default function AccountVolumeGrid() {
       return sort.dir === 'asc' ? cmp : -cmp;
     });
     return arr;
-  }, [rows, sort, allColumns, cellValue]);
+  }, [rows, sort, allColumns, cellValue, attentionOnly]);
 
   const toggleSort = (key) => setSort((p) => ({ key, dir: p.key === key && p.dir === 'asc' ? 'desc' : 'asc' }));
 
@@ -567,6 +571,21 @@ export default function AccountVolumeGrid() {
             {availableCities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
+        <button
+          type="button"
+          onClick={() => setAttentionOnly((v) => !v)}
+          className={`h-9 inline-flex items-center gap-1.5 rounded-sm border px-3 text-sm font-medium transition-colors ${attentionOnly
+            ? 'bg-rose-600 border-rose-600 text-white hover:bg-rose-700'
+            : 'bg-white border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-700'}`}
+          title="Show only accounts needing action: low warehouse stock or on-boarded within the last week"
+          data-testid="vg-attention-filter"
+        >
+          <AlertTriangle className="h-3.5 w-3.5" />
+          Needs attention
+          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${attentionOnly ? 'bg-white/20 text-white' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+            {rows.filter((r) => r.low_warehouse_stock || (r.account_age_days != null && r.account_age_days <= 7)).length}
+          </span>
+        </button>
         <Badge variant="outline" className="ml-auto text-xs text-slate-500">{sortedRows.length} accounts</Badge>
       </div>
 

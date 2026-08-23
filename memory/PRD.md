@@ -2673,3 +2673,6 @@ New column "Stock at Warehouse (Crates)": current stock of the account's ordered
 ## 2026-08 — New-account highlight + demo seed (Volume Tracking)
 Accounts on-boarded within last 7 days (account_age_days <= 7): account name cell gets blue tint #EAF1FF + 2px left brand accent + "NEW" pill (testid vg-new-account-{code}), tooltip "plan stock for this new account".
 Preview seed (prefix vgdemo-): Demo Fresh Mart (New) activated 3d ago → NEW badge; Demo Grand Hotel (Low Stock) expected 10 crates vs 3 crates at Demo Stock WH → red stock cell. Cleanup: delete id regex ^vgdemo- across accounts, master_skus, distributor_locations, distributor_stock, distributor_deliveries, distributor_delivery_items.
+
+## 2026-08 — Needs Attention filter (Volume Tracking)
+One-click toggle chip "Needs attention (count)" (testid vg-attention-filter) next to location filters: shows only rows with low_warehouse_stock OR account_age_days <= 7. Active state = solid rose. Verified: 15 rows → 2 (both vgdemo seeds).
