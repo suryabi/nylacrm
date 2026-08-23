@@ -2669,3 +2669,7 @@ New column "Stock at Warehouse (Crates)": current stock of the account's ordered
 - Default hidden columns: order_count, onboarded_date, last_order_sku, account_age_days. LS key bumped to volume_grid_hidden_columns_v2 so defaults apply to all users once.
 - Redesign per /app/design_guidelines.json (design_agent): dark #0b192c header (white text, wider tracking), summary row #EAF0FC/#DFE7F7 corner, zebra white/#F8FAFC, hover #EDF2FA, strict alignment (numbers/dates), tabular-nums everywhere, bordered subtle recency pills (legend + cells), low-stock cell rose-50 with inset rose left bar, list columns newest-on-top with muted history, text-xs density, rounded-lg container.
 - AMC demo rows removed from preview (13 records: ^amc- regex across 6 collections).
+
+## 2026-08 — New-account highlight + demo seed (Volume Tracking)
+Accounts on-boarded within last 7 days (account_age_days <= 7): account name cell gets blue tint #EAF1FF + 2px left brand accent + "NEW" pill (testid vg-new-account-{code}), tooltip "plan stock for this new account".
+Preview seed (prefix vgdemo-): Demo Fresh Mart (New) activated 3d ago → NEW badge; Demo Grand Hotel (Low Stock) expected 10 crates vs 3 crates at Demo Stock WH → red stock cell. Cleanup: delete id regex ^vgdemo- across accounts, master_skus, distributor_locations, distributor_stock, distributor_deliveries, distributor_delivery_items.
