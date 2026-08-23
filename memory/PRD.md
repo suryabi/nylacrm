@@ -2631,3 +2631,9 @@ Test tenant sales-only deleted.
 - Toggle OFF result: Royal 1092, Garci 720, Cafe 1080, Generic 284 — every child = received−delivered(−returns), total 3176 preserved. Fixes "available > received" (Garci 1080→720).
 - Toggle ON reproduced the bad production result (Generic→0), confirming duplicate branding entries as root cause.
 - User instruction: redeploy → Reconcile → pick distributor → UNTICK "Count branding conversions" → verify breakdown → apply per-SKU.
+
+## 2026-08 — Branding entry cleanup tool
+- Purpose: remove duplicate Branding-module conversions that double-count already-branded receipts (production root cause), making toggle-ON reconciliation trustworthy.
+- Backend (global_stock_dashboard.py): refactored flow collection into _collect_child_stock_data(tenant_id) shared helper. New endpoints (admin): POST /api/distributor/branding-entries/cleanup (list, distributor-scoped, per-entry suspect flag = drift-with-branding > drift-without at that loc+sku), /cleanup/remove {entry_ids} (archives to branding_entries_removed then deletes record — stock rows untouched; realign afterwards), /cleanup/restore {entry_ids}.
+- UI: third tab "Branding entries" in Reconcile dialog — entries list with rose "suspect" badge + per-row Remove, removed section with Restore, footer "Remove All Suspect (n)". data-testids: realign-tab-branding, branding-entry-{i}, branding-suspect-{i}, branding-remove-{i}, branding-restore-{i}, branding-remove-suspect-btn.
+- Verified: duplicate entry flagged suspect (drift 100 with vs 0 without), legit entry not flagged (0 with vs 60 without); remove → 24 Brand vanished from drift findings even with branding ON; restore round-trip clean. UI tab screenshot OK. Seeds cleaned.

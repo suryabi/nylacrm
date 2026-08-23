@@ -521,13 +521,9 @@ async def _apply_child_delta(tenant_id: str, loc: dict, sku_id: str, child_id, d
             upsert=True)
 
 
-@router.post("/distributor/stock-child-realign")
-async def stock_child_realign(payload: RealignRequest, current_user: dict = Depends(get_current_user)):
-    if (current_user.get("role") or "").strip() not in _REALIGN_ADMIN_ROLES:
-        raise HTTPException(status_code=403, detail="Only CEO / Director / Admin can realign stock.")
-    tenant_id = get_current_tenant_id()
-    now = datetime.now(timezone.utc).isoformat()
-
+async def _collect_child_stock_data(tenant_id: str):
+    """Shared collector: actual stock rows + expected transaction flows per
+    (warehouse, sku, child). Used by realign and branding cleanup."""
     locs = {l["id"]: l for l in await db.distributor_locations.find(
         {"tenant_id": tenant_id},
         {"_id": 0, "id": 1, "location_name": 1, "distributor_id": 1, "is_factory": 1, "is_default": 1},
@@ -667,6 +663,19 @@ async def stock_child_realign(payload: RealignRequest, current_user: dict = Depe
                 continue
             rkey = (d["distributor_location_id"], it.get("sku_id"), it.get("child_sku_id") or None)
             reserved[rkey] = reserved.get(rkey, 0) + _item_units(it)
+
+    return {"locs": locs, "actual": actual, "flows": flows, "names": names, "reserved": reserved}
+
+
+@router.post("/distributor/stock-child-realign")
+async def stock_child_realign(payload: RealignRequest, current_user: dict = Depends(get_current_user)):
+    if (current_user.get("role") or "").strip() not in _REALIGN_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Only CEO / Director / Admin can realign stock.")
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    data = await _collect_child_stock_data(tenant_id)
+    locs, actual, flows = data["locs"], data["actual"], data["flows"]
+    names, reserved = data["names"], data["reserved"]
 
     # ── per (loc, sku): targets that preserve the SKU total exactly ──────
     by_loc_sku: dict = {}
@@ -837,3 +846,123 @@ async def stock_child_realign_undo(payload: RealignUndoRequest,
                       "reverted_by_name": current_user.get("name") or current_user.get("email")}})
         reverted += 1
     return {"reverted": reverted}
+
+
+# ═══════════════════ Branding entry cleanup (duplicates) ════════════════════
+# When stock arrives ALREADY branded (shipment items carry the child SKU) but a
+# Branding-module conversion was ALSO recorded for the same movement, the entry
+# double-counts: it physically moved Generic rows that belonged to other stock.
+# An entry group is "suspect" when excluding branding conversions makes the
+# per-child split match the stock rows BETTER than including them.
+
+class BrandingCleanupListRequest(BaseModel):
+    distributor_id: Optional[str] = None
+
+
+class BrandingCleanupActionRequest(BaseModel):
+    entry_ids: list
+    distributor_id: Optional[str] = None
+
+
+def _branding_drift_scores(data, loc_id, sku_id):
+    actual, flows = data["actual"], data["flows"]
+    children = set()
+    for (l, s, c) in set(list(actual.keys()) + list(flows.keys())):
+        if l == loc_id and s == sku_id:
+            children.add(c)
+    def score(include_branding):
+        tot = 0
+        for c in children:
+            m = flows.get((loc_id, sku_id, c), {})
+            exp = sum(v for k, v in m.items() if include_branding or k != "branding")
+            tot += abs(exp - actual.get((loc_id, sku_id, c), 0))
+        return tot
+    return score(True), score(False)
+
+
+@router.post("/distributor/branding-entries/cleanup")
+async def branding_cleanup_list(payload: BrandingCleanupListRequest,
+                                current_user: dict = Depends(get_current_user)):
+    if (current_user.get("role") or "").strip() not in _REALIGN_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Only CEO / Director / Admin can manage branding cleanup.")
+    tenant_id = get_current_tenant_id()
+    data = await _collect_child_stock_data(tenant_id)
+    locs = data["locs"]
+    loc_ids = None
+    if payload.distributor_id:
+        loc_ids = [lid for lid, l in locs.items() if l.get("distributor_id") == payload.distributor_id]
+    q = {"tenant_id": tenant_id}
+    if loc_ids is not None:
+        q["warehouse_location_id"] = {"$in": loc_ids}
+    entries, scores_cache = [], {}
+    async for be in db.branding_entries.find(q, {"_id": 0}).sort("created_at", -1):
+        gkey = (be.get("warehouse_location_id"), be.get("sku_id"))
+        if gkey not in scores_cache:
+            scores_cache[gkey] = _branding_drift_scores(data, *gkey)
+        with_b, without_b = scores_cache[gkey]
+        entries.append({
+            "id": be.get("id"), "created_at": be.get("created_at"),
+            "location_name": (locs.get(be.get("warehouse_location_id")) or {}).get("location_name"),
+            "sku_name": be.get("sku_name"),
+            "from_name": be.get("from_child_sku_name") or "Generic / Unbranded",
+            "to_name": be.get("to_child_sku_name") or "Generic / Unbranded",
+            "quantity": be.get("quantity"),
+            "created_by_name": be.get("created_by_name"),
+            "suspect": with_b > without_b,
+            "drift_with_branding": with_b, "drift_without_branding": without_b,
+        })
+    removed = await db.branding_entries_removed.find(
+        {"tenant_id": tenant_id, **({"warehouse_location_id": {"$in": loc_ids}} if loc_ids is not None else {})},
+        {"_id": 0}).sort("removed_at", -1).to_list(200)
+    removed_view = [{
+        "id": r.get("id"), "created_at": r.get("created_at"),
+        "location_name": (locs.get(r.get("warehouse_location_id")) or {}).get("location_name"),
+        "sku_name": r.get("sku_name"),
+        "from_name": r.get("from_child_sku_name") or "Generic / Unbranded",
+        "to_name": r.get("to_child_sku_name") or "Generic / Unbranded",
+        "quantity": r.get("quantity"), "removed_at": r.get("removed_at"),
+        "removed_by_name": r.get("removed_by_name"),
+    } for r in removed]
+    return {"entries": entries, "removed": removed_view,
+            "suspect_count": sum(1 for e in entries if e["suspect"])}
+
+
+@router.post("/distributor/branding-entries/cleanup/remove")
+async def branding_cleanup_remove(payload: BrandingCleanupActionRequest,
+                                  current_user: dict = Depends(get_current_user)):
+    """Archives + deletes branding entry RECORDS only — stock rows are not
+    touched (run Reconcile afterwards to realign the rows). Fully restorable."""
+    if (current_user.get("role") or "").strip() not in _REALIGN_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Only CEO / Director / Admin can manage branding cleanup.")
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    removed = 0
+    for eid in payload.entry_ids:
+        be = await db.branding_entries.find_one({"id": eid, "tenant_id": tenant_id}, {"_id": 0})
+        if not be:
+            continue
+        await db.branding_entries_removed.insert_one({
+            **be, "removed_at": now, "removed_by": current_user.get("id"),
+            "removed_by_name": current_user.get("name") or current_user.get("email")})
+        await db.branding_entries.delete_one({"id": eid, "tenant_id": tenant_id})
+        removed += 1
+    return {"removed": removed}
+
+
+@router.post("/distributor/branding-entries/cleanup/restore")
+async def branding_cleanup_restore(payload: BrandingCleanupActionRequest,
+                                   current_user: dict = Depends(get_current_user)):
+    if (current_user.get("role") or "").strip() not in _REALIGN_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Only CEO / Director / Admin can manage branding cleanup.")
+    tenant_id = get_current_tenant_id()
+    restored = 0
+    for eid in payload.entry_ids:
+        r = await db.branding_entries_removed.find_one({"id": eid, "tenant_id": tenant_id}, {"_id": 0})
+        if not r:
+            continue
+        for k in ("removed_at", "removed_by", "removed_by_name"):
+            r.pop(k, None)
+        await db.branding_entries.insert_one(r)
+        await db.branding_entries_removed.delete_one({"id": eid, "tenant_id": tenant_id})
+        restored += 1
+    return {"restored": restored}

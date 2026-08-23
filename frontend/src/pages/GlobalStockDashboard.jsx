@@ -52,6 +52,32 @@ export default function GlobalStockDashboard() {
   const [realignView, setRealignView] = useState('drift'); // 'drift' | 'history'
   const [realignHistory, setRealignHistory] = useState(null);
   const [includeBranding, setIncludeBranding] = useState(true);
+  const [brandingScan, setBrandingScan] = useState(null);
+
+  const fetchBrandingCleanup = useCallback(async (distId) => {
+    try {
+      const res = await axios.post(`${API_URL}/api/distributor/branding-entries/cleanup`,
+        { distributor_id: distId || null }, { headers: HEAD() });
+      setBrandingScan(res.data);
+    } catch (e) { setBrandingScan({ entries: [], removed: [] }); }
+  }, []);
+
+  const brandingAction = useCallback(async (action, entryIds) => {
+    setRealignBusy(true);
+    try {
+      const res = await axios.post(`${API_URL}/api/distributor/branding-entries/cleanup/${action}`,
+        { entry_ids: entryIds, distributor_id: realignDistId || null }, { headers: HEAD() });
+      toast.success(action === 'remove'
+        ? `Removed ${res.data.removed} entry(ies) — run Reconcile after to realign rows`
+        : `Restored ${res.data.restored} entry(ies)`);
+      await fetchBrandingCleanup(realignDistId);
+      if (realignDistId) runRealign(false, null, realignDistId);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Action failed');
+    } finally {
+      setRealignBusy(false);
+    }
+  }, [realignDistId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchRealignDists = useCallback(async () => {
     try {
@@ -376,6 +402,7 @@ export default function GlobalStockDashboard() {
                 setRealignDistId(v);
                 setRealignScan(null);
                 setRealignHistory(null);
+                setBrandingScan(null);
                 if (v) { runRealign(false, null, v); fetchRealignHistory(v); }
               }}
               data-testid="realign-dist-select"
@@ -387,6 +414,9 @@ export default function GlobalStockDashboard() {
             </select>
             <Button size="sm" variant={realignView === 'drift' ? 'secondary' : 'ghost'} className="h-7 text-xs"
               onClick={() => setRealignView('drift')} data-testid="realign-tab-drift">Drift</Button>
+            <Button size="sm" variant={realignView === 'branding' ? 'secondary' : 'ghost'} className="h-7 text-xs"
+              onClick={() => { setRealignView('branding'); if (!brandingScan) fetchBrandingCleanup(realignDistId); }}
+              data-testid="realign-tab-branding">Branding entries</Button>
             <Button size="sm" variant={realignView === 'history' ? 'secondary' : 'ghost'} className="h-7 text-xs"
               onClick={() => setRealignView('history')} data-testid="realign-tab-history">History (undo)</Button>
             <label className="flex items-center gap-1.5 text-xs text-slate-600 ml-auto cursor-pointer select-none" data-testid="realign-branding-toggle">
@@ -405,6 +435,55 @@ export default function GlobalStockDashboard() {
             <div className="text-center py-8 text-muted-foreground text-sm" data-testid="realign-pick-dist">
               Pick a distributor to scan its warehouses.
             </div>
+          ) : realignView === 'branding' ? (
+            !brandingScan ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                <div className="text-xs text-slate-500">
+                  Entries flagged <span className="text-rose-600 font-medium">suspect</span> make the split match
+                  the stock rows <i>worse</i> — they likely duplicate already-branded receipts. Removing deletes the
+                  record only (restorable); run Reconcile afterwards to fix the rows.
+                </div>
+                {(brandingScan.entries || []).length === 0 && (
+                  <div className="text-center py-6 text-muted-foreground text-sm" data-testid="branding-empty">No branding entries for this distributor.</div>
+                )}
+                {(brandingScan.entries || []).map((e, i) => (
+                  <div key={e.id} className={`border rounded-md px-3 py-2 flex items-center gap-3 ${e.suspect ? 'border-rose-200 bg-rose-50/50' : ''}`} data-testid={`branding-entry-${i}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium">
+                        {e.sku_name}: {e.from_name} → {e.to_name} · {Number(e.quantity).toLocaleString('en-IN')}
+                        {e.suspect && <Badge className="ml-2 bg-rose-100 text-rose-700 text-[10px]" data-testid={`branding-suspect-${i}`}>suspect</Badge>}
+                      </div>
+                      <div className="text-[10px] text-slate-400">{e.location_name} · {String(e.created_at || '').slice(0, 10)}{e.created_by_name ? ` · by ${e.created_by_name}` : ''}</div>
+                    </div>
+                    <Button size="sm" variant="outline" className="h-7 text-xs border-rose-300 text-rose-700 hover:bg-rose-50 shrink-0"
+                      disabled={realignBusy} onClick={() => brandingAction('remove', [e.id])} data-testid={`branding-remove-${i}`}>
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+                {(brandingScan.removed || []).length > 0 && (
+                  <div className="pt-2 border-t">
+                    <div className="text-xs font-medium text-slate-500 mb-1">Removed (restorable)</div>
+                    {(brandingScan.removed || []).map((r, i) => (
+                      <div key={r.id} className="border rounded-md px-3 py-2 flex items-center gap-3 opacity-70 mb-1" data-testid={`branding-removed-${i}`}>
+                        <div className="flex-1 min-w-0 text-sm">
+                          {r.sku_name}: {r.from_name} → {r.to_name} · {Number(r.quantity).toLocaleString('en-IN')}
+                          <span className="block text-[10px] text-slate-400">removed {String(r.removed_at || '').slice(0, 16).replace('T', ' ')} by {r.removed_by_name}</span>
+                        </div>
+                        <Button size="sm" variant="outline" className="h-7 text-xs shrink-0"
+                          disabled={realignBusy} onClick={() => brandingAction('restore', [r.id])} data-testid={`branding-restore-${i}`}>
+                          Restore
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
           ) : realignView === 'history' ? (
             realignHistory == null ? (
               <div className="flex items-center justify-center py-10">
@@ -510,6 +589,17 @@ export default function GlobalStockDashboard() {
           ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowRealign(false)} data-testid="realign-close-btn">Close</Button>
+            {realignView === 'branding' && (brandingScan?.suspect_count || 0) > 0 && (
+              <Button
+                variant="outline"
+                className="border-rose-300 text-rose-700 hover:bg-rose-50"
+                disabled={realignBusy}
+                onClick={() => brandingAction('remove', brandingScan.entries.filter((e) => e.suspect).map((e) => e.id))}
+                data-testid="branding-remove-suspect-btn"
+              >
+                Remove All Suspect ({brandingScan.suspect_count})
+              </Button>
+            )}
             {realignView === 'history' && realignDistId && (realignHistory || []).some((l) => !l.reverted_at) && (
               <Button
                 variant="outline"
