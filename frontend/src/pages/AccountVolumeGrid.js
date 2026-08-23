@@ -13,10 +13,10 @@ import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
-const LS_KEY = 'volume_grid_hidden_columns_v2';
+const LS_KEY = 'volume_grid_hidden_columns_v3';
 const LS_WIDTHS = 'volume_grid_col_widths';
 const LS_ORDER = 'volume_grid_col_order';
-const DEFAULT_HIDDEN = ['order_count', 'onboarded_date', 'last_order_sku', 'account_age_days'];
+const DEFAULT_HIDDEN = ['order_count', 'onboarded_date', 'last_order_sku', 'account_age_days', 'biweekly_volume_crates'];
 
 const BASE_COLUMNS = [
   { key: 'account_name', label: 'Account Name', type: 'text' },
