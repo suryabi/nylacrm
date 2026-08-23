@@ -2679,3 +2679,6 @@ One-click toggle chip "Needs attention (count)" (testid vg-attention-filter) nex
 
 ## 2026-08 — Stock at Warehouse column REMOVED
 Removed from grid (BASE_COLUMNS), formula context, and Excel export (custom offset back to 17+j, no red fill). Backend still computes warehouse_stock_crates/low_warehouse_stock — the "Needs attention" filter still uses the low-stock flag.
+
+## 2026-08 — Stock at Hand column (Volume Tracking)
+"Stock at Hand (Crates)": computed like Global Dashboard WH Stock (physical distributor_stock + factory_warehouse_stock rows for the account's SKUs at last-serving warehouse), crates only, EDITABLE — manual value saved to accounts.stock_at_hand_crates_override (clear cell → reverts to computed). RED cell (bg-red-100 + inset red bar, testid vg-soh-{code}-low) when stock_at_hand < ½ × monthly order volume (actual monthly consumption first, else expected monthly volume). Excel export column 18 with red fill; formula name "Stock at Hand". Needs-attention filter now uses low_stock_at_hand. PUT /rows/{id} accepts stock_at_hand_crates_override / clear_stock_at_hand. Demo: vgdemo-del-3 bumped to 120 bottles (actual 10 cr/mo vs 3 on hand → red). Verified: compute/override/clear via curl + UI screenshot.

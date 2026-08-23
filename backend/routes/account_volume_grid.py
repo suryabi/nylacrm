@@ -106,6 +106,7 @@ async def get_grid(
         "_id": 0, "id": 1, "account_id": 1, "account_name": 1, "territory": 1,
         "state": 1, "city": 1, "activated_at": 1,
         "expected_monthly_volume_crates": 1, "volume_grid_values": 1,
+        "stock_at_hand_crates_override": 1,
     }).sort("account_name", 1).to_list(5000)
 
     # Delivery metrics per account (dates in bottles; totals per delivery)
@@ -236,6 +237,13 @@ async def get_grid(
         low_stock = bool(
             wh_stock is not None and isinstance(est, (int, float)) and est > 0 and wh_stock < est / 2
         )
+        # Stock at Hand — same source as Global Dashboard WH Stock (physical
+        # stock rows), overridable per account. RED when below 15 days of the
+        # customer's order volume (½ × monthly: actual consumption, else expected).
+        override = a.get("stock_at_hand_crates_override")
+        stock_at_hand = round(float(override), 2) if isinstance(override, (int, float)) else wh_stock
+        monthly = actual_monthly if actual_monthly is not None else (emv if isinstance(emv, (int, float)) else None)
+        low_soh = bool(stock_at_hand is not None and monthly and monthly > 0 and stock_at_hand < monthly / 2)
         onb = _parse_dt(a.get("activated_at"))
         age_days = (datetime.now(timezone.utc).replace(tzinfo=None) - onb.replace(tzinfo=None)).days if onb else None
         rows.append({
@@ -259,6 +267,9 @@ async def get_grid(
             "consumption_available_in_days": consumption_in_days,
             "warehouse_stock_crates": wh_stock,
             "low_warehouse_stock": low_stock,
+            "stock_at_hand_crates": stock_at_hand,
+            "stock_at_hand_is_override": isinstance(override, (int, float)),
+            "low_stock_at_hand": low_soh,
             "custom_values": a.get("volume_grid_values") or {},
         })
 
@@ -286,6 +297,9 @@ async def get_grid(
             "consumption_available_in_days": None,
             "warehouse_stock_crates": None,
             "low_warehouse_stock": False,
+            "stock_at_hand_crates": None,
+            "stock_at_hand_is_override": False,
+            "low_stock_at_hand": False,
             "custom_values": m.get("custom_values") or {},
         })
 
@@ -353,6 +367,7 @@ async def export_excel(
             "Average Order Frequency": r.get("avg_order_frequency_days"),
             "Number of Orders": r.get("order_count"),
             "Actual Monthly Consumption": r.get("actual_monthly_consumption_crates"),
+            "Stock at Hand": r.get("stock_at_hand_crates"),
         }
         for c in custom_cols:
             if c["type"] == "number":
@@ -363,7 +378,7 @@ async def export_excel(
                "Avg Order Frequency (Days)", "No. of Orders", "First Delivery Date", "Latest Delivery Date",
                "Last 4 Delivery Dates", "Last 4 Delivery Qty (Crates)",
                "Last Order Quantity (Crates)", "Last Ordered SKU", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)",
-               "Actual Monthly Consumption (Crates)"] \
+               "Actual Monthly Consumption (Crates)", "Stock at Hand (Crates)"] \
         + [c["name"] for c in custom_cols]
 
     def row_values(r):
@@ -376,7 +391,8 @@ async def export_excel(
                 r.get("last_order_quantity"), r.get("last_order_sku") or "",
                 r.get("biweekly_volume_crates"), r.get("expected_monthly_volume_crates"),
                 r.get("actual_monthly_consumption_crates") if r.get("actual_monthly_consumption_crates") is not None
-                else (f"Available in {r['consumption_available_in_days']} days" if r.get("consumption_available_in_days") is not None else "")]
+                else (f"Available in {r['consumption_available_in_days']} days" if r.get("consumption_available_in_days") is not None else ""),
+                r.get("stock_at_hand_crates")]
         for c in custom_cols:
             if c["type"] == "formula":
                 base.append(_eval_formula(c.get("formula"), ctx_for(r)))
@@ -391,7 +407,7 @@ async def export_excel(
     total_indexes = {14, 15, 16}  # Bi-weekly, Expected Monthly, Actual Monthly Consumption
     for j, c in enumerate(custom_cols):
         if c.get("include_in_total"):
-            total_indexes.add(17 + j)
+            total_indexes.add(18 + j)
     for i in sorted(total_indexes):
         nums = [v[i] for v in all_values if isinstance(v[i], (int, float))]
         if nums:
@@ -410,11 +426,19 @@ async def export_excel(
         c.fill = PatternFill(start_color="E8EDFB", end_color="E8EDFB", fill_type="solid")
     for v in all_values:
         ws.append(v)
+    # Red-flag Stock at Hand below 15 days of order volume
+    low_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+    low_font = Font(bold=True, color="B91C1C")
+    for i, r in enumerate(rows):
+        if r.get("low_stock_at_hand"):
+            cell = ws.cell(row=3 + i, column=18)
+            cell.fill = low_fill
+            cell.font = low_font
     wrap = Alignment(wrap_text=True, vertical="top")
     for row_cells in ws.iter_rows(min_row=3, min_col=11, max_col=12):
         for c in row_cells:
             c.alignment = wrap
-    widths = [34, 16, 16, 16, 18, 14, 22, 14, 16, 16, 16, 16, 16, 24, 20, 26, 28] + [18] * len(custom_cols)
+    widths = [34, 16, 16, 16, 18, 14, 22, 14, 16, 16, 16, 16, 16, 24, 20, 26, 28, 22] + [18] * len(custom_cols)
     for idx, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=idx).column_letter].width = w
     brand_workbook(wb)
@@ -431,6 +455,8 @@ async def export_excel(
 
 class RowUpdate(BaseModel):
     expected_monthly_volume_crates: Optional[float] = Field(default=None, ge=0)
+    stock_at_hand_crates_override: Optional[float] = Field(default=None, ge=0)
+    clear_stock_at_hand: bool = False
     custom_values: Optional[Dict[str, Any]] = None
     clear_expected: bool = False
 
@@ -447,6 +473,10 @@ async def update_row(account_id: str, payload: RowUpdate, current_user: dict = D
         upd["expected_monthly_volume_crates"] = None
     elif payload.expected_monthly_volume_crates is not None:
         upd["expected_monthly_volume_crates"] = payload.expected_monthly_volume_crates
+    if payload.clear_stock_at_hand:
+        upd["stock_at_hand_crates_override"] = None
+    elif payload.stock_at_hand_crates_override is not None:
+        upd["stock_at_hand_crates_override"] = payload.stock_at_hand_crates_override
     if payload.custom_values is not None:
         config = await _get_config(tenant_id)
         known_ids = {c["id"] for c in config.get("columns") or []}
