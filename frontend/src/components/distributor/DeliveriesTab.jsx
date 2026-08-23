@@ -189,7 +189,32 @@ export default function DeliveriesTab({
   // Per-date-group open/close state. Default (when a key is absent) is driven
   // by `isToday` so only Today's group is expanded on first render.
   const [openDateGroups, setOpenDateGroups] = useState({});
-  const toggleDateGroup = (key) => setOpenDateGroups(prev => ({ ...prev, [key]: !(prev[key] ?? false) }));
+  const toggleDateGroup = (key, current) => setOpenDateGroups(prev => ({ ...prev, [key]: !(current ?? prev[key] ?? false) }));
+  // Stock Out grouping mode: by delivery date (default), by SKU or by account.
+  const [stockOutGroupBy, setStockOutGroupBy] = useState('date');
+  const buildDeliveryGroups = () => {
+    if (stockOutGroupBy === 'date') return groupByDateDesc(deliveries, (d) => d.delivery_date);
+    const map = new Map();
+    if (stockOutGroupBy === 'account') {
+      deliveries.forEach((d) => {
+        const label = d.account_name || 'No account';
+        if (!map.has(label)) map.set(label, []);
+        map.get(label).push(d);
+      });
+    } else {
+      // SKU: a delivery with multiple SKUs appears under each of its SKU groups
+      deliveries.forEach((d) => {
+        const skus = [...new Set((d.items || []).map((it) => it.sku_name || 'Unknown SKU'))];
+        (skus.length ? skus : ['Unknown SKU']).forEach((label) => {
+          if (!map.has(label)) map.set(label, []);
+          map.get(label).push(d);
+        });
+      });
+    }
+    return [...map.keys()].sort((a, b) => a.localeCompare(b)).map((label) => ({
+      key: `${stockOutGroupBy}:${label}`, label, items: map.get(label),
+    }));
+  };
 
   // Collapsible section state
   const [custSectionOpen, setCustSectionOpen] = useState(true);
@@ -2108,8 +2133,26 @@ export default function DeliveriesTab({
                 ))}
               </SelectContent>
             </Select>
+
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Group by:</span>
+            </div>
+            <Select
+              value={stockOutGroupBy}
+              onValueChange={(v) => { setStockOutGroupBy(v); setOpenDateGroups({}); }}
+            >
+              <SelectTrigger className="h-9 w-[140px]" data-testid="deliveries-group-by">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="date" data-testid="deliveries-group-by-date">Date</SelectItem>
+                <SelectItem value="sku" data-testid="deliveries-group-by-sku">SKU</SelectItem>
+                <SelectItem value="account" data-testid="deliveries-group-by-account">Account</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          
+
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Show:</span>
@@ -2183,19 +2226,21 @@ export default function DeliveriesTab({
                 </tr>
               </thead>
               <tbody>
-                {groupByDateDesc(deliveries, (d) => d.delivery_date).map((group) => {
-                  const isOpen = openDateGroups[group.key] ?? group.isToday;
+                {buildDeliveryGroups().map((group) => {
+                  const isDateMode = stockOutGroupBy === 'date';
+                  const isOpen = openDateGroups[group.key] ?? (isDateMode ? group.isToday : true);
+                  const GroupIcon = isDateMode ? Calendar : (stockOutGroupBy === 'sku' ? Package : Building2);
                   return (
                   <React.Fragment key={group.key}>
                     <tr
                       className={`border-y cursor-pointer ${group.isToday ? 'bg-emerald-100/80 border-emerald-300' : group.isTomorrow ? 'bg-amber-100/80 border-amber-300' : 'bg-slate-50 border-slate-200'}`}
                       data-testid={`delivery-date-group-${group.key}`}
-                      onClick={() => toggleDateGroup(group.key)}
+                      onClick={() => toggleDateGroup(group.key, isOpen)}
                     >
                       <td colSpan="11" className="px-3 py-2">
                         <div className="flex items-center gap-2">
                           <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isOpen ? '' : '-rotate-90'} ${group.isToday ? 'text-emerald-700' : group.isTomorrow ? 'text-amber-700' : 'text-slate-400'}`} />
-                          <Calendar className={`h-3.5 w-3.5 ${group.isToday ? 'text-emerald-700' : group.isTomorrow ? 'text-amber-700' : 'text-slate-400'}`} />
+                          <GroupIcon className={`h-3.5 w-3.5 ${group.isToday ? 'text-emerald-700' : group.isTomorrow ? 'text-amber-700' : 'text-slate-400'}`} />
                           <span className={`text-xs font-bold uppercase tracking-wider ${group.isToday ? 'text-emerald-800' : group.isTomorrow ? 'text-amber-800' : 'text-slate-600'}`}>{group.label}</span>
                           {(group.isToday || group.isTomorrow) && (
                             <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${group.isToday ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'}`}>Scheduling</span>
