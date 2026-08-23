@@ -2551,3 +2551,15 @@ Test tenant sales-only deleted.
 - User feedback: full backgrounds too disturbing. Replaced with contemporary status-dot pills (rounded-full, 10% tint bg + small solid dot): ≤7d dark green (emerald-700), ≤14d light green (emerald-400/500), ≤21d amber, >21d red. Same 4 spots (latest date, last qty, first line of both Last-4 columns); never-ordered rows neutral.
 - AccountVolumeGrid.js: orderRecency(row) returns {pill,dot}; RecencyPill component; data-testid vg-recency-{colKey} unchanged.
 - Verified by screenshot (red tier live on preview data; other tiers same code path).
+
+## 2026-08 — Promo crate-unit bug v2: DO bridge + repair tool coverage (production DC-2607-0011)
+- User report: 16-Jul promo stock-out (5 crates of 12) counted as 5 bottles; Repair Units found nothing.
+- Root cause 1 (source): Delivery Order bridge (_auto_create_draft_promo) passes quantity_unit="bottles", but the DO stored 5 UNCONVERTED (packaging "12 Bottle Crate" had no units_per_package, so DO form never multiplied). create_promo_dispatch bottles-path saw 5 % 12 != 0 → stored 5 loose bottles but KEPT the crate label.
+- Root cause 2 (repair miss): repair endpoint scanned only legacy db.promo_dispatches; new dispatches are is_promo docs in db.distributor_deliveries.
+- Fixes:
+  - delivery_orders.py: _normalize_item_units() at create + update — if item names a packaging but client sent upp<=1, resolve upp from SKU packaging_config (id/name match) or digits in packaging name, multiply quantity → bottles. No double-multiply when client already converted (upp>1 sent).
+  - promo_dispatch.py _resolve_units: name-digit fallback ("12 Bottle Crate" → 12); loose-bottle collapse now relabels to "Bottle" (pkg_id None) instead of keeping misleading crate name.
+  - Repair endpoint scans BOTH collections. is_promo deducted statuses {complete, completed, delivered} (open statuses = reservation only, recomputes from corrected qty). Detection: resolved upp>1 AND (packages==qty or packages None with package-count-shaped qty). Clean-multiple collapsed lines (upp stored 1, qty%upp==0) are AMBIGUOUS → listed, flagged, never auto-repaired. Response adds "ambiguous" count; each finding has ambiguous flag.
+  - PromoDispatchSection.jsx: dialog copy updated; ambiguous rows amber with "review manually — skipped"; Apply hidden when only ambiguous lines.
+- Verified in preview: replica of DC-2607-0011 detected (5→60, stock 100→45 after 55-bottle catch-up deduction), ambiguous 24-line flagged and untouched, real legacy draft DC-2606-0006 corrected (2→24, no stock change for draft), idempotent rerun, DO create with unconverted 5-crates stored as 60/upp=12 (PASS), already-converted 60 not double-multiplied (PASS). Test data cleaned up.
+- PRODUCTION: redeploy, then rerun Repair Units → DC-2607-0011 will appear (5 → 60, deducts missing 55) → Apply.

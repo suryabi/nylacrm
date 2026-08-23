@@ -13,6 +13,7 @@ from typing import Optional, List
 from datetime import datetime, timezone, date, timedelta
 import uuid
 import logging
+import re
 from pymongo import UpdateOne
 
 from deps import get_current_user
@@ -154,6 +155,42 @@ async def _resolve_recipient(tenant_id: str, data) -> dict:
 
 def _doc_total(items: List[DeliveryOrderItem]) -> float:
     return round(sum((i.quantity or 0) * (i.unit_price or 0) for i in items), 2)
+
+
+async def _normalize_item_units(tenant_id: str, items: list) -> list:
+    """Server-side guard: DO quantities must be stored in BOTTLES. If a line names
+    a multi-unit packaging but the client didn't send units_per_package (so it
+    could not have multiplied), resolve the pack size from the SKU packaging
+    config / packaging name and convert package-count → bottles."""
+    dicts = [i.model_dump() if hasattr(i, "model_dump") else dict(i) for i in items]
+    sku_ids = list({d.get("sku_id") for d in dicts if d.get("sku_id")})
+    pc_map: dict = {}
+    if sku_ids:
+        async for s in db.master_skus.find({"id": {"$in": sku_ids}}, {"_id": 0, "id": 1, "packaging_config": 1}):
+            pc_map[s["id"]] = s.get("packaging_config") or {}
+    for d in dicts:
+        if int(d.get("units_per_package") or 0) > 1:
+            continue  # client already converted to bottles
+        if not (d.get("packaging_type_id") or d.get("packaging_type_name")):
+            continue  # plain bottles line
+        pc = pc_map.get(d.get("sku_id")) or {}
+        pools = []
+        for section in pc.values():
+            pools += section or []
+        match = None
+        if d.get("packaging_type_id"):
+            match = next((p for p in pools if p.get("packaging_type_id") == d["packaging_type_id"]), None)
+        if not match and d.get("packaging_type_name"):
+            tgt = d["packaging_type_name"].strip().lower()
+            match = next((p for p in pools if (p.get("packaging_type_name") or "").strip().lower() == tgt), None)
+        upp = int((match or {}).get("units_per_package") or (match or {}).get("units") or 0)
+        if upp <= 1:
+            m = re.search(r"(\d+)", d.get("packaging_type_name") or "")
+            upp = int(m.group(1)) if m else 0
+        if upp > 1:
+            d["quantity"] = int(d["quantity"]) * upp
+            d["units_per_package"] = upp
+    return dicts
 
 
 async def _create_approval_task(tenant_id: str, order: dict, requester: dict):
@@ -361,7 +398,7 @@ async def create_delivery_order(data: DeliveryOrderCreate, current_user: dict = 
         "contact_phone": data.contact_phone or snap["recipient_phone"],
         "delivery_instructions": data.delivery_instructions,
         "notes": data.notes,
-        "items": [i.model_dump() for i in data.items],
+        "items": await _normalize_item_units(tenant_id, data.items),
         "total_value": _doc_total(data.items),
         "current_state_key": initial["key"],
         "current_state_label": initial.get("label") or initial["key"],
@@ -491,6 +528,7 @@ async def update_delivery_order(order_id: str, data: DeliveryOrderUpdate, curren
     if "items" in upd and upd["items"] is not None:
         if not upd["items"]:
             raise HTTPException(400, "At least one line item is required.")
+        upd["items"] = await _normalize_item_units(tenant_id, upd["items"])
         upd["total_value"] = round(sum((i.get("quantity") or 0) * (i.get("unit_price") or 0) for i in upd["items"]), 2)
     if "delivery_address" in upd and upd["delivery_address"] is not None:
         upd["delivery_city"] = upd["delivery_address"].get("city")

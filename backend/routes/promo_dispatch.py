@@ -619,6 +619,10 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
             match = next((p for p in pools if (p.get("packaging_type_name") or "").strip().lower() == tgt), None)
         if match and int(match.get("units_per_package") or 0) > 1:
             return int(match["units_per_package"]), match.get("packaging_type_name") or it.packaging_type_name, match.get("packaging_type_id") or it.packaging_type_id
+        # Last resort: pack size embedded in the packaging name ("12 Bottle Crate").
+        m = re.search(r"(\d+)", it.packaging_type_name or "")
+        if m and int(m.group(1)) > 1:
+            return int(m.group(1)), it.packaging_type_name, it.packaging_type_id
         return (upp or 1), it.packaging_type_name, it.packaging_type_id
 
     inserted_items: list[dict] = []
@@ -631,8 +635,9 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
             if upp > 1 and bottles % upp == 0:
                 crates = bottles // upp
             else:
-                # Not a clean multiple of the pack size → dispatch loose bottles.
-                upp, pkg_name, pkg_id = 1, pkg_name or "Bottle", pkg_id
+                # Not a clean multiple of the pack size → dispatch loose bottles
+                # and drop the pack label so "5 bottles" never prints as a crate.
+                upp, pkg_name, pkg_id = 1, "Bottle", None
                 crates = bottles
             per_bottle = float(it.unit_price or 0)
         else:
@@ -1176,53 +1181,70 @@ async def repair_promo_crate_units(payload: RepairRequest, current_user: dict = 
             return int(ms["bottles_per_crate"])
         return 0
 
-    findings, applied = [], 0
-    async for d in db.promo_dispatches.find({"tenant_id": tenant_id}, {"_id": 0}):
-        items = await db.distributor_delivery_items.find(
-            {"tenant_id": tenant_id, "delivery_id": d["id"]}, {"_id": 0}).to_list(500)
-        for it in items:
-            if it.get("unit_repair_applied_at"):
-                continue
-            qty = int(it.get("quantity") or 0)
-            if qty <= 0:
-                continue
-            upp = resolve_upp(it)
-            if upp <= 1:
-                continue
-            packages = it.get("packages")
-            # Legacy bug signature: quantity equals the package count (never multiplied).
-            if packages is not None and int(packages) != qty:
-                continue  # already stored in bottles
-            if packages is None and (it.get("units_per_package") or 0) > 1 and qty % upp == 0 and qty >= upp:
-                continue  # quantity already looks like bottles
-            correct_qty = qty * upp
-            delta = correct_qty - qty
-            stock_deducted = (d.get("status") in DEDUCTED_STATUSES)
-            finding = {
-                "challan_number": d.get("challan_number"), "dispatch_id": d["id"],
-                "status": d.get("status"), "sku_name": it.get("sku_name"),
-                "packaging": it.get("packaging_type_name"), "stored_quantity": qty,
-                "correct_quantity_bottles": correct_qty, "missing_bottles": delta,
-                "stock_will_be_adjusted": stock_deducted,
-            }
-            findings.append(finding)
-            if payload.apply:
-                await db.distributor_delivery_items.update_one(
-                    {"id": it["id"], "tenant_id": tenant_id},
-                    {"$set": {"quantity": correct_qty, "packages": qty, "units_per_package": upp,
-                              "unit_repair_applied_at": now}})
-                totals = await db.distributor_delivery_items.aggregate([
-                    {"$match": {"tenant_id": tenant_id, "delivery_id": d["id"]}},
-                    {"$group": {"_id": None, "q": {"$sum": "$quantity"}}}]).to_list(1)
-                await db.promo_dispatches.update_one(
-                    {"id": d["id"], "tenant_id": tenant_id},
-                    {"$set": {"total_quantity": (totals[0]["q"] if totals else correct_qty),
-                              "updated_at": now}})
-                if stock_deducted:
-                    await _adjust_stock_for_dispatch(
-                        tenant_id, d, [{"quantity": delta, "sku_id": it.get("sku_id"),
-                                        "batch_id": it.get("batch_id")}], sign=-1)
-                applied += 1
+    findings, applied, ambiguous_count = [], 0, 0
+
+    async def scan(dispatch_coll, query, deducted_statuses):
+        nonlocal applied, ambiguous_count
+        async for d in dispatch_coll.find(query, {"_id": 0}):
+            items = await db.distributor_delivery_items.find(
+                {"tenant_id": tenant_id, "delivery_id": d["id"]}, {"_id": 0}).to_list(500)
+            for it in items:
+                if it.get("unit_repair_applied_at"):
+                    continue
+                qty = int(it.get("quantity") or 0)
+                if qty <= 0:
+                    continue
+                stored_upp = int(it.get("units_per_package") or 0)
+                upp = resolve_upp(it)
+                if upp <= 1:
+                    continue
+                packages = it.get("packages")
+                # Bug signature: quantity equals the package count (never multiplied).
+                if packages is not None and int(packages) != qty:
+                    continue  # already stored in bottles (packages = qty / upp)
+                if packages is None and stored_upp > 1 and qty % upp == 0 and qty >= upp:
+                    continue  # quantity already looks like bottles
+                # Collapsed lines (upp stored as 1) that are a clean multiple of the
+                # pack size can't be told apart from genuine loose bottles →
+                # flag for manual review, never auto-repair.
+                ambiguous = stored_upp <= 1 and packages is not None and qty % upp == 0 and qty >= upp
+                correct_qty = qty * upp
+                delta = correct_qty - qty
+                stock_deducted = (d.get("status") in deducted_statuses)
+                findings.append({
+                    "challan_number": d.get("challan_number"), "dispatch_id": d["id"],
+                    "status": d.get("status"), "sku_name": it.get("sku_name"),
+                    "packaging": it.get("packaging_type_name"), "stored_quantity": qty,
+                    "correct_quantity_bottles": correct_qty, "missing_bottles": delta,
+                    "stock_will_be_adjusted": stock_deducted, "ambiguous": ambiguous,
+                })
+                if ambiguous:
+                    ambiguous_count += 1
+                    continue
+                if payload.apply:
+                    await db.distributor_delivery_items.update_one(
+                        {"id": it["id"], "tenant_id": tenant_id},
+                        {"$set": {"quantity": correct_qty, "packages": qty, "units_per_package": upp,
+                                  "packaging_units": upp, "unit_repair_applied_at": now}})
+                    totals = await db.distributor_delivery_items.aggregate([
+                        {"$match": {"tenant_id": tenant_id, "delivery_id": d["id"]}},
+                        {"$group": {"_id": None, "q": {"$sum": "$quantity"}}}]).to_list(1)
+                    await dispatch_coll.update_one(
+                        {"id": d["id"], "tenant_id": tenant_id},
+                        {"$set": {"total_quantity": (totals[0]["q"] if totals else correct_qty),
+                                  "updated_at": now}})
+                    if stock_deducted:
+                        await _adjust_stock_for_dispatch(
+                            tenant_id, d, [{"quantity": delta, "sku_id": it.get("sku_id"),
+                                            "batch_id": it.get("batch_id")}], sign=-1)
+                    applied += 1
+
+    # Legacy records (stock deducted at confirm) + unified is_promo deliveries
+    # (stock reserved until completion — open statuses need no stock write, the
+    # reservation recomputes from the corrected item quantity).
+    await scan(db.promo_dispatches, {"tenant_id": tenant_id}, DEDUCTED_STATUSES)
+    await scan(db.distributor_deliveries, {"tenant_id": tenant_id, "is_promo": True},
+               {"complete", "completed", "delivered"})
 
     return {"dry_run": not payload.apply, "affected_lines": len(findings),
-            "repaired": applied, "findings": findings}
+            "repaired": applied, "ambiguous": ambiguous_count, "findings": findings}

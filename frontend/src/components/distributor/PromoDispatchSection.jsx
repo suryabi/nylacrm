@@ -1489,8 +1489,9 @@ export default function PromoDispatchSection({
               Repair Legacy Crate Units
             </DialogTitle>
             <DialogDescription>
-              Finds old promo stock-outs where a crate was deducted as 1 bottle, converts them to bottles
-              and deducts the missing stock. Review the preview below, then apply.
+              Scans all promo stock-outs (old and new) where a crate/pack was recorded as loose bottles,
+              converts them to bottles and corrects the stock. Lines needing manual review are flagged
+              and never auto-changed. Review the preview below, then apply.
             </DialogDescription>
           </DialogHeader>
           {repairBusy && !repairScan ? (
@@ -1508,8 +1509,8 @@ export default function PromoDispatchSection({
               <div className="space-y-3">
                 <div className={`text-sm font-medium ${repairScan.dry_run ? 'text-amber-700' : 'text-emerald-700'}`} data-testid="repair-summary">
                   {repairScan.dry_run
-                    ? `Preview: ${repairScan.affected_lines} line(s) will be corrected. Nothing changed yet.`
-                    : `Done: ${repairScan.repaired} line(s) corrected and stock adjusted.`}
+                    ? `Preview: ${repairScan.affected_lines - (repairScan.ambiguous || 0)} line(s) will be corrected${repairScan.ambiguous ? `, ${repairScan.ambiguous} flagged for manual review (not auto-changed)` : ''}. Nothing changed yet.`
+                    : `Done: ${repairScan.repaired} line(s) corrected and stock adjusted.${repairScan.ambiguous ? ` ${repairScan.ambiguous} flagged line(s) left untouched — review manually.` : ''}`}
                 </div>
                 <div className="max-h-72 overflow-y-auto border rounded-md">
                   <table className="w-full text-sm">
@@ -1526,14 +1527,14 @@ export default function PromoDispatchSection({
                     </thead>
                     <tbody>
                       {(repairScan.findings || []).map((f, i) => (
-                        <tr key={i} className="border-t" data-testid={`repair-finding-${i}`}>
+                        <tr key={i} className={`border-t ${f.ambiguous ? 'bg-amber-50' : ''}`} data-testid={`repair-finding-${i}`}>
                           <td className="p-2 font-mono text-xs">{f.challan_number}</td>
                           <td className="p-2">{f.sku_name}</td>
-                          <td className="p-2">{f.packaging}</td>
+                          <td className="p-2">{f.packaging}{f.ambiguous && <span className="block text-[10px] text-amber-700 font-medium">review manually — skipped</span>}</td>
                           <td className="p-2 text-right">{f.stored_quantity}</td>
                           <td className="p-2 text-right font-medium">{f.correct_quantity_bottles}</td>
                           <td className="p-2 text-right text-red-600 font-medium">{f.missing_bottles}</td>
-                          <td className="p-2 text-center">{f.stock_will_be_adjusted ? 'Yes' : 'No'}</td>
+                          <td className="p-2 text-center">{f.ambiguous ? '—' : f.stock_will_be_adjusted ? 'Yes' : 'No'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1544,7 +1545,7 @@ export default function PromoDispatchSection({
           ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowRepair(false)} data-testid="repair-close-btn">Close</Button>
-            {repairScan?.dry_run && repairScan.affected_lines > 0 && (
+            {repairScan?.dry_run && (repairScan.affected_lines - (repairScan.ambiguous || 0)) > 0 && (
               <Button
                 className="bg-amber-600 hover:bg-amber-700"
                 disabled={repairBusy}
