@@ -647,6 +647,24 @@ async def stock_child_realign(payload: RealignRequest, current_user: dict = Depe
         flow(be.get("warehouse_location_id"), be.get("sku_id"), be.get("to_child_sku_id"),
              qty, be.get("sku_name"), be.get("to_child_sku_name"))
 
+    # ── open stock-outs (scheduled/confirmed — stock NOT yet deducted) ───
+    # These don't change the physical split, but each child's realign target
+    # must keep at least this much so pending orders can still complete.
+    OPEN_STATUSES = ["draft", "confirmed", "scheduled", "in_transit",
+                     "delivery_assigned", "delivery_scheduled", "on_the_way"]
+    reserved: dict = {}
+    open_dels = {d["id"]: d for d in await db.distributor_deliveries.find(
+        {"tenant_id": tenant_id, "status": {"$in": OPEN_STATUSES}},
+        {"_id": 0, "id": 1, "distributor_location_id": 1}).to_list(20000)}
+    if open_dels:
+        async for it in db.distributor_delivery_items.find(
+                {"tenant_id": tenant_id, "delivery_id": {"$in": list(open_dels.keys())}}, {"_id": 0}):
+            d = open_dels.get(it.get("delivery_id"))
+            if not d or not d.get("distributor_location_id"):
+                continue
+            rkey = (d["distributor_location_id"], it.get("sku_id"), it.get("child_sku_id") or None)
+            reserved[rkey] = reserved.get(rkey, 0) + _item_units(it)
+
     # ── per (loc, sku): targets that preserve the SKU total exactly ──────
     by_loc_sku: dict = {}
     for key in set(list(actual.keys()) + list(flows.keys())):
@@ -683,6 +701,26 @@ async def stock_child_realign(payload: RealignRequest, current_user: dict = Depe
                 deficit -= take
                 if deficit <= 0:
                     break
+        # ── keep each child's target ≥ its open stock-out commitments ────
+        # (scheduled/confirmed orders haven't deducted stock yet; when they
+        # complete they deduct from THAT child's rows — don't realign it away)
+        res = {c: reserved.get((loc_id, sku_id, c), 0) for c in children}
+        for c in children:
+            need = res[c] - expected[c]
+            if need <= 0:
+                continue
+            donors = sorted([d for d in children if d != c],
+                            key=lambda d: (d is not None, -(expected[d] - res[d])))
+            for dn in donors:
+                surplus = expected[dn] - res[dn]
+                if surplus <= 0:
+                    continue
+                take = min(need, surplus)
+                expected[dn] -= take
+                expected[c] += take
+                need -= take
+                if need <= 0:
+                    break
         deltas = {c: expected[c] - actual.get((loc_id, sku_id, c), 0) for c in children}
         if all(d == 0 for d in deltas.values()):
             continue
@@ -701,6 +739,7 @@ async def stock_child_realign(payload: RealignRequest, current_user: dict = Depe
                 "actual": actual.get((loc_id, sku_id, c), 0),
                 "target": expected[c],
                 "delta": deltas[c],
+                "reserved": res.get(c, 0),
             } for c in sorted(children, key=lambda c: (c is not None, str(c)))],
         }
         findings.append(finding)

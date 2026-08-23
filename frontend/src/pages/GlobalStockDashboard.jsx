@@ -469,7 +469,10 @@ export default function GlobalStockDashboard() {
                         <tbody>
                           {f.children.map((c, j) => (
                             <tr key={j} className="border-t first:border-t-0">
-                              <td className="px-3 py-1.5">{c.child_sku_name}</td>
+                              <td className="px-3 py-1.5">
+                                {c.child_sku_name}
+                                {c.reserved > 0 && <span className="ml-2 text-[10px] text-amber-600 font-medium">reserved {Number(c.reserved).toLocaleString('en-IN')}</span>}
+                              </td>
                               <td className="px-3 py-1.5 text-right text-slate-500">{Number(c.actual).toLocaleString('en-IN')}</td>
                               <td className="px-2 py-1.5 text-center text-slate-400">→</td>
                               <td className="px-3 py-1.5 text-right font-medium">{Number(c.target).toLocaleString('en-IN')}</td>
