@@ -2625,3 +2625,9 @@ Test tenant sales-only deleted.
   - RealignRequest.include_branding (default true): when false, branding conversions are excluded and targets equal pure received−delivered−returns. UI checkbox "Count branding conversions" (realign-branding-toggle) re-runs the preview on toggle; child rows show tiny breakdown line (rec/del/xfer/fact.ret/brand).
 - Verified: with branding A96/B96/G24; without branding A96/B60/G60 (pure rec−del); totals 216 both ways; UI toggle + dialog screenshot OK. Seeds cleaned.
 - PRODUCTION guidance: Undo the applied realignment first, redeploy, re-open Reconcile, UNTICK branding toggle to compare, verify per-child breakdown, then apply per-SKU only when numbers match physical reality.
+
+## 2026-08 — Production-replica simulation of realign v4 (verified before user redeploy)
+- Seeded EXACT production numbers (rows 1128/1080/544/424; received 3420/1440/1800/300; delivered 2328/720/720/15; 1 generic factory return; duplicate branding entry generic→Cafe 284).
+- Toggle OFF result: Royal 1092, Garci 720, Cafe 1080, Generic 284 — every child = received−delivered(−returns), total 3176 preserved. Fixes "available > received" (Garci 1080→720).
+- Toggle ON reproduced the bad production result (Generic→0), confirming duplicate branding entries as root cause.
+- User instruction: redeploy → Reconcile → pick distributor → UNTICK "Count branding conversions" → verify breakdown → apply per-SKU.
