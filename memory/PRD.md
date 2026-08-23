@@ -2663,3 +2663,9 @@ Preview seed kept for demo: accounts AMC Test Mature (shows 3 crates) / AMC Test
 
 ## 2026-08 — Stock at Warehouse column + low-stock red signal (Volume Tracking)
 New column "Stock at Warehouse (Crates)": current stock of the account's ordered SKUs at the warehouse that last delivered to it (distributor_stock + factory_warehouse_stock). Cell (not row) gets red bg + bold red text when stock < ½ × estimated monthly consumption (Expected Monthly Volume if set, else Actual Monthly Consumption). Available in formulas as "Stock at Warehouse"; Excel export includes the column with red fill on flagged rows. testid: vg-whstock-{code}[-low]. Seed extended: amc-test-loc location + amc-test-stock (12 bottles = 1 crate) → Mature flags red (1 < 1.5).
+
+## 2026-08 — Volume Tracking: Account Age + redesign + default hidden cols
+- New "Account Age (Days)" column (days since activated_at), hidden by default; in Excel export (after On-boarded Date; totals/custom offsets shifted, low-stock fill col now 18); formula name "Account Age".
+- Default hidden columns: order_count, onboarded_date, last_order_sku, account_age_days. LS key bumped to volume_grid_hidden_columns_v2 so defaults apply to all users once.
+- Redesign per /app/design_guidelines.json (design_agent): dark #0b192c header (white text, wider tracking), summary row #EAF0FC/#DFE7F7 corner, zebra white/#F8FAFC, hover #EDF2FA, strict alignment (numbers/dates), tabular-nums everywhere, bordered subtle recency pills (legend + cells), low-stock cell rose-50 with inset rose left bar, list columns newest-on-top with muted history, text-xs density, rounded-lg container.
+- AMC demo rows removed from preview (13 records: ^amc- regex across 6 collections).

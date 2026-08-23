@@ -236,12 +236,15 @@ async def get_grid(
         low_stock = bool(
             wh_stock is not None and isinstance(est, (int, float)) and est > 0 and wh_stock < est / 2
         )
+        onb = _parse_dt(a.get("activated_at"))
+        age_days = (datetime.now(timezone.utc).replace(tzinfo=None) - onb.replace(tzinfo=None)).days if onb else None
         rows.append({
             "account_id": a["id"],
             "account_code": a.get("account_id"),
             "account_name": a.get("account_name"),
             "territory": a.get("territory"), "state": a.get("state"), "city": a.get("city"),
             "onboarded_date": (a.get("activated_at") or "")[:10] or None,
+            "account_age_days": age_days,
             "avg_order_frequency_days": freq,
             "order_count": len(dels),
             "first_delivery_date": first_dt.strftime("%Y-%m-%d") if first_dt else None,
@@ -272,7 +275,7 @@ async def get_grid(
             "account_id": m["id"], "account_code": None, "is_manual": True,
             "account_name": m.get("account_name") or "",
             "territory": None, "state": None, "city": None,
-            "onboarded_date": None, "avg_order_frequency_days": None,
+            "onboarded_date": None, "account_age_days": None, "avg_order_frequency_days": None,
             "order_count": 0, "first_delivery_date": None, "latest_delivery_date": None,
             "last_order_quantity": None,
             "last_order_sku": None,
@@ -357,7 +360,7 @@ async def export_excel(
                 ctx[c["name"]] = (r.get("custom_values") or {}).get(c["id"])
         return ctx
 
-    headers = ["Account Name", "Territory", "State", "City", "On-boarded Date",
+    headers = ["Account Name", "Territory", "State", "City", "On-boarded Date", "Account Age (Days)",
                "Avg Order Frequency (Days)", "No. of Orders", "First Delivery Date", "Latest Delivery Date",
                "Last 4 Delivery Dates", "Last 4 Delivery Qty (Crates)",
                "Last Order Quantity (Crates)", "Last Ordered SKU", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)",
@@ -366,7 +369,7 @@ async def export_excel(
 
     def row_values(r):
         base = [r.get("account_name") or "", r.get("territory") or "", r.get("state") or "",
-                r.get("city") or "", r.get("onboarded_date") or "",
+                r.get("city") or "", r.get("onboarded_date") or "", r.get("account_age_days"),
                 r.get("avg_order_frequency_days"), r.get("order_count"), r.get("first_delivery_date") or "",
                 r.get("latest_delivery_date") or "",
                 "\n".join(r.get("recent_delivery_dates") or []),
@@ -387,10 +390,10 @@ async def export_excel(
 
     # Totals: only Bi-weekly, Expected Monthly, and custom columns opted into totals
     totals = [f"TOTAL — {len(rows)} rows"] + [""] * (len(headers) - 1)
-    total_indexes = {13, 14, 15}  # Bi-weekly, Expected Monthly, Actual Monthly Consumption
+    total_indexes = {14, 15, 16}  # Bi-weekly, Expected Monthly, Actual Monthly Consumption
     for j, c in enumerate(custom_cols):
         if c.get("include_in_total"):
-            total_indexes.add(17 + j)
+            total_indexes.add(18 + j)
     for i in sorted(total_indexes):
         nums = [v[i] for v in all_values if isinstance(v[i], (int, float))]
         if nums:
@@ -414,14 +417,14 @@ async def export_excel(
     low_font = Font(bold=True, color="B91C1C")
     for i, r in enumerate(rows):
         if r.get("low_warehouse_stock"):
-            cell = ws.cell(row=3 + i, column=16)
+            cell = ws.cell(row=3 + i, column=18)
             cell.fill = low_fill
             cell.font = low_font
     wrap = Alignment(wrap_text=True, vertical="top")
-    for row_cells in ws.iter_rows(min_row=3, min_col=10, max_col=11):
+    for row_cells in ws.iter_rows(min_row=3, min_col=11, max_col=12):
         for c in row_cells:
             c.alignment = wrap
-    widths = [34, 16, 16, 16, 18, 22, 14, 16, 16, 16, 16, 16, 24, 20, 26, 28, 24] + [18] * len(custom_cols)
+    widths = [34, 16, 16, 16, 18, 14, 22, 14, 16, 16, 16, 16, 16, 24, 20, 26, 28, 24] + [18] * len(custom_cols)
     for idx, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=idx).column_letter].width = w
     brand_workbook(wb)

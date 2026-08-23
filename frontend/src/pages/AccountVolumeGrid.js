@@ -13,13 +13,15 @@ import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
-const LS_KEY = 'volume_grid_hidden_columns';
+const LS_KEY = 'volume_grid_hidden_columns_v2';
 const LS_WIDTHS = 'volume_grid_col_widths';
 const LS_ORDER = 'volume_grid_col_order';
+const DEFAULT_HIDDEN = ['order_count', 'onboarded_date', 'last_order_sku', 'account_age_days'];
 
 const BASE_COLUMNS = [
   { key: 'account_name', label: 'Account Name', type: 'text' },
   { key: 'onboarded_date', label: 'On-boarded Date', type: 'date' },
+  { key: 'account_age_days', label: 'Account Age (Days)', type: 'number' },
   { key: 'avg_order_frequency_days', label: 'Average Order Frequency (Days)', type: 'number' },
   { key: 'order_count', label: 'No. of Orders', type: 'number' },
   { key: 'first_delivery_date', label: 'First Delivery Date', type: 'date' },
@@ -44,6 +46,7 @@ const formulaContext = (row, customCols) => {
     'Number of Orders': row.order_count,
     'Actual Monthly Consumption': row.actual_monthly_consumption_crates,
     'Stock at Warehouse': row.warehouse_stock_crates,
+    'Account Age': row.account_age_days,
   };
   (customCols || []).forEach((c) => {
     if (c.type === 'number') ctx[c.name] = row.custom_values?.[c.id];
@@ -94,10 +97,10 @@ const fmt = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit'
 const orderRecency = (row) => {
   if (!row.latest_delivery_date) return null;
   const days = (Date.now() - new Date(row.latest_delivery_date).getTime()) / 86400000;
-  if (days <= 7) return { pill: 'bg-emerald-700/10 text-emerald-900', dot: 'bg-emerald-700' };
-  if (days <= 14) return { pill: 'bg-emerald-500/10 text-emerald-700', dot: 'bg-emerald-400' };
-  if (days <= 21) return { pill: 'bg-amber-500/10 text-amber-800', dot: 'bg-amber-500' };
-  return { pill: 'bg-red-500/10 text-red-700', dot: 'bg-red-500' };
+  if (days <= 7) return { pill: 'bg-emerald-50 text-emerald-800 border border-emerald-200/60', dot: 'bg-emerald-600' };
+  if (days <= 14) return { pill: 'bg-emerald-50/70 text-emerald-700 border border-emerald-200/40', dot: 'bg-emerald-400' };
+  if (days <= 21) return { pill: 'bg-amber-50 text-amber-800 border border-amber-200/60', dot: 'bg-amber-500' };
+  return { pill: 'bg-red-50 text-red-700 border border-red-200/60', dot: 'bg-red-500' };
 };
 const RecencyPill = ({ recency, colKey, children }) => (
   <span
@@ -109,7 +112,7 @@ const RecencyPill = ({ recency, colKey, children }) => (
   </span>
 );
 const RECENCY_COLS = ['latest_delivery_date', 'last_order_quantity'];
-const TH = 'px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap select-none';
+const TH = 'px-3 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-200 whitespace-nowrap select-none';
 const numericCol = (c) => c.type === 'number' || c.key === 'recent_delivery_crates' || (c.custom && (c.custom.type === 'number' || c.custom.type === 'formula'));
 
 export default function AccountVolumeGrid() {
@@ -122,7 +125,7 @@ export default function AccountVolumeGrid() {
   const [cityFilter, setCityFilter] = useState('all');
   const [sort, setSort] = useState({ key: 'account_name', dir: 'asc' });
   const [hidden, setHidden] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch { return []; }
+    try { return JSON.parse(localStorage.getItem(LS_KEY)) || DEFAULT_HIDDEN; } catch { return DEFAULT_HIDDEN; }
   });
   const [colWidths, setColWidths] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_WIDTHS)) || {}; } catch { return {}; }
@@ -416,11 +419,11 @@ export default function AccountVolumeGrid() {
       const arr = Array.isArray(raw) ? raw : [];
       const listRecency = (col.key === 'recent_delivery_dates' || col.key === 'recent_delivery_crates') ? orderRecency(row) : null;
       return arr.length === 0 ? <span className="tabular-nums">—</span> : (
-        <span className="tabular-nums leading-relaxed">
+        <span className="tabular-nums leading-tight">
           {arr.map((v, i) => {
             const text = typeof v === 'number' ? v.toLocaleString('en-IN') : v;
             return (
-              <span key={i} className="block whitespace-nowrap">
+              <span key={i} className={`block whitespace-nowrap ${i > 0 ? 'text-slate-500 mt-0.5' : ''}`}>
                 {i === 0 && listRecency ? <RecencyPill recency={listRecency} colKey={col.key}>{text}</RecencyPill> : text}
               </span>
             );
@@ -566,10 +569,10 @@ export default function AccountVolumeGrid() {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500" data-testid="vg-recency-legend">
         <span className="font-medium text-slate-600">Last order:</span>
         {[
-          { dot: 'bg-emerald-700', pill: 'bg-emerald-700/10 text-emerald-900', label: 'within 1 week' },
-          { dot: 'bg-emerald-400', pill: 'bg-emerald-500/10 text-emerald-700', label: 'within 2 weeks' },
-          { dot: 'bg-amber-500', pill: 'bg-amber-500/10 text-amber-800', label: 'within 3 weeks' },
-          { dot: 'bg-red-500', pill: 'bg-red-500/10 text-red-700', label: '4+ weeks ago' },
+          { dot: 'bg-emerald-600', pill: 'bg-emerald-50 text-emerald-800 border border-emerald-200/60', label: 'within 1 week' },
+          { dot: 'bg-emerald-400', pill: 'bg-emerald-50/70 text-emerald-700 border border-emerald-200/40', label: 'within 2 weeks' },
+          { dot: 'bg-amber-500', pill: 'bg-amber-50 text-amber-800 border border-amber-200/60', label: 'within 3 weeks' },
+          { dot: 'bg-red-500', pill: 'bg-red-50 text-red-700 border border-red-200/60', label: '4+ weeks ago' },
         ].map((t) => (
           <span key={t.label} className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 ${t.pill}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} />
@@ -582,18 +585,18 @@ export default function AccountVolumeGrid() {
       {loading ? (
         <div className="flex items-center justify-center py-20 text-slate-500"><RefreshCw className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-md shadow-sm overflow-auto max-h-[calc(100vh-260px)]" data-testid="vg-scroll-container">
-          <table className="w-full text-sm" style={{ tableLayout: 'fixed' }} data-testid="vg-table">
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-auto max-h-[calc(100vh-260px)]" data-testid="vg-scroll-container">
+          <table className="w-full text-xs" style={{ tableLayout: 'fixed' }} data-testid="vg-table">
             <colgroup>
               {visibleColumns.map((c) => (
                 <col key={c.key} style={{ width: colWidths[c.key] ? `${colWidths[c.key]}px` : (c.key === 'account_name' ? '220px' : '150px') }} />
               ))}
             </colgroup>
             <thead>
-              <tr ref={headerRowRef} className="border-b border-slate-200 bg-slate-50">
+              <tr ref={headerRowRef} className="bg-[#0b192c]">
                 {visibleColumns.map((c) => (
                   <th key={c.key}
-                    className={`${TH} ${numericCol(c) ? 'text-right' : 'text-left'} cursor-pointer hover:text-[#002FA7] sticky top-0 bg-slate-50 shadow-[inset_0_-1px_0_#e2e8f0] ${c.key === 'account_name' ? 'left-0 z-30' : 'z-20'}`}
+                    className={`${TH} ${numericCol(c) ? 'text-right' : 'text-left'} cursor-pointer transition-colors hover:text-white sticky top-0 bg-[#0b192c] shadow-[inset_0_-1px_0_#1e293b] ${c.key === 'account_name' ? 'left-0 z-30 shadow-[inset_-1px_0_0_#334155,inset_0_-1px_0_#1e293b]' : 'z-20'}`}
                     onClick={() => toggleSort(c.key)}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => { e.preventDefault(); if (dragColRef.current) moveColumn(dragColRef.current, c.key); dragColRef.current = null; }}
@@ -603,13 +606,13 @@ export default function AccountVolumeGrid() {
                       onDragStart={(e) => { dragColRef.current = c.key; e.dataTransfer.effectAllowed = 'move'; }}
                       className={`inline-flex items-center gap-1 whitespace-normal break-words leading-tight ${c.key !== 'account_name' ? 'cursor-move' : ''}`}>
                       {c.label}
-                      {c.custom?.type === 'formula' && <Sigma className="h-3 w-3 text-indigo-500 shrink-0" />}
+                      {c.custom?.type === 'formula' && <Sigma className="h-3 w-3 text-indigo-300 shrink-0" />}
                       {sort.key === c.key
-                        ? (sort.dir === 'asc' ? <ArrowUp className="h-3 w-3 shrink-0" /> : <ArrowDown className="h-3 w-3 shrink-0" />)
-                        : <ArrowUpDown className="h-3 w-3 opacity-30 shrink-0" />}
+                        ? (sort.dir === 'asc' ? <ArrowUp className="h-3 w-3 shrink-0 text-white" /> : <ArrowDown className="h-3 w-3 shrink-0 text-white" />)
+                        : <ArrowUpDown className="h-3 w-3 opacity-40 shrink-0" />}
                     </span>
                     <span
-                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-[#002FA7]/40 active:bg-[#002FA7]"
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-white/30 active:bg-[#002FA7]"
                       onMouseDown={(e) => startResize(e, c.key)}
                       onClick={(e) => e.stopPropagation()}
                       data-testid={`vg-resize-${c.key}`}
@@ -621,7 +624,7 @@ export default function AccountVolumeGrid() {
               <tr className="border-b-2 border-[#002FA7]/30" data-testid="vg-summary-row">
                 {visibleColumns.map((c) => (
                   <td key={c.key} style={{ top: headerH }}
-                    className={`px-3 py-2 text-sm font-bold text-[#002FA7] tabular-nums whitespace-normal break-words sticky bg-[#E9EEF9] shadow-[inset_0_-2px_0_rgba(0,47,167,0.3)] ${numericCol(c) ? 'text-right' : 'text-left'} ${c.key === 'account_name' ? 'left-0 z-30' : 'z-20'}`}
+                    className={`px-3 py-2 text-xs font-bold text-[#002FA7] tabular-nums tracking-tight whitespace-normal break-words sticky shadow-[inset_0_-2px_0_rgba(0,47,167,0.3)] ${numericCol(c) ? 'text-right' : 'text-left'} ${c.key === 'account_name' ? 'left-0 z-30 bg-[#DFE7F7] shadow-[inset_-1px_0_0_#CBD5E1,inset_0_-2px_0_rgba(0,47,167,0.3)]' : 'z-20 bg-[#EAF0FC]'}`}
                     data-testid={`vg-summary-${c.key}`}>
                     {typeof summaryFor(c) === 'number' ? summaryFor(c).toLocaleString('en-IN') : summaryFor(c)}
                   </td>
@@ -633,9 +636,9 @@ export default function AccountVolumeGrid() {
                 <tr><td colSpan={visibleColumns.length} className="px-4 py-12 text-center text-slate-500" data-testid="vg-empty">No accounts match the current filters.</td></tr>
               )}
               {sortedRows.map((row, ri) => (
-                <tr key={row.account_id} className={`border-b border-slate-100 transition-colors group ${row.is_manual ? 'bg-amber-50/40' : ri % 2 ? 'bg-slate-50/60' : 'bg-white'} hover:bg-[#EFF3FB]`} data-testid={`vg-row-${row.account_code || row.account_id}`}>
+                <tr key={row.account_id} className={`border-b border-slate-100 transition-colors group ${row.is_manual ? 'bg-[#FFFDF5]' : ri % 2 ? 'bg-[#F8FAFC]' : 'bg-white'} hover:bg-[#EDF2FA]`} data-testid={`vg-row-${row.account_code || row.account_id}`}>
                   {visibleColumns.map((c) => (
-                    <td key={c.key} className={`px-3 py-2 align-top whitespace-normal break-words ${numericCol(c) ? 'text-right' : ''} ${c.key === 'warehouse_stock_crates' && row.low_warehouse_stock ? 'bg-red-100 text-red-700 font-semibold' : ''} ${c.key === 'account_name' ? `font-semibold text-slate-900 sticky left-0 z-10 ${row.is_manual ? 'bg-[#FDF6E7]' : ri % 2 ? 'bg-[#F7F9FC]' : 'bg-white'} group-hover:bg-[#EFF3FB] shadow-[inset_-1px_0_0_#e2e8f0]` : 'text-slate-700'}`}
+                    <td key={c.key} className={`px-3 py-2.5 align-middle whitespace-normal break-words tabular-nums ${numericCol(c) ? 'text-right' : 'text-left'} ${c.key === 'warehouse_stock_crates' && row.low_warehouse_stock ? 'bg-rose-50 text-rose-700 font-semibold shadow-[inset_2px_0_0_#f43f5e]' : ''} ${c.key === 'account_name' ? `font-semibold text-slate-900 sticky left-0 z-10 ${row.is_manual ? 'bg-[#FFFCF0]' : ri % 2 ? 'bg-[#F6F8FB]' : 'bg-white'} group-hover:bg-[#EDF2FA] shadow-[inset_-1px_0_0_#E2E8F0]` : 'text-slate-700'}`}
                       data-testid={c.key === 'warehouse_stock_crates' ? `vg-whstock-${row.account_code || row.account_id}${row.low_warehouse_stock ? '-low' : ''}` : undefined}>
                       {c.key === 'account_name' ? (
                         row.is_manual ? (
