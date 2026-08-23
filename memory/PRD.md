@@ -2567,3 +2567,6 @@ Test tenant sales-only deleted.
 ## 2026-08 — Pending Approvals widget: always collapsed
 - Home widget (PendingApprovalsWidget.jsx) now renders collapsed on every load — header row shows title + amber count badge + chevron; clicking toggles the list. No persistence (always starts collapsed per user request). data-testid pending-approvals-toggle.
 - Verified with seeded approval tasks: badge=2 while items hidden, expand shows 2, re-collapse hides. Seeds cleaned up.
+
+## 2026-08 — Volume Tracking recency legend
+- Small legend row above the grid (below filters, data-testid vg-recency-legend): "Last order:" + four pills matching the tier styling (within 1 week / 2 weeks / 3 weeks / 4+ weeks ago). Verified by screenshot.

@@ -533,6 +533,22 @@ export default function AccountVolumeGrid() {
         <Badge variant="outline" className="ml-auto text-xs text-slate-500">{sortedRows.length} accounts</Badge>
       </div>
 
+      {/* Recency legend */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500" data-testid="vg-recency-legend">
+        <span className="font-medium text-slate-600">Last order:</span>
+        {[
+          { dot: 'bg-emerald-700', pill: 'bg-emerald-700/10 text-emerald-900', label: 'within 1 week' },
+          { dot: 'bg-emerald-400', pill: 'bg-emerald-500/10 text-emerald-700', label: 'within 2 weeks' },
+          { dot: 'bg-amber-500', pill: 'bg-amber-500/10 text-amber-800', label: 'within 3 weeks' },
+          { dot: 'bg-red-500', pill: 'bg-red-500/10 text-red-700', label: '4+ weeks ago' },
+        ].map((t) => (
+          <span key={t.label} className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 ${t.pill}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} />
+            {t.label}
+          </span>
+        ))}
+      </div>
+
       {/* Grid */}
       {loading ? (
         <div className="flex items-center justify-center py-20 text-slate-500"><RefreshCw className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
