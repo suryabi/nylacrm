@@ -2563,3 +2563,7 @@ Test tenant sales-only deleted.
   - PromoDispatchSection.jsx: dialog copy updated; ambiguous rows amber with "review manually — skipped"; Apply hidden when only ambiguous lines.
 - Verified in preview: replica of DC-2607-0011 detected (5→60, stock 100→45 after 55-bottle catch-up deduction), ambiguous 24-line flagged and untouched, real legacy draft DC-2606-0006 corrected (2→24, no stock change for draft), idempotent rerun, DO create with unconverted 5-crates stored as 60/upp=12 (PASS), already-converted 60 not double-multiplied (PASS). Test data cleaned up.
 - PRODUCTION: redeploy, then rerun Repair Units → DC-2607-0011 will appear (5 → 60, deducts missing 55) → Apply.
+
+## 2026-08 — Pending Approvals widget: always collapsed
+- Home widget (PendingApprovalsWidget.jsx) now renders collapsed on every load — header row shows title + amber count badge + chevron; clicking toggles the list. No persistence (always starts collapsed per user request). data-testid pending-approvals-toggle.
+- Verified with seeded approval tasks: badge=2 while items hidden, expand shows 2, re-collapse hides. Seeds cleaned up.

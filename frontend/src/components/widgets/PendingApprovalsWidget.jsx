@@ -6,7 +6,7 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
-import { ClipboardCheck, Check, X, ExternalLink, Loader2 } from 'lucide-react';
+import { ClipboardCheck, Check, X, ExternalLink, Loader2, ChevronDown } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -72,6 +72,7 @@ export default function PendingApprovalsWidget() {
   const [actingId, setActingId] = useState(null);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [open, setOpen] = useState(false); // always starts collapsed
 
   const load = useCallback(async () => {
     try {
@@ -126,16 +127,22 @@ export default function PendingApprovalsWidget() {
 
   return (
     <Card className="border-amber-200/80 bg-gradient-to-br from-amber-50/60 to-white dark:from-amber-950/20 dark:to-slate-900 shadow-sm overflow-hidden" data-testid="pending-approvals-widget">
-      <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3 border-b border-amber-200/60">
+      <button
+        className="w-full flex items-center gap-2.5 px-4 sm:px-5 py-3 text-left hover:bg-amber-100/40 transition-colors"
+        onClick={() => setOpen((v) => !v)}
+        data-testid="pending-approvals-toggle"
+      >
         <div className="p-1.5 rounded-lg bg-amber-500/15">
           <ClipboardCheck className="h-4 w-4 text-amber-600" />
         </div>
         <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Pending Approvals</h3>
         <Badge className="bg-amber-500 text-white text-[11px] tabular-nums" data-testid="pending-approvals-count">{items.length}</Badge>
         <span className="ml-auto text-xs text-muted-foreground hidden sm:inline">Action needed from you</span>
-      </div>
+        <ChevronDown className={`h-4 w-4 text-amber-600 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
 
-      <ul className="divide-y divide-amber-100/70 dark:divide-slate-800">
+      {open && (
+      <ul className="divide-y divide-amber-100/70 dark:divide-slate-800 border-t border-amber-200/60">
         {items.map((item) => {
           const meta = APPROVAL_META[item.approval_type] || { label: 'Request', color: 'bg-slate-100 text-slate-700 border-slate-200', canActInline: false };
           const due = fmtDate(item.due_date);
@@ -228,6 +235,7 @@ export default function PendingApprovalsWidget() {
           );
         })}
       </ul>
+      )}
     </Card>
   );
 }
