@@ -368,8 +368,16 @@ async def list_articles(
             {"keywords": {"$regex": re.escape(search), "$options": "i"}},
         ]
     total = await db[ARTICLES].count_documents(q)
-    docs = await db[ARTICLES].find(q, {"_id": 0}).sort([("relevance_score", -1), ("created_at", -1)]) \
-        .skip((page - 1) * limit).limit(limit).to_list(limit)
+    # Group by collection date (desc), rank by relevance within each day
+    pipeline = [
+        {"$match": q},
+        {"$addFields": {"collected_date": {"$substrBytes": [{"$ifNull": ["$created_at", ""]}, 0, 10]}}},
+        {"$sort": {"collected_date": -1, "relevance_score": -1, "created_at": -1}},
+        {"$skip": (page - 1) * limit},
+        {"$limit": limit},
+        {"$project": {"_id": 0}},
+    ]
+    docs = await db[ARTICLES].aggregate(pipeline).to_list(limit)
     return {"articles": docs, "total": total, "page": page, "limit": limit}
 
 

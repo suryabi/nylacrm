@@ -2529,3 +2529,8 @@ Test tenant sales-only deleted.
 - Frontend (AccountDetail.js): under the GST checklist row (when GST missing) a "Customer has no GST registration" option → double-confirmation dialog (no-gst-confirm-dialog): warning + mandatory "I have verified..." checkbox gates the Confirm button; on confirm the GST row shows blue "Unregistered — confirmed" badge and counts as satisfied. States reset each time the activate dialog opens. Account Info shows GST Number: "Unregistered" badge for activated no-GST accounts.
 - Invoicing: unchanged — Zoho invoices inherit the contact's Unregistered treatment; CRM shows "Unregistered" wherever GSTIN is displayed.
 - Verified: curl (no_gst=false → blocked; no_gst=true → GST failure gone, others enforced); browser E2E (option → dialog → verify-gated confirm → badge). Zoho branch is code-reviewed only (integration not connected in preview).
+
+## 2026-06 — Water Intelligence: date-grouped, rank-sorted list
+- Backend list_articles: aggregation adds collected_date (created_at[:10]) and sorts {collected_date: -1, relevance_score: -1, created_at: -1} — newest day first, ranked by relevance within each day. Pagination unchanged.
+- Frontend WaterIntelligence.js: date group headers ("SUN, 23 AUG, 2026 — ranked by relevance", wi-date-group-{date}) inserted whenever the day changes in the list.
+- Verified: API order (23 Aug: 94→92→90→88…) + browser screenshot shows header and descending rank badges.

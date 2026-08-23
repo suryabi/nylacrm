@@ -231,11 +231,24 @@ export default function WaterIntelligence() {
         </div>
       ) : (
         <div className="space-y-3">
-          {articles.map((a) => {
+          {articles.map((a, i) => {
             const meta = STATUS_META[a.status] || STATUS_META.pending_approval;
             const open = expanded === a.id;
+            const day = (a.collected_date || (a.created_at || '').slice(0, 10)) || '';
+            const prevDay = i > 0 ? (articles[i - 1].collected_date || (articles[i - 1].created_at || '').slice(0, 10)) : null;
+            const showDateHeader = day && day !== prevDay;
             return (
-              <div key={a.id} className="bg-white border border-slate-200 rounded-sm hover:border-slate-300 transition-colors" data-testid={`wi-article-${a.id}`}>
+              <React.Fragment key={a.id}>
+              {showDateHeader && (
+                <div className="flex items-center gap-3 pt-2 first:pt-0" data-testid={`wi-date-group-${day}`}>
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#002FA7]">
+                    {new Date(day).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
+                  </span>
+                  <span className="flex-1 h-px bg-slate-200" />
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wide">ranked by relevance</span>
+                </div>
+              )}
+              <div className="bg-white border border-slate-200 rounded-sm hover:border-slate-300 transition-colors" data-testid={`wi-article-${a.id}`}>
                 <div className="p-4 flex items-start gap-3 cursor-pointer" onClick={() => setExpanded(open ? null : a.id)}>
                   <ScoreBadge score={a.relevance_score} />
                   <div className="min-w-0 flex-1">
@@ -308,6 +321,7 @@ export default function WaterIntelligence() {
                   </div>
                 )}
               </div>
+              </React.Fragment>
             );
           })}
           {pages > 1 && (
