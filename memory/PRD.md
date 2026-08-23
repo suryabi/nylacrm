@@ -2691,3 +2691,6 @@ Stock rows keyed (loc, sku_id, child_sku_id). For each item of the account's las
 
 ## 2026-08 — Stock at Hand: name-based child matching tier
 Matching priority per last-delivery item: (1) item.child_sku_id → (2) child_skus.customer_account_id link → (3) NAME match: stock child rows whose child_sku_name contains the account name (casefold, min 4 chars) — production children are named "SKU – AccountName" and often lack ID links → (4) Generic (child None). Name tier also rescues stale/mismatched ids (units==0 triggers it). Verified: unlinked child row "Demo 500ml – Demo Grand Hotel (Low Stock)" 96/12 → 8 crates picked over generic 3. Seed: vgdemo-stock4.
+
+## 2026-08 — Stock at Hand: negative clamp + edit error fix
+Negative stock aggregates clamp to 0 (mirrors dashboard max(0,..) per row); name/generic fallback also triggers when target units <= 0. saveCell now parses FastAPI 422 detail arrays → readable toast (was "[object Object]"); friendly default "enter a valid non-negative number". Verified: -2460 bottle child row → 0.0 crates; override -5 → "Input should be greater than or equal to 0".

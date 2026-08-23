@@ -306,7 +306,13 @@ export default function AccountVolumeGrid() {
       : `${API_URL}/api/account-volume-grid/rows/${rowId}`;
     try {
       const r = await fetch(url, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(body) });
-      if (!r.ok) throw new Error((await r.json()).detail || 'Save failed');
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        let msg = err.detail;
+        if (Array.isArray(msg)) msg = msg.map((m) => m.msg || '').filter(Boolean).join('; ');
+        if (typeof msg !== 'string' || !msg) msg = 'Save failed — please enter a valid non-negative number';
+        throw new Error(msg);
+      }
       setEditCell(null);
       load();
     } catch (e) { toast.error(e.message); }

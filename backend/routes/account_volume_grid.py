@@ -270,7 +270,7 @@ async def get_grid(
                 for sid, cid in pairs:
                     target = cid or acc_child.get((a["id"], sid))
                     units = stock_units.get((loc, sid, target), 0) if target else 0
-                    if units == 0:
+                    if units <= 0:
                         # name-based match: child rows named "... – <Account Name>"
                         matched = [k for k in stock_units
                                    if k[0] == loc and k[1] == sid and k[2]
@@ -280,7 +280,8 @@ async def get_grid(
                             units = sum(stock_units[k] for k in matched)
                         elif not target:
                             units = stock_units.get((loc, sid, None), 0)
-                    total += units / (upc.get(sid) or stock_bpc.get(sid) or default_bpc or 1)
+                    # dashboard rows never go below zero — mirror that
+                    total += max(0, units) / (upc.get(sid) or stock_bpc.get(sid) or default_bpc or 1)
                 wh_stock = round(total, 2)
         est = emv if isinstance(emv, (int, float)) else actual_monthly
         low_stock = bool(
