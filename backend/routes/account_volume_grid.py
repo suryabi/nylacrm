@@ -164,19 +164,34 @@ async def get_grid(
     # "Stock at Warehouse" column (stock of the account's SKUs at the
     # warehouse that last served it).
     stock_units: Dict[tuple, int] = {}
+    stock_bpc: Dict[str, int] = {}
     all_locs = list({l for l in loc_by_delivery.values() if l})
     all_skus = list({s for ss in skuids_by_delivery.values() for s in ss})
     if all_locs and all_skus:
         async for sr in db.distributor_stock.find(
                 {"tenant_id": tenant_id, "distributor_location_id": {"$in": all_locs},
-                 "sku_id": {"$in": all_skus}}, {"_id": 0, "distributor_location_id": 1, "sku_id": 1, "quantity": 1}):
+                 "sku_id": {"$in": all_skus}},
+                {"_id": 0, "distributor_location_id": 1, "sku_id": 1, "quantity": 1, "bottles_per_crate": 1}):
             k = (sr["distributor_location_id"], sr["sku_id"])
             stock_units[k] = stock_units.get(k, 0) + int(sr.get("quantity") or 0)
+            try:
+                b = int(sr.get("bottles_per_crate") or 0)
+                if b > 0 and sr["sku_id"] not in stock_bpc:
+                    stock_bpc[sr["sku_id"]] = b
+            except Exception:
+                pass
         async for sr in db.factory_warehouse_stock.find(
                 {"tenant_id": tenant_id, "warehouse_location_id": {"$in": all_locs},
-                 "sku_id": {"$in": all_skus}}, {"_id": 0, "warehouse_location_id": 1, "sku_id": 1, "quantity": 1}):
+                 "sku_id": {"$in": all_skus}},
+                {"_id": 0, "warehouse_location_id": 1, "sku_id": 1, "quantity": 1, "bottles_per_crate": 1}):
             k = (sr["warehouse_location_id"], sr["sku_id"])
             stock_units[k] = stock_units.get(k, 0) + int(sr.get("quantity") or 0)
+            try:
+                b = int(sr.get("bottles_per_crate") or 0)
+                if b > 0 and sr["sku_id"] not in stock_bpc:
+                    stock_bpc[sr["sku_id"]] = b
+            except Exception:
+                pass
 
     rows = []
     for a in accounts:
@@ -228,10 +243,12 @@ async def get_grid(
         wh_stock = None
         if dels:
             loc = loc_by_delivery.get(dels[-1][2])
-            acc_skus = {s for _, _, did in dels for s in skuids_by_delivery.get(did, set())}
+            # only the SKUs from the account's LAST delivery — mirrors the
+            # Global Dashboard WH Stock row(s) the planner would check
+            acc_skus = skuids_by_delivery.get(dels[-1][2], set())
             if loc and acc_skus:
                 wh_stock = round(sum(
-                    stock_units.get((loc, sid), 0) / (upc.get(sid) or default_bpc or 1)
+                    stock_units.get((loc, sid), 0) / (upc.get(sid) or stock_bpc.get(sid) or default_bpc or 1)
                     for sid in acc_skus), 2)
         est = emv if isinstance(emv, (int, float)) else actual_monthly
         low_stock = bool(
