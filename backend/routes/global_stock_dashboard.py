@@ -33,7 +33,12 @@ from utils.sku_order import master_sku_order, sku_sort_key
 router = APIRouter()
 
 DELIVERED_STATUSES = {"delivered", "complete", "completed"}
-RESERVED_STATUSES = {"draft", "confirmed", "scheduled"}
+# Every OPEN stock-out still holds a reservation — must match
+# RESERVED_DELIVERY_STATUSES in distributors.py (a delivery attached to a
+# schedule moves to delivery_assigned/on_the_way and stays reserved).
+RESERVED_STATUSES = {"draft", "pending", "confirmed", "scheduled",
+                     "delivery_scheduled", "delivery_assigned",
+                     "on_the_way", "in_transit"}
 EMPTY_CATEGORIES = {"empty_reusable", "promotional"}
 PRODUCT_RETURN_CATEGORIES = {"damaged", "expired"}
 
@@ -649,7 +654,7 @@ async def _collect_child_stock_data(tenant_id: str):
     # ── open stock-outs (scheduled/confirmed — stock NOT yet deducted) ───
     # These don't change the physical split, but each child's realign target
     # must keep at least this much so pending orders can still complete.
-    OPEN_STATUSES = ["draft", "confirmed", "scheduled", "in_transit",
+    OPEN_STATUSES = ["draft", "pending", "confirmed", "scheduled", "in_transit",
                      "delivery_assigned", "delivery_scheduled", "on_the_way"]
     reserved: dict = {}
     open_dels = {d["id"]: d for d in await db.distributor_deliveries.find(
