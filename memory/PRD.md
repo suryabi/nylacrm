@@ -2685,3 +2685,6 @@ Removed from grid (BASE_COLUMNS), formula context, and Excel export (custom offs
 
 ## 2026-08 — Stock at Hand fix (units + scope)
 Bug: values looked like bottles / inflated identical totals. Causes: (1) summed stock of EVERY SKU the account ever ordered; (2) crate conversion missed SKUs without master bottles_per_crate. Fix: scope to SKUs of the account's LAST delivery only (mirrors dashboard row planners check); conversion now also learns bottles_per_crate from stock rows themselves (same as global dashboard learn_upc), fallback chain upc → stock_bpc → default_bpc. Verified: SKU without master bpc, 480 bottles + row bpc 24 → 20 crates; Grand Hotel still 3 crates red. Extra seed: vgdemo-sku2/vgdemo-stock2/vgdemo-del-4.
+
+## 2026-08 — Stock at Hand now CHILD-SKU level
+Stock rows keyed (loc, sku_id, child_sku_id). For each item of the account's last delivery: use item.child_sku_id, else the account's own branded child (child_skus.customer_account_id + parent_sku_id), else Generic (child None) rows. Verified: branded child 240 bottles/24 → 10 crates for Fresh Mart (was 20 from parent total); unbranded Grand Hotel → generic 3 crates red. Extra seed: vgdemo-child + vgdemo-stock3.

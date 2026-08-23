@@ -131,11 +131,12 @@ async def get_grid(
     bpc_by_delivery: Dict[str, list] = {}
     skus_by_delivery: Dict[str, list] = {}
     skuids_by_delivery: Dict[str, set] = {}
+    childpairs_by_delivery: Dict[str, set] = {}
     upc: Dict[str, int] = {}
     if delivery_ids:
         items = await db.distributor_delivery_items.find(
             {"delivery_id": {"$in": delivery_ids}},
-            {"_id": 0, "delivery_id": 1, "sku_id": 1, "sku_name": 1, "quantity": 1}).to_list(50000)
+            {"_id": 0, "delivery_id": 1, "sku_id": 1, "sku_name": 1, "quantity": 1, "child_sku_id": 1}).to_list(50000)
         sku_ids = list({i.get("sku_id") for i in items if i.get("sku_id")})
         if sku_ids:
             async for ms in db.master_skus.find(
@@ -157,6 +158,8 @@ async def get_grid(
                 skus_by_delivery[i["delivery_id"]].append(i["sku_name"])
             if i.get("sku_id"):
                 skuids_by_delivery.setdefault(i["delivery_id"], set()).add(i["sku_id"])
+                childpairs_by_delivery.setdefault(i["delivery_id"], set()).add(
+                    (i["sku_id"], i.get("child_sku_id") or None))
             crates_by_delivery[i["delivery_id"]] = crates_by_delivery.get(i["delivery_id"], 0) + (i.get("quantity") or 0) / (n or 1)
     default_bpc = max(set(upc.values()), key=list(upc.values()).count) if crates_by_delivery and upc else 1
 
@@ -171,8 +174,9 @@ async def get_grid(
         async for sr in db.distributor_stock.find(
                 {"tenant_id": tenant_id, "distributor_location_id": {"$in": all_locs},
                  "sku_id": {"$in": all_skus}},
-                {"_id": 0, "distributor_location_id": 1, "sku_id": 1, "quantity": 1, "bottles_per_crate": 1}):
-            k = (sr["distributor_location_id"], sr["sku_id"])
+                {"_id": 0, "distributor_location_id": 1, "sku_id": 1, "quantity": 1,
+                 "bottles_per_crate": 1, "child_sku_id": 1}):
+            k = (sr["distributor_location_id"], sr["sku_id"], sr.get("child_sku_id") or None)
             stock_units[k] = stock_units.get(k, 0) + int(sr.get("quantity") or 0)
             try:
                 b = int(sr.get("bottles_per_crate") or 0)
@@ -183,8 +187,9 @@ async def get_grid(
         async for sr in db.factory_warehouse_stock.find(
                 {"tenant_id": tenant_id, "warehouse_location_id": {"$in": all_locs},
                  "sku_id": {"$in": all_skus}},
-                {"_id": 0, "warehouse_location_id": 1, "sku_id": 1, "quantity": 1, "bottles_per_crate": 1}):
-            k = (sr["warehouse_location_id"], sr["sku_id"])
+                {"_id": 0, "warehouse_location_id": 1, "sku_id": 1, "quantity": 1,
+                 "bottles_per_crate": 1, "child_sku_id": 1}):
+            k = (sr["warehouse_location_id"], sr["sku_id"], sr.get("child_sku_id") or None)
             stock_units[k] = stock_units.get(k, 0) + int(sr.get("quantity") or 0)
             try:
                 b = int(sr.get("bottles_per_crate") or 0)
@@ -192,6 +197,14 @@ async def get_grid(
                     stock_bpc[sr["sku_id"]] = b
             except Exception:
                 pass
+
+    # account-branded child SKU lookup: (customer_account_id, parent_sku_id) → child id
+    acc_child: Dict[tuple, str] = {}
+    async for cs in db.child_skus.find(
+            {"tenant_id": tenant_id, "customer_account_id": {"$nin": [None, ""]}},
+            {"_id": 0, "id": 1, "customer_account_id": 1, "parent_sku_id": 1}):
+        if cs.get("parent_sku_id"):
+            acc_child.setdefault((cs["customer_account_id"], cs["parent_sku_id"]), cs["id"])
 
     rows = []
     for a in accounts:
@@ -243,13 +256,16 @@ async def get_grid(
         wh_stock = None
         if dels:
             loc = loc_by_delivery.get(dels[-1][2])
-            # only the SKUs from the account's LAST delivery — mirrors the
-            # Global Dashboard WH Stock row(s) the planner would check
-            acc_skus = skuids_by_delivery.get(dels[-1][2], set())
-            if loc and acc_skus:
-                wh_stock = round(sum(
-                    stock_units.get((loc, sid), 0) / (upc.get(sid) or stock_bpc.get(sid) or default_bpc or 1)
-                    for sid in acc_skus), 2)
+            # SKUs of the LAST delivery, matched at CHILD SKU level: the item's
+            # child branding, else the account's own branded child, else Generic
+            pairs = childpairs_by_delivery.get(dels[-1][2], set())
+            if loc and pairs:
+                total = 0.0
+                for sid, cid in pairs:
+                    target = cid or acc_child.get((a["id"], sid))
+                    units = stock_units.get((loc, sid, target), 0) if target else stock_units.get((loc, sid, None), 0)
+                    total += units / (upc.get(sid) or stock_bpc.get(sid) or default_bpc or 1)
+                wh_stock = round(total, 2)
         est = emv if isinstance(emv, (int, float)) else actual_monthly
         low_stock = bool(
             wh_stock is not None and isinstance(est, (int, float)) and est > 0 and wh_stock < est / 2
