@@ -9,8 +9,10 @@ import { getTerm } from '../context/TenantConfigContext';
 import {
   Globe, RefreshCw, Search, ChevronDown, ChevronRight, Factory, Warehouse,
   Boxes, Truck, Clock, PackageCheck, Loader2, ArrowDownToLine, Recycle,
-  PackageX, Undo2, CheckCircle2, FileSpreadsheet,
+  PackageX, Undo2, CheckCircle2, FileSpreadsheet, Scale,
 } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { useAuth } from '../context/AuthContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -39,6 +41,37 @@ export default function GlobalStockDashboard() {
   const [openWh, setOpenWh] = useState({});
   const [openSku, setOpenSku] = useState({});
   const [exporting, setExporting] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = ['CEO', 'Director', 'Admin', 'admin', 'ceo', 'director'].includes((user?.role || '').trim());
+  const [showRealign, setShowRealign] = useState(false);
+  const [realignScan, setRealignScan] = useState(null);
+  const [realignBusy, setRealignBusy] = useState(false);
+  const [realigningSku, setRealigningSku] = useState(null);
+
+  const runRealign = useCallback(async (apply, scope = null) => {
+    if (scope) setRealigningSku(`${scope.location_id}|${scope.sku_id}`); else setRealignBusy(true);
+    try {
+      const res = await axios.post(
+        `${API_URL}/api/distributor/stock-child-realign`,
+        { apply, location_id: scope?.location_id || null, sku_id: scope?.sku_id || null },
+        { headers: HEAD() }
+      );
+      if (apply) {
+        toast.success(`Realigned ${res.data.realigned} SKU(s) — totals unchanged, split corrected`);
+        const r2 = await axios.post(`${API_URL}/api/distributor/stock-child-realign`, { apply: false }, { headers: HEAD() });
+        setRealignScan(r2.data);
+        fetchData();
+      } else {
+        setRealignScan(res.data);
+        if (res.data.skus_with_drift === 0) toast.info('No child-split drift found — all SKUs reconcile');
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Reconciliation failed');
+    } finally {
+      setRealignBusy(false);
+      setRealigningSku(null);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const exportExcel = useCallback(async () => {
     setExporting(true);
@@ -128,6 +161,11 @@ export default function GlobalStockDashboard() {
               onClick={() => setUnit('units')} data-testid="gsd-unit-units"
             >Units</button>
           </div>
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={() => { setRealignScan(null); setShowRealign(true); runRealign(false); }} data-testid="gsd-realign-btn">
+              <Scale className="h-4 w-4 mr-1.5 text-amber-600" /> Reconcile
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={exportExcel} disabled={exporting} data-testid="gsd-export-btn">
             {exporting
               ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
@@ -270,6 +308,95 @@ export default function GlobalStockDashboard() {
           );
         })}
       </div>
+
+      {/* Child-split reconciliation dialog */}
+      <Dialog open={showRealign} onOpenChange={setShowRealign}>
+        <DialogContent className="max-w-3xl" data-testid="realign-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Scale className="h-5 w-5 text-amber-600" />
+              Reconcile Child-SKU Split
+            </DialogTitle>
+            <DialogDescription>
+              Rebuilds each SKU's branding split from the transaction history (shipments, deliveries,
+              transfers, factory returns, branding conversions) and realigns the warehouse rows to it.
+              The SKU total never changes — only the distribution across brandings.
+            </DialogDescription>
+          </DialogHeader>
+          {realignBusy && !realignScan ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : realignScan ? (
+            realignScan.skus_with_drift === 0 ? (
+              <div className="text-center py-8 text-muted-foreground" data-testid="realign-no-drift">
+                <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-emerald-500" />
+                <p className="font-medium text-slate-700">No drift found</p>
+                <p className="text-sm">Every SKU's child split matches its transaction history.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className={`text-sm font-medium ${realignScan.dry_run ? 'text-amber-700' : 'text-emerald-700'}`} data-testid="realign-summary">
+                  {realignScan.dry_run
+                    ? `Preview: ${realignScan.skus_with_drift} SKU(s) have a drifted split. Nothing changed yet.`
+                    : `Done: ${realignScan.realigned} SKU(s) realigned.`}
+                </div>
+                <div className="max-h-80 overflow-y-auto space-y-3 pr-1">
+                  {(realignScan.findings || []).map((f, i) => (
+                    <div key={i} className="border rounded-md" data-testid={`realign-finding-${i}`}>
+                      <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border-b">
+                        <span className="text-sm font-semibold">{f.sku_name}</span>
+                        <span className="text-xs text-slate-500">@ {f.location_name}</span>
+                        <Badge variant="outline" className="text-[10px]">total {Number(f.total).toLocaleString('en-IN')} stays unchanged</Badge>
+                        {realignScan.dry_run && (
+                          <Button
+                            size="sm" variant="outline"
+                            className="ml-auto h-7 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                            disabled={realignBusy || realigningSku != null}
+                            onClick={() => runRealign(true, { location_id: f.location_id, sku_id: f.sku_id })}
+                            data-testid={`realign-sku-${i}`}
+                          >
+                            {realigningSku === `${f.location_id}|${f.sku_id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Realign'}
+                          </Button>
+                        )}
+                      </div>
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {f.children.map((c, j) => (
+                            <tr key={j} className="border-t first:border-t-0">
+                              <td className="px-3 py-1.5">{c.child_sku_name}</td>
+                              <td className="px-3 py-1.5 text-right text-slate-500">{Number(c.actual).toLocaleString('en-IN')}</td>
+                              <td className="px-2 py-1.5 text-center text-slate-400">→</td>
+                              <td className="px-3 py-1.5 text-right font-medium">{Number(c.target).toLocaleString('en-IN')}</td>
+                              <td className={`px-3 py-1.5 text-right text-xs font-medium ${c.delta > 0 ? 'text-emerald-600' : c.delta < 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                                {c.delta > 0 ? `+${c.delta}` : c.delta}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRealign(false)} data-testid="realign-close-btn">Close</Button>
+            {realignScan?.dry_run && realignScan.skus_with_drift > 0 && (
+              <Button
+                className="bg-amber-600 hover:bg-amber-700"
+                disabled={realignBusy || realigningSku != null}
+                onClick={() => runRealign(true)}
+                data-testid="realign-all-btn"
+              >
+                {realignBusy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Scale className="h-4 w-4 mr-2" />}
+                Realign All
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -451,3 +451,259 @@ async def export_global_stock_dashboard(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
+
+
+# ═══════════════════ Child-split reconciliation / realign ═══════════════════
+# WH stock rows carry a child (branding) classification. Transactions
+# (shipments, deliveries, transfers, factory returns, branding conversions)
+# also carry one. When a write hits a different child's row than the
+# transaction line said (e.g. promo stock-outs always deducting Generic),
+# the per-child split drifts even though the SKU total stays right.
+# This tool rebuilds the expected split from the transaction history and
+# realigns the stock rows to it WITHOUT ever changing the SKU total.
+
+from pydantic import BaseModel
+from fastapi import HTTPException
+
+_REALIGN_ADMIN_ROLES = {"CEO", "Director", "Admin", "admin", "ceo", "director"}
+
+
+class RealignRequest(BaseModel):
+    apply: bool = False
+    location_id: Optional[str] = None
+    sku_id: Optional[str] = None
+
+
+@router.post("/distributor/stock-child-realign")
+async def stock_child_realign(payload: RealignRequest, current_user: dict = Depends(get_current_user)):
+    if (current_user.get("role") or "").strip() not in _REALIGN_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Only CEO / Director / Admin can realign stock.")
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+
+    locs = {l["id"]: l for l in await db.distributor_locations.find(
+        {"tenant_id": tenant_id},
+        {"_id": 0, "id": 1, "location_name": 1, "distributor_id": 1, "is_factory": 1, "is_default": 1},
+    ).to_list(3000)}
+    default_loc_by_dist: dict = {}
+    for l in locs.values():
+        did = l.get("distributor_id")
+        if not did:
+            continue
+        cur = default_loc_by_dist.get(did)
+        if cur is None or (l.get("is_default") and not cur.get("is_default")):
+            default_loc_by_dist[did] = l
+
+    # ── actual stock rows per (loc, sku, child) ──────────────────────────
+    actual: dict = {}
+    rows_by_key: dict = {}
+    names: dict = {}
+
+    def note_names(sku_id, child_id, sku_name=None, child_name=None):
+        m = names.setdefault((sku_id, child_id or None), {})
+        if sku_name:
+            m.setdefault("sku_name", sku_name)
+        if child_name:
+            m.setdefault("child_sku_name", child_name)
+
+    for coll_name, loc_field in (("factory_warehouse_stock", "warehouse_location_id"),
+                                 ("distributor_stock", "distributor_location_id")):
+        async for r in getattr(db, coll_name).find({"tenant_id": tenant_id}, {"_id": 0}):
+            loc_id = r.get(loc_field)
+            key = (loc_id, r.get("sku_id"), r.get("child_sku_id") or None)
+            if not loc_id or not r.get("sku_id"):
+                continue
+            actual[key] = actual.get(key, 0) + int(r.get("quantity") or 0)
+            rows_by_key.setdefault(key, []).append({**r, "_coll": coll_name})
+            note_names(r.get("sku_id"), r.get("child_sku_id"), r.get("sku_name"), r.get("child_sku_name"))
+
+    # ── expected net flow per (loc, sku, child) ──────────────────────────
+    flows: dict = {}
+
+    def flow(loc_id, sku_id, child_id, units, sku_name=None, child_name=None):
+        if not loc_id or not sku_id:
+            return
+        key = (loc_id, sku_id, child_id or None)
+        flows[key] = flows.get(key, 0) + int(units or 0)
+        note_names(sku_id, child_id, sku_name, child_name)
+
+    # shipments in (distributor warehouses)
+    ships = {s["id"]: s for s in await db.distributor_shipments.find(
+        {"tenant_id": tenant_id, "status": "delivered"},
+        {"_id": 0, "id": 1, "distributor_id": 1, "distributor_location_id": 1}).to_list(20000)}
+    if ships:
+        async for it in db.distributor_shipment_items.find(
+                {"tenant_id": tenant_id, "shipment_id": {"$in": list(ships.keys())}}, {"_id": 0}):
+            s = ships.get(it.get("shipment_id"))
+            if not s:
+                continue
+            loc_id = s.get("distributor_location_id") or \
+                (default_loc_by_dist.get(s.get("distributor_id")) or {}).get("id")
+            flow(loc_id, it.get("sku_id"), it.get("child_sku_id"), _item_units(it),
+                 it.get("sku_name"), it.get("child_sku_name"))
+
+    # deliveries out (incl. is_promo stock-outs — same collection)
+    dels = {d["id"]: d for d in await db.distributor_deliveries.find(
+        {"tenant_id": tenant_id, "status": {"$in": list(DELIVERED_STATUSES)}},
+        {"_id": 0, "id": 1, "distributor_location_id": 1}).to_list(20000)}
+    if dels:
+        async for it in db.distributor_delivery_items.find(
+                {"tenant_id": tenant_id, "delivery_id": {"$in": list(dels.keys())}}, {"_id": 0}):
+            d = dels.get(it.get("delivery_id"))
+            if not d:
+                continue
+            flow(d.get("distributor_location_id"), it.get("sku_id"), it.get("child_sku_id"),
+                 -_item_units(it), it.get("sku_name"), it.get("child_sku_name"))
+
+    # legacy promo dispatches (deducted at confirm; not in distributor_deliveries)
+    legacy_promos = {p["id"]: p for p in await db.promo_dispatches.find(
+        {"tenant_id": tenant_id, "status": {"$in": ["dispatched", "delivered", "completed"]}},
+        {"_id": 0, "id": 1, "distributor_location_id": 1}).to_list(5000)}
+    if legacy_promos:
+        for coll_name, link in (("distributor_delivery_items", "delivery_id"),
+                                ("promo_dispatch_items", "dispatch_id")):
+            async for it in getattr(db, coll_name).find(
+                    {"tenant_id": tenant_id, link: {"$in": list(legacy_promos.keys())}}, {"_id": 0}):
+                p = legacy_promos.get(it.get(link))
+                if not p:
+                    continue
+                flow(p.get("distributor_location_id"), it.get("sku_id"), it.get("child_sku_id"),
+                     -_item_units(it), it.get("sku_name"), it.get("child_sku_name"))
+
+    # transfers (source −, dest +); item quantity is packages
+    async for t in db.distributor_stock_transfers.find(
+            {"tenant_id": tenant_id, "status": "completed"}, {"_id": 0}):
+        for it in (t.get("items") or []):
+            try:
+                upp = int(it.get("units_per_package") or 0)
+            except Exception:
+                upp = 0
+            units = int(it.get("quantity") or 0) * (upp or 1)
+            flow(t.get("source_location_id"), it.get("sku_id"), it.get("child_sku_id"),
+                 -units, it.get("sku_name"), it.get("child_sku_name"))
+            flow(t.get("dest_location_id"), it.get("sku_id"), it.get("child_sku_id"),
+                 units, it.get("sku_name"), it.get("child_sku_name"))
+
+    # factory returns out
+    async for fr in db.distributor_factory_returns.find(
+            {"tenant_id": tenant_id, "status": {"$nin": ["cancelled", "draft"]}}, {"_id": 0}):
+        loc_id = fr.get("distributor_location_id") or \
+            (default_loc_by_dist.get(fr.get("distributor_id")) or {}).get("id")
+        for it in (fr.get("items") or []):
+            flow(loc_id, it.get("sku_id"), it.get("child_sku_id"),
+                 -(int(it.get("quantity") or 0)), it.get("sku_name"), it.get("child_sku_name"))
+
+    # branding conversions (from −, to +)
+    async for be in db.branding_entries.find({"tenant_id": tenant_id}, {"_id": 0}):
+        qty = int(be.get("quantity") or 0)
+        flow(be.get("warehouse_location_id"), be.get("sku_id"), be.get("from_child_sku_id"),
+             -qty, be.get("sku_name"), be.get("from_child_sku_name"))
+        flow(be.get("warehouse_location_id"), be.get("sku_id"), be.get("to_child_sku_id"),
+             qty, be.get("sku_name"), be.get("to_child_sku_name"))
+
+    # ── per (loc, sku): targets that preserve the SKU total exactly ──────
+    by_loc_sku: dict = {}
+    for key in set(list(actual.keys()) + list(flows.keys())):
+        loc_id, sku_id, child_id = key
+        if payload.location_id and loc_id != payload.location_id:
+            continue
+        if payload.sku_id and sku_id != payload.sku_id:
+            continue
+        by_loc_sku.setdefault((loc_id, sku_id), set()).add(child_id)
+
+    findings, applied = [], 0
+    for (loc_id, sku_id), children in sorted(by_loc_sku.items(), key=lambda x: str(x[0])):
+        if len(children) < 2:
+            continue  # nothing to redistribute
+        actual_total = sum(actual.get((loc_id, sku_id, c), 0) for c in children)
+        expected = {c: flows.get((loc_id, sku_id, c), 0) for c in children}
+        residual = actual_total - sum(expected.values())
+        expected[None] = expected.get(None, 0) + residual  # production / unexplained → Generic
+        children = set(children) | {None}
+        # clamp negatives → shortfall comes out of Generic, then largest child
+        for c in [c for c in children if c is not None]:
+            if expected[c] < 0:
+                expected[None] = expected.get(None, 0) + expected[c]
+                expected[c] = 0
+        if expected.get(None, 0) < 0:
+            deficit = -expected[None]
+            expected[None] = 0
+            for c in sorted([c for c in children if c is not None],
+                            key=lambda c: -expected[c]):
+                take = min(deficit, expected[c])
+                expected[c] -= take
+                deficit -= take
+                if deficit <= 0:
+                    break
+        deltas = {c: expected[c] - actual.get((loc_id, sku_id, c), 0) for c in children}
+        if all(d == 0 for d in deltas.values()):
+            continue
+        loc = locs.get(loc_id, {})
+        sku_name = next((names.get((sku_id, c), {}).get("sku_name") for c in children
+                         if names.get((sku_id, c), {}).get("sku_name")), sku_id)
+        finding = {
+            "location_id": loc_id, "location_name": loc.get("location_name") or "Unknown",
+            "is_factory": bool(loc.get("is_factory")),
+            "sku_id": sku_id, "sku_name": sku_name,
+            "total": actual_total,
+            "children": [{
+                "child_sku_id": c,
+                "child_sku_name": (names.get((sku_id, c), {}).get("child_sku_name")
+                                   or ("Generic / Unbranded" if c is None else c)),
+                "actual": actual.get((loc_id, sku_id, c), 0),
+                "target": expected[c],
+                "delta": deltas[c],
+            } for c in sorted(children, key=lambda c: (c is not None, str(c)))],
+        }
+        findings.append(finding)
+
+        if payload.apply:
+            is_factory = bool(loc.get("is_factory"))
+            for c, delta in deltas.items():
+                if delta == 0:
+                    continue
+                key = (loc_id, sku_id, c)
+                if delta < 0:
+                    remaining = -delta
+                    for r in sorted(rows_by_key.get(key, []), key=lambda r: -(r.get("quantity") or 0)):
+                        if remaining <= 0:
+                            break
+                        take = min(remaining, int(r.get("quantity") or 0))
+                        if take <= 0:
+                            continue
+                        remaining -= take
+                        await getattr(db, r["_coll"]).update_one(
+                            {"id": r["id"], "tenant_id": tenant_id},
+                            {"$inc": {"quantity": -take}, "$set": {"updated_at": now}})
+                else:
+                    child_name = names.get((sku_id, c), {}).get("child_sku_name")
+                    if is_factory:
+                        stock_key = {"tenant_id": tenant_id, "warehouse_location_id": loc_id,
+                                     "sku_id": sku_id, "child_sku_id": c if c else {"$in": [None]},
+                                     "batch_id": {"$in": [None]}}
+                        on_insert = {"id": str(__import__("uuid").uuid4()), "tenant_id": tenant_id,
+                                     "warehouse_location_id": loc_id, "sku_id": sku_id,
+                                     "child_sku_id": c, "batch_id": None, "created_at": now}
+                        coll = db.factory_warehouse_stock
+                    else:
+                        stock_key = {"tenant_id": tenant_id,
+                                     "distributor_id": loc.get("distributor_id"),
+                                     "distributor_location_id": loc_id, "sku_id": sku_id,
+                                     "child_sku_id": c if c else {"$in": [None]},
+                                     "batch_id": {"$in": [None]}}
+                        on_insert = {"id": str(__import__("uuid").uuid4()), "tenant_id": tenant_id,
+                                     "distributor_id": loc.get("distributor_id"),
+                                     "distributor_location_id": loc_id, "sku_id": sku_id,
+                                     "child_sku_id": c, "batch_id": None, "created_at": now}
+                        coll = db.distributor_stock
+                    set_fields = {"updated_at": now, "sku_name": sku_name}
+                    if child_name and c:
+                        set_fields["child_sku_name"] = child_name
+                    await coll.update_one(
+                        stock_key,
+                        {"$inc": {"quantity": delta}, "$set": set_fields, "$setOnInsert": on_insert},
+                        upsert=True)
+            applied += 1
+
+    return {"dry_run": not payload.apply, "skus_with_drift": len(findings),
+            "realigned": applied, "findings": findings}
