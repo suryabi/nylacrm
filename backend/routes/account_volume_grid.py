@@ -2,7 +2,7 @@
 Auto-computed delivery metrics + manually entered Expected Monthly Volume + custom columns."""
 import uuid
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Depends
@@ -181,6 +181,23 @@ async def get_grid(
         if len(dels) >= 2:
             span_days = (dels[-1][0].replace(tzinfo=None) - dels[0][0].replace(tzinfo=None)).days
             freq = round(span_days / (len(dels) - 1)) if span_days > 0 else 0
+        # Actual Monthly Consumption = crates delivered in the most recent 4
+        # weeks; only shown once 30 days elapsed since the first delivery.
+        actual_monthly = None
+        consumption_in_days = None
+        if dels:
+            now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+            days_elapsed = (now_naive - first_dt.replace(tzinfo=None)).days
+            if days_elapsed >= 30:
+                cutoff = now_naive - timedelta(days=28)
+                total = 0.0
+                for dt_i, qty_i, did_i in dels:
+                    if dt_i.replace(tzinfo=None) >= cutoff:
+                        cr = crates_by_delivery.get(did_i)
+                        total += cr if cr is not None else (qty_i or 0) / acc_bpc
+                actual_monthly = round(total, 2)
+            else:
+                consumption_in_days = 30 - days_elapsed
         emv = a.get("expected_monthly_volume_crates")
         rows.append({
             "account_id": a["id"],
@@ -198,6 +215,8 @@ async def get_grid(
             "recent_delivery_crates": recent_crates,
             "expected_monthly_volume_crates": emv,
             "biweekly_volume_crates": round(emv / 2, 1) if isinstance(emv, (int, float)) else None,
+            "actual_monthly_consumption_crates": actual_monthly,
+            "consumption_available_in_days": consumption_in_days,
             "custom_values": a.get("volume_grid_values") or {},
         })
 
@@ -221,6 +240,8 @@ async def get_grid(
             "recent_delivery_dates": [], "recent_delivery_crates": [],
             "expected_monthly_volume_crates": emv,
             "biweekly_volume_crates": round(emv / 2, 1) if isinstance(emv, (int, float)) else None,
+            "actual_monthly_consumption_crates": None,
+            "consumption_available_in_days": None,
             "custom_values": m.get("custom_values") or {},
         })
 
@@ -287,6 +308,7 @@ async def export_excel(
             "Last Order Quantity": r.get("last_order_quantity"),
             "Average Order Frequency": r.get("avg_order_frequency_days"),
             "Number of Orders": r.get("order_count"),
+            "Actual Monthly Consumption": r.get("actual_monthly_consumption_crates"),
         }
         for c in custom_cols:
             if c["type"] == "number":
@@ -296,7 +318,8 @@ async def export_excel(
     headers = ["Account Name", "Territory", "State", "City", "On-boarded Date",
                "Avg Order Frequency (Days)", "No. of Orders", "First Delivery Date", "Latest Delivery Date",
                "Last 4 Delivery Dates", "Last 4 Delivery Qty (Crates)",
-               "Last Order Quantity (Crates)", "Last Ordered SKU", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)"] \
+               "Last Order Quantity (Crates)", "Last Ordered SKU", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)",
+               "Actual Monthly Consumption (Crates)"] \
         + [c["name"] for c in custom_cols]
 
     def row_values(r):
@@ -307,7 +330,9 @@ async def export_excel(
                 "\n".join(r.get("recent_delivery_dates") or []),
                 "\n".join(str(c) for c in (r.get("recent_delivery_crates") or [])),
                 r.get("last_order_quantity"), r.get("last_order_sku") or "",
-                r.get("biweekly_volume_crates"), r.get("expected_monthly_volume_crates")]
+                r.get("biweekly_volume_crates"), r.get("expected_monthly_volume_crates"),
+                r.get("actual_monthly_consumption_crates") if r.get("actual_monthly_consumption_crates") is not None
+                else (f"Available in {r['consumption_available_in_days']} days" if r.get("consumption_available_in_days") is not None else "")]
         for c in custom_cols:
             if c["type"] == "formula":
                 base.append(_eval_formula(c.get("formula"), ctx_for(r)))
@@ -319,10 +344,10 @@ async def export_excel(
 
     # Totals: only Bi-weekly, Expected Monthly, and custom columns opted into totals
     totals = [f"TOTAL — {len(rows)} rows"] + [""] * (len(headers) - 1)
-    total_indexes = {13, 14}  # Bi-weekly, Expected Monthly
+    total_indexes = {13, 14, 15}  # Bi-weekly, Expected Monthly, Actual Monthly Consumption
     for j, c in enumerate(custom_cols):
         if c.get("include_in_total"):
-            total_indexes.add(15 + j)
+            total_indexes.add(16 + j)
     for i in sorted(total_indexes):
         nums = [v[i] for v in all_values if isinstance(v[i], (int, float))]
         if nums:
@@ -345,7 +370,7 @@ async def export_excel(
     for row_cells in ws.iter_rows(min_row=3, min_col=10, max_col=11):
         for c in row_cells:
             c.alignment = wrap
-    widths = [34, 16, 16, 16, 18, 22, 14, 16, 16, 16, 16, 16, 24, 20, 26] + [18] * len(custom_cols)
+    widths = [34, 16, 16, 16, 18, 22, 14, 16, 16, 16, 16, 16, 24, 20, 26, 28] + [18] * len(custom_cols)
     for idx, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=idx).column_letter].width = w
     brand_workbook(wb)

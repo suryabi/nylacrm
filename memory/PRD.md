@@ -2655,3 +2655,8 @@ Stock Out tab (DeliveriesTab.jsx) now has a "Group by" selector (data-testid del
 
 ## 2026-08 — Stock Out Excel export simplified
 /api/distributors/{id}/deliveries/export rewritten to a flat sheet (one row per delivery line): Account Name, City, SKU, Quantity, Invoice Value (qty × customer price), Date of Delivery, Status. Removed grouped summary + drill-down rows and pricing columns. Honors time_filter/account/warehouse params (already passed by DeliveriesTab downloadExcel). Verified via curl (lifetime 19 rows vs this_month 0, matching UI).
+
+## 2026-08 — Actual Monthly Consumption column (Volume Tracking)
+Backend (account_volume_grid.py): per account computes `actual_monthly_consumption_crates` = crates delivered in last 28 days, only when ≥30 days elapsed since first delivery; otherwise `consumption_available_in_days` = 30 − elapsed. Formula name "Actual Monthly Consumption" available; Excel export has the column (totals row includes it; pending shows "Available in X days").
+Frontend (AccountVolumeGrid.js): new base column after Expected Monthly Volume; pending state renders italic "Available in X days" + Info icon (hover title + click Popover with the explanation text). data-testids: vg-amc-pending-{code}, vg-amc-info-{code}.
+Preview seed kept for demo: accounts AMC Test Mature (shows 3 crates) / AMC Test New (Available in 17 days), ids amc-test-acc-a/b, deliveries amc-del-*, sku amc-test-sku — delete with regex ^amc- when user asks.

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Checkbox } from '../components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Table2, RefreshCw, Columns3, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Sigma, Download, Truck } from 'lucide-react';
+import { Table2, RefreshCw, Columns3, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Sigma, Download, Truck, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
@@ -30,6 +30,7 @@ const BASE_COLUMNS = [
   { key: 'last_order_sku', label: 'Last Ordered SKU', type: 'text' },
   { key: 'biweekly_volume_crates', label: 'Bi-weekly Volume (Crates)', type: 'number' },
   { key: 'expected_monthly_volume_crates', label: 'Expected Monthly Volume (Crates)', type: 'number', editable: true },
+  { key: 'actual_monthly_consumption_crates', label: 'Actual Monthly Consumption (Crates)', type: 'number' },
 ];
 
 // Names usable inside formulas → row value resolver
@@ -40,6 +41,7 @@ const formulaContext = (row, customCols) => {
     'Last Order Quantity': row.last_order_quantity,
     'Average Order Frequency': row.avg_order_frequency_days,
     'Number of Orders': row.order_count,
+    'Actual Monthly Consumption': row.actual_monthly_consumption_crates,
   };
   (customCols || []).forEach((c) => {
     if (c.type === 'number') ctx[c.name] = row.custom_values?.[c.id];
@@ -383,6 +385,31 @@ export default function AccountVolumeGrid() {
     }
 
     let display;
+    if (col.key === 'actual_monthly_consumption_crates' && raw == null && row.consumption_available_in_days != null) {
+      return (
+        <span className="inline-flex items-center gap-1 text-slate-500 italic whitespace-nowrap" data-testid={`vg-amc-pending-${row.account_code || row.account_id}`}>
+          Available in {row.consumption_available_in_days} day{row.consumption_available_in_days === 1 ? '' : 's'}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                onClick={(e) => e.stopPropagation()}
+                className="p-0.5 rounded-full text-slate-400 hover:text-[#002FA7] hover:bg-[#002FA7]/10"
+                title="Actual Monthly Consumption is calculated using the customer's last 4 weeks of delivery history. This data will be available once 30 days have elapsed from the customer's first delivery."
+                data-testid={`vg-amc-info-${row.account_code || row.account_id}`}
+              >
+                <Info className="h-3.5 w-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 text-xs leading-relaxed" onClick={(e) => e.stopPropagation()}>
+              Actual Monthly Consumption is calculated using the customer's last 4 weeks of delivery
+              history. This data will be available once 30 days have elapsed from the customer's
+              first delivery.
+            </PopoverContent>
+          </Popover>
+        </span>
+      );
+    }
     if (col.type === 'list') {
       const arr = Array.isArray(raw) ? raw : [];
       const listRecency = (col.key === 'recent_delivery_dates' || col.key === 'recent_delivery_crates') ? orderRecency(row) : null;
