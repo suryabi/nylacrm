@@ -33,7 +33,6 @@ const BASE_COLUMNS = [
   { key: 'biweekly_volume_crates', label: 'Bi-weekly Volume (Crates)', type: 'number' },
   { key: 'expected_monthly_volume_crates', label: 'Expected Monthly Volume (Crates)', type: 'number', editable: true },
   { key: 'actual_monthly_consumption_crates', label: 'Actual Monthly Consumption (Crates)', type: 'number' },
-  { key: 'warehouse_stock_crates', label: 'Stock at Warehouse (Crates)', type: 'number' },
 ];
 
 // Names usable inside formulas → row value resolver
@@ -45,7 +44,6 @@ const formulaContext = (row, customCols) => {
     'Average Order Frequency': row.avg_order_frequency_days,
     'Number of Orders': row.order_count,
     'Actual Monthly Consumption': row.actual_monthly_consumption_crates,
-    'Stock at Warehouse': row.warehouse_stock_crates,
     'Account Age': row.account_age_days,
   };
   (customCols || []).forEach((c) => {
@@ -662,8 +660,7 @@ export default function AccountVolumeGrid() {
               {sortedRows.map((row, ri) => (
                 <tr key={row.account_id} className={`border-b border-slate-100 transition-colors group ${row.is_manual ? 'bg-[#FFFDF5]' : ri % 2 ? 'bg-[#F8FAFC]' : 'bg-white'} hover:bg-[#EDF2FA]`} data-testid={`vg-row-${row.account_code || row.account_id}`}>
                   {visibleColumns.map((c) => (
-                    <td key={c.key} className={`px-3 py-2.5 align-middle whitespace-normal break-words tabular-nums ${numericCol(c) ? 'text-right' : 'text-left'} ${c.key === 'warehouse_stock_crates' && row.low_warehouse_stock ? 'bg-rose-50 text-rose-700 font-semibold shadow-[inset_2px_0_0_#f43f5e]' : ''} ${c.key === 'account_name' ? `font-semibold text-slate-900 sticky left-0 z-10 ${row.account_age_days != null && row.account_age_days <= 7 ? 'bg-[#EAF1FF] shadow-[inset_2px_0_0_#002FA7,inset_-1px_0_0_#E2E8F0]' : `${row.is_manual ? 'bg-[#FFFCF0]' : ri % 2 ? 'bg-[#F6F8FB]' : 'bg-white'} shadow-[inset_-1px_0_0_#E2E8F0]`} group-hover:bg-[#EDF2FA]` : 'text-slate-700'}`}
-                      data-testid={c.key === 'warehouse_stock_crates' ? `vg-whstock-${row.account_code || row.account_id}${row.low_warehouse_stock ? '-low' : ''}` : undefined}>
+                    <td key={c.key} className={`px-3 py-2.5 align-middle whitespace-normal break-words tabular-nums ${numericCol(c) ? 'text-right' : 'text-left'} ${c.key === 'account_name' ? `font-semibold text-slate-900 sticky left-0 z-10 ${row.account_age_days != null && row.account_age_days <= 7 ? 'bg-[#EAF1FF] shadow-[inset_2px_0_0_#002FA7,inset_-1px_0_0_#E2E8F0]' : `${row.is_manual ? 'bg-[#FFFCF0]' : ri % 2 ? 'bg-[#F6F8FB]' : 'bg-white'} shadow-[inset_-1px_0_0_#E2E8F0]`} group-hover:bg-[#EDF2FA]` : 'text-slate-700'}`}>
                       {c.key === 'account_name' ? (
                         row.is_manual ? (
                           <div className="flex items-start justify-between gap-1">

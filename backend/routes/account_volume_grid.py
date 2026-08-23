@@ -353,7 +353,6 @@ async def export_excel(
             "Average Order Frequency": r.get("avg_order_frequency_days"),
             "Number of Orders": r.get("order_count"),
             "Actual Monthly Consumption": r.get("actual_monthly_consumption_crates"),
-            "Stock at Warehouse": r.get("warehouse_stock_crates"),
         }
         for c in custom_cols:
             if c["type"] == "number":
@@ -364,7 +363,7 @@ async def export_excel(
                "Avg Order Frequency (Days)", "No. of Orders", "First Delivery Date", "Latest Delivery Date",
                "Last 4 Delivery Dates", "Last 4 Delivery Qty (Crates)",
                "Last Order Quantity (Crates)", "Last Ordered SKU", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)",
-               "Actual Monthly Consumption (Crates)", "Stock at Warehouse (Crates)"] \
+               "Actual Monthly Consumption (Crates)"] \
         + [c["name"] for c in custom_cols]
 
     def row_values(r):
@@ -377,8 +376,7 @@ async def export_excel(
                 r.get("last_order_quantity"), r.get("last_order_sku") or "",
                 r.get("biweekly_volume_crates"), r.get("expected_monthly_volume_crates"),
                 r.get("actual_monthly_consumption_crates") if r.get("actual_monthly_consumption_crates") is not None
-                else (f"Available in {r['consumption_available_in_days']} days" if r.get("consumption_available_in_days") is not None else ""),
-                r.get("warehouse_stock_crates")]
+                else (f"Available in {r['consumption_available_in_days']} days" if r.get("consumption_available_in_days") is not None else "")]
         for c in custom_cols:
             if c["type"] == "formula":
                 base.append(_eval_formula(c.get("formula"), ctx_for(r)))
@@ -393,7 +391,7 @@ async def export_excel(
     total_indexes = {14, 15, 16}  # Bi-weekly, Expected Monthly, Actual Monthly Consumption
     for j, c in enumerate(custom_cols):
         if c.get("include_in_total"):
-            total_indexes.add(18 + j)
+            total_indexes.add(17 + j)
     for i in sorted(total_indexes):
         nums = [v[i] for v in all_values if isinstance(v[i], (int, float))]
         if nums:
@@ -412,19 +410,11 @@ async def export_excel(
         c.fill = PatternFill(start_color="E8EDFB", end_color="E8EDFB", fill_type="solid")
     for v in all_values:
         ws.append(v)
-    # Red-flag low warehouse stock (< half estimated monthly consumption)
-    low_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
-    low_font = Font(bold=True, color="B91C1C")
-    for i, r in enumerate(rows):
-        if r.get("low_warehouse_stock"):
-            cell = ws.cell(row=3 + i, column=18)
-            cell.fill = low_fill
-            cell.font = low_font
     wrap = Alignment(wrap_text=True, vertical="top")
     for row_cells in ws.iter_rows(min_row=3, min_col=11, max_col=12):
         for c in row_cells:
             c.alignment = wrap
-    widths = [34, 16, 16, 16, 18, 14, 22, 14, 16, 16, 16, 16, 16, 24, 20, 26, 28, 24] + [18] * len(custom_cols)
+    widths = [34, 16, 16, 16, 18, 14, 22, 14, 16, 16, 16, 16, 16, 24, 20, 26, 28] + [18] * len(custom_cols)
     for idx, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=idx).column_letter].width = w
     brand_workbook(wb)

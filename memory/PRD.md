@@ -2676,3 +2676,6 @@ Preview seed (prefix vgdemo-): Demo Fresh Mart (New) activated 3d ago → NEW ba
 
 ## 2026-08 — Needs Attention filter (Volume Tracking)
 One-click toggle chip "Needs attention (count)" (testid vg-attention-filter) next to location filters: shows only rows with low_warehouse_stock OR account_age_days <= 7. Active state = solid rose. Verified: 15 rows → 2 (both vgdemo seeds).
+
+## 2026-08 — Stock at Warehouse column REMOVED
+Removed from grid (BASE_COLUMNS), formula context, and Excel export (custom offset back to 17+j, no red fill). Backend still computes warehouse_stock_crates/low_warehouse_stock — the "Needs attention" filter still uses the low-stock flag.
