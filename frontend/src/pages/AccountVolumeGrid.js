@@ -86,6 +86,13 @@ const evalFormula = (formula, ctx) => {
 };
 
 const fmt = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
+// green if last order within 14 days (active customer), red otherwise; null when never ordered
+const orderRecencyClass = (row) => {
+  if (!row.latest_delivery_date) return null;
+  const days = (Date.now() - new Date(row.latest_delivery_date).getTime()) / 86400000;
+  return days <= 14 ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900';
+};
+const RECENCY_COLS = ['latest_delivery_date', 'last_order_quantity'];
 const TH = 'px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap select-none';
 const numericCol = (c) => c.type === 'number' || c.key === 'recent_delivery_crates' || (c.custom && (c.custom.type === 'number' || c.custom.type === 'formula'));
 
@@ -366,9 +373,14 @@ export default function AccountVolumeGrid() {
     let display;
     if (col.type === 'list') {
       const arr = Array.isArray(raw) ? raw : [];
+      const listRecency = (col.key === 'recent_delivery_dates' || col.key === 'recent_delivery_crates') ? orderRecencyClass(row) : null;
       return arr.length === 0 ? <span className="tabular-nums">—</span> : (
         <span className="tabular-nums leading-relaxed">
-          {arr.map((v, i) => <span key={i} className="block whitespace-nowrap">{typeof v === 'number' ? v.toLocaleString('en-IN') : v}</span>)}
+          {arr.map((v, i) => (
+            <span key={i} className={`block whitespace-nowrap ${i === 0 && listRecency ? `${listRecency} rounded-sm px-1 -mx-1` : ''}`} data-testid={i === 0 && listRecency ? `vg-recency-${col.key}` : undefined}>
+              {typeof v === 'number' ? v.toLocaleString('en-IN') : v}
+            </span>
+          ))}
         </span>
       );
     }
@@ -378,7 +390,15 @@ export default function AccountVolumeGrid() {
     else display = typeof raw === 'number' ? raw.toLocaleString('en-IN') : String(raw);
 
     if (!editable) {
-      return <span className={col.custom?.type === 'formula' ? 'text-indigo-700 font-medium tabular-nums' : 'tabular-nums'}>{display}</span>;
+      const recency = RECENCY_COLS.includes(col.key) ? orderRecencyClass(row) : null;
+      return (
+        <span
+          className={`${col.custom?.type === 'formula' ? 'text-indigo-700 font-medium ' : ''}tabular-nums${recency ? ` ${recency} rounded-sm px-1.5 py-0.5` : ''}`}
+          data-testid={recency ? `vg-recency-${col.key}` : undefined}
+        >
+          {display}
+        </span>
+      );
     }
     return (
       <button

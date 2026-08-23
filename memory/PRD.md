@@ -2541,3 +2541,8 @@ Test tenant sales-only deleted.
 - Frontend (PromoDispatchSection.jsx): admin "Repair Units" button (repair-crate-units-btn) next to Reasons → dialog auto-runs dry-run, shows preview table (repair-finding-N), Apply Repair (repair-apply-btn) only shown for dry-run with findings.
 - Verified in preview with seeded legacy record: dry-run found only the broken line (no false positives on real data), apply corrected 1→12 + stock 100→89, rerun = no-op; UI dialog E2E via screenshot. Test data cleaned up.
 - PRODUCTION: user must redeploy, then click Repair Units → review preview → Apply on production. Preview fix is NOT live in production until redeployed.
+
+## 2026-08 — Volume Tracking: order-recency highlighting
+- User request: green background if last order within 2 weeks, else red — on Latest Delivery Date + Last Order Quantity, and on the most recent date/qty line inside Last 4 Delivery Dates / Qty columns.
+- Frontend-only (AccountVolumeGrid.js): orderRecencyClass(row) — ≤14 days from latest_delivery_date → bg-emerald-100, else bg-red-100; null (neutral) when never ordered. Applied in renderCell to RECENCY_COLS and to index-0 line of the two list columns (backend sends lists newest-first). data-testid="vg-recency-{colKey}".
+- Verified by screenshot: red highlights on stale accounts, only first line highlighted in Last-4 columns, no-order rows neutral.
