@@ -69,7 +69,7 @@ export default function PromoDispatchSection({
       const res = await fetch(`${API_URL}/api/promo-deliveries/repair-crate-units`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apply, item_ids: itemIds }),
+        body: JSON.stringify({ apply, item_ids: itemIds, distributor_id: distributor?.id || null }),
       });
       if (!res.ok) throw new Error((await res.json()).detail || 'Repair failed');
       const data = await res.json();
@@ -80,7 +80,7 @@ export default function PromoDispatchSection({
         const r2 = await fetch(`${API_URL}/api/promo-deliveries/repair-crate-units`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apply: false }),
+          body: JSON.stringify({ apply: false, distributor_id: distributor?.id || null }),
         });
         if (r2.ok) setRepairScan(await r2.json());
         return;

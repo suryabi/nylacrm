@@ -2587,3 +2587,8 @@ Test tenant sales-only deleted.
 - RepairRequest gains item_ids (optional list). Bulk apply (no item_ids) still skips ambiguous lines; targeted apply (item_ids) applies exactly those lines INCLUDING ambiguous ones (explicit user confirmation). Findings include item_id.
 - UI: each preview row has a "Fix" button (repair-fix-row-{i}); on success re-runs dry-run to refresh the list; "Apply Repair" renamed "Apply All". Ambiguous note: "needs review — use Fix to confirm".
 - Verified: targeted fix corrected only row-item-1 (3→36, stock -33 only), others untouched; explicit fix on ambiguous line applied (24→288); remaining dry-run listed only leftover line; UI click-Fix corrected 7→84 and refreshed to no-issues. Seeds cleaned up.
+
+## 2026-08 — Repair tool: distributor scoping + legacy item collection coverage
+- RepairRequest gains distributor_id; scan filters both dispatch collections by it. PromoDispatchSection always sends the current page's distributor.id, so Repair Units shows only that distributor's records.
+- Legacy promo_dispatches scan now also reads promo_dispatch_items (dispatch_id key) besides distributor_delivery_items; items tagged with _items_coll so apply updates/aggregates the correct collection.
+- Verified: scoped dry-run returned only distributor A's finding; unscoped returned both. Seeds cleaned up.

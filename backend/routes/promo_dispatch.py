@@ -1158,6 +1158,7 @@ async def promo_challan_pdf(distributor_id: str, dispatch_id: str, current_user:
 class RepairRequest(BaseModel):
     apply: bool = False
     item_ids: Optional[List[str]] = None  # apply only these lines (per-row fix)
+    distributor_id: Optional[str] = None  # scope the scan to one distributor
 
 
 def _pkg_units_from_name(name: str) -> int:
@@ -1223,9 +1224,15 @@ async def repair_promo_crate_units(payload: RepairRequest, current_user: dict = 
 
     async def scan(dispatch_coll, query, deducted_statuses):
         nonlocal applied, ambiguous_count
+        legacy = dispatch_coll is db.promo_dispatches
         async for d in dispatch_coll.find(query, {"_id": 0}):
-            items = await db.distributor_delivery_items.find(
-                {"tenant_id": tenant_id, "delivery_id": d["id"]}, {"_id": 0}).to_list(500)
+            items = [dict(i, _items_coll="distributor_delivery_items") for i in
+                     await db.distributor_delivery_items.find(
+                         {"tenant_id": tenant_id, "delivery_id": d["id"]}, {"_id": 0}).to_list(500)]
+            if legacy:
+                items += [dict(i, _items_coll="promo_dispatch_items") for i in
+                          await db.promo_dispatch_items.find(
+                              {"tenant_id": tenant_id, "dispatch_id": d["id"]}, {"_id": 0}).to_list(500)]
             for it in items:
                 if it.get("unit_repair_applied_at"):
                     continue
@@ -1269,12 +1276,14 @@ async def repair_promo_crate_units(payload: RepairRequest, current_user: dict = 
                 else:
                     apply_this = payload.apply and not ambiguous
                 if apply_this:
-                    await db.distributor_delivery_items.update_one(
+                    items_coll = getattr(db, it["_items_coll"])
+                    await items_coll.update_one(
                         {"id": it["id"], "tenant_id": tenant_id},
                         {"$set": {"quantity": correct_qty, "packages": qty, "units_per_package": upp,
                                   "packaging_units": upp, "unit_repair_applied_at": now}})
-                    totals = await db.distributor_delivery_items.aggregate([
-                        {"$match": {"tenant_id": tenant_id, "delivery_id": d["id"]}},
+                    link_key = "dispatch_id" if it["_items_coll"] == "promo_dispatch_items" else "delivery_id"
+                    totals = await items_coll.aggregate([
+                        {"$match": {"tenant_id": tenant_id, link_key: d["id"]}},
                         {"$group": {"_id": None, "q": {"$sum": "$quantity"}}}]).to_list(1)
                     await dispatch_coll.update_one(
                         {"id": d["id"], "tenant_id": tenant_id},
@@ -1289,8 +1298,9 @@ async def repair_promo_crate_units(payload: RepairRequest, current_user: dict = 
     # Legacy records (stock deducted at confirm) + unified is_promo deliveries
     # (stock reserved until completion — open statuses need no stock write, the
     # reservation recomputes from the corrected item quantity).
-    await scan(db.promo_dispatches, {"tenant_id": tenant_id}, DEDUCTED_STATUSES)
-    await scan(db.distributor_deliveries, {"tenant_id": tenant_id, "is_promo": True},
+    dist_scope = {"distributor_id": payload.distributor_id} if payload.distributor_id else {}
+    await scan(db.promo_dispatches, {"tenant_id": tenant_id, **dist_scope}, DEDUCTED_STATUSES)
+    await scan(db.distributor_deliveries, {"tenant_id": tenant_id, "is_promo": True, **dist_scope},
                {"complete", "completed", "delivered"})
 
     return {"dry_run": not payload.apply, "affected_lines": len(findings),
