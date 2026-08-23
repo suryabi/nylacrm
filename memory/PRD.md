@@ -2652,3 +2652,6 @@ Backlog: an optional repair action for flagged mismatched delivery lines (deduct
 
 ## 2026-06 — Stock Out grouping options
 Stock Out tab (DeliveriesTab.jsx) now has a "Group by" selector (data-testid deliveries-group-by): Date (default, unchanged incl. Today/Tomorrow pills), SKU (a multi-SKU delivery appears under each of its SKU groups), Account. SKU/Account groups sort alphabetically, expand by default, collapsible headers with Package/Building2 icons. Verified via screenshots (Brian distributor, Lifetime period).
+
+## 2026-08 — Stock Out Excel export simplified
+/api/distributors/{id}/deliveries/export rewritten to a flat sheet (one row per delivery line): Account Name, City, SKU, Quantity, Invoice Value (qty × customer price), Date of Delivery, Status. Removed grouped summary + drill-down rows and pricing columns. Honors time_filter/account/warehouse params (already passed by DeliveriesTab downloadExcel). Verified via curl (lifetime 19 rows vs this_month 0, matching UI).

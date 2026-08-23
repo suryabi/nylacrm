@@ -4783,19 +4783,16 @@ async def export_distributor_deliveries(
             {"delivery_id": delivery['id'], "tenant_id": tenant_id}, {"_id": 0}
         ).to_list(500)
 
+    # Simple flat sheet — one row per delivery line item. No grouping, no
+    # drill-down: Account, City, SKU, Quantity, Invoice Value, Date, Status.
     wb = Workbook()
     ws = wb.active
     ws.title = "Stock Out"
-    ws.sheet_properties.outlinePr.summaryBelow = False
 
-    headers = ['Delivery #', 'Date', 'Account', 'City', _t(terms, 'sku'), 'Quantity', 'Margin %',
-               'Base Price', 'Transfer Price', f'Billed to {_t(terms, "distributor")}', 'Customer Price',
-               'New Transfer Price', f'Actual Billable to {_t(terms, "distributor")}',
-               f'Adjustment ({_t(terms, "distributor")} to {_t(terms, "factory")})', 'Customer Invoice Amount', 'Status']
+    headers = ['Account Name', 'City', _t(terms, 'sku'), 'Quantity',
+               'Invoice Value', 'Date of Delivery', 'Status']
     header_font = Font(bold=True, color="FFFFFF", size=11)
     header_fill = PatternFill(start_color="166534", end_color="166534", fill_type="solid")
-    summary_fill = PatternFill(start_color="ecfdf5", end_color="ecfdf5", fill_type="solid")
-    summary_font = Font(bold=True, color="065f46")
     thin = Side(style="thin", color="d0d5dd")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
@@ -4806,70 +4803,30 @@ async def export_distributor_deliveries(
         cell.alignment = Alignment(horizontal="center")
         cell.border = border
 
-    widths = [16, 12, 28, 16, 30, 10, 9, 12, 14, 16, 12, 14, 20, 18, 18, 12]
+    widths = [30, 16, 32, 10, 14, 16, 12]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[chr(64 + i)].width = w
 
-    def _item_calc(item):
-        qty = item.get('quantity') or 0
-        customer_price = item.get('customer_selling_price') or item.get('unit_price') or 0
-        commission_pct = item.get('distributor_commission_percent')
-        if commission_pct is None:
-            commission_pct = item.get('margin_percent')
-        if commission_pct is None:
-            commission_pct = 2.5
-        base_price = item.get('base_price') or item.get('transfer_price') or 0
-        transfer_price = base_price * (1 - commission_pct / 100) if base_price > 0 else 0
-        billed = qty * transfer_price
-        new_tp = customer_price * (1 - commission_pct / 100) if customer_price > 0 else 0
-        actual = qty * new_tp
-        return {
-            'qty': qty, 'commission_pct': commission_pct, 'base_price': base_price,
-            'transfer_price': transfer_price, 'billed': billed, 'customer_price': customer_price,
-            'new_tp': new_tp, 'actual': actual, 'adjustment': actual - billed,
-            'customer_invoice': qty * customer_price,
-        }
-
     r = 2
     for d in deliveries:
-        items = d.get('items') or []
         dev_date = d.get('delivery_date') or '-'
         if isinstance(dev_date, str):
             dev_date = dev_date[:10]
-        calcs = [_item_calc(it) for it in items]
-        tot = {k: sum(c[k] for c in calcs) for k in ('qty', 'billed', 'actual', 'adjustment', 'customer_invoice')} if calcs else {k: 0 for k in ('qty', 'billed', 'actual', 'adjustment', 'customer_invoice')}
-        summary = [
-            d.get('delivery_number') or '-', dev_date, d.get('account_name') or '-', d.get('account_city') or '-',
-            f"{len(items)} SKU(s)", tot['qty'], '', '', '', round(tot['billed'], 2), '', '',
-            round(tot['actual'], 2), round(tot['adjustment'], 2), round(tot['customer_invoice'], 2),
-            d.get('status') or '-',
-        ]
-        for c_idx, val in enumerate(summary, 1):
-            cell = ws.cell(row=r, column=c_idx, value=val)
-            cell.border = border
-            cell.fill = summary_fill
-            cell.font = summary_font
-            if c_idx == 6:
-                cell.number_format = '#,##0'
-            elif c_idx in (10, 13, 14, 15):
-                cell.number_format = '#,##0.00'
-        r += 1
-        for it, c in zip(items, calcs):
-            detail = [
-                '', '', '', '', f"    {it.get('sku_name') or it.get('sku_code') or 'N/A'}",
-                c['qty'], round(c['commission_pct'], 2), round(c['base_price'], 2),
-                round(c['transfer_price'], 2), round(c['billed'], 2), round(c['customer_price'], 2),
-                round(c['new_tp'], 2), round(c['actual'], 2), round(c['adjustment'], 2),
-                round(c['customer_invoice'], 2), '',
+        for it in (d.get('items') or []):
+            qty = it.get('quantity') or 0
+            customer_price = it.get('customer_selling_price') or it.get('unit_price') or 0
+            row = [
+                d.get('account_name') or '-', d.get('account_city') or '-',
+                it.get('sku_name') or it.get('sku_code') or 'N/A',
+                qty, round(qty * customer_price, 2), dev_date, d.get('status') or '-',
             ]
-            for c_idx, val in enumerate(detail, 1):
+            for c_idx, val in enumerate(row, 1):
                 cell = ws.cell(row=r, column=c_idx, value=val)
                 cell.border = border
-                if c_idx == 6:
+                if c_idx == 4:
                     cell.number_format = '#,##0'
-                elif c_idx in (7, 8, 9, 10, 11, 12, 13, 14, 15):
+                elif c_idx == 5:
                     cell.number_format = '#,##0.00'
-            ws.row_dimensions[r].outline_level = 1
             r += 1
 
     buf = io.BytesIO()
