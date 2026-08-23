@@ -418,12 +418,14 @@ export default function AccountVolumeGrid() {
     if (col.type === 'list') {
       const arr = Array.isArray(raw) ? raw : [];
       const listRecency = (col.key === 'recent_delivery_dates' || col.key === 'recent_delivery_crates') ? orderRecency(row) : null;
-      return arr.length === 0 ? <span className="tabular-nums">—</span> : (
+      // pill has px-2 (8px) + dot (6px) + gap (6px): pad plain lines so values align
+      const alignPad = listRecency ? (numericCol(col) ? 'pr-2' : 'pl-5') : '';
+      return arr.length === 0 ? <span className={`tabular-nums ${numericCol(col) ? 'pr-2' : 'pl-5'} block`}>—</span> : (
         <span className="tabular-nums leading-tight">
           {arr.map((v, i) => {
             const text = typeof v === 'number' ? v.toLocaleString('en-IN') : v;
             return (
-              <span key={i} className={`block whitespace-nowrap ${i > 0 ? 'text-slate-500 mt-0.5' : ''}`}>
+              <span key={i} className={`block whitespace-nowrap ${i > 0 ? `text-slate-500 mt-1 ${alignPad}` : ''}`}>
                 {i === 0 && listRecency ? <RecencyPill recency={listRecency} colKey={col.key}>{text}</RecencyPill> : text}
               </span>
             );
@@ -440,6 +442,9 @@ export default function AccountVolumeGrid() {
       const recency = RECENCY_COLS.includes(col.key) ? orderRecency(row) : null;
       if (recency) {
         return <RecencyPill recency={recency} colKey={col.key}><span className="tabular-nums">{display}</span></RecencyPill>;
+      }
+      if (RECENCY_COLS.includes(col.key)) {
+        return <span className={`tabular-nums block ${numericCol(col) ? 'pr-2' : 'pl-5'}`}>{display}</span>;
       }
       return <span className={col.custom?.type === 'formula' ? 'text-indigo-700 font-medium tabular-nums' : 'tabular-nums'}>{display}</span>;
     }
