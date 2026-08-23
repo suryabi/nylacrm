@@ -1305,3 +1305,87 @@ async def repair_promo_crate_units(payload: RepairRequest, current_user: dict = 
 
     return {"dry_run": not payload.apply, "affected_lines": len(findings),
             "repaired": applied, "ambiguous": ambiguous_count, "findings": findings}
+
+
+class UndoRepairRequest(BaseModel):
+    apply: bool = False
+    item_ids: Optional[List[str]] = None   # undo only these lines
+    distributor_id: Optional[str] = None   # scope to one distributor
+
+
+@router.post("/promo-deliveries/undo-crate-repairs")
+async def undo_promo_crate_repairs(payload: UndoRepairRequest, current_user: dict = Depends(get_current_user)):
+    """Reverts applied crate-unit repairs. Every repair stamped the line with
+    unit_repair_applied_at and preserved the original quantity in `packages`,
+    so the exact pre-repair state (quantity + stock) can be restored.
+    Dry-run by default; apply=true reverts (per line via item_ids, or all)."""
+    _ensure_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    LEGACY_DEDUCTED = {"dispatched", "delivered", "completed"}
+    NEW_DEDUCTED = {"complete", "completed", "delivered"}
+
+    findings, reverted = [], 0
+    dist_scope = {"distributor_id": payload.distributor_id} if payload.distributor_id else {}
+
+    async def scan(dispatch_coll, query, deducted_statuses):
+        nonlocal reverted
+        legacy = dispatch_coll is db.promo_dispatches
+        async for d in dispatch_coll.find(query, {"_id": 0}):
+            items = [dict(i, _items_coll="distributor_delivery_items") for i in
+                     await db.distributor_delivery_items.find(
+                         {"tenant_id": tenant_id, "delivery_id": d["id"],
+                          "unit_repair_applied_at": {"$exists": True, "$ne": None}}, {"_id": 0}).to_list(500)]
+            if legacy:
+                items += [dict(i, _items_coll="promo_dispatch_items") for i in
+                          await db.promo_dispatch_items.find(
+                              {"tenant_id": tenant_id, "dispatch_id": d["id"],
+                               "unit_repair_applied_at": {"$exists": True, "$ne": None}}, {"_id": 0}).to_list(500)]
+            for it in items:
+                qty = int(it.get("quantity") or 0)
+                original_qty = int(it.get("packages") or 0)
+                if original_qty <= 0 or original_qty == qty:
+                    continue
+                delta = qty - original_qty  # bottles that the repair added/deducted
+                stock_adjusted = (d.get("status") in deducted_statuses)
+                findings.append({
+                    "item_id": it["id"],
+                    "challan_number": d.get("challan_number"), "dispatch_id": d["id"],
+                    "recipient": d.get("contact_name") or d.get("recipient_name"),
+                    "delivery_date": (d.get("delivery_date") or d.get("created_at") or "")[:10],
+                    "status": d.get("status"), "sku_name": it.get("sku_name"),
+                    "packaging": it.get("packaging_type_name"),
+                    "current_quantity": qty, "restores_quantity_to": original_qty,
+                    "stock_to_restore": delta, "stock_will_be_adjusted": stock_adjusted,
+                    "repaired_at": it.get("unit_repair_applied_at"),
+                })
+                if payload.item_ids is not None:
+                    undo_this = payload.apply and it["id"] in payload.item_ids
+                else:
+                    undo_this = payload.apply
+                if undo_this:
+                    items_coll = getattr(db, it["_items_coll"])
+                    await items_coll.update_one(
+                        {"id": it["id"], "tenant_id": tenant_id},
+                        {"$set": {"quantity": original_qty, "unit_repair_undone_at": now},
+                         "$unset": {"unit_repair_applied_at": ""}})
+                    link_key = "dispatch_id" if it["_items_coll"] == "promo_dispatch_items" else "delivery_id"
+                    totals = await items_coll.aggregate([
+                        {"$match": {"tenant_id": tenant_id, link_key: d["id"]}},
+                        {"$group": {"_id": None, "q": {"$sum": "$quantity"}}}]).to_list(1)
+                    await dispatch_coll.update_one(
+                        {"id": d["id"], "tenant_id": tenant_id},
+                        {"$set": {"total_quantity": (totals[0]["q"] if totals else original_qty),
+                                  "updated_at": now}})
+                    if stock_adjusted:
+                        # Repair deducted `delta` extra bottles — add them back.
+                        await _adjust_stock_for_dispatch(
+                            tenant_id, d, [{"quantity": delta, "sku_id": it.get("sku_id"),
+                                            "batch_id": it.get("batch_id")}], sign=+1)
+                    reverted += 1
+
+    await scan(db.promo_dispatches, {"tenant_id": tenant_id, **dist_scope}, LEGACY_DEDUCTED)
+    await scan(db.distributor_deliveries, {"tenant_id": tenant_id, "is_promo": True, **dist_scope}, NEW_DEDUCTED)
+
+    return {"dry_run": not payload.apply, "applied_repairs": len(findings),
+            "reverted": reverted, "findings": findings}

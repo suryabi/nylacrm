@@ -2592,3 +2592,11 @@ Test tenant sales-only deleted.
 - RepairRequest gains distributor_id; scan filters both dispatch collections by it. PromoDispatchSection always sends the current page's distributor.id, so Repair Units shows only that distributor's records.
 - Legacy promo_dispatches scan now also reads promo_dispatch_items (dispatch_id key) besides distributor_delivery_items; items tagged with _items_coll so apply updates/aggregates the correct collection.
 - Verified: scoped dry-run returned only distributor A's finding; unscoped returned both. Seeds cleaned up.
+
+## 2026-08 — Undo tool for applied crate repairs (production data recovery)
+- User reported production data "messed up" after applying fix(es). Audit of write path: per-row Fix targets the unique item UUID (never the challan number — duplicates cannot cross-write). Likely cause of broad corruption: "Apply All" pressed on the earlier deployed build with loose digit detection (14 findings incl. false positives).
+- Recovery: every repair stamped unit_repair_applied_at and preserved original quantity in `packages` → fully reversible.
+- Backend: POST /api/promo-deliveries/undo-crate-repairs {apply, item_ids, distributor_id} — dry-run lists applied repairs (current_quantity, restores_quantity_to, stock_to_restore, stock_will_be_adjusted per dispatch status); apply restores quantity=packages, clears stamp (sets unit_repair_undone_at), recomputes total_quantity, adds deducted stock back via _adjust_stock_for_dispatch sign=+1. Scans both collections + both item collections; distributor-scoped.
+- UI: repair dialog now has tabs "Issues found" / "Applied fixes (undo)" — per-row Undo + Undo All (rose styling). data-testids: repair-tab-issues/applied, undo-finding-{i}, undo-row-{i}, undo-all-btn.
+- Verified full round-trip in preview: fix 4→48 (stock 100→56), undo → qty 4, total 4, stock 100, stamp cleared; undone line re-appears in Issues scan (correct). UI tab screenshot OK. Seeds cleaned.
+- PRODUCTION recovery: redeploy → open the affected distributor → Repair Units → "Applied fixes (undo)" tab → review each line (shows what it restores) → Undo per row or Undo All.

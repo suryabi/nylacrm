@@ -62,6 +62,38 @@ export default function PromoDispatchSection({
   const [repairScan, setRepairScan] = useState(null);
   const [repairBusy, setRepairBusy] = useState(false);
   const [fixingItemId, setFixingItemId] = useState(null);
+  const [repairView, setRepairView] = useState('issues'); // 'issues' | 'applied'
+  const [appliedScan, setAppliedScan] = useState(null);
+
+  const fetchAppliedFixes = async () => {
+    const res = await fetch(`${API_URL}/api/promo-deliveries/undo-crate-repairs`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apply: false, distributor_id: distributor?.id || null }),
+    });
+    if (res.ok) setAppliedScan(await res.json());
+  };
+
+  const runUndo = async (itemIds = null) => {
+    if (itemIds) setFixingItemId(itemIds[0]); else setRepairBusy(true);
+    try {
+      const res = await fetch(`${API_URL}/api/promo-deliveries/undo-crate-repairs`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apply: true, item_ids: itemIds, distributor_id: distributor?.id || null }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || 'Undo failed');
+      const data = await res.json();
+      toast.success(`Reverted ${data.reverted} line(s) — quantities and stock restored`);
+      fetchDispatches();
+      await fetchAppliedFixes();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setRepairBusy(false);
+      setFixingItemId(null);
+    }
+  };
 
   const runRepair = async (apply, itemIds = null) => {
     if (itemIds) setFixingItemId(itemIds[0]); else setRepairBusy(true);
@@ -628,7 +660,7 @@ export default function PromoDispatchSection({
               {isAdmin && (
                 <Button
                   variant="outline"
-                  onClick={() => { setRepairScan(null); setShowRepair(true); runRepair(false); }}
+                  onClick={() => { setRepairScan(null); setAppliedScan(null); setRepairView('issues'); setShowRepair(true); runRepair(false); }}
                   data-testid="repair-crate-units-btn"
                 >
                   <Wrench className="h-4 w-4 mr-2" />
@@ -1508,7 +1540,80 @@ export default function PromoDispatchSection({
               and never auto-changed. Review the preview below, then apply.
             </DialogDescription>
           </DialogHeader>
-          {repairBusy && !repairScan ? (
+          <div className="flex items-center gap-1 border-b pb-2">
+            <Button
+              size="sm" variant={repairView === 'issues' ? 'secondary' : 'ghost'} className="h-7 text-xs"
+              onClick={() => setRepairView('issues')} data-testid="repair-tab-issues"
+            >
+              Issues found
+            </Button>
+            <Button
+              size="sm" variant={repairView === 'applied' ? 'secondary' : 'ghost'} className="h-7 text-xs"
+              onClick={() => { setRepairView('applied'); if (!appliedScan) fetchAppliedFixes(); }}
+              data-testid="repair-tab-applied"
+            >
+              Applied fixes (undo)
+            </Button>
+          </div>
+          {repairView === 'applied' ? (
+            !appliedScan ? (
+              <div className="flex items-center justify-center py-10">
+                <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (appliedScan.findings || []).length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground" data-testid="undo-empty">
+                <p className="font-medium text-slate-700">No applied fixes for this distributor</p>
+                <p className="text-sm">Nothing to undo.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="text-sm font-medium text-slate-700" data-testid="undo-summary">
+                  {appliedScan.findings.length} applied fix(es). Undo restores the original quantity and adds the deducted stock back.
+                </div>
+                <div className="max-h-72 overflow-y-auto border rounded-md">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 sticky top-0">
+                      <tr>
+                        <th className="text-left p-2 font-semibold text-xs uppercase text-slate-600">Challan</th>
+                        <th className="text-left p-2 font-semibold text-xs uppercase text-slate-600">SKU</th>
+                        <th className="text-left p-2 font-semibold text-xs uppercase text-slate-600">Packaging</th>
+                        <th className="text-right p-2 font-semibold text-xs uppercase text-slate-600">Now</th>
+                        <th className="text-right p-2 font-semibold text-xs uppercase text-slate-600">Restores To</th>
+                        <th className="text-right p-2 font-semibold text-xs uppercase text-slate-600">Stock Back</th>
+                        <th className="text-center p-2 font-semibold text-xs uppercase text-slate-600">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {appliedScan.findings.map((f, i) => (
+                        <tr key={i} className="border-t" data-testid={`undo-finding-${i}`}>
+                          <td className="p-2 font-mono text-xs">
+                            {f.challan_number}
+                            <span className="block font-sans text-[10px] text-slate-500">{[f.recipient, f.delivery_date].filter(Boolean).join(' · ')}</span>
+                          </td>
+                          <td className="p-2">{f.sku_name}</td>
+                          <td className="p-2">{f.packaging}</td>
+                          <td className="p-2 text-right">{f.current_quantity}</td>
+                          <td className="p-2 text-right font-medium">{f.restores_quantity_to}</td>
+                          <td className="p-2 text-right text-emerald-700 font-medium">{f.stock_will_be_adjusted ? `+${f.stock_to_restore}` : '—'}</td>
+                          <td className="p-2 text-center">
+                            <Button
+                              size="sm" variant="outline"
+                              className="h-7 text-xs border-rose-300 text-rose-700 hover:bg-rose-50"
+                              disabled={fixingItemId != null || repairBusy}
+                              onClick={() => runUndo([f.item_id])}
+                              data-testid={`undo-row-${i}`}
+                            >
+                              {fixingItemId === f.item_id ? <RefreshCw className="h-3 w-3 animate-spin" /> : 'Undo'}
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          ) : repairBusy && !repairScan ? (
             <div className="flex items-center justify-center py-10">
               <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
@@ -1575,7 +1680,19 @@ export default function PromoDispatchSection({
           ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowRepair(false)} data-testid="repair-close-btn">Close</Button>
-            {repairScan?.dry_run && (repairScan.affected_lines - (repairScan.ambiguous || 0)) > 0 && (
+            {repairView === 'applied' && (appliedScan?.findings || []).length > 0 && (
+              <Button
+                variant="outline"
+                className="border-rose-300 text-rose-700 hover:bg-rose-50"
+                disabled={repairBusy || fixingItemId != null}
+                onClick={() => runUndo(null)}
+                data-testid="undo-all-btn"
+              >
+                {repairBusy ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Undo2 className="h-4 w-4 mr-2" />}
+                Undo All
+              </Button>
+            )}
+            {repairView === 'issues' && repairScan?.dry_run && (repairScan.affected_lines - (repairScan.ambiguous || 0)) > 0 && (
               <Button
                 className="bg-amber-600 hover:bg-amber-700"
                 disabled={repairBusy}
