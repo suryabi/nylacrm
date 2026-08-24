@@ -125,6 +125,15 @@ export default function AccountVolumeGrid() {
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
   const [attentionOnly, setAttentionOnly] = useState(false);
+  const [recencyFilter, setRecencyFilter] = useState([]);
+  const rowTier = (r) => {
+    if (!r.latest_delivery_date) return null;
+    const days = (Date.now() - new Date(r.latest_delivery_date).getTime()) / 86400000;
+    if (days <= 7) return 'w1';
+    if (days <= 14) return 'w2';
+    if (days <= 21) return 'w3';
+    return 'w4';
+  };
   const [showHelp, setShowHelp] = useState(false);
   const [sort, setSort] = useState({ key: 'account_name', dir: 'asc' });
   const [hidden, setHidden] = useState(() => {
@@ -249,9 +258,10 @@ export default function AccountVolumeGrid() {
 
   const sortedRows = useMemo(() => {
     const col = allColumns.find((c) => c.key === sort.key) || BASE_COLUMNS[0];
-    const base = attentionOnly
+    let base = attentionOnly
       ? rows.filter((r) => r.low_stock_at_hand || (r.account_age_days != null && r.account_age_days <= 7))
       : rows;
+    if (recencyFilter.length) base = base.filter((r) => recencyFilter.includes(rowTier(r)));
     const arr = [...base].sort((a, b) => {
       const va = cellValue(a, col); const vb = cellValue(b, col);
       if (va == null && vb == null) return 0;
@@ -261,7 +271,7 @@ export default function AccountVolumeGrid() {
       return sort.dir === 'asc' ? cmp : -cmp;
     });
     return arr;
-  }, [rows, sort, allColumns, cellValue, attentionOnly]);
+  }, [rows, sort, allColumns, cellValue, attentionOnly, recencyFilter]);
 
   const toggleSort = (key) => setSort((p) => ({ key, dir: p.key === key && p.dir === 'asc' ? 'desc' : 'asc' }));
 
@@ -605,16 +615,31 @@ export default function AccountVolumeGrid() {
         <span className="ml-auto flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-slate-500" data-testid="vg-recency-legend">
           <span className="font-medium text-slate-600">Last order:</span>
           {[
-            { dot: 'bg-emerald-600', pill: 'bg-emerald-50 text-emerald-800 border border-emerald-200/60', label: '≤1 wk' },
-            { dot: 'bg-emerald-400', pill: 'bg-emerald-50/70 text-emerald-700 border border-emerald-200/40', label: '≤2 wk' },
-            { dot: 'bg-amber-500', pill: 'bg-amber-50 text-amber-800 border border-amber-200/60', label: '≤3 wk' },
-            { dot: 'bg-red-500', pill: 'bg-red-50 text-red-700 border border-red-200/60', label: '4+ wk' },
-          ].map((t) => (
-            <span key={t.label} className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 ${t.pill}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} />
-              {t.label}
-            </span>
-          ))}
+            { k: 'w1', dot: 'bg-emerald-600', pill: 'bg-emerald-50 text-emerald-800 border-emerald-200/60', on: 'ring-emerald-500', label: '≤1 wk' },
+            { k: 'w2', dot: 'bg-emerald-400', pill: 'bg-emerald-50/70 text-emerald-700 border-emerald-200/40', on: 'ring-emerald-400', label: '≤2 wk' },
+            { k: 'w3', dot: 'bg-amber-500', pill: 'bg-amber-50 text-amber-800 border-amber-200/60', on: 'ring-amber-500', label: '≤3 wk' },
+            { k: 'w4', dot: 'bg-red-500', pill: 'bg-red-50 text-red-700 border-red-200/60', on: 'ring-red-500', label: '4+ wk' },
+          ].map((t) => {
+            const active = recencyFilter.includes(t.k);
+            return (
+              <button
+                key={t.k}
+                type="button"
+                onClick={() => setRecencyFilter((p) => (p.includes(t.k) ? p.filter((x) => x !== t.k) : [...p, t.k]))}
+                className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 cursor-pointer transition-shadow ${t.pill} ${active ? `ring-2 ring-offset-1 ${t.on} font-semibold` : 'hover:ring-1 hover:ring-slate-300'}`}
+                title={`Show only accounts whose last order was ${t.label}${active ? ' — click to clear' : ''}`}
+                data-testid={`vg-recency-pill-${t.k}`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} />
+                {t.label}
+              </button>
+            );
+          })}
+          {recencyFilter.length > 0 && (
+            <button type="button" onClick={() => setRecencyFilter([])} className="text-[#002FA7] underline underline-offset-2" data-testid="vg-recency-clear">
+              clear
+            </button>
+          )}
           <Badge variant="outline" className="text-xs text-slate-500">{sortedRows.length} accounts</Badge>
         </span>
       </div>

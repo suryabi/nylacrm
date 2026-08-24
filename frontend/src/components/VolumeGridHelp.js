@@ -25,6 +25,7 @@ const ACTIONS = [
   { icon: Columns3, title: 'Arrange the grid', text: 'Sort by clicking a header, drag headers to reorder, drag the header edge to resize, and show/hide columns from the Columns menu. The Account Name column and totals row stay frozen while you scroll.' },
   { icon: Sigma, title: 'Formulas', text: 'Add Column → Formula for spreadsheet-style calculations (e.g. =Expected Monthly Volume - Actual Monthly Consumption). A live preview shows the result while you type.' },
   { icon: AlertTriangle, title: 'Needs attention', text: 'One click filters to accounts that are red-flagged for low stock at hand or on-boarded within the last week.' },
+  { icon: MousePointerClick, title: 'Recency filters', text: 'Click the "Last order" pills (≤1 wk, ≤2 wk, ≤3 wk, 4+ wk) to show only accounts in those tiers — combine several, click again or "clear" to reset.' },
   { icon: Download, title: 'Excel export', text: 'Downloads the grid with totals, custom columns and the red low-stock flags as a branded spreadsheet.' },
   { icon: Truck, title: 'Consignment Planner', text: 'Below the grid — enter truck capacity and it plans the next 3 consignments with suggested dates from ordering patterns, current warehouse stock and your filters.' },
 ];
@@ -74,7 +75,7 @@ export const VolumeGridHelp = ({ open, onOpenChange }) => (
           <ul className="text-xs text-slate-500 space-y-1 leading-relaxed">
             <li><span className="font-semibold text-[#002FA7]">Blue account name + NEW pill</span> — on-boarded within the last 7 days; plan initial stock.</li>
             <li><span className="font-semibold text-red-700">Red Stock at Hand cell</span> — stock below 15 days of the account's order volume; restock soon.</li>
-            <li><span className="font-semibold text-emerald-700">Green / amber / red recency pills</span> — how recently the account last ordered (1, 2, 3, 4+ weeks).</li>
+            <li><span className="font-semibold text-emerald-700">Green / amber / red recency pills</span> — how recently the account last ordered (1, 2, 3, 4+ weeks). Click a legend pill to filter the grid to that tier.</li>
             <li><span className="font-semibold text-slate-600">"Available in X days"</span> — Actual Monthly Consumption unlocks 30 days after the first delivery.</li>
           </ul>
         </div>

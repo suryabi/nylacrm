@@ -2697,3 +2697,6 @@ Negative stock aggregates clamp to 0 (mirrors dashboard max(0,..) per row); name
 
 ## 2026-08 — Volume Tracking explainer
 "How it works" button (vg-help-btn) in header opens dialog (vg-help-dialog, component /app/frontend/src/components/VolumeGridHelp.js): 6 action cards (edit cells, arrange grid, formulas, needs-attention, export, planner), per-column derivation table (16 rows), colour-signal legend (NEW, red stock, recency pills, Available in X days). Verified via screenshot.
+
+## 2026-08 — Clickable recency pill filters
+Legend pills (vg-recency-pill-w1..w4) now toggle filters (multi-select OR, ring highlight when active, "clear" link vg-recency-clear). Tier from latest_delivery_date. Help dialog updated (Recency filters action card + legend bullet). Verified: 15→2 (w1) →6 (w1+w4) →15 (clear).
