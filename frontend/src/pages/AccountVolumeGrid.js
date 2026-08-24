@@ -602,29 +602,30 @@ export default function AccountVolumeGrid() {
         <button
           type="button"
           onClick={() => setAttentionOnly((v) => !v)}
-          className={`h-9 inline-flex items-center gap-1.5 rounded-sm border px-3 text-sm font-medium transition-colors ${attentionOnly
-            ? 'bg-rose-600 border-rose-600 text-white hover:bg-rose-700'
-            : 'bg-white border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-700'}`}
+          className={`h-8 inline-flex items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium transition-all ${attentionOnly
+            ? 'bg-rose-600 border-rose-600 text-white shadow-sm hover:bg-rose-700'
+            : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:border-rose-300'}`}
           title="Show only accounts needing action: low warehouse stock or on-boarded within the last week"
           data-testid="vg-attention-filter"
         >
           <AlertTriangle className="h-3.5 w-3.5" />
           Needs attention
-          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${attentionOnly ? 'bg-white/20 text-white' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${attentionOnly ? 'bg-white/25 text-white' : 'bg-white text-rose-700 border border-rose-200'}`}>
             {rows.filter((r) => r.low_stock_at_hand || (r.account_age_days != null && r.account_age_days <= 7)).length}
           </span>
         </button>
         <button
           type="button"
           onClick={() => setNewOnly((v) => !v)}
-          className={`h-9 inline-flex items-center gap-1.5 rounded-sm border px-3 text-sm font-medium transition-colors ${newOnly
-            ? 'bg-[#002FA7] border-[#002FA7] text-white hover:bg-[#00227A]'
-            : 'bg-white border-slate-200 text-slate-600 hover:border-[#002FA7]/40 hover:text-[#002FA7]'}`}
+          className={`h-8 inline-flex items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium transition-all ${newOnly
+            ? 'bg-[#002FA7] border-[#002FA7] text-white shadow-sm hover:bg-[#00227A]'
+            : 'bg-[#EAF1FF] border-[#B9CBF2] text-[#002FA7] hover:bg-[#DDE8FC] hover:border-[#9AB4EC]'}`}
           title="Show only accounts on-boarded within the last 7 days (tagged NEW)"
           data-testid="vg-new-filter"
         >
+          <span className={`h-1.5 w-1.5 rounded-full ${newOnly ? 'bg-white' : 'bg-[#002FA7]'}`} />
           New accounts
-          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${newOnly ? 'bg-white/20 text-white' : 'bg-[#EAF1FF] text-[#002FA7] border border-[#002FA7]/20'}`}>
+          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${newOnly ? 'bg-white/25 text-white' : 'bg-white text-[#002FA7] border border-[#B9CBF2]'}`}>
             {rows.filter((r) => r.account_age_days != null && r.account_age_days <= 7).length}
           </span>
         </button>
