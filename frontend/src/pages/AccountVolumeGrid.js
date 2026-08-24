@@ -476,24 +476,19 @@ export default function AccountVolumeGrid() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-[1500px] mx-auto space-y-5" data-testid="volume-grid-page">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-            <Table2 className="h-6 w-6 text-[#002FA7]" /> Account Volume Tracking
-          </h1>
-          <p className="text-slate-500 text-sm mt-1 flex flex-wrap items-center gap-x-2">
-            Spreadsheet-style view of account volumes — click a highlighted cell to edit. Delivery data updates automatically.
-            <button
-              type="button"
-              onClick={() => setShowHelp(true)}
-              className="inline-flex items-center gap-1 text-[#002FA7] font-medium underline decoration-dotted underline-offset-4 hover:decoration-solid"
-              data-testid="vg-help-btn"
-            >
-              <HelpCircle className="h-3.5 w-3.5" /> How this view works
-            </button>
-          </p>
-        </div>
+    <div className="p-4 lg:p-6 max-w-[1500px] mx-auto space-y-3" data-testid="volume-grid-page">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+          <Table2 className="h-5 w-5 text-[#002FA7]" /> Account Volume Tracking
+          <button
+            type="button"
+            onClick={() => setShowHelp(true)}
+            className="inline-flex items-center gap-1 text-sm font-medium text-[#002FA7] underline decoration-dotted underline-offset-4 hover:decoration-solid ml-1"
+            data-testid="vg-help-btn"
+          >
+            <HelpCircle className="h-3.5 w-3.5" /> How this view works
+          </button>
+        </h1>
         <div className="flex items-center gap-2">
           <Button variant="outline" className="rounded-sm" onClick={async () => {
             try {
@@ -607,23 +602,21 @@ export default function AccountVolumeGrid() {
             {rows.filter((r) => r.low_stock_at_hand || (r.account_age_days != null && r.account_age_days <= 7)).length}
           </span>
         </button>
-        <Badge variant="outline" className="ml-auto text-xs text-slate-500">{sortedRows.length} accounts</Badge>
-      </div>
-
-      {/* Recency legend */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-500" data-testid="vg-recency-legend">
-        <span className="font-medium text-slate-600">Last order:</span>
-        {[
-          { dot: 'bg-emerald-600', pill: 'bg-emerald-50 text-emerald-800 border border-emerald-200/60', label: 'within 1 week' },
-          { dot: 'bg-emerald-400', pill: 'bg-emerald-50/70 text-emerald-700 border border-emerald-200/40', label: 'within 2 weeks' },
-          { dot: 'bg-amber-500', pill: 'bg-amber-50 text-amber-800 border border-amber-200/60', label: 'within 3 weeks' },
-          { dot: 'bg-red-500', pill: 'bg-red-50 text-red-700 border border-red-200/60', label: '4+ weeks ago' },
-        ].map((t) => (
-          <span key={t.label} className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 ${t.pill}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} />
-            {t.label}
-          </span>
-        ))}
+        <span className="ml-auto flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-slate-500" data-testid="vg-recency-legend">
+          <span className="font-medium text-slate-600">Last order:</span>
+          {[
+            { dot: 'bg-emerald-600', pill: 'bg-emerald-50 text-emerald-800 border border-emerald-200/60', label: '≤1 wk' },
+            { dot: 'bg-emerald-400', pill: 'bg-emerald-50/70 text-emerald-700 border border-emerald-200/40', label: '≤2 wk' },
+            { dot: 'bg-amber-500', pill: 'bg-amber-50 text-amber-800 border border-amber-200/60', label: '≤3 wk' },
+            { dot: 'bg-red-500', pill: 'bg-red-50 text-red-700 border border-red-200/60', label: '4+ wk' },
+          ].map((t) => (
+            <span key={t.label} className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 ${t.pill}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} />
+              {t.label}
+            </span>
+          ))}
+          <Badge variant="outline" className="text-xs text-slate-500">{sortedRows.length} accounts</Badge>
+        </span>
       </div>
 
       {/* Grid */}
