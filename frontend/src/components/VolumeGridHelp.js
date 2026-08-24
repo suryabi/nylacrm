@@ -25,6 +25,7 @@ const ACTIONS = [
   { icon: Columns3, title: 'Arrange the grid', text: 'Sort by clicking a header, drag headers to reorder, drag the header edge to resize, and show/hide columns from the Columns menu. The Account Name column and totals row stay frozen while you scroll.' },
   { icon: Sigma, title: 'Formulas', text: 'Add Column → Formula for spreadsheet-style calculations (e.g. =Expected Monthly Volume - Actual Monthly Consumption). A live preview shows the result while you type.' },
   { icon: AlertTriangle, title: 'Needs attention', text: 'One click filters to accounts that are red-flagged for low stock at hand or on-boarded within the last week.' },
+  { icon: MousePointerClick, title: 'New accounts filter', text: 'Shows only accounts on-boarded within the last 7 days (tagged NEW) so initial stock planning is never missed.' },
   { icon: MousePointerClick, title: 'Recency filters', text: 'Click the "Last order" pills (≤1 wk, ≤2 wk, ≤3 wk, 4+ wk) to show only accounts in those tiers — combine several, click again or "clear" to reset.' },
   { icon: Download, title: 'Excel export', text: 'Downloads the grid with totals, custom columns and the red low-stock flags as a branded spreadsheet.' },
   { icon: Truck, title: 'Consignment Planner', text: 'Below the grid — enter truck capacity and it plans the next 3 consignments with suggested dates from ordering patterns, current warehouse stock and your filters.' },

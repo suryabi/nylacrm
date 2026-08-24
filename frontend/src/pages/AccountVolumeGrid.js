@@ -125,6 +125,7 @@ export default function AccountVolumeGrid() {
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
   const [attentionOnly, setAttentionOnly] = useState(false);
+  const [newOnly, setNewOnly] = useState(false);
   const [recencyFilter, setRecencyFilter] = useState([]);
   const rowTier = (r) => {
     if (!r.latest_delivery_date) return null;
@@ -261,6 +262,7 @@ export default function AccountVolumeGrid() {
     let base = attentionOnly
       ? rows.filter((r) => r.low_stock_at_hand || (r.account_age_days != null && r.account_age_days <= 7))
       : rows;
+    if (newOnly) base = base.filter((r) => r.account_age_days != null && r.account_age_days <= 7);
     if (recencyFilter.length) base = base.filter((r) => recencyFilter.includes(rowTier(r)));
     const arr = [...base].sort((a, b) => {
       const va = cellValue(a, col); const vb = cellValue(b, col);
@@ -271,7 +273,7 @@ export default function AccountVolumeGrid() {
       return sort.dir === 'asc' ? cmp : -cmp;
     });
     return arr;
-  }, [rows, sort, allColumns, cellValue, attentionOnly, recencyFilter]);
+  }, [rows, sort, allColumns, cellValue, attentionOnly, recencyFilter, newOnly]);
 
   const toggleSort = (key) => setSort((p) => ({ key, dir: p.key === key && p.dir === 'asc' ? 'desc' : 'asc' }));
 
@@ -610,6 +612,20 @@ export default function AccountVolumeGrid() {
           Needs attention
           <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${attentionOnly ? 'bg-white/20 text-white' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
             {rows.filter((r) => r.low_stock_at_hand || (r.account_age_days != null && r.account_age_days <= 7)).length}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setNewOnly((v) => !v)}
+          className={`h-9 inline-flex items-center gap-1.5 rounded-sm border px-3 text-sm font-medium transition-colors ${newOnly
+            ? 'bg-[#002FA7] border-[#002FA7] text-white hover:bg-[#00227A]'
+            : 'bg-white border-slate-200 text-slate-600 hover:border-[#002FA7]/40 hover:text-[#002FA7]'}`}
+          title="Show only accounts on-boarded within the last 7 days (tagged NEW)"
+          data-testid="vg-new-filter"
+        >
+          New accounts
+          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${newOnly ? 'bg-white/20 text-white' : 'bg-[#EAF1FF] text-[#002FA7] border border-[#002FA7]/20'}`}>
+            {rows.filter((r) => r.account_age_days != null && r.account_age_days <= 7).length}
           </span>
         </button>
         <span className="ml-auto flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-slate-500" data-testid="vg-recency-legend">

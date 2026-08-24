@@ -2700,3 +2700,6 @@ Negative stock aggregates clamp to 0 (mirrors dashboard max(0,..) per row); name
 
 ## 2026-08 — Clickable recency pill filters
 Legend pills (vg-recency-pill-w1..w4) now toggle filters (multi-select OR, ring highlight when active, "clear" link vg-recency-clear). Tier from latest_delivery_date. Help dialog updated (Recency filters action card + legend bullet). Verified: 15→2 (w1) →6 (w1+w4) →15 (clear).
+
+## 2026-08 — New accounts filter
+"New accounts" toggle (vg-new-filter, count badge) next to Needs-attention: filters to account_age_days <= 7 (NEW tag). Help dialog updated with "New accounts filter" card. Verified: 15 → 1 (Demo Fresh Mart).
