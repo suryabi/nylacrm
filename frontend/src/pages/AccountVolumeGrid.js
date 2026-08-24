@@ -482,7 +482,17 @@ export default function AccountVolumeGrid() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
             <Table2 className="h-6 w-6 text-[#002FA7]" /> Account Volume Tracking
           </h1>
-          <p className="text-slate-500 text-sm mt-1">Spreadsheet-style view of account volumes — click a highlighted cell to edit. Delivery data updates automatically.</p>
+          <p className="text-slate-500 text-sm mt-1 flex flex-wrap items-center gap-x-2">
+            Spreadsheet-style view of account volumes — click a highlighted cell to edit. Delivery data updates automatically.
+            <button
+              type="button"
+              onClick={() => setShowHelp(true)}
+              className="inline-flex items-center gap-1 text-[#002FA7] font-medium underline decoration-dotted underline-offset-4 hover:decoration-solid"
+              data-testid="vg-help-btn"
+            >
+              <HelpCircle className="h-3.5 w-3.5" /> How this view works
+            </button>
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" className="rounded-sm" onClick={async () => {
@@ -504,9 +514,6 @@ export default function AccountVolumeGrid() {
             } catch (e) { toast.error(e.message); }
           }} data-testid="vg-download-excel-btn">
             <Download className="h-4 w-4 mr-1.5" /> Excel
-          </Button>
-          <Button variant="outline" className="rounded-sm" onClick={() => setShowHelp(true)} data-testid="vg-help-btn">
-            <HelpCircle className="h-4 w-4 mr-1.5" /> How it works
           </Button>
           <Button variant="outline" className="rounded-sm" onClick={addRow} data-testid="vg-add-row-btn">
             <Plus className="h-4 w-4 mr-1.5" /> Add Row
