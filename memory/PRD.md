@@ -2694,3 +2694,6 @@ Matching priority per last-delivery item: (1) item.child_sku_id → (2) child_sk
 
 ## 2026-08 — Stock at Hand: negative clamp + edit error fix
 Negative stock aggregates clamp to 0 (mirrors dashboard max(0,..) per row); name/generic fallback also triggers when target units <= 0. saveCell now parses FastAPI 422 detail arrays → readable toast (was "[object Object]"); friendly default "enter a valid non-negative number". Verified: -2460 bottle child row → 0.0 crates; override -5 → "Input should be greater than or equal to 0".
+
+## 2026-08 — Volume Tracking explainer
+"How it works" button (vg-help-btn) in header opens dialog (vg-help-dialog, component /app/frontend/src/components/VolumeGridHelp.js): 6 action cards (edit cells, arrange grid, formulas, needs-attention, export, planner), per-column derivation table (16 rows), colour-signal legend (NEW, red stock, recency pills, Available in X days). Verified via screenshot.

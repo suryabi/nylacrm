@@ -7,7 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Checkbox } from '../components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Table2, RefreshCw, Columns3, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Sigma, Download, Truck, Info, AlertTriangle } from 'lucide-react';
+import { Table2, RefreshCw, Columns3, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Sigma, Download, Truck, Info, AlertTriangle, HelpCircle } from 'lucide-react';
+import { VolumeGridHelp } from '../components/VolumeGridHelp';
 import { toast } from 'sonner';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
@@ -124,6 +125,7 @@ export default function AccountVolumeGrid() {
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
   const [attentionOnly, setAttentionOnly] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [sort, setSort] = useState({ key: 'account_name', dir: 'asc' });
   const [hidden, setHidden] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_KEY)) || DEFAULT_HIDDEN; } catch { return DEFAULT_HIDDEN; }
@@ -502,6 +504,9 @@ export default function AccountVolumeGrid() {
             } catch (e) { toast.error(e.message); }
           }} data-testid="vg-download-excel-btn">
             <Download className="h-4 w-4 mr-1.5" /> Excel
+          </Button>
+          <Button variant="outline" className="rounded-sm" onClick={() => setShowHelp(true)} data-testid="vg-help-btn">
+            <HelpCircle className="h-4 w-4 mr-1.5" /> How it works
           </Button>
           <Button variant="outline" className="rounded-sm" onClick={addRow} data-testid="vg-add-row-btn">
             <Plus className="h-4 w-4 mr-1.5" /> Add Row
@@ -883,6 +888,7 @@ export default function AccountVolumeGrid() {
           </div>
         </DialogContent>
       </Dialog>
+      <VolumeGridHelp open={showHelp} onOpenChange={setShowHelp} />
     </div>
   );
 }
