@@ -567,10 +567,12 @@ async def delete_delivery_order(order_id: str, current_user: dict = Depends(get_
     if not order:
         raise HTTPException(404, "Delivery order not found")
     state = order.get("current_state_key")
-    if state == "cancelled":
-        # Cancelled requests can be permanently deleted, but only by CEO/Admin.
+    failed = (order.get("fulfillment_status") or "") == "failed"
+    if state == "cancelled" or failed:
+        # Cancelled or failed (stock-out never created) requests can be
+        # permanently deleted, but only by CEO/Admin.
         if current_user.get("role") not in _ADMIN_CANCEL_ROLES:
-            raise HTTPException(403, "Only a CEO or Admin can permanently delete a cancelled request.")
+            raise HTTPException(403, "Only a CEO or Admin can permanently delete this request.")
         await db.delivery_orders.delete_one({"id": order_id, "tenant_id": tenant_id})
         return {"ok": True, "deleted": order_id}
     if state != "draft":

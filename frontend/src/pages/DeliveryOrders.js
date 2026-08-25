@@ -616,6 +616,7 @@ function DetailDialog({ orderId, open, onClose, onChanged, role }) {
 
   const isAdmin = ADMIN_CANCEL_ROLES.includes(role);
   const isCancelled = order?.current_state_key === 'cancelled';
+  const promoFailed = (order?.fulfillment_status || '') === 'failed';
   // Admin override cancel — shown when the workflow itself offers no cancel action
   // and the delivery has not yet been scheduled.
   const canAdminCancel = isAdmin && order
@@ -885,9 +886,9 @@ function DetailDialog({ orderId, open, onClose, onChanged, role }) {
                   {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><XCircle className="mr-1.5 h-4 w-4" />{commentFor === '__admin_cancel__' ? 'Confirm Cancel' : 'Cancel Request'}</>}
                 </Button>
               )}
-              {isCancelled && isAdmin && (
+              {(isCancelled || promoFailed) && isAdmin && (
                 <Button variant="destructive" disabled={acting} onClick={permanentDelete} data-testid="do-permanent-delete-btn">
-                  {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Trash2 className="mr-1.5 h-4 w-4" />Delete Permanently</>}
+                  {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Trash2 className="mr-1.5 h-4 w-4" />{promoFailed && !isCancelled ? 'Remove Failed Request' : 'Delete Permanently'}</>}
                 </Button>
               )}
             </DialogFooter>
