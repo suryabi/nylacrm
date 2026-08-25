@@ -318,8 +318,26 @@ async def _auto_create_draft_promo(tenant_id: str, order: dict, current_user: di
         c = await db.contacts.find_one(
             {"tenant_id": tenant_id, "account_id": order.get("account_id")}, {"_id": 0, "id": 1})
         if not c:
-            return {"status": "failed", "error": "Account has no linked contact to receive a promo stock-out. "
-                                                  "Add a contact to the account, or fulfil manually."}
+            # Auto-create a lightweight contact linked to the account so the
+            # promo stock-out has a recipient (uses the order's contact details,
+            # falling back to the account's).
+            acc = await db.accounts.find_one(
+                {"id": order.get("account_id"), "tenant_id": tenant_id}, {"_id": 0}) or {}
+            name = (order.get("contact_name") or acc.get("contact_person")
+                    or acc.get("account_name"))
+            if not name:
+                return {"status": "failed", "error": "Account has no linked contact to receive a promo stock-out. "
+                                                      "Add a contact to the account, or fulfil manually."}
+            now = datetime.now(timezone.utc).isoformat()
+            c = {"id": str(uuid.uuid4()), "tenant_id": tenant_id,
+                 "account_id": order.get("account_id"), "name": name,
+                 "phone": order.get("contact_phone") or acc.get("phone") or acc.get("mobile"),
+                 "email": acc.get("email"), "company": acc.get("account_name"),
+                 "city": (order.get("delivery_address") or {}).get("city") or acc.get("city"),
+                 "notes": f"Auto-created from Delivery Order {order.get('order_number')} for promo stock-out.",
+                 "created_at": now, "updated_at": now,
+                 "created_by_name": (current_user or {}).get("name")}
+            await db.contacts.insert_one({**c})
         rt, contact_id = "contact", c["id"]
 
     reason = order.get("reason")

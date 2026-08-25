@@ -2703,3 +2703,6 @@ Legend pills (vg-recency-pill-w1..w4) now toggle filters (multi-select OR, ring 
 
 ## 2026-08 — New accounts filter
 "New accounts" toggle (vg-new-filter, count badge) next to Needs-attention: filters to account_age_days <= 7 (NEW tag). Help dialog updated with "New accounts filter" card. Verified: 15 → 1 (Demo Fresh Mart).
+
+## 2026-08 — Free stock delivery order: "no linked contact" fix
+Root cause: contacts collection has NO account_id linkage in this schema, so _auto_create_draft_promo (delivery_orders.py) failed for every account-recipient order despite contact details on the order. Fix: when no linked contact exists, auto-create a lightweight contact (name/phone from order, fallback account fields; account_id set; note "Auto-created from Delivery Order …") and proceed. Verified E2E via API: draft→submit→approve→place_order → promo created (challan at Brian) for account with 0 linked contacts. Production users can use the existing retry-promo on previously failed orders after redeploy. Test artifacts cleaned.
