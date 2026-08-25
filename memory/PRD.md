@@ -2712,3 +2712,7 @@ DELETE /delivery-orders/{id} now also allows CEO/Admin to delete orders with ful
 
 ## 2026-08 — Delivery request min date: tomorrow
 Min requested_date changed from +2 days to +1 day (create validation, duplicate clamp, frontend calendar min + hint "Earliest delivery is tomorrow"). Verified: tomorrow accepted, today rejected with updated message.
+
+## 2026-08 — Lead Briefs module (NEW)
+Backend routes/lead_briefs.py (/api/lead-briefs): GET list (city/status filters, returns is_admin), GET /cities, POST (admin: CEO/Director/Admin/System Admin), PUT, DELETE (admin), POST /{id}/review (any user → reviewed + reviewer/at), POST /{id}/converted {lead_id, lead_company}. Collection lead_briefs: title/city/summary/content/source_name/source_url/status(new|reviewed)/converted_lead_*.
+Frontend pages/LeadBriefs.js at /lead-briefs (moduleKey lead_briefs, registered in models/role.py defaults+Core+display names, App.js route, DashboardLayout Sales nav after Leads, NotebookPen icon): card grid (city+date meta, title, 3-line summary, "Read brief →", status badges New blue / Reviewed green / Lead added indigo), city select + status pill filters with counts, detail popup (full content, source link, Mark Reviewed, Add as Lead mini-form → POST /api/leads {company,contact,phone,city,state,region,source:"Lead Brief"} then /converted, admin Delete), admin Add Brief dialog. Verified E2E: create x2, filters, review, lead conversion round-trip. 2 sample briefs left in preview (Hyderabad reviewed, Bangalore new).

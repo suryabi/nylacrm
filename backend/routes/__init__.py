@@ -52,6 +52,7 @@ from .production_qc import router as production_qc_router
 from .glass_breakage import router as glass_breakage_router
 from .qc_tests import router as qc_tests_router
 from .account_volume_grid import router as account_volume_grid_router
+from .lead_briefs import router as lead_briefs_router
 from .water_intelligence import router as water_intelligence_router, public_router as water_public_router
 from .equipment_master import router as equipment_master_router
 from .event_journeys import router as event_journeys_router
@@ -157,6 +158,7 @@ routes_router.include_router(production_qc_router, tags=["Production QC"])
 routes_router.include_router(glass_breakage_router, tags=["Glass Breakage Register"])
 routes_router.include_router(qc_tests_router, tags=["QC Tests"])
 routes_router.include_router(account_volume_grid_router, tags=["Account Volume Grid"])
+routes_router.include_router(lead_briefs_router, tags=["Lead Briefs"])
 routes_router.include_router(water_intelligence_router, tags=["Water Intelligence"])
 routes_router.include_router(water_public_router, tags=["Water Intelligence Public"])
 routes_router.include_router(equipment_master_router, tags=["Equipment Master"])

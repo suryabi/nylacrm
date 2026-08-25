@@ -108,6 +108,7 @@ const EventsPage = lazy(() => import('./pages/Events'));
 const WaterIntelligence = lazy(() => import('./pages/WaterIntelligence'));
 const QCTests = lazy(() => import('./pages/QCTests'));
 const AccountVolumeGrid = lazy(() => import('./pages/AccountVolumeGrid'));
+const LeadBriefs = lazy(() => import('./pages/LeadBriefs'));
 const EventDetailPage = lazy(() => import('./pages/EventDetail'));
 const Inventory = lazy(() => import('./pages/Inventory'));
 const PublicContactCard = lazy(() => import('./pages/PublicContactCard'));
@@ -485,6 +486,7 @@ function AppRouter() {
           <Route path="/water-intelligence" element={<ProtectedRoute moduleKey="water_intelligence"><WaterIntelligence /></ProtectedRoute>} />
           <Route path="/qc-tests" element={<ProtectedRoute moduleKey="qc_tests"><QCTests /></ProtectedRoute>} />
           <Route path="/account-volume-grid" element={<ProtectedRoute moduleKey="account_volume_grid"><AccountVolumeGrid /></ProtectedRoute>} />
+          <Route path="/lead-briefs" element={<ProtectedRoute moduleKey="lead_briefs"><LeadBriefs /></ProtectedRoute>} />
           <Route path="/events/:eventId" element={<ProtectedRoute moduleKey="marketing_events"><EventDetailPage /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute moduleKey="inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/quality-control" element={<ProtectedRoute moduleKey="quality_control"><QualityControl /></ProtectedRoute>} />
