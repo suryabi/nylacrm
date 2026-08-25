@@ -2736,3 +2736,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Backend now fetches og:image from the Instagram profile URL too on brief create/update (stored as instagram_photo_url); photo priority: image_url → linkedin_photo_url → instagram_photo_url → initials.
 - Removed broken client-side unavatar.io Instagram call (unavatar now paywalls Instagram).
 - NOTE: Instagram aggressively login-walls anonymous/datacenter requests (429), so from Preview the IG fetch returned NONE; mechanism verified via LinkedIn path which works. May succeed from Production IP.
+
+## Update — 25 Jun 2026: Multi-prospect AI splitting for Lead Briefs
+- /api/lead-briefs/ai-extract now returns {briefs:[...]} — AI splits messy dumps into one brief per prospect, attaching correct links/contacts/city to each; unattachable intel goes under a "General notes:" section of the most relevant brief.
+- Frontend: single prospect → existing review form; multiple → new 'multi' review step (stacked editable cards, include checkboxes, Save All (n)). No cap on prospect count.
+- Verified in Preview: 3-prospect curl split correct (incl. Bengaluru city mapping + General notes); UI e2e tested with 2 prospects, untick + Save All worked. Redeploy for Production.

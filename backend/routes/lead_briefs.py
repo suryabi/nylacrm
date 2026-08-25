@@ -216,13 +216,20 @@ class ExtractPayload(BaseModel):
 
 
 AI_EXTRACT_SYSTEM = (
-    "You extract structured lead-brief fields from raw market-intel text for a beverage/FMCG CRM. "
-    "Respond with ONLY a JSON object, no markdown, using exactly these keys: "
+    "You extract structured lead briefs from raw, possibly messy market-intel text for a beverage/FMCG CRM. "
+    "The text may mention MULTIPLE distinct prospects (people, companies or venues) with mixed-up links and contacts. "
+    "Split the text into one brief per distinct prospect/opportunity, attaching the correct LinkedIn/Instagram/email/phone "
+    "and city to each. If a link or note cannot be confidently attached to a specific prospect, append it under a "
+    "'General notes:' section inside the content of the most relevant brief so nothing is lost. "
+    "Respond with ONLY a JSON object, no markdown, shaped as {\"briefs\": [ ... ]} where each brief has exactly these keys: "
     "title (short headline naming the person/business opportunity), city, summary (max 220 chars card snippet), "
-    "content (clean, well-organised version of the full information, preserve all facts), "
+    "content (clean, well-organised version of that prospect's information, preserve all facts), "
     "source_name, source_url, linkedin_url, instagram_url, email, phone. "
     "Use empty string for anything not present. Do not invent facts."
 )
+
+BRIEF_KEYS = ("title", "city", "summary", "content", "source_name", "source_url",
+              "linkedin_url", "instagram_url", "email", "phone")
 
 
 @router.post("/ai-extract")
@@ -232,7 +239,7 @@ async def ai_extract(payload: ExtractPayload, current_user: dict = Depends(get_c
     text = (payload.text or "").strip()
     if len(text) < 20:
         raise HTTPException(400, "Please paste more information to extract from.")
-    import os, json, re
+    import os, json
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     api_key = os.environ.get("EMERGENT_LLM_KEY")
     if not api_key:
@@ -241,8 +248,8 @@ async def ai_extract(payload: ExtractPayload, current_user: dict = Depends(get_c
     city_names = [c["name"] for c in cities if c.get("name")]
     chat = LlmChat(api_key=api_key, session_id=f"lead-brief-{uuid.uuid4()}",
                    system_message=AI_EXTRACT_SYSTEM).with_model("openai", "gpt-5.5")
-    prompt = (f"Known cities (pick the matching one for `city`, or empty string if none match): "
-              f"{json.dumps(city_names)}\n\nRAW INFORMATION:\n{text[:8000]}")
+    prompt = (f"Known cities (pick the matching one for each brief's `city`, or empty string if none match): "
+              f"{json.dumps(city_names)}\n\nRAW INFORMATION:\n{text[:12000]}")
     try:
         resp = await chat.send_message(UserMessage(text=prompt))
         raw = resp if isinstance(resp, str) else str(resp)
@@ -251,9 +258,17 @@ async def ai_extract(payload: ExtractPayload, current_user: dict = Depends(get_c
         data = json.loads(m.group(0) if m else raw)
     except Exception as e:
         raise HTTPException(502, f"AI extraction failed: {e}")
-    fields = {k: (data.get(k) or "").strip() if isinstance(data.get(k), str) else ""
-              for k in ("title", "city", "summary", "content", "source_name", "source_url",
-                        "linkedin_url", "instagram_url", "email", "phone")}
-    if not fields["content"]:
-        fields["content"] = text
-    return {"fields": fields}
+    raw_briefs = data.get("briefs") if isinstance(data.get("briefs"), list) else [data]
+    briefs = []
+    for item in raw_briefs:
+        if not isinstance(item, dict):
+            continue
+        fields = {k: (item.get(k) or "").strip() if isinstance(item.get(k), str) else ""
+                  for k in BRIEF_KEYS}
+        if fields["title"] or fields["content"]:
+            briefs.append(fields)
+    if not briefs:
+        briefs = [{**{k: "" for k in BRIEF_KEYS}, "content": text}]
+    if len(briefs) == 1 and not briefs[0]["content"]:
+        briefs[0]["content"] = text
+    return {"briefs": briefs, "fields": briefs[0]}

@@ -4,6 +4,7 @@ import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Checkbox } from '../components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { NotebookPen, Plus, MapPin, ExternalLink, CheckCircle2, UserPlus, Trash2, Loader2, ArrowRight, Linkedin, Instagram, Mail, Phone, Sparkles } from 'lucide-react';
@@ -52,10 +53,11 @@ export default function LeadBriefs() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [addStep, setAddStep] = useState('dump'); // 'dump' → AI extract → 'form'
+  const [addStep, setAddStep] = useState('dump'); // 'dump' → AI extract → 'form' | 'multi'
   const [dumpText, setDumpText] = useState('');
   const [extracting, setExtracting] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [multiBriefs, setMultiBriefs] = useState([]);
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [leadForm, setLeadForm] = useState(EMPTY_LEAD);
   const [busy, setBusy] = useState(false);
@@ -99,11 +101,40 @@ export default function LeadBriefs() {
       const r = await fetch(`${API}/api/lead-briefs/ai-extract`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ text: dumpText }) });
       const data = await r.json();
       if (!r.ok) throw new Error(data.detail || 'Extraction failed');
-      setForm({ ...EMPTY_FORM, ...data.fields });
-      setAddStep('form');
-      toast.success('Fields extracted — review and save');
+      const found = (data.briefs || []).length ? data.briefs : [data.fields];
+      if (found.length > 1) {
+        setMultiBriefs(found.map((f) => ({ ...EMPTY_FORM, ...f, _include: true })));
+        setAddStep('multi');
+        toast.success(`${found.length} prospects found — review and save`);
+      } else {
+        setForm({ ...EMPTY_FORM, ...found[0] });
+        setAddStep('form');
+        toast.success('Fields extracted — review and save');
+      }
     } catch (e) { toast.error(typeof e.message === 'string' ? e.message : 'AI extraction failed'); }
     finally { setExtracting(false); }
+  };
+
+  const updateMulti = (idx, patch) => setMultiBriefs((list) => list.map((b, i) => (i === idx ? { ...b, ...patch } : b)));
+
+  const includedMulti = multiBriefs.filter((b) => b._include);
+  const multiInvalid = includedMulti.some((b) => !b.title.trim() || !b.city.trim() || !b.content.trim());
+
+  const saveAllBriefs = async () => {
+    setBusy(true);
+    let saved = 0;
+    try {
+      for (const b of includedMulti) {
+        const { _include, ...payload } = b;
+        const r = await fetch(`${API}/api/lead-briefs`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) });
+        if (r.ok) saved += 1;
+      }
+      toast.success(`${saved} lead brief${saved === 1 ? '' : 's'} added`);
+      setShowAdd(false);
+      setMultiBriefs([]);
+      load();
+    } catch { toast.error('Some briefs failed to save'); }
+    finally { setBusy(false); }
   };
 
   const saveBrief = async () => {
@@ -318,7 +349,7 @@ export default function LeadBriefs() {
 
       {/* Add brief dialog (admin) */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent className="max-w-xl" data-testid="lb-add-dialog">
+        <DialogContent className={addStep === 'multi' ? 'max-w-3xl max-h-[85vh] overflow-y-auto' : 'max-w-xl'} data-testid="lb-add-dialog">
           {addStep === 'dump' ? (
             <>
               <DialogHeader>
@@ -342,6 +373,56 @@ export default function LeadBriefs() {
                 <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
                 <Button className="bg-[#002FA7] hover:bg-[#00227A]" disabled={extracting || dumpText.trim().length < 20} onClick={extractWithAI} data-testid="lb-extract-btn">
                   {extracting ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" /> Extracting…</> : <><Sparkles className="h-4 w-4 mr-1.5" /> Extract with AI</>}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : addStep === 'multi' ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-[#002FA7]" /> {multiBriefs.length} Prospects Found</DialogTitle>
+                <DialogDescription>AI split your dump into separate briefs — untick any you don't want, correct details, then save all.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                {multiBriefs.map((b, i) => (
+                  <div key={i} className={`rounded-md border p-4 space-y-3 ${b._include ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50 opacity-60'}`} data-testid={`lb-multi-card-${i}`}>
+                    <div className="flex items-start gap-3">
+                      <Checkbox checked={b._include} onCheckedChange={(v) => updateMulti(i, { _include: !!v })} className="mt-2.5" data-testid={`lb-multi-include-${i}`} />
+                      <Input placeholder="Title *" value={b.title} onChange={(e) => updateMulti(i, { title: e.target.value })} data-testid={`lb-multi-title-${i}`} />
+                      <Select value={b.city} onValueChange={(v) => updateMulti(i, { city: v })}>
+                        <SelectTrigger className="w-44 shrink-0" data-testid={`lb-multi-city-${i}`}><SelectValue placeholder="City *" /></SelectTrigger>
+                        <SelectContent>
+                          {b.city && !masterCities.includes(b.city) && <SelectItem value={b.city}>{b.city}</SelectItem>}
+                          {masterCities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {b._include && (
+                      <div className="pl-8 space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <Input placeholder="LinkedIn profile URL" value={b.linkedin_url} onChange={(e) => updateMulti(i, { linkedin_url: e.target.value })} data-testid={`lb-multi-linkedin-${i}`} />
+                          <Input placeholder="Instagram profile URL" value={b.instagram_url} onChange={(e) => updateMulti(i, { instagram_url: e.target.value })} data-testid={`lb-multi-instagram-${i}`} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Input placeholder="Email address" type="email" value={b.email} onChange={(e) => updateMulti(i, { email: e.target.value })} data-testid={`lb-multi-email-${i}`} />
+                          <Input placeholder="Phone number" value={b.phone} onChange={(e) => updateMulti(i, { phone: e.target.value })} data-testid={`lb-multi-phone-${i}`} />
+                        </div>
+                        <Textarea placeholder="Card summary" rows={2} value={b.summary} onChange={(e) => updateMulti(i, { summary: e.target.value })} data-testid={`lb-multi-summary-${i}`} />
+                        <Textarea placeholder="Full brief content *" rows={4} value={b.content} onChange={(e) => updateMulti(i, { content: e.target.value })} data-testid={`lb-multi-content-${i}`} />
+                        {(!b.title.trim() || !b.city.trim() || !b.content.trim()) && (
+                          <p className="text-xs text-red-600">Title, city and content are required.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <DialogFooter className="flex-wrap gap-2">
+                <button type="button" className="mr-auto text-sm text-slate-500 underline underline-offset-2 hover:text-[#002FA7]" onClick={() => setAddStep('dump')} data-testid="lb-multi-back">
+                  ← Back to info dump
+                </button>
+                <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
+                <Button className="bg-[#002FA7] hover:bg-[#00227A]" disabled={busy || includedMulti.length === 0 || multiInvalid} onClick={saveAllBriefs} data-testid="lb-multi-save-all">
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : `Save All (${includedMulti.length})`}
                 </Button>
               </DialogFooter>
             </>
