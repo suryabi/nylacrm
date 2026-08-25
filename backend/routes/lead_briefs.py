@@ -30,23 +30,34 @@ _BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 
 
-async def _fetch_linkedin_photo(linkedin_url: str) -> Optional[str]:
-    """Best-effort: pull og:image from the public LinkedIn profile page."""
-    if not linkedin_url or "linkedin.com" not in linkedin_url:
+async def _fetch_og_photo(profile_url: str, domain: str) -> Optional[str]:
+    """Best-effort: pull og:image from a public profile page (LinkedIn/Instagram)."""
+    if not profile_url or domain not in profile_url:
         return None
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=12,
                                      headers={"User-Agent": _BROWSER_UA, "Accept-Language": "en"}) as client:
-            r = await client.get(linkedin_url)
-        if r.status_code != 200 or "authwall" in str(r.url):
+            r = await client.get(profile_url)
+        final = str(r.url)
+        if r.status_code != 200 or "authwall" in final or "/accounts/login" in final:
             return None
         m = re.search(r'og:image"\s+content="([^"]+)"', r.text) or \
             re.search(r'content="([^"]+)"\s+property="og:image"', r.text)
         if m:
-            return m.group(1).replace("&amp;", "&")
+            photo = m.group(1).replace("&amp;", "&")
+            if "static.cdninstagram.com/rsrc" not in photo:
+                return photo
     except Exception:
         pass
     return None
+
+
+async def _fetch_linkedin_photo(linkedin_url: str) -> Optional[str]:
+    return await _fetch_og_photo(linkedin_url, "linkedin.com")
+
+
+async def _fetch_instagram_photo(instagram_url: str) -> Optional[str]:
+    return await _fetch_og_photo(instagram_url, "instagram.com")
 
 
 class BriefCreate(BaseModel):
@@ -127,8 +138,11 @@ async def create_brief(payload: BriefCreate, current_user: dict = Depends(get_cu
         "created_by": current_user.get("id"), "created_by_name": current_user.get("name"),
         "created_at": _now(), "updated_at": _now(),
     }
-    if not doc["image_url"] and doc["linkedin_url"]:
-        doc["linkedin_photo_url"] = await _fetch_linkedin_photo(doc["linkedin_url"])
+    if not doc["image_url"]:
+        if doc["linkedin_url"]:
+            doc["linkedin_photo_url"] = await _fetch_linkedin_photo(doc["linkedin_url"])
+        if doc["instagram_url"]:
+            doc["instagram_photo_url"] = await _fetch_instagram_photo(doc["instagram_url"])
     await db.lead_briefs.insert_one({**doc})
     return {"ok": True, "brief": doc}
 
@@ -143,10 +157,15 @@ async def update_brief(brief_id: str, payload: BriefUpdate,
     if not upd:
         raise HTTPException(400, "Nothing to update.")
     upd["updated_at"] = _now()
-    if upd.get("linkedin_url") and not upd.get("image_url"):
-        photo = await _fetch_linkedin_photo(upd["linkedin_url"])
-        if photo:
-            upd["linkedin_photo_url"] = photo
+    if not upd.get("image_url"):
+        if upd.get("linkedin_url"):
+            photo = await _fetch_linkedin_photo(upd["linkedin_url"])
+            if photo:
+                upd["linkedin_photo_url"] = photo
+        if upd.get("instagram_url"):
+            photo = await _fetch_instagram_photo(upd["instagram_url"])
+            if photo:
+                upd["instagram_photo_url"] = photo
     r = await db.lead_briefs.update_one({"id": brief_id, "tenant_id": tenant_id}, {"$set": upd})
     if r.matched_count == 0:
         raise HTTPException(404, "Brief not found")

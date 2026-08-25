@@ -11,16 +11,11 @@ import { NotebookPen, Plus, MapPin, ExternalLink, CheckCircle2, UserPlus, Trash2
 const API = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
-const igHandle = (url) => {
-  const m = (url || '').match(/instagram\.com\/([A-Za-z0-9_.]+)/);
-  return m ? m[1] : null;
-};
-// photo priority: explicit photo URL → LinkedIn profile photo → Instagram avatar → initials block
+// photo priority: explicit photo URL → LinkedIn profile photo → Instagram profile photo → initials block
 const briefImage = (b) => {
   if (b.image_url) return b.image_url;
   if (b.linkedin_photo_url) return b.linkedin_photo_url;
-  const ig = igHandle(b.instagram_url);
-  if (ig) return `https://unavatar.io/instagram/${ig}?fallback=false`;
+  if (b.instagram_photo_url) return b.instagram_photo_url;
   return null;
 };
 

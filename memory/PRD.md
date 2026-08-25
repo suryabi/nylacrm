@@ -2731,3 +2731,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Backend fetches og:image from the LinkedIn profile URL (browser UA, httpx) on brief create/update, stored as linkedin_photo_url. Best-effort: LinkedIn bot-blocks some profiles (HTTP 999) — those fall back to Instagram avatar → initials.
 - Photo priority: image_url → linkedin_photo_url → Instagram unavatar → initials.
 - Verified in Preview: demo brief with real public LinkedIn profile renders the fetched photo. Redeploy needed for Production.
+
+## Update — 25 Jun 2026: Instagram profile photo pickup (same mechanism as LinkedIn)
+- Backend now fetches og:image from the Instagram profile URL too on brief create/update (stored as instagram_photo_url); photo priority: image_url → linkedin_photo_url → instagram_photo_url → initials.
+- Removed broken client-side unavatar.io Instagram call (unavatar now paywalls Instagram).
+- NOTE: Instagram aggressively login-walls anonymous/datacenter requests (429), so from Preview the IG fetch returned NONE; mechanism verified via LinkedIn path which works. May succeed from Production IP.
