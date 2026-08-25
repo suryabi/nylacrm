@@ -6,23 +6,51 @@ import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { NotebookPen, Plus, MapPin, ExternalLink, CheckCircle2, UserPlus, Trash2, Loader2, ArrowRight } from 'lucide-react';
+import { NotebookPen, Plus, MapPin, ExternalLink, CheckCircle2, UserPlus, Trash2, Loader2, ArrowRight, Linkedin, Instagram, Mail, Phone } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
+
+const igHandle = (url) => {
+  const m = (url || '').match(/instagram\.com\/([A-Za-z0-9_.]+)/);
+  return m ? m[1] : null;
+};
+// photo priority: explicit photo URL → Instagram avatar (via unavatar) → initials block
+const briefImage = (b) => {
+  if (b.image_url) return b.image_url;
+  const ig = igHandle(b.instagram_url);
+  if (ig) return `https://unavatar.io/instagram/${ig}?fallback=false`;
+  return null;
+};
+
+const BriefPhoto = ({ brief, className }) => {
+  const [failed, setFailed] = useState(false);
+  const src = briefImage(brief);
+  if (!src || failed) {
+    return (
+      <div className={`${className} bg-gradient-to-br from-[#002FA7] to-[#0B4FD6] flex items-center justify-center`}>
+        <span className="text-white/90 text-3xl font-bold tracking-wide">
+          {(brief.title || '?').split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()}
+        </span>
+      </div>
+    );
+  }
+  return <img src={src} alt={brief.title} className={`${className} object-cover`} onError={() => setFailed(true)} loading="lazy" />;
+};
 
 const fmtDate = (iso) => {
   if (!iso) return '';
   return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
-const EMPTY_FORM = { title: '', city: '', summary: '', content: '', source_name: '', source_url: '' };
-const EMPTY_LEAD = { company: '', contact_person: '', phone: '', city: '', state: '', region: '' };
+const EMPTY_FORM = { title: '', city: '', summary: '', content: '', source_name: '', source_url: '', linkedin_url: '', instagram_url: '', image_url: '', email: '', phone: '' };
+const EMPTY_LEAD = { company: '', contact_person: '', phone: '', email: '', city: '', state: '', region: '' };
 
 export default function LeadBriefs() {
   const [briefs, setBriefs] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [cities, setCities] = useState([]);
+  const [masterCities, setMasterCities] = useState([]);
   const [cityFilter, setCityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -52,6 +80,12 @@ export default function LeadBriefs() {
   }, [cityFilter, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    fetch(`${API}/api/master-locations/flat`, { headers: authHeaders() })
+      .then((r) => r.json())
+      .then((d) => setMasterCities((d.cities || []).map((c) => c.name).filter(Boolean).sort()))
+      .catch(() => {});
+  }, []);
 
   const counts = useMemo(() => ({
     new: briefs.filter((b) => b.status === 'new').length,
@@ -93,7 +127,7 @@ export default function LeadBriefs() {
   };
 
   const openLeadForm = () => {
-    setLeadForm({ ...EMPTY_LEAD, company: selected?.title || '', city: selected?.city || '' });
+    setLeadForm({ ...EMPTY_LEAD, company: selected?.title || '', city: selected?.city || '', phone: selected?.phone || '', email: selected?.email || '' });
     setShowLeadForm(true);
   };
 
@@ -105,7 +139,7 @@ export default function LeadBriefs() {
     setBusy(true);
     try {
       const body = {
-        ...leadForm, country: 'India', status: 'new', source: 'Lead Brief',
+        ...leadForm, email: leadForm.email.trim() || undefined, country: 'India', status: 'new', source: 'Lead Brief',
         notes: `From lead brief "${selected?.title}" (${selected?.city}).${selected?.source_name ? ` Source: ${selected.source_name}.` : ''}`,
       };
       const r = await fetch(`${API}/api/leads`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) });
@@ -173,8 +207,10 @@ export default function LeadBriefs() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {briefs.map((b) => (
             <button key={b.id} type="button" onClick={() => setSelected(b)}
-              className="group text-left rounded-lg border border-slate-200 bg-white p-5 hover:border-[#002FA7]/40 hover:shadow-md transition-all flex flex-col"
+              className="group text-left rounded-lg border border-slate-200 bg-white overflow-hidden hover:border-[#002FA7]/40 hover:shadow-md transition-all flex flex-col"
               data-testid={`lb-card-${b.id}`}>
+              <BriefPhoto brief={b} className="w-full h-36" />
+              <div className="p-5 flex flex-col flex-1">
               <div className="flex items-start justify-between gap-2 mb-2">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-[#002FA7] flex items-center gap-1">
                   <MapPin className="h-3 w-3" /> {b.city} <span className="text-slate-300 font-normal">•</span>
@@ -187,6 +223,7 @@ export default function LeadBriefs() {
               <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[#002FA7]">
                 Read brief <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
               </span>
+              </div>
             </button>
           ))}
         </div>
@@ -213,7 +250,30 @@ export default function LeadBriefs() {
                   </DialogDescription>
                 )}
               </DialogHeader>
-              <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap" data-testid="lb-detail-content">{selected.content}</div>
+              <div className="flex gap-4">
+                <BriefPhoto brief={selected} className="w-24 h-24 rounded-md shrink-0" />
+                <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap flex-1" data-testid="lb-detail-content">{selected.content}</div>
+              </div>
+              {(selected.linkedin_url || selected.instagram_url || selected.email || selected.phone) && (
+                <div className="rounded-md border border-slate-200 bg-slate-50/60 p-3 space-y-1.5 text-sm" data-testid="lb-detail-contacts">
+                  {selected.linkedin_url && (
+                    <p className="flex items-center gap-2"><Linkedin className="h-4 w-4 text-[#0A66C2] shrink-0" />
+                      <a href={selected.linkedin_url} target="_blank" rel="noreferrer" className="text-[#002FA7] underline underline-offset-2 break-all">{selected.linkedin_url}</a></p>
+                  )}
+                  {selected.instagram_url && (
+                    <p className="flex items-center gap-2"><Instagram className="h-4 w-4 text-[#E1306C] shrink-0" />
+                      <a href={selected.instagram_url} target="_blank" rel="noreferrer" className="text-[#002FA7] underline underline-offset-2 break-all">{selected.instagram_url}</a></p>
+                  )}
+                  {selected.email && (
+                    <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-slate-400 shrink-0" />
+                      <a href={`mailto:${selected.email}`} className="text-slate-700">{selected.email}</a></p>
+                  )}
+                  {selected.phone && (
+                    <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-slate-400 shrink-0" />
+                      <a href={`tel:${selected.phone}`} className="text-slate-700">{selected.phone}</a></p>
+                  )}
+                </div>
+              )}
               {selected.status === 'reviewed' && selected.reviewed_by_name && (
                 <p className="text-xs text-slate-400">Reviewed by {selected.reviewed_by_name} on {fmtDate(selected.reviewed_at)}</p>
               )}
@@ -252,12 +312,26 @@ export default function LeadBriefs() {
           <div className="space-y-3">
             <Input placeholder="Title *" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} data-testid="lb-form-title" />
             <div className="grid grid-cols-2 gap-3">
-              <Input placeholder="City *" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} data-testid="lb-form-city" />
+              <Select value={form.city} onValueChange={(v) => setForm({ ...form, city: v })}>
+                <SelectTrigger data-testid="lb-form-city"><SelectValue placeholder="City *" /></SelectTrigger>
+                <SelectContent>
+                  {masterCities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
               <Input placeholder="Source name (optional)" value={form.source_name} onChange={(e) => setForm({ ...form, source_name: e.target.value })} data-testid="lb-form-source" />
             </div>
             <Input placeholder="Source URL (optional)" value={form.source_url} onChange={(e) => setForm({ ...form, source_url: e.target.value })} data-testid="lb-form-url" />
+            <div className="grid grid-cols-2 gap-3">
+              <Input placeholder="LinkedIn profile URL" value={form.linkedin_url} onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })} data-testid="lb-form-linkedin" />
+              <Input placeholder="Instagram profile URL" value={form.instagram_url} onChange={(e) => setForm({ ...form, instagram_url: e.target.value })} data-testid="lb-form-instagram" />
+            </div>
+            <Input placeholder="Photo URL (optional — else Instagram photo is used)" value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} data-testid="lb-form-image" />
+            <div className="grid grid-cols-2 gap-3">
+              <Input placeholder="Email address" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="lb-form-email" />
+              <Input placeholder="Phone number" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="lb-form-phone" />
+            </div>
             <Textarea placeholder="Short summary shown on the card (optional — first lines of content used if empty)" rows={2} value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} data-testid="lb-form-summary" />
-            <Textarea placeholder="Full information dump *" rows={7} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} data-testid="lb-form-content" />
+            <Textarea placeholder="Full information dump *" rows={6} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} data-testid="lb-form-content" />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
@@ -281,6 +355,7 @@ export default function LeadBriefs() {
               <Input placeholder="Contact person" value={leadForm.contact_person} onChange={(e) => setLeadForm({ ...leadForm, contact_person: e.target.value })} data-testid="lb-lead-contact" />
               <Input placeholder="Phone" value={leadForm.phone} onChange={(e) => setLeadForm({ ...leadForm, phone: e.target.value })} data-testid="lb-lead-phone" />
             </div>
+            <Input placeholder="Email" type="email" value={leadForm.email} onChange={(e) => setLeadForm({ ...leadForm, email: e.target.value })} data-testid="lb-lead-email" />
             <div className="grid grid-cols-3 gap-3">
               <Input placeholder="City *" value={leadForm.city} onChange={(e) => setLeadForm({ ...leadForm, city: e.target.value })} data-testid="lb-lead-city" />
               <Input placeholder="State *" value={leadForm.state} onChange={(e) => setLeadForm({ ...leadForm, state: e.target.value })} data-testid="lb-lead-state" />

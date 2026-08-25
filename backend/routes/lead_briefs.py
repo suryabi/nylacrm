@@ -30,6 +30,11 @@ class BriefCreate(BaseModel):
     summary: Optional[str] = None
     source_name: Optional[str] = None
     source_url: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    image_url: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
 
 
 class BriefUpdate(BaseModel):
@@ -39,6 +44,11 @@ class BriefUpdate(BaseModel):
     summary: Optional[str] = None
     source_name: Optional[str] = None
     source_url: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    image_url: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
 
 
 class ConvertPayload(BaseModel):
@@ -80,6 +90,11 @@ async def create_brief(payload: BriefCreate, current_user: dict = Depends(get_cu
         "content": payload.content.strip(), "summary": summary,
         "source_name": (payload.source_name or "").strip() or None,
         "source_url": (payload.source_url or "").strip() or None,
+        "linkedin_url": (payload.linkedin_url or "").strip() or None,
+        "instagram_url": (payload.instagram_url or "").strip() or None,
+        "image_url": (payload.image_url or "").strip() or None,
+        "email": (payload.email or "").strip() or None,
+        "phone": (payload.phone or "").strip() or None,
         "status": "new",
         "reviewed_by_name": None, "reviewed_at": None,
         "converted_lead_id": None, "converted_lead_company": None,
