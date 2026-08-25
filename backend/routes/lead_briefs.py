@@ -296,10 +296,34 @@ async def ai_extract(payload: ExtractPayload, current_user: dict = Depends(get_c
         raise HTTPException(500, "AI key not configured")
     cities = await db.master_cities.find({"is_active": True}, {"_id": 0, "name": 1}).to_list(200)
     city_names = [c["name"] for c in cities if c.get("name")]
+
+    # Profile-aware extraction: fetch live profile data for any social URLs in the dump
+    import asyncio
+    li_urls = [u.rstrip('.') for u in re.findall(r'(?:https?://)?(?:www\.)?linkedin\.com/in/[A-Za-z0-9\-_%.]+', text)][:5]
+    ig_urls = [u.rstrip('./') for u in re.findall(r'(?:https?://)?(?:www\.)?instagram\.com/[A-Za-z0-9_.]+/?', text)][:5]
+
+    def _full(u):
+        return u if u.startswith("http") else f"https://www.{u.lstrip('w.')}" if not u.startswith("www.") else f"https://{u}"
+
+    tasks = [(u, _fetch_profile_meta(_full(u), "linkedin.com")) for u in li_urls] + \
+            [(u, _fetch_profile_meta(_full(u), "instagram.com")) for u in ig_urls]
+    profile_context = ""
+    if tasks:
+        metas = await asyncio.gather(*[t[1] for t in tasks], return_exceptions=True)
+        lines = []
+        for (u, _), meta in zip(tasks, metas):
+            if isinstance(meta, dict) and (meta.get("name") or meta.get("description")):
+                lines.append(f"- {u}: name={meta.get('name') or ''} | location={meta.get('location') or ''} | "
+                             f"followers={meta.get('followers') or ''} | bio={meta.get('description') or ''}")
+        if lines:
+            profile_context = ("\n\nVERIFIED PROFILE DATA (fetched live from the profile pages — use this to enrich "
+                               "each prospect's role, company and location in title/summary/content; do not contradict it):\n"
+                               + "\n".join(lines))
+
     chat = LlmChat(api_key=api_key, session_id=f"lead-brief-{uuid.uuid4()}",
                    system_message=AI_EXTRACT_SYSTEM).with_model("openai", "gpt-5.5")
     prompt = (f"Known cities (pick the matching one for each brief's `city`, or empty string if none match): "
-              f"{json.dumps(city_names)}\n\nRAW INFORMATION:\n{text[:12000]}")
+              f"{json.dumps(city_names)}\n\nRAW INFORMATION:\n{text[:12000]}{profile_context}")
     try:
         resp = await chat.send_message(UserMessage(text=prompt))
         raw = resp if isinstance(resp, str) else str(resp)

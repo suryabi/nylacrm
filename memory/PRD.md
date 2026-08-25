@@ -2761,3 +2761,7 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Popup shows a profile card: name, followers (en-IN formatted), location, bio/description, "auto-fetched from" label.
 - Same access limits as photos: only publicly-served profiles work (Instagram mostly blocked from datacenter IPs).
 - Verified in Preview: demo brief shows "Bill Gates - Gates Foundation, 4,05,99,474 followers · Seattle…, bio + experience/education".
+
+## Update — 25 Jun 2026: Profile-aware AI extraction + Edit brief
+- ai-extract now finds LinkedIn/Instagram URLs in the dump (regex, trailing-punctuation stripped — fixed bug where "url." broke the fetch), fetches live profile meta concurrently, and feeds it to the AI as VERIFIED PROFILE DATA. Verified: bare LinkedIn link produced brief enriched with name/role/org/location.
+- Edit brief: admin "Edit" button in popup opens the review form pre-filled (editingId state); saves via PUT; dup-check skipped when editing; header/button switch to "Edit Brief"/"Save Changes". Verified via Playwright.

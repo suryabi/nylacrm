@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Checkbox } from '../components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { NotebookPen, Plus, MapPin, ExternalLink, CheckCircle2, Trash2, Loader2, ArrowRight, Linkedin, Instagram, Mail, Phone, Sparkles, AlertTriangle, Image as ImageIcon, Clock } from 'lucide-react';
+import { NotebookPen, Plus, MapPin, ExternalLink, CheckCircle2, Trash2, Loader2, ArrowRight, Linkedin, Instagram, Mail, Phone, Sparkles, AlertTriangle, Image as ImageIcon, Clock, Pencil } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
@@ -68,6 +68,7 @@ export default function LeadBriefs() {
   const [dumpText, setDumpText] = useState('');
   const [extracting, setExtracting] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [editingId, setEditingId] = useState(null);
   const [multiBriefs, setMultiBriefs] = useState([]);
   const [multiDups, setMultiDups] = useState([]);
   const [dupWarning, setDupWarning] = useState(null); // {key, matches}
@@ -107,7 +108,16 @@ export default function LeadBriefs() {
     reviewed: briefs.filter((b) => b.status === 'reviewed').length,
   }), [briefs]);
 
-  const openAdd = () => { setForm(EMPTY_FORM); setDumpText(''); setAddStep('dump'); setDupWarning(null); setMultiDups([]); setShowAdd(true); };
+  const openAdd = () => { setForm(EMPTY_FORM); setEditingId(null); setDumpText(''); setAddStep('dump'); setDupWarning(null); setMultiDups([]); setShowAdd(true); };
+
+  const openEdit = (brief) => {
+    setForm(Object.fromEntries(Object.keys(EMPTY_FORM).map((k) => [k, brief[k] || ''])));
+    setEditingId(brief.id);
+    setDupWarning(null);
+    setAddStep('form');
+    setSelected(null);
+    setShowAdd(true);
+  };
 
   const checkDuplicates = async (items) => {
     try {
@@ -167,22 +177,26 @@ export default function LeadBriefs() {
   const saveBrief = async () => {
     setBusy(true);
     try {
-      const dupKey = `${form.title}|${form.email}|${form.phone}`;
-      if (!dupWarning || dupWarning.key !== dupKey) {
-        const [matches] = await checkDuplicates([form]);
-        if (matches && matches.length > 0) {
-          setDupWarning({ key: dupKey, matches });
-          setBusy(false);
-          return;
+      if (!editingId) {
+        const dupKey = `${form.title}|${form.email}|${form.phone}`;
+        if (!dupWarning || dupWarning.key !== dupKey) {
+          const [matches] = await checkDuplicates([form]);
+          if (matches && matches.length > 0) {
+            setDupWarning({ key: dupKey, matches });
+            setBusy(false);
+            return;
+          }
         }
       }
-      const r = await fetch(`${API}/api/lead-briefs`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(form) });
+      const r = await fetch(editingId ? `${API}/api/lead-briefs/${editingId}` : `${API}/api/lead-briefs`,
+        { method: editingId ? 'PUT' : 'POST', headers: authHeaders(), body: JSON.stringify(form) });
       if (!r.ok) throw new Error((await r.json()).detail || 'Failed');
-      toast.success('Lead brief added');
+      toast.success(editingId ? 'Lead brief updated' : 'Lead brief added');
       setShowAdd(false);
+      setEditingId(null);
       setForm(EMPTY_FORM);
       load();
-    } catch (e) { toast.error(typeof e.message === 'string' ? e.message : 'Failed to add brief'); }
+    } catch (e) { toast.error(typeof e.message === 'string' ? e.message : 'Failed to save brief'); }
     finally { setBusy(false); }
   };
 
@@ -412,6 +426,11 @@ export default function LeadBriefs() {
                     <ImageIcon className="h-4 w-4 mr-1.5 text-[#002FA7]" /> Fetch Profile Info
                   </Button>
                 )}
+                {isAdmin && (
+                  <Button variant="outline" disabled={busy} onClick={() => openEdit(selected)} data-testid="lb-edit-btn">
+                    <Pencil className="h-4 w-4 mr-1.5 text-[#002FA7]" /> Edit
+                  </Button>
+                )}
                 {selected.status === 'new' && (
                   <Button variant="outline" disabled={busy} onClick={() => markReviewed(selected)} data-testid="lb-review-btn">
                     <CheckCircle2 className="h-4 w-4 mr-1.5 text-emerald-600" /> Mark Reviewed
@@ -511,8 +530,8 @@ export default function LeadBriefs() {
           ) : (
             <>
           <DialogHeader>
-            <DialogTitle>Review &amp; Save Brief</DialogTitle>
-            <DialogDescription>AI has pre-filled the fields below — correct anything before saving.</DialogDescription>
+            <DialogTitle>{editingId ? 'Edit Brief' : 'Review & Save Brief'}</DialogTitle>
+            <DialogDescription>{editingId ? 'Update the brief details and save.' : 'AI has pre-filled the fields below — correct anything before saving.'}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <Input placeholder="Title *" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} data-testid="lb-form-title" />
@@ -551,12 +570,14 @@ export default function LeadBriefs() {
             )}
           </div>
           <DialogFooter className="flex-wrap gap-2">
-            <button type="button" className="mr-auto text-sm text-slate-500 underline underline-offset-2 hover:text-[#002FA7]" onClick={() => setAddStep('dump')} data-testid="lb-back-to-dump">
-              ← Back to info dump
-            </button>
+            {!editingId && (
+              <button type="button" className="mr-auto text-sm text-slate-500 underline underline-offset-2 hover:text-[#002FA7]" onClick={() => setAddStep('dump')} data-testid="lb-back-to-dump">
+                ← Back to info dump
+              </button>
+            )}
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button className={dupWarning && dupWarning.matches.length > 0 ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#002FA7] hover:bg-[#00227A]'} disabled={busy || !form.title.trim() || !form.city.trim() || !form.content.trim()} onClick={saveBrief} data-testid="lb-form-save">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : (dupWarning && dupWarning.matches.length > 0 ? 'Save Anyway' : 'Save Brief')}
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : (dupWarning && dupWarning.matches.length > 0 ? 'Save Anyway' : editingId ? 'Save Changes' : 'Save Brief')}
             </Button>
           </DialogFooter>
             </>
