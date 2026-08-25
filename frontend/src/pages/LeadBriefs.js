@@ -15,9 +15,10 @@ const igHandle = (url) => {
   const m = (url || '').match(/instagram\.com\/([A-Za-z0-9_.]+)/);
   return m ? m[1] : null;
 };
-// photo priority: explicit photo URL → Instagram avatar (via unavatar) → initials block
+// photo priority: explicit photo URL → LinkedIn profile photo → Instagram avatar → initials block
 const briefImage = (b) => {
   if (b.image_url) return b.image_url;
+  if (b.linkedin_photo_url) return b.linkedin_photo_url;
   const ig = igHandle(b.instagram_url);
   if (ig) return `https://unavatar.io/instagram/${ig}?fallback=false`;
   return null;
@@ -222,7 +223,7 @@ export default function LeadBriefs() {
           No lead briefs {cityFilter !== 'all' ? `for ${cityFilter}` : 'yet'}.{isAdmin ? ' Use "Add Brief" to create one.' : ''}
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {briefs.map((b) => (
             <button key={b.id} type="button" onClick={() => setSelected(b)}
               className="group text-left rounded-lg border border-slate-200 bg-white overflow-hidden hover:border-[#002FA7]/40 hover:shadow-md transition-all flex flex-col"
@@ -372,7 +373,7 @@ export default function LeadBriefs() {
               <Input placeholder="LinkedIn profile URL" value={form.linkedin_url} onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })} data-testid="lb-form-linkedin" />
               <Input placeholder="Instagram profile URL" value={form.instagram_url} onChange={(e) => setForm({ ...form, instagram_url: e.target.value })} data-testid="lb-form-instagram" />
             </div>
-            <Input placeholder="Photo URL (optional — else Instagram photo is used)" value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} data-testid="lb-form-image" />
+            <Input placeholder="Photo URL (optional — else LinkedIn/Instagram photo is used)" value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} data-testid="lb-form-image" />
             <div className="grid grid-cols-2 gap-3">
               <Input placeholder="Email address" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="lb-form-email" />
               <Input placeholder="Phone number" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="lb-form-phone" />

@@ -2725,3 +2725,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - New endpoint POST /api/lead-briefs/ai-extract (admin, tenant-scoped) uses LlmChat (gpt-5.5, EMERGENT_LLM_KEY, same pattern as water_intelligence.py) to extract title, city (constrained to master cities), summary, content, source_name/url, linkedin_url, instagram_url, email, phone from raw pasted text.
 - Frontend LeadBriefs.js: addStep state ('dump'|'form'), "Extract with AI" button, "Fill manually instead" skip, "Back to info dump" link; unknown AI city is injected into city Select safely.
 - Tested in Preview: backend curl extraction correct; Playwright e2e dump→extract→pre-filled form verified. Production requires redeploy.
+
+## Update — 25 Jun 2026: Lead Briefs — 4-per-row grid + LinkedIn profile photos
+- Grid now shows 4 cards per row on wide screens (xl:grid-cols-4).
+- Backend fetches og:image from the LinkedIn profile URL (browser UA, httpx) on brief create/update, stored as linkedin_photo_url. Best-effort: LinkedIn bot-blocks some profiles (HTTP 999) — those fall back to Instagram avatar → initials.
+- Photo priority: image_url → linkedin_photo_url → Instagram unavatar → initials.
+- Verified in Preview: demo brief with real public LinkedIn profile renders the fetched photo. Redeploy needed for Production.

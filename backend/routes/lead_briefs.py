@@ -1,8 +1,11 @@
 """Lead Briefs — externally-sourced market intel dumped per city for the sales
 team to review. Sales mark briefs Reviewed and can convert promising ones to leads."""
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
+
+import httpx
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Depends
 
@@ -21,6 +24,29 @@ def _is_admin(user: dict) -> bool:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+_BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+               "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
+
+
+async def _fetch_linkedin_photo(linkedin_url: str) -> Optional[str]:
+    """Best-effort: pull og:image from the public LinkedIn profile page."""
+    if not linkedin_url or "linkedin.com" not in linkedin_url:
+        return None
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=12,
+                                     headers={"User-Agent": _BROWSER_UA, "Accept-Language": "en"}) as client:
+            r = await client.get(linkedin_url)
+        if r.status_code != 200 or "authwall" in str(r.url):
+            return None
+        m = re.search(r'og:image"\s+content="([^"]+)"', r.text) or \
+            re.search(r'content="([^"]+)"\s+property="og:image"', r.text)
+        if m:
+            return m.group(1).replace("&amp;", "&")
+    except Exception:
+        pass
+    return None
 
 
 class BriefCreate(BaseModel):
@@ -101,6 +127,8 @@ async def create_brief(payload: BriefCreate, current_user: dict = Depends(get_cu
         "created_by": current_user.get("id"), "created_by_name": current_user.get("name"),
         "created_at": _now(), "updated_at": _now(),
     }
+    if not doc["image_url"] and doc["linkedin_url"]:
+        doc["linkedin_photo_url"] = await _fetch_linkedin_photo(doc["linkedin_url"])
     await db.lead_briefs.insert_one({**doc})
     return {"ok": True, "brief": doc}
 
@@ -115,6 +143,10 @@ async def update_brief(brief_id: str, payload: BriefUpdate,
     if not upd:
         raise HTTPException(400, "Nothing to update.")
     upd["updated_at"] = _now()
+    if upd.get("linkedin_url") and not upd.get("image_url"):
+        photo = await _fetch_linkedin_photo(upd["linkedin_url"])
+        if photo:
+            upd["linkedin_photo_url"] = photo
     r = await db.lead_briefs.update_one({"id": brief_id, "tenant_id": tenant_id}, {"$set": upd})
     if r.matched_count == 0:
         raise HTTPException(404, "Brief not found")
