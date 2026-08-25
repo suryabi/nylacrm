@@ -192,8 +192,14 @@ export default function LeadBriefs() {
       const r = await fetch(`${API}/api/lead-briefs/${brief.id}/fetch-photo`, { method: 'POST', headers: authHeaders() });
       const d = await r.json();
       if (d.ok) {
-        toast.success(`Photo fetched from ${d.source}`);
-        setSelected((s) => (s ? { ...s, linkedin_photo_url: d.linkedin_photo_url || s.linkedin_photo_url, instagram_photo_url: d.instagram_photo_url || s.instagram_photo_url } : s));
+        toast.success(`Profile info fetched from ${d.source}`);
+        setSelected((s) => (s ? {
+          ...s,
+          linkedin_photo_url: d.linkedin_photo_url || s.linkedin_photo_url,
+          instagram_photo_url: d.instagram_photo_url || s.instagram_photo_url,
+          linkedin_profile: d.linkedin_profile || s.linkedin_profile,
+          instagram_profile: d.instagram_profile || s.instagram_profile,
+        } : s));
         load();
       } else {
         toast.warning(d.message || 'Could not fetch the photo right now.');
@@ -340,6 +346,28 @@ export default function LeadBriefs() {
                 <BriefPhoto brief={selected} className="w-24 h-24 rounded-md shrink-0" />
                 <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap flex-1" data-testid="lb-detail-content">{selected.content}</div>
               </div>
+              {(selected.linkedin_profile || selected.instagram_profile) && (
+                <div className="space-y-2" data-testid="lb-profile-info">
+                  {[['linkedin_profile', 'LinkedIn profile', Linkedin, 'text-[#0A66C2]'], ['instagram_profile', 'Instagram profile', Instagram, 'text-[#E1306C]']].map(([key, label, Icon, color]) => {
+                    const p = selected[key];
+                    if (!p || (!p.name && !p.description)) return null;
+                    return (
+                      <div key={key} className="rounded-md border border-slate-200 bg-white p-3 text-sm">
+                        <p className="flex items-center gap-2 font-semibold text-slate-800">
+                          <Icon className={`h-4 w-4 ${color} shrink-0`} /> {p.name || label}
+                          {(p.followers || p.location) && (
+                            <span className="font-normal text-xs text-slate-400">
+                              {p.followers ? `${Number(p.followers).toLocaleString('en-IN')} followers` : ''}{p.followers && p.location ? ' · ' : ''}{p.location || ''}
+                            </span>
+                          )}
+                        </p>
+                        {p.description && <p className="mt-1 text-[13px] text-slate-600 leading-relaxed">{p.description}</p>}
+                        <p className="mt-1 text-[10px] uppercase tracking-wide text-slate-300">Auto-fetched from {label.split(' ')[0]}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               {(selected.linkedin_url || selected.instagram_url || selected.email || selected.phone) && (
                 <div className="rounded-md border border-slate-200 bg-slate-50/60 p-3 space-y-1.5 text-sm" data-testid="lb-detail-contacts">
                   {selected.linkedin_url && (
@@ -379,9 +407,9 @@ export default function LeadBriefs() {
                     <Trash2 className="h-4 w-4 mr-1.5" /> Delete
                   </Button>
                 )}
-                {isAdmin && !briefImage(selected) && (selected.linkedin_url || selected.instagram_url) && (
+                {isAdmin && (selected.linkedin_url || selected.instagram_url) && (!briefImage(selected) || (!selected.linkedin_profile && !selected.instagram_profile)) && (
                   <Button variant="outline" disabled={busy} onClick={() => fetchPhoto(selected)} data-testid="lb-fetch-photo-btn">
-                    <ImageIcon className="h-4 w-4 mr-1.5 text-[#002FA7]" /> Fetch Photo
+                    <ImageIcon className="h-4 w-4 mr-1.5 text-[#002FA7]" /> Fetch Profile Info
                   </Button>
                 )}
                 {selected.status === 'new' && (

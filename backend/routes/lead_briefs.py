@@ -1,5 +1,7 @@
 """Lead Briefs — externally-sourced market intel dumped per city for the sales
 team to review. Sales mark briefs Reviewed and can convert promising ones to leads."""
+import html as _html
+import json as _json
 import re
 import uuid
 from datetime import datetime, timezone
@@ -30,8 +32,8 @@ _BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 
 
-async def _fetch_og_photo(profile_url: str, domain: str) -> Optional[str]:
-    """Best-effort: pull og:image from a public profile page (LinkedIn/Instagram)."""
+async def _fetch_profile_meta(profile_url: str, domain: str) -> Optional[dict]:
+    """Best-effort: pull og:image/title/description + JSON-LD profile data from a public profile page."""
     if not profile_url or domain not in profile_url:
         return None
     try:
@@ -41,15 +43,63 @@ async def _fetch_og_photo(profile_url: str, domain: str) -> Optional[str]:
         final = str(r.url)
         if r.status_code != 200 or "authwall" in final or "/accounts/login" in final:
             return None
-        m = re.search(r'og:image"\s+content="([^"]+)"', r.text) or \
-            re.search(r'content="([^"]+)"\s+property="og:image"', r.text)
-        if m:
-            photo = m.group(1).replace("&amp;", "&")
-            if "static.cdninstagram.com/rsrc" not in photo:
-                return photo
+        text = r.text
+
+        def og(prop):
+            m = re.search(rf'{prop}"\s+content="([^"]+)"', text) or \
+                re.search(rf'content="([^"]+)"\s+property="{prop}"', text)
+            return _html.unescape(m.group(1)) if m else ""
+
+        meta = {"photo": og("og:image") or None, "name": og("og:title"),
+                "description": og("og:description"), "location": "", "followers": None}
+        if meta["photo"] and "static.cdninstagram.com/rsrc" in meta["photo"]:
+            meta["photo"] = None
+        meta["name"] = re.sub(r"\s*\|\s*LinkedIn\s*$", "", meta["name"]).strip()
+        ld = re.search(r'<script type="application/ld\+json">(.*?)</script>', text, re.S)
+        if ld:
+            try:
+                data = _json.loads(_html.unescape(ld.group(1)))
+                for node in data.get("@graph", [data]):
+                    if node.get("@type") == "Person":
+                        addr = node.get("address") or {}
+                        meta["location"] = addr.get("addressLocality") or ""
+                        stats = node.get("interactionStatistic") or []
+                        if isinstance(stats, dict):
+                            stats = [stats]
+                        for stat in stats:
+                            if isinstance(stat, dict) and stat.get("userInteractionCount"):
+                                meta["followers"] = stat["userInteractionCount"]
+                                break
+                        if not meta["name"]:
+                            meta["name"] = node.get("name") or ""
+            except Exception:
+                pass
+        if not (meta["photo"] or meta["name"] or meta["description"]):
+            return None
+        meta["fetched_at"] = _now()
+        return meta
     except Exception:
-        pass
-    return None
+        return None
+
+
+async def _fetch_og_photo(profile_url: str, domain: str) -> Optional[str]:
+    meta = await _fetch_profile_meta(profile_url, domain)
+    return meta.get("photo") if meta else None
+
+
+async def _social_enrichment(linkedin_url, instagram_url) -> dict:
+    out = {}
+    if linkedin_url:
+        meta = await _fetch_profile_meta(linkedin_url, "linkedin.com")
+        if meta:
+            out["linkedin_photo_url"] = meta.pop("photo", None)
+            out["linkedin_profile"] = meta
+    if instagram_url:
+        meta = await _fetch_profile_meta(instagram_url, "instagram.com")
+        if meta:
+            out["instagram_photo_url"] = meta.pop("photo", None)
+            out["instagram_profile"] = meta
+    return out
 
 
 async def _fetch_linkedin_photo(linkedin_url: str) -> Optional[str]:
@@ -143,11 +193,12 @@ async def create_brief(payload: BriefCreate, current_user: dict = Depends(get_cu
         "created_by": current_user.get("id"), "created_by_name": current_user.get("name"),
         "created_at": _now(), "updated_at": _now(),
     }
-    if not doc["image_url"]:
-        if doc["linkedin_url"]:
-            doc["linkedin_photo_url"] = await _fetch_linkedin_photo(doc["linkedin_url"])
-        if doc["instagram_url"]:
-            doc["instagram_photo_url"] = await _fetch_instagram_photo(doc["instagram_url"])
+    if doc["linkedin_url"] or doc["instagram_url"]:
+        enrich = await _social_enrichment(doc["linkedin_url"], doc["instagram_url"])
+        if doc["image_url"]:
+            enrich.pop("linkedin_photo_url", None)
+            enrich.pop("instagram_photo_url", None)
+        doc.update(enrich)
     await db.lead_briefs.insert_one({**doc})
     return {"ok": True, "brief": doc}
 
@@ -162,15 +213,9 @@ async def update_brief(brief_id: str, payload: BriefUpdate,
     if not upd:
         raise HTTPException(400, "Nothing to update.")
     upd["updated_at"] = _now()
-    if not upd.get("image_url"):
-        if upd.get("linkedin_url"):
-            photo = await _fetch_linkedin_photo(upd["linkedin_url"])
-            if photo:
-                upd["linkedin_photo_url"] = photo
-        if upd.get("instagram_url"):
-            photo = await _fetch_instagram_photo(upd["instagram_url"])
-            if photo:
-                upd["instagram_photo_url"] = photo
+    if upd.get("linkedin_url") or upd.get("instagram_url"):
+        enrich = await _social_enrichment(upd.get("linkedin_url"), upd.get("instagram_url"))
+        upd.update({k: v for k, v in enrich.items() if v})
     r = await db.lead_briefs.update_one({"id": brief_id, "tenant_id": tenant_id}, {"$set": upd})
     if r.matched_count == 0:
         raise HTTPException(404, "Brief not found")
@@ -357,17 +402,14 @@ async def fetch_photo(brief_id: str, current_user: dict = Depends(get_current_us
     b = await db.lead_briefs.find_one({"id": brief_id, "tenant_id": tenant_id}, {"_id": 0})
     if not b:
         raise HTTPException(404, "Brief not found")
-    upd, source = {}, None
-    if b.get("linkedin_url"):
-        photo = await _fetch_linkedin_photo(b["linkedin_url"])
-        if photo:
-            upd["linkedin_photo_url"], source = photo, "LinkedIn"
-    if not upd and b.get("instagram_url"):
-        photo = await _fetch_instagram_photo(b["instagram_url"])
-        if photo:
-            upd["instagram_photo_url"], source = photo, "Instagram"
+    upd = await _social_enrichment(b.get("linkedin_url"), b.get("instagram_url"))
+    upd = {k: v for k, v in upd.items() if v}
+    if b.get("image_url"):
+        upd.pop("linkedin_photo_url", None)
+        upd.pop("instagram_photo_url", None)
     if not upd:
         return {"ok": False, "message": "LinkedIn/Instagram refused to serve this profile to our server (bot protection). You can retry later — or it may work from the production server."}
+    source = "LinkedIn" if "linkedin_profile" in upd or "linkedin_photo_url" in upd else "Instagram"
     upd["updated_at"] = _now()
     await db.lead_briefs.update_one({"id": brief_id, "tenant_id": tenant_id}, {"$set": upd})
     return {"ok": True, "source": source, **upd}

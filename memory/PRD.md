@@ -2754,3 +2754,10 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Brief Ageing: AgeTag on cards + popup for status=new — "today"/"Nd unreviewed", amber ≥3d, red ≥7d.
 - City Coverage: /lead-briefs/cities now aggregates new_counts; city filter dropdown shows "City — N new".
 - All verified via Playwright in Preview. Redeploy for Production.
+
+## Update — 25 Jun 2026: Social profile enrichment
+- _fetch_profile_meta parses og:title/og:description + JSON-LD (name, location, followers via interactionStatistic dict-or-list) from LinkedIn/Instagram pages; stored as linkedin_profile / instagram_profile on the brief alongside photos.
+- Enrichment runs on create/update and via the renamed "Fetch Profile Info" button (/{id}/fetch-photo endpoint).
+- Popup shows a profile card: name, followers (en-IN formatted), location, bio/description, "auto-fetched from" label.
+- Same access limits as photos: only publicly-served profiles work (Instagram mostly blocked from datacenter IPs).
+- Verified in Preview: demo brief shows "Bill Gates - Gates Foundation, 4,05,99,474 followers · Seattle…, bio + experience/education".
