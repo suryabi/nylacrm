@@ -2747,3 +2747,10 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Single form: save triggers dup check → amber warning box listing matches → button becomes "Save Anyway". Multi-review: amber "Possible duplicate of…" note per card.
 - POST /api/lead-briefs/{id}/fetch-photo: retries LinkedIn/Instagram og:image fetch; honest ok:false message when blocked. "Fetch Photo" button in brief popup (admin, only when no photo + social URL present).
 - KNOWN LIMIT: LinkedIn serves photos only for high-visibility profiles to server IPs (williamhgates=200, marcodemiranda=999 consistently, incl. Googlebot UA + jina proxy). Regular profiles need retry from Production IP or manual Photo URL.
+
+## Update — 25 Jun 2026: Lead Brief popup cleanup + 3 features
+- REMOVED "Add as Lead" conversion (button + mini-form dialog) per user request; backend /converted endpoint left in place but unused.
+- Manual Photo Edit: admin row in brief popup — paste photo URL + "Set Photo" (PUT image_url). Verified working.
+- Brief Ageing: AgeTag on cards + popup for status=new — "today"/"Nd unreviewed", amber ≥3d, red ≥7d.
+- City Coverage: /lead-briefs/cities now aggregates new_counts; city filter dropdown shows "City — N new".
+- All verified via Playwright in Preview. Redeploy for Production.

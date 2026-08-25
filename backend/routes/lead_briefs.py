@@ -109,8 +109,13 @@ async def list_briefs(city: Optional[str] = None, status: Optional[str] = None,
 @router.get("/cities")
 async def brief_cities(current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
-    cities = await db.lead_briefs.distinct("city", {"tenant_id": tenant_id})
-    return {"cities": sorted(c for c in cities if c)}
+    rows = await db.lead_briefs.aggregate([
+        {"$match": {"tenant_id": tenant_id}},
+        {"$group": {"_id": "$city",
+                    "new_count": {"$sum": {"$cond": [{"$eq": ["$status", "new"]}, 1, 0]}}}},
+    ]).to_list(500)
+    cities = sorted(r["_id"] for r in rows if r["_id"])
+    return {"cities": cities, "new_counts": {r["_id"]: r["new_count"] for r in rows if r["_id"]}}
 
 
 @router.post("")
