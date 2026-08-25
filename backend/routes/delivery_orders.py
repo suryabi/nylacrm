@@ -394,9 +394,9 @@ async def create_delivery_order(data: DeliveryOrderCreate, current_user: dict = 
         req_d = date.fromisoformat(str(data.requested_date)[:10])
     except ValueError:
         raise HTTPException(400, "Invalid delivery date.")
-    min_d = datetime.now(timezone.utc).date() + timedelta(days=2)
+    min_d = datetime.now(timezone.utc).date() + timedelta(days=1)
     if req_d < min_d:
-        raise HTTPException(400, f"Delivery date must be on or after {min_d.isoformat()} (at least 2 days from today).")
+        raise HTTPException(400, f"Delivery date must be on or after {min_d.isoformat()} (at least 1 day from today).")
     for it in data.items:
         if not it.quantity or it.quantity <= 0:
             raise HTTPException(400, "Quantity must be greater than zero for every line.")
@@ -740,7 +740,7 @@ async def duplicate_delivery_order(order_id: str, current_user: dict = Depends(g
     sm = await ensure_default_delivery_order_sm(tenant_id)
     initial = get_initial_state(sm)
     now = datetime.now(timezone.utc).isoformat()
-    min_d = datetime.now(timezone.utc).date() + timedelta(days=2)
+    min_d = datetime.now(timezone.utc).date() + timedelta(days=1)
     requested_date = src.get("requested_date")
     try:
         if not requested_date or date.fromisoformat(str(requested_date)[:10]) < min_d:

@@ -2709,3 +2709,6 @@ Root cause: contacts collection has NO account_id linkage in this schema, so _au
 
 ## 2026-08 — Remove failed delivery requests (admin)
 DELETE /delivery-orders/{id} now also allows CEO/Admin to delete orders with fulfillment_status=="failed" (stock-out never created). Detail dialog shows destructive "Remove Failed Request" button (do-permanent-delete-btn) for admins on failed orders. Verified via curl: seeded failed order deleted, 404 after.
+
+## 2026-08 — Delivery request min date: tomorrow
+Min requested_date changed from +2 days to +1 day (create validation, duplicate clamp, frontend calendar min + hint "Earliest delivery is tomorrow"). Verified: tomorrow accepted, today rejected with updated message.

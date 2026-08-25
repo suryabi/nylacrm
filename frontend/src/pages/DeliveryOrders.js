@@ -261,7 +261,7 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
     const bottles = upp > 1 ? (Number(i.quantity) || 0) * upp : (Number(i.quantity) || 0);
     return s + bottles * (Number(i.unit_price) || 0);
   }, 0), [items]);
-  const minDeliveryDate = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + 2); return d; }, []);
+  const minDeliveryDate = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + 1); return d; }, []);
 
   const recipientId = () => {
     const m = { lead: 'lead_id', account: 'account_id', contact: 'contact_id', employee: 'employee_id' };
@@ -399,7 +399,7 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
                     initialFocus />
                 </PopoverContent>
               </Popover>
-              <p className="mt-1 text-xs text-slate-400">Earliest delivery is 2 days from today.</p>
+              <p className="mt-1 text-xs text-slate-400">Earliest delivery is tomorrow.</p>
             </div>
           </div>
 
