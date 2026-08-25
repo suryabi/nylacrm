@@ -6,7 +6,7 @@ import { Badge } from '../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { NotebookPen, Plus, MapPin, ExternalLink, CheckCircle2, UserPlus, Trash2, Loader2, ArrowRight, Linkedin, Instagram, Mail, Phone } from 'lucide-react';
+import { NotebookPen, Plus, MapPin, ExternalLink, CheckCircle2, UserPlus, Trash2, Loader2, ArrowRight, Linkedin, Instagram, Mail, Phone, Sparkles } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
@@ -56,6 +56,9 @@ export default function LeadBriefs() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [addStep, setAddStep] = useState('dump'); // 'dump' → AI extract → 'form'
+  const [dumpText, setDumpText] = useState('');
+  const [extracting, setExtracting] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [leadForm, setLeadForm] = useState(EMPTY_LEAD);
@@ -91,6 +94,21 @@ export default function LeadBriefs() {
     new: briefs.filter((b) => b.status === 'new').length,
     reviewed: briefs.filter((b) => b.status === 'reviewed').length,
   }), [briefs]);
+
+  const openAdd = () => { setForm(EMPTY_FORM); setDumpText(''); setAddStep('dump'); setShowAdd(true); };
+
+  const extractWithAI = async () => {
+    setExtracting(true);
+    try {
+      const r = await fetch(`${API}/api/lead-briefs/ai-extract`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ text: dumpText }) });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || 'Extraction failed');
+      setForm({ ...EMPTY_FORM, ...data.fields });
+      setAddStep('form');
+      toast.success('Fields extracted — review and save');
+    } catch (e) { toast.error(typeof e.message === 'string' ? e.message : 'AI extraction failed'); }
+    finally { setExtracting(false); }
+  };
 
   const saveBrief = async () => {
     setBusy(true);
@@ -171,7 +189,7 @@ export default function LeadBriefs() {
           <NotebookPen className="h-5 w-5 text-[#002FA7]" /> Lead Briefs
         </h1>
         {isAdmin && (
-          <Button className="bg-[#002FA7] hover:bg-[#00227A] rounded-sm" onClick={() => setShowAdd(true)} data-testid="lb-add-btn">
+          <Button className="bg-[#002FA7] hover:bg-[#00227A] rounded-sm" onClick={openAdd} data-testid="lb-add-btn">
             <Plus className="h-4 w-4 mr-1.5" /> Add Brief
           </Button>
         )}
@@ -305,9 +323,37 @@ export default function LeadBriefs() {
       {/* Add brief dialog (admin) */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
         <DialogContent className="max-w-xl" data-testid="lb-add-dialog">
+          {addStep === 'dump' ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-[#002FA7]" /> Add Lead Brief</DialogTitle>
+                <DialogDescription>
+                  Dump everything you've gathered — text from articles, LinkedIn bios, notes, contact details. AI will sort it into the right fields for you to review.
+                </DialogDescription>
+              </DialogHeader>
+              <Textarea
+                placeholder={"Paste the raw information here…\n\ne.g. article text, a LinkedIn about section, phone numbers, emails, profile links — all in one go."}
+                rows={12}
+                value={dumpText}
+                onChange={(e) => setDumpText(e.target.value)}
+                data-testid="lb-dump-text"
+              />
+              <DialogFooter className="flex-wrap gap-2">
+                <button type="button" className="mr-auto text-sm text-slate-500 underline underline-offset-2 hover:text-[#002FA7]"
+                  onClick={() => { setForm(EMPTY_FORM); setAddStep('form'); }} data-testid="lb-skip-ai">
+                  Fill manually instead
+                </button>
+                <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
+                <Button className="bg-[#002FA7] hover:bg-[#00227A]" disabled={extracting || dumpText.trim().length < 20} onClick={extractWithAI} data-testid="lb-extract-btn">
+                  {extracting ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" /> Extracting…</> : <><Sparkles className="h-4 w-4 mr-1.5" /> Extract with AI</>}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
           <DialogHeader>
-            <DialogTitle>Add Lead Brief</DialogTitle>
-            <DialogDescription>Paste information gathered from external sources for the sales team to review.</DialogDescription>
+            <DialogTitle>Review &amp; Save Brief</DialogTitle>
+            <DialogDescription>AI has pre-filled the fields below — correct anything before saving.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <Input placeholder="Title *" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} data-testid="lb-form-title" />
@@ -315,6 +361,7 @@ export default function LeadBriefs() {
               <Select value={form.city} onValueChange={(v) => setForm({ ...form, city: v })}>
                 <SelectTrigger data-testid="lb-form-city"><SelectValue placeholder="City *" /></SelectTrigger>
                 <SelectContent>
+                  {form.city && !masterCities.includes(form.city) && <SelectItem value={form.city}>{form.city}</SelectItem>}
                   {masterCities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -333,12 +380,17 @@ export default function LeadBriefs() {
             <Textarea placeholder="Short summary shown on the card (optional — first lines of content used if empty)" rows={2} value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} data-testid="lb-form-summary" />
             <Textarea placeholder="Full information dump *" rows={6} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} data-testid="lb-form-content" />
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-wrap gap-2">
+            <button type="button" className="mr-auto text-sm text-slate-500 underline underline-offset-2 hover:text-[#002FA7]" onClick={() => setAddStep('dump')} data-testid="lb-back-to-dump">
+              ← Back to info dump
+            </button>
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button className="bg-[#002FA7] hover:bg-[#00227A]" disabled={busy || !form.title.trim() || !form.city.trim() || !form.content.trim()} onClick={saveBrief} data-testid="lb-form-save">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Brief'}
             </Button>
           </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

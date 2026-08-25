@@ -2719,3 +2719,9 @@ Frontend pages/LeadBriefs.js at /lead-briefs (moduleKey lead_briefs, registered 
 
 ## 2026-08 — Lead Briefs v2 (photos, socials, contact fields, master-city dropdown)
 Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create/update/doc). Add-form city is now a dropdown from GET /api/master-locations/flat (master_cities). Card shows photo banner (h-36): image_url → Instagram avatar via unavatar.io/instagram/{handle}?fallback=false → brand-blue initials block (BriefPhoto component with onError fallback; LinkedIn has no public avatar API so use Photo URL for LinkedIn folks). Popup: photo + full content + contacts block (LinkedIn/Instagram links, mailto email, tel phone). Add-as-Lead prefills phone/email; mini-form has Email field. Verified via screenshots (Hyderabad brief shows photo+LinkedIn+email+phone; initials fallback works). User has real briefs in preview already (Canisio Carneiro, Goa).
+
+## Update — 25 Jun 2026: AI-Powered Lead Brief Creation
+- "Add Brief" now opens a 2-step flow: Step 1 is an info-dump textarea; Step 2 is the review form.
+- New endpoint POST /api/lead-briefs/ai-extract (admin, tenant-scoped) uses LlmChat (gpt-5.5, EMERGENT_LLM_KEY, same pattern as water_intelligence.py) to extract title, city (constrained to master cities), summary, content, source_name/url, linkedin_url, instagram_url, email, phone from raw pasted text.
+- Frontend LeadBriefs.js: addStep state ('dump'|'form'), "Extract with AI" button, "Fill manually instead" skip, "Back to info dump" link; unknown AI city is injected into city Select safely.
+- Tested in Preview: backend curl extraction correct; Playwright e2e dump→extract→pre-filled form verified. Production requires redeploy.

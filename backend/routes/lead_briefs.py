@@ -158,3 +158,51 @@ async def mark_converted(brief_id: str, payload: ConvertPayload,
     if r.matched_count == 0:
         raise HTTPException(404, "Brief not found")
     return {"ok": True}
+
+
+class ExtractPayload(BaseModel):
+    text: str
+
+
+AI_EXTRACT_SYSTEM = (
+    "You extract structured lead-brief fields from raw market-intel text for a beverage/FMCG CRM. "
+    "Respond with ONLY a JSON object, no markdown, using exactly these keys: "
+    "title (short headline naming the person/business opportunity), city, summary (max 220 chars card snippet), "
+    "content (clean, well-organised version of the full information, preserve all facts), "
+    "source_name, source_url, linkedin_url, instagram_url, email, phone. "
+    "Use empty string for anything not present. Do not invent facts."
+)
+
+
+@router.post("/ai-extract")
+async def ai_extract(payload: ExtractPayload, current_user: dict = Depends(get_current_user)):
+    if not _is_admin(current_user):
+        raise HTTPException(403, "Only admins can add lead briefs.")
+    text = (payload.text or "").strip()
+    if len(text) < 20:
+        raise HTTPException(400, "Please paste more information to extract from.")
+    import os, json, re
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(500, "AI key not configured")
+    cities = await db.master_cities.find({"is_active": True}, {"_id": 0, "name": 1}).to_list(200)
+    city_names = [c["name"] for c in cities if c.get("name")]
+    chat = LlmChat(api_key=api_key, session_id=f"lead-brief-{uuid.uuid4()}",
+                   system_message=AI_EXTRACT_SYSTEM).with_model("openai", "gpt-5.5")
+    prompt = (f"Known cities (pick the matching one for `city`, or empty string if none match): "
+              f"{json.dumps(city_names)}\n\nRAW INFORMATION:\n{text[:8000]}")
+    try:
+        resp = await chat.send_message(UserMessage(text=prompt))
+        raw = resp if isinstance(resp, str) else str(resp)
+        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip())
+        m = re.search(r"\{.*\}", raw, re.S)
+        data = json.loads(m.group(0) if m else raw)
+    except Exception as e:
+        raise HTTPException(502, f"AI extraction failed: {e}")
+    fields = {k: (data.get(k) or "").strip() if isinstance(data.get(k), str) else ""
+              for k in ("title", "city", "summary", "content", "source_name", "source_url",
+                        "linkedin_url", "instagram_url", "email", "phone")}
+    if not fields["content"]:
+        fields["content"] = text
+    return {"fields": fields}
