@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Checkbox } from '../components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { NotebookPen, Plus, MapPin, ExternalLink, CheckCircle2, UserPlus, Trash2, Loader2, ArrowRight, Linkedin, Instagram, Mail, Phone, Sparkles } from 'lucide-react';
+import { NotebookPen, Plus, MapPin, ExternalLink, CheckCircle2, UserPlus, Trash2, Loader2, ArrowRight, Linkedin, Instagram, Mail, Phone, Sparkles, AlertTriangle, Image as ImageIcon } from 'lucide-react';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
@@ -58,6 +58,8 @@ export default function LeadBriefs() {
   const [extracting, setExtracting] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [multiBriefs, setMultiBriefs] = useState([]);
+  const [multiDups, setMultiDups] = useState([]);
+  const [dupWarning, setDupWarning] = useState(null); // {key, matches}
   const [showLeadForm, setShowLeadForm] = useState(false);
   const [leadForm, setLeadForm] = useState(EMPTY_LEAD);
   const [busy, setBusy] = useState(false);
@@ -93,7 +95,18 @@ export default function LeadBriefs() {
     reviewed: briefs.filter((b) => b.status === 'reviewed').length,
   }), [briefs]);
 
-  const openAdd = () => { setForm(EMPTY_FORM); setDumpText(''); setAddStep('dump'); setShowAdd(true); };
+  const openAdd = () => { setForm(EMPTY_FORM); setDumpText(''); setAddStep('dump'); setDupWarning(null); setMultiDups([]); setShowAdd(true); };
+
+  const checkDuplicates = async (items) => {
+    try {
+      const r = await fetch(`${API}/api/lead-briefs/check-duplicates`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ items: items.map((b) => ({ title: b.title, email: b.email, phone: b.phone })) }),
+      });
+      if (!r.ok) return items.map(() => []);
+      return (await r.json()).duplicates || items.map(() => []);
+    } catch { return items.map(() => []); }
+  };
 
   const extractWithAI = async () => {
     setExtracting(true);
@@ -104,10 +117,12 @@ export default function LeadBriefs() {
       const found = (data.briefs || []).length ? data.briefs : [data.fields];
       if (found.length > 1) {
         setMultiBriefs(found.map((f) => ({ ...EMPTY_FORM, ...f, _include: true })));
+        setMultiDups(await checkDuplicates(found));
         setAddStep('multi');
         toast.success(`${found.length} prospects found — review and save`);
       } else {
         setForm({ ...EMPTY_FORM, ...found[0] });
+        setDupWarning(null);
         setAddStep('form');
         toast.success('Fields extracted — review and save');
       }
@@ -140,6 +155,15 @@ export default function LeadBriefs() {
   const saveBrief = async () => {
     setBusy(true);
     try {
+      const dupKey = `${form.title}|${form.email}|${form.phone}`;
+      if (!dupWarning || dupWarning.key !== dupKey) {
+        const [matches] = await checkDuplicates([form]);
+        if (matches && matches.length > 0) {
+          setDupWarning({ key: dupKey, matches });
+          setBusy(false);
+          return;
+        }
+      }
       const r = await fetch(`${API}/api/lead-briefs`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(form) });
       if (!r.ok) throw new Error((await r.json()).detail || 'Failed');
       toast.success('Lead brief added');
@@ -147,6 +171,22 @@ export default function LeadBriefs() {
       setForm(EMPTY_FORM);
       load();
     } catch (e) { toast.error(typeof e.message === 'string' ? e.message : 'Failed to add brief'); }
+    finally { setBusy(false); }
+  };
+
+  const fetchPhoto = async (brief) => {
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/lead-briefs/${brief.id}/fetch-photo`, { method: 'POST', headers: authHeaders() });
+      const d = await r.json();
+      if (d.ok) {
+        toast.success(`Photo fetched from ${d.source}`);
+        setSelected((s) => (s ? { ...s, linkedin_photo_url: d.linkedin_photo_url || s.linkedin_photo_url, instagram_photo_url: d.instagram_photo_url || s.instagram_photo_url } : s));
+        load();
+      } else {
+        toast.warning(d.message || 'Could not fetch the photo right now.');
+      }
+    } catch { toast.error('Photo fetch failed'); }
     finally { setBusy(false); }
   };
 
@@ -331,6 +371,11 @@ export default function LeadBriefs() {
                     <Trash2 className="h-4 w-4 mr-1.5" /> Delete
                   </Button>
                 )}
+                {isAdmin && !briefImage(selected) && (selected.linkedin_url || selected.instagram_url) && (
+                  <Button variant="outline" disabled={busy} onClick={() => fetchPhoto(selected)} data-testid="lb-fetch-photo-btn">
+                    <ImageIcon className="h-4 w-4 mr-1.5 text-[#002FA7]" /> Fetch Photo
+                  </Button>
+                )}
                 {selected.status === 'new' && (
                   <Button variant="outline" disabled={busy} onClick={() => markReviewed(selected)} data-testid="lb-review-btn">
                     <CheckCircle2 className="h-4 w-4 mr-1.5 text-emerald-600" /> Mark Reviewed
@@ -398,6 +443,12 @@ export default function LeadBriefs() {
                     </div>
                     {b._include && (
                       <div className="pl-8 space-y-3">
+                        {(multiDups[i] || []).length > 0 && (
+                          <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-start gap-1.5" data-testid={`lb-multi-dup-${i}`}>
+                            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                            <span>Possible duplicate of: {multiDups[i].map((m) => `${m.title} (${m.city}) — ${m.matched_on.join(', ')}`).join('; ')}</span>
+                          </div>
+                        )}
                         <div className="grid grid-cols-2 gap-3">
                           <Input placeholder="LinkedIn profile URL" value={b.linkedin_url} onChange={(e) => updateMulti(i, { linkedin_url: e.target.value })} data-testid={`lb-multi-linkedin-${i}`} />
                           <Input placeholder="Instagram profile URL" value={b.instagram_url} onChange={(e) => updateMulti(i, { instagram_url: e.target.value })} data-testid={`lb-multi-instagram-${i}`} />
@@ -456,14 +507,25 @@ export default function LeadBriefs() {
             </div>
             <Textarea placeholder="Short summary shown on the card (optional — first lines of content used if empty)" rows={2} value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} data-testid="lb-form-summary" />
             <Textarea placeholder="Full information dump *" rows={6} value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} data-testid="lb-form-content" />
+            {dupWarning && dupWarning.matches.length > 0 && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" data-testid="lb-dup-warning">
+                <p className="font-semibold flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" /> Possible duplicate{dupWarning.matches.length > 1 ? 's' : ''} found</p>
+                <ul className="mt-1.5 space-y-0.5 list-disc pl-5">
+                  {dupWarning.matches.map((m) => (
+                    <li key={m.id}>{m.title} ({m.city}) — matched on {m.matched_on.join(', ')}</li>
+                  ))}
+                </ul>
+                <p className="mt-1.5 text-xs">Click "Save Anyway" if this is genuinely a new brief.</p>
+              </div>
+            )}
           </div>
           <DialogFooter className="flex-wrap gap-2">
             <button type="button" className="mr-auto text-sm text-slate-500 underline underline-offset-2 hover:text-[#002FA7]" onClick={() => setAddStep('dump')} data-testid="lb-back-to-dump">
               ← Back to info dump
             </button>
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button className="bg-[#002FA7] hover:bg-[#00227A]" disabled={busy || !form.title.trim() || !form.city.trim() || !form.content.trim()} onClick={saveBrief} data-testid="lb-form-save">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Brief'}
+            <Button className={dupWarning && dupWarning.matches.length > 0 ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#002FA7] hover:bg-[#00227A]'} disabled={busy || !form.title.trim() || !form.city.trim() || !form.content.trim()} onClick={saveBrief} data-testid="lb-form-save">
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : (dupWarning && dupWarning.matches.length > 0 ? 'Save Anyway' : 'Save Brief')}
             </Button>
           </DialogFooter>
             </>

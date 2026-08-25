@@ -272,3 +272,97 @@ async def ai_extract(payload: ExtractPayload, current_user: dict = Depends(get_c
     if len(briefs) == 1 and not briefs[0]["content"]:
         briefs[0]["content"] = text
     return {"briefs": briefs, "fields": briefs[0]}
+
+
+class DupItem(BaseModel):
+    title: Optional[str] = ""
+    email: Optional[str] = ""
+    phone: Optional[str] = ""
+
+
+class DupCheckPayload(BaseModel):
+    items: list[DupItem]
+
+
+def _norm_title(t: str) -> str:
+    return re.sub(r"[^a-z0-9 ]", " ", (t or "").lower()).strip()
+
+
+def _name_part(t: str) -> str:
+    """Prospect-name portion of a title: text before the first separator."""
+    head = re.split(r"—|-|:|,| at | from | of ", t or "", 1)[0]
+    return _norm_title(head)
+
+
+def _titles_match(a: str, b: str) -> bool:
+    na, nb = _norm_title(a), _norm_title(b)
+    if not na or not nb:
+        return False
+    if na == nb:
+        return True
+    if len(na) >= 5 and len(nb) >= 5 and (na in nb or nb in na):
+        return True
+    pa, pb = _name_part(a), _name_part(b)
+    return bool(pa and pb and len(pa) >= 5 and len(pb) >= 5 and (pa == pb or pa in nb or pb in na))
+
+
+def _norm_phones(p: str) -> set:
+    """Split multi-number strings and normalise each to its last 10 digits."""
+    out = set()
+    for part in re.split(r"[;,/|]| and ", p or ""):
+        digits = re.sub(r"\D", "", part)
+        if len(digits) >= 7:
+            out.add(digits[-10:])
+    return out
+
+
+@router.post("/check-duplicates")
+async def check_duplicates(payload: DupCheckPayload, current_user: dict = Depends(get_current_user)):
+    if not _is_admin(current_user):
+        raise HTTPException(403, "Only admins can add lead briefs.")
+    tenant_id = get_current_tenant_id()
+    existing = await db.lead_briefs.find(
+        {"tenant_id": tenant_id}, {"_id": 0, "id": 1, "title": 1, "city": 1, "email": 1, "phone": 1}
+    ).to_list(2000)
+    results = []
+    for item in payload.items:
+        ne, np_ = (item.email or "").strip().lower(), _norm_phones(item.phone)
+        matches = []
+        for b in existing:
+            be, bp = (b.get("email") or "").strip().lower(), _norm_phones(b.get("phone"))
+            matched_on = []
+            if _titles_match(item.title, b.get("title")):
+                matched_on.append("name")
+            if ne and be and ne == be:
+                matched_on.append("email")
+            if np_ and bp and np_ & bp:
+                matched_on.append("phone")
+            if matched_on:
+                matches.append({"id": b["id"], "title": b.get("title"), "city": b.get("city"),
+                                "matched_on": matched_on})
+        results.append(matches[:5])
+    return {"duplicates": results}
+
+
+@router.post("/{brief_id}/fetch-photo")
+async def fetch_photo(brief_id: str, current_user: dict = Depends(get_current_user)):
+    if not _is_admin(current_user):
+        raise HTTPException(403, "Only admins can refresh photos.")
+    tenant_id = get_current_tenant_id()
+    b = await db.lead_briefs.find_one({"id": brief_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "Brief not found")
+    upd, source = {}, None
+    if b.get("linkedin_url"):
+        photo = await _fetch_linkedin_photo(b["linkedin_url"])
+        if photo:
+            upd["linkedin_photo_url"], source = photo, "LinkedIn"
+    if not upd and b.get("instagram_url"):
+        photo = await _fetch_instagram_photo(b["instagram_url"])
+        if photo:
+            upd["instagram_photo_url"], source = photo, "Instagram"
+    if not upd:
+        return {"ok": False, "message": "LinkedIn/Instagram refused to serve this profile to our server (bot protection). You can retry later — or it may work from the production server."}
+    upd["updated_at"] = _now()
+    await db.lead_briefs.update_one({"id": brief_id, "tenant_id": tenant_id}, {"$set": upd})
+    return {"ok": True, "source": source, **upd}

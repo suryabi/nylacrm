@@ -2741,3 +2741,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - /api/lead-briefs/ai-extract now returns {briefs:[...]} — AI splits messy dumps into one brief per prospect, attaching correct links/contacts/city to each; unattachable intel goes under a "General notes:" section of the most relevant brief.
 - Frontend: single prospect → existing review form; multiple → new 'multi' review step (stacked editable cards, include checkboxes, Save All (n)). No cap on prospect count.
 - Verified in Preview: 3-prospect curl split correct (incl. Bengaluru city mapping + General notes); UI e2e tested with 2 prospects, untick + Save All worked. Redeploy for Production.
+
+## Update — 25 Jun 2026: Duplicate Warning + Fetch Photo retry
+- POST /api/lead-briefs/check-duplicates: matches on prospect name (title/name-part, min-length guarded), email (exact), phone (multi-number aware, last-10-digit sets). Verified: name/email/phone matches + zero false positives.
+- Single form: save triggers dup check → amber warning box listing matches → button becomes "Save Anyway". Multi-review: amber "Possible duplicate of…" note per card.
+- POST /api/lead-briefs/{id}/fetch-photo: retries LinkedIn/Instagram og:image fetch; honest ok:false message when blocked. "Fetch Photo" button in brief popup (admin, only when no photo + social URL present).
+- KNOWN LIMIT: LinkedIn serves photos only for high-visibility profiles to server IPs (williamhgates=200, marcodemiranda=999 consistently, incl. Googlebot UA + jina proxy). Regular profiles need retry from Production IP or manual Photo URL.
