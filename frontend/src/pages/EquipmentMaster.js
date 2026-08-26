@@ -35,6 +35,56 @@ const DOC_CATEGORIES = [
 ];
 const fmtSize = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
+const CameraDialog = ({ open, onClose, onCapture }) => {
+  const videoRef = React.useRef(null);
+  const streamRef = React.useRef(null);
+  const [camError, setCamError] = useState('');
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!open) return undefined;
+    setCamError(''); setReady(false);
+    navigator.mediaDevices?.getUserMedia({ video: { facingMode: 'environment' } })
+      .then((s) => {
+        streamRef.current = s;
+        if (videoRef.current) { videoRef.current.srcObject = s; videoRef.current.onloadedmetadata = () => setReady(true); }
+      })
+      .catch(() => setCamError('Camera not available or permission denied. Please allow camera access in your browser, or use "From gallery / files" instead.'));
+    return () => { streamRef.current?.getTracks().forEach((t) => t.stop()); streamRef.current = null; };
+  }, [open]);
+  const capture = () => {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+    canvas.getContext('2d').drawImage(v, 0, 0);
+    canvas.toBlob((blob) => {
+      if (blob) onCapture(new File([blob], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' }));
+      onClose();
+    }, 'image/jpeg', 0.9);
+  };
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg" data-testid="eq-camera-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><CameraIcon className="h-5 w-5 text-[#002FA7]" /> Take Photo</DialogTitle>
+          <DialogDescription>Point the camera at the equipment and hit Capture.</DialogDescription>
+        </DialogHeader>
+        {camError ? (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-3" data-testid="eq-camera-error">{camError}</p>
+        ) : (
+          <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-md bg-black aspect-video object-contain" data-testid="eq-camera-video" />
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button className="bg-[#002FA7] hover:bg-[#00227A]" disabled={!ready || !!camError} onClick={capture} data-testid="eq-camera-capture-btn">
+            <CameraIcon className="h-4 w-4 mr-1.5" /> Capture
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const AuthImg = ({ src, alt, className, onClick, testid }) => {
   const [url, setUrl] = useState(null);
   useEffect(() => {
@@ -101,6 +151,7 @@ export default function EquipmentMaster() {
   const [docCategory, setDocCategory] = useState('photo');
   const [uploading, setUploading] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
+  const [cameraFor, setCameraFor] = useState(null); // 'docs' | 'log'
 
   const uploadDoc = async (fileList, categoryOverride) => {
     if (!fileList?.length) return;
@@ -570,13 +621,11 @@ export default function EquipmentMaster() {
             <div>
               <Label>Evidence Photos</Label>
               <div className="mt-1 flex flex-wrap items-center gap-2">
-                <label className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#002FA7] text-white text-sm font-medium cursor-pointer hover:bg-[#00227A]" data-testid="eq-log-camera-label">
-                  <CameraIcon className="h-4 w-4" /> {logUploading ? 'Uploading…' : 'Take Photo'}
-                  <input type="file" accept="image/*" capture="environment" className="hidden" disabled={logUploading}
-                    onChange={(e) => { uploadLogPhoto(e.target.files); e.target.value = ''; }} data-testid="eq-log-camera-input" />
-                </label>
+                <Button className="h-9 bg-[#002FA7] hover:bg-[#00227A]" disabled={logUploading} onClick={() => setCameraFor('log')} data-testid="eq-log-camera-label">
+                  <CameraIcon className="h-4 w-4 mr-1.5" /> {logUploading ? 'Uploading…' : 'Take Photo'}
+                </Button>
                 <label className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-background text-sm font-medium cursor-pointer hover:bg-slate-50" data-testid="eq-log-upload-label">
-                  <Upload className="h-4 w-4" /> From gallery
+                  <Upload className="h-4 w-4" /> From gallery / files
                   <input type="file" accept="image/*" multiple className="hidden" disabled={logUploading}
                     onChange={(e) => { uploadLogPhoto(e.target.files); e.target.value = ''; }} data-testid="eq-log-upload-input" />
                 </label>
@@ -621,11 +670,9 @@ export default function EquipmentMaster() {
                 accept={docCategory === 'photo' ? 'image/*' : undefined}
                 onChange={(e) => { uploadDoc(e.target.files); e.target.value = ''; }} data-testid="eq-doc-file-input" />
             </label>
-            <label className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#002FA7] text-white text-sm font-medium cursor-pointer hover:bg-[#00227A]" data-testid="eq-doc-camera-label">
-              <CameraIcon className="h-4 w-4" /> Take Photo
-              <input type="file" accept="image/*" capture="environment" className="hidden" disabled={uploading}
-                onChange={(e) => { uploadDoc(e.target.files, 'photo'); e.target.value = ''; }} data-testid="eq-doc-camera-input" />
-            </label>
+            <Button className="h-9 bg-[#002FA7] hover:bg-[#00227A]" disabled={uploading} onClick={() => setCameraFor('docs')} data-testid="eq-doc-camera-label">
+              <CameraIcon className="h-4 w-4 mr-1.5" /> Take Photo
+            </Button>
             <span className="text-xs text-muted-foreground">Max 15 MB per file</span>
           </div>
           {DOC_CATEGORIES.map(({ key, label, icon: Icon }) => {
@@ -677,6 +724,9 @@ export default function EquipmentMaster() {
           )}
         </DialogContent>
       </Dialog>
+
+      <CameraDialog open={!!cameraFor} onClose={() => setCameraFor(null)}
+        onCapture={(file) => (cameraFor === 'log' ? uploadLogPhoto([file]) : uploadDoc([file], 'photo'))} />
 
       {/* Photo preview lightbox */}
       <Dialog open={!!previewFile} onOpenChange={(o) => !o && setPreviewFile(null)}>

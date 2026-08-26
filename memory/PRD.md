@@ -2796,3 +2796,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - LogDateBody gains photo_ids; log-maintenance/log-replacement embed {id, filename} photo refs into the log entry (_log_photos_meta resolves from attachments).
 - Log dialog: "Take Photo" (camera capture) + "From gallery" buttons upload immediately as photo category (auto-named), thumbnails preview in dialog, ids sent with the log. Fixed babel error (await inside setState updater).
 - Verified via Playwright + API: log entry stored with photos [{id, filename PHOT_5_Micron_Filter_03.jpg}].
+
+## Update — 26 Jun 2026: In-app camera (fix for "Take Photo shows file picker")
+- Root cause: capture="environment" attr only opens camera on mobile; desktop browsers always show a file picker (expected browser behavior).
+- Fix: CameraDialog component using getUserMedia (facingMode environment) → live <video> preview → Capture draws to canvas → JPEG file uploaded (docs → photo category; log → log photos). Graceful amber error when camera denied/absent, pointing at "From gallery / files". Works on desktop webcam + phone; HTTPS required (both envs have it).
+- Verified via Playwright with camera permission granted: dialog + live video + capture + upload thumbnail all working.
