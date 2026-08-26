@@ -2769,3 +2769,6 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — 26 Jun 2026: Delete Event in Marketing module
 - Events list (/events, Events.js): trash icon on each event card (stopPropagation) → confirm dialog warning that stakeholders/tasks/budget items are removed too → DELETE /api/events/{id} (endpoint pre-existed in event_journeys.py with cascade deletes).
 - Verified via Playwright in Preview: delete buttons render on cards, confirm dialog opens; cancelled without touching real data.
+
+## Update — 26 Jun 2026: Lead Briefs in Marketing nav
+- Added Lead Briefs item to marketingNavigationGroups in DashboardLayout.js (roles: CEO/Director/Admin/System Admin/Marketing Manager/Marketing Executive/Content Creator). Still present in Sales nav. Verified via Playwright with Marketing module selected.
