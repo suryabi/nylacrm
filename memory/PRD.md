@@ -2787,3 +2787,7 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — 26 Jun 2026: Equipment photo thumbnails + preview
 - Photos category renders a thumbnail grid (AuthImg component fetches via authenticated blob URL); click opens a lightbox dialog with full image, size/uploader info, Download and Delete. Hover ✕ on thumbnails for quick delete.
 - Verified via Playwright: 2 thumbnails rendered, lightbox opened with image. Fake text-based .jpg test file removed from demo data.
+
+## Update — 26 Jun 2026: Camera capture for equipment photos
+- "Take Photo" button in Documents dialog: <input type="file" accept="image/*" capture="environment"> opens the phone rear camera directly; upload forced to 'photo' category (auto-named PHOT_..._NN). Desktop falls back to file picker.
+- Verified in mobile viewport via Playwright: capture attrs present, simulated capture uploaded and thumbnail appeared.

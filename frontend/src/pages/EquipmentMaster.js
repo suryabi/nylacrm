@@ -7,7 +7,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
-import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText } from 'lucide-react';
+import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -81,14 +81,14 @@ export default function EquipmentMaster() {
   const [uploading, setUploading] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
 
-  const uploadDoc = async (fileList) => {
+  const uploadDoc = async (fileList, categoryOverride) => {
     if (!fileList?.length) return;
     setUploading(true);
     try {
       for (const f of Array.from(fileList)) {
         const fd = new FormData();
         fd.append('file', f);
-        fd.append('category', docCategory);
+        fd.append('category', categoryOverride || docCategory);
         const res = await fetch(`${API_URL}/api/production/equipment/${docsTarget.id}/files`, {
           method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` }, body: fd,
         });
@@ -571,6 +571,11 @@ export default function EquipmentMaster() {
               <input type="file" multiple className="hidden" disabled={uploading}
                 accept={docCategory === 'photo' ? 'image/*' : undefined}
                 onChange={(e) => { uploadDoc(e.target.files); e.target.value = ''; }} data-testid="eq-doc-file-input" />
+            </label>
+            <label className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#002FA7] text-white text-sm font-medium cursor-pointer hover:bg-[#00227A]" data-testid="eq-doc-camera-label">
+              <CameraIcon className="h-4 w-4" /> Take Photo
+              <input type="file" accept="image/*" capture="environment" className="hidden" disabled={uploading}
+                onChange={(e) => { uploadDoc(e.target.files, 'photo'); e.target.value = ''; }} data-testid="eq-doc-camera-input" />
             </label>
             <span className="text-xs text-muted-foreground">Max 15 MB per file</span>
           </div>
