@@ -186,6 +186,21 @@ export default function EquipmentMaster() {
     } catch { toast.error('Download failed'); }
   };
 
+  const downloadZip = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/production/equipment/${docsTarget.id}/files-zip`, { headers: authHeaders() });
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(docsTarget.name || 'equipment').replace(/\s+/g, '_')}_documents.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Documents zip downloaded');
+    } catch { toast.error('Zip download failed'); }
+  };
+
   const deleteDoc = async (f) => {
     if (!window.confirm(`Delete "${f.filename}"?`)) return;
     const res = await fetch(`${API_URL}/api/production/equipment/${docsTarget.id}/files/${f.id}`, { method: 'DELETE', headers: authHeaders() });
@@ -674,6 +689,11 @@ export default function EquipmentMaster() {
               <CameraIcon className="h-4 w-4 mr-1.5" /> Take Photo
             </Button>
             <span className="text-xs text-muted-foreground">Max 15 MB per file</span>
+            {(docsTarget?.attachments || []).length > 0 && (
+              <Button variant="outline" className="h-9 ml-auto" onClick={downloadZip} data-testid="eq-doc-zip-btn">
+                <Download className="h-4 w-4 mr-1.5 text-[#002FA7]" /> Download all (zip)
+              </Button>
+            )}
           </div>
           {DOC_CATEGORIES.map(({ key, label, icon: Icon }) => {
             const files = (docsTarget?.attachments || []).filter((f) => f.category === key);

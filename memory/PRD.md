@@ -2801,3 +2801,7 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Root cause: capture="environment" attr only opens camera on mobile; desktop browsers always show a file picker (expected browser behavior).
 - Fix: CameraDialog component using getUserMedia (facingMode environment) → live <video> preview → Capture draws to canvas → JPEG file uploaded (docs → photo category; log → log photos). Graceful amber error when camera denied/absent, pointing at "From gallery / files". Works on desktop webcam + phone; HTTPS required (both envs have it).
 - Verified via Playwright with camera permission granted: dialog + live video + capture + upload thumbnail all working.
+
+## Update — 26 Jun 2026: Equipment documents zip export
+- GET /api/production/equipment/{id}/files-zip: in-memory zip, category folders (Photos/Certifications/Vendor_Documents/Other_Documents), filename {Equipment_Name}_documents.zip; 404 if no docs.
+- "Download all (zip)" button in Documents dialog (shows only when attachments exist). Verified: zip contained all 8 files in folders; UI download + toast confirmed via Playwright.

@@ -383,3 +383,31 @@ async def delete_equipment_file(equipment_id: str, file_id: str,
         {"$pull": {"attachments": {"id": file_id}},
          "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
     return {"deleted": True}
+
+
+@router.get("/{equipment_id}/files-zip")
+async def download_equipment_zip(equipment_id: str, current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id},
+                                            {"_id": 0, "name": 1, "attachments": 1})
+    if not eq:
+        raise HTTPException(404, "Equipment not found")
+    attachments = eq.get("attachments", [])
+    if not attachments:
+        raise HTTPException(404, "No documents to export")
+    import io
+    import zipfile
+    from fastapi.responses import Response
+    folder_map = {"photo": "Photos", "certification": "Certifications",
+                  "quotation": "Vendor_Documents", "document": "Other_Documents"}
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in attachments:
+            path = os.path.join(EQ_UPLOAD_DIR, f"{f['id']}_{f['filename']}")
+            if os.path.exists(path):
+                zf.write(path, f"{folder_map.get(f.get('category'), 'Other_Documents')}/{f['filename']}")
+    import re as _re
+    zip_name = _re.sub(r"[^A-Za-z0-9_]", "", (eq.get("name") or "equipment").replace(" ", "_")) + "_documents.zip"
+    return Response(buf.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{zip_name}"'})
