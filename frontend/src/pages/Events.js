@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
-import { CalendarRange, Plus, MapPin, Users, AlertTriangle, RefreshCw, Copy } from 'lucide-react';
+import { CalendarRange, Plus, MapPin, Users, AlertTriangle, RefreshCw, Copy, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -135,6 +135,20 @@ export default function Events() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const deleteEvent = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/events/${deleteTarget.id}`, { method: 'DELETE', headers: authHeaders() });
+      if (!res.ok) throw new Error();
+      toast.success(`Event "${deleteTarget.name}" deleted`);
+      setDeleteTarget(null);
+      load();
+    } catch { toast.error('Failed to delete event'); }
+    finally { setDeleting(false); }
+  };
 
   useEffect(() => {
     if (searchParams.get('new') === '1') {
@@ -206,7 +220,14 @@ export default function Events() {
                       {ev.event_type && <p className="text-xs text-muted-foreground">{ev.event_type}</p>}
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <Badge variant="outline" className={STATUS_STYLE[ev.status] || ''}>{(ev.status || '').replace('_', ' ')}</Badge>
+                      <div className="flex items-center gap-1">
+                        <Badge variant="outline" className={STATUS_STYLE[ev.status] || ''}>{(ev.status || '').replace('_', ' ')}</Badge>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 rounded-sm text-slate-400 hover:text-[#FF3B30] hover:bg-red-50"
+                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(ev); }}
+                          data-testid={`event-delete-${ev.name.replace(/\s/g, '-')}`}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                       {isLive && <Badge className="bg-emerald-500 text-white border-emerald-500" data-testid={`event-live-${ev.name.replace(/\s/g, '-')}`}>Live now</Badge>}
                       {isUpcoming && <Badge className="bg-amber-100 text-amber-800 border-amber-200" data-testid={`event-upcoming-${ev.name.replace(/\s/g, '-')}`}>{daysTo === 1 ? 'Tomorrow' : `In ${daysTo} days`}</Badge>}
                     </div>
@@ -245,6 +266,23 @@ export default function Events() {
             <DialogDescription>Creating an event starts its journey — you'll add stakeholders, plan and budget next.</DialogDescription>
           </DialogHeader>
           <EventForm onCancel={() => setShowNew(false)} onSaved={(d) => { setShowNew(false); navigate(`/events/${d.id}`); }} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <DialogContent className="max-w-md" data-testid="event-delete-dialog">
+          <DialogHeader>
+            <DialogTitle>Delete Event?</DialogTitle>
+            <DialogDescription>
+              "{deleteTarget?.name}" and all its stakeholders, tasks and budget items will be permanently removed. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button className="bg-[#FF3B30] hover:bg-red-700 text-white" disabled={deleting} onClick={deleteEvent} data-testid="event-delete-confirm">
+              {deleting ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Delete Event'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

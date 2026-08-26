@@ -2765,3 +2765,7 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — 25 Jun 2026: Profile-aware AI extraction + Edit brief
 - ai-extract now finds LinkedIn/Instagram URLs in the dump (regex, trailing-punctuation stripped — fixed bug where "url." broke the fetch), fetches live profile meta concurrently, and feeds it to the AI as VERIFIED PROFILE DATA. Verified: bare LinkedIn link produced brief enriched with name/role/org/location.
 - Edit brief: admin "Edit" button in popup opens the review form pre-filled (editingId state); saves via PUT; dup-check skipped when editing; header/button switch to "Edit Brief"/"Save Changes". Verified via Playwright.
+
+## Update — 26 Jun 2026: Delete Event in Marketing module
+- Events list (/events, Events.js): trash icon on each event card (stopPropagation) → confirm dialog warning that stakeholders/tasks/budget items are removed too → DELETE /api/events/{id} (endpoint pre-existed in event_journeys.py with cascade deletes).
+- Verified via Playwright in Preview: delete buttons render on cards, confirm dialog opens; cancelled without touching real data.
