@@ -699,7 +699,7 @@ export default function MarketingRequestDetail() {
               <span className="flex items-center gap-1.5">
                 <Calendar className="h-4 w-4 text-emerald-500" /> Due {fmtDate(req.requested_due_date)}
               </span>
-              <Popover open={estOpen} onOpenChange={setEstOpen}>
+              <Popover modal={true} open={estOpen} onOpenChange={setEstOpen}>
                 <PopoverTrigger asChild>
                   <button
                     className="flex items-center gap-1.5 group hover:text-emerald-700 transition-colors focus:outline-none"
@@ -719,8 +719,7 @@ export default function MarketingRequestDetail() {
                     mode="single"
                     selected={req.estimated_finished_date ? parseISO(req.estimated_finished_date) : undefined}
                     onSelect={(d) => { if (d) saveEstDate(format(d, 'yyyy-MM-dd')); }}
-                    initialFocus
-                  />
+                                      />
                   {req.estimated_finished_date && (
                     <div className="border-t border-slate-100 p-2">
                       <Button

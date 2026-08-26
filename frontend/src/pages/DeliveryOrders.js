@@ -379,7 +379,7 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
             </div>
             <div>
               <Label>Delivery date <span className="text-rose-500">*</span></Label>
-              <Popover>
+              <Popover modal={true}>
                 <PopoverTrigger asChild>
                   <Button type="button" variant="outline"
                     className={`w-full justify-start text-left font-normal ${requestedDate ? 'text-slate-800' : 'text-slate-400'}`}
@@ -396,7 +396,7 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
                     onSelect={(d) => d && setRequestedDate(toYMD(d))}
                     disabled={{ before: minDeliveryDate }}
                     defaultMonth={requestedDate ? new Date(requestedDate + 'T00:00:00') : minDeliveryDate}
-                    initialFocus />
+                    />
                 </PopoverContent>
               </Popover>
               <p className="mt-1 text-xs text-slate-400">Earliest delivery is tomorrow.</p>

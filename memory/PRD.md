@@ -2810,3 +2810,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Root cause: shadcn Input applies display:flex to ALL inputs; iOS Safari has a documented WebKit bug where flex-displayed date/time inputs collapse the value area and taps fail to open the native picker (desktop unaffected).
 - Fix in index.css: -webkit-appearance none + ::-webkit-date-and-time-value text-align, and iOS-only (@supports -webkit-touch-callout) display:block + min-height + min-logical-width for date/time/datetime-local/month inputs. Also touch-action: manipulation on rdp/popover buttons and onOpenAutoFocus preventDefault on DatePicker popovers.
 - Desktop verified unchanged (display stays flex, input works). True iOS verification requires user's device — asked user to check Preview URL on iPhone/iPad.
+
+## Update — 26 Jun 2026: iOS calendar-popover fix (design request / lead detail / print request etc.)
+- Second root cause (beyond native date-input flex bug): shadcn Calendar inside Radix Popover doesn't receive taps on iOS Safari (known radix-ui/primitives + shadcn issue). Fix: modal={true} on the Popover + remove initialFocus + :has(.rdp) pointer-events CSS.
+- Patched: ui/date-picker.jsx (both pickers), DeliveriesTab.jsx (reschedule), DesignRequestNewDetail.js (est date), MarketingRequestDetail.js, DeliveryOrders.js, NewMarketingRequest.js, NewDesignRequestNew.js (mr-due-input), AccountDetail.js (DateField).
+- LeadDetail.js uses native type="date" inputs — covered by the earlier iOS CSS fix.
+- Desktop verified via Playwright (design request due-date select works). iOS verification pending on user's device via Preview URL.

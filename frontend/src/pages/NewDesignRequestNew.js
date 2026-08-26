@@ -384,7 +384,7 @@ export default function NewDesignRequestNew() {
               <Label className={LABEL_CLS}>
                 <CalendarClock className="h-3.5 w-3.5" /> Requested Due Date *
               </Label>
-              <Popover>
+              <Popover modal={true}>
                 <PopoverTrigger asChild>
                   <button
                     type="button"
@@ -402,7 +402,6 @@ export default function NewDesignRequestNew() {
                     onSelect={(d) => d && setForm({ ...form, requested_due_date: format(d, 'yyyy-MM-dd') })}
                     disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
                     classNames={CAL_CLASSNAMES}
-                    initialFocus
                   />
                 </PopoverContent>
               </Popover>

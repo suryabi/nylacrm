@@ -2319,7 +2319,7 @@ export default function DeliveriesTab({
                           <p className="text-xs text-slate-500">
                             {new Date(delivery.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </p>
-                          <Popover open={openDatePickerId === delivery.id} onOpenChange={(o) => setOpenDatePickerId(o ? delivery.id : null)}>
+                          <Popover modal={true} open={openDatePickerId === delivery.id} onOpenChange={(o) => setOpenDatePickerId(o ? delivery.id : null)}>
                             <PopoverTrigger asChild>
                               <button
                                 onClick={(e) => e.stopPropagation()}
@@ -2340,8 +2340,7 @@ export default function DeliveriesTab({
                                 selected={delivery.delivery_date ? new Date(String(delivery.delivery_date).slice(0, 10) + 'T00:00:00') : undefined}
                                 defaultMonth={delivery.delivery_date ? new Date(String(delivery.delivery_date).slice(0, 10) + 'T00:00:00') : undefined}
                                 onSelect={(d) => updateDeliveryDate(delivery.id, d)}
-                                initialFocus
-                              />
+                                                              />
                             </PopoverContent>
                           </Popover>
                         </div>

@@ -34,7 +34,7 @@ const DatePicker = React.forwardRef(({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover modal={true} open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           ref={ref}
@@ -73,7 +73,6 @@ const DatePicker = React.forwardRef(({
             if (maxDate && date > maxDate) return true
             return false
           }}
-          initialFocus
           className="rounded-lg"
         />
       </PopoverContent>
@@ -102,7 +101,7 @@ const DateRangePicker = React.forwardRef(({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover modal={true} open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           ref={ref}
@@ -139,7 +138,6 @@ const DateRangePicker = React.forwardRef(({
           selected={value}
           onSelect={handleSelect}
           numberOfMonths={2}
-          initialFocus
           className="rounded-lg"
         />
       </PopoverContent>

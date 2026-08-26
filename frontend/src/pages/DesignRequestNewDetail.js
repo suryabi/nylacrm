@@ -752,7 +752,7 @@ export default function DesignRequestNewDetail() {
                   <p className={`text-sm font-bold ${overdue ? 'text-red-600' : 'text-slate-900'}`}>{fmtDate(req.requested_due_date)}</p>
                 </div>
               </div>
-              <Popover open={estOpen} onOpenChange={setEstOpen}>
+              <Popover modal={true} open={estOpen} onOpenChange={setEstOpen}>
                 <PopoverTrigger asChild>
                   <button
                     className="inline-flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2 hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors group text-left"
@@ -777,8 +777,7 @@ export default function DesignRequestNewDetail() {
                     mode="single"
                     selected={req.estimated_finished_date ? parseISO(req.estimated_finished_date) : undefined}
                     onSelect={(d) => { if (d) saveEstDate(format(d, 'yyyy-MM-dd')); }}
-                    initialFocus
-                  />
+                                      />
                   {req.estimated_finished_date && (
                     <div className="border-t border-slate-100 p-2">
                       <Button

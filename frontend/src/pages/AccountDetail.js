@@ -284,7 +284,7 @@ function DateField({ label, value, onChange, testId }) {
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
-      <Popover>
+      <Popover modal={true}>
         <PopoverTrigger asChild>
           <Button variant="outline" className="w-full justify-start text-left font-normal h-10" data-testid={testId}>
             <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />
@@ -296,7 +296,6 @@ function DateField({ label, value, onChange, testId }) {
             mode="single"
             selected={value ? new Date(value) : undefined}
             onSelect={(d) => onChange(d ? format(d, 'yyyy-MM-dd') : '')}
-            initialFocus
           />
         </PopoverContent>
       </Popover>
