@@ -2772,3 +2772,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 
 ## Update — 26 Jun 2026: Lead Briefs in Marketing nav
 - Added Lead Briefs item to marketingNavigationGroups in DashboardLayout.js (roles: CEO/Director/Admin/System Admin/Marketing Manager/Marketing Executive/Content Creator). Still present in Sales nav. Verified via Playwright with Marketing module selected.
+
+## Update — 26 Jun 2026: Equipment document attachments
+- equipment_master.py: POST/GET/DELETE /api/production/equipment/{id}/files with category form field (photo|certification|quotation|document), 15MB cap, files at /app/backend/uploads/equipment_docs, meta in `attachments` array on equipment doc.
+- EquipmentMaster.js: paperclip button per row with count badge → Documents dialog (category select, multi-file upload, grouped lists per category, authenticated blob download, delete with confirm).
+- NOTE: page uses localStorage 'session_token' (not 'token').
+- Tested: curl upload/download/delete + invalid-category rejection; UI verified via Playwright. Demo data left in Preview: type + "Demo Booster Pump" with one certification file.

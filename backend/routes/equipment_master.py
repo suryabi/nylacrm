@@ -265,3 +265,81 @@ async def log_replacement(equipment_id: str, body: LogDateBody, current_user: di
                   "updated_at": datetime.now(timezone.utc).isoformat()},
          "$push": {"replacement_log": entry}})
     return await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id}, {"_id": 0})
+
+
+# ── Attachments (photos, certifications, quotations, documents) ──
+import os
+from fastapi import UploadFile, File, Form
+from fastapi.responses import FileResponse
+
+EQ_UPLOAD_DIR = "/app/backend/uploads/equipment_docs"
+EQ_MAX_FILE_MB = 15
+EQ_CATEGORIES = {"photo", "certification", "quotation", "document"}
+
+
+@router.post("/{equipment_id}/files")
+async def upload_equipment_file(equipment_id: str, file: UploadFile = File(...),
+                                category: str = Form("document"),
+                                current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id}, {"_id": 0, "id": 1})
+    if not eq:
+        raise HTTPException(404, "Equipment not found")
+    if category not in EQ_CATEGORIES:
+        raise HTTPException(400, f"Invalid category — use one of {sorted(EQ_CATEGORIES)}")
+    content = await file.read()
+    if len(content) > EQ_MAX_FILE_MB * 1024 * 1024:
+        raise HTTPException(400, f"File too large (max {EQ_MAX_FILE_MB} MB)")
+    os.makedirs(EQ_UPLOAD_DIR, exist_ok=True)
+    file_id = str(uuid.uuid4())
+    safe_name = os.path.basename(file.filename or "file")
+    with open(os.path.join(EQ_UPLOAD_DIR, f"{file_id}_{safe_name}"), "wb") as fh:
+        fh.write(content)
+    meta = {"id": file_id, "filename": safe_name, "size": len(content),
+            "content_type": file.content_type, "category": category,
+            "uploaded_by": current_user.get("name") or current_user.get("email"),
+            "uploaded_at": datetime.now(timezone.utc).isoformat()}
+    await db.equipment_master.update_one(
+        {"tenant_id": tenant_id, "id": equipment_id},
+        {"$push": {"attachments": meta},
+         "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
+    return meta
+
+
+@router.get("/{equipment_id}/files/{file_id}")
+async def download_equipment_file(equipment_id: str, file_id: str,
+                                  current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id}, {"_id": 0, "attachments": 1})
+    if not eq:
+        raise HTTPException(404, "Equipment not found")
+    meta = next((f for f in eq.get("attachments", []) if f["id"] == file_id), None)
+    if not meta:
+        raise HTTPException(404, "File not found")
+    path = os.path.join(EQ_UPLOAD_DIR, f"{file_id}_{meta['filename']}")
+    if not os.path.exists(path):
+        raise HTTPException(404, "File missing from storage")
+    return FileResponse(path, filename=meta["filename"],
+                        media_type=meta.get("content_type") or "application/octet-stream")
+
+
+@router.delete("/{equipment_id}/files/{file_id}")
+async def delete_equipment_file(equipment_id: str, file_id: str,
+                                current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id}, {"_id": 0, "attachments": 1})
+    if not eq:
+        raise HTTPException(404, "Equipment not found")
+    meta = next((f for f in eq.get("attachments", []) if f["id"] == file_id), None)
+    if not meta:
+        raise HTTPException(404, "File not found")
+    path = os.path.join(EQ_UPLOAD_DIR, f"{file_id}_{meta['filename']}")
+    if os.path.exists(path):
+        os.remove(path)
+    await db.equipment_master.update_one(
+        {"tenant_id": tenant_id, "id": equipment_id},
+        {"$pull": {"attachments": {"id": file_id}},
+         "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
+    return {"deleted": True}

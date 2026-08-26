@@ -7,7 +7,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
-import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat } from 'lucide-react';
+import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -26,6 +26,14 @@ const daysUntil = (d) => {
   if (!d) return null;
   return Math.ceil((new Date(d) - new Date(new Date().toDateString())) / 86400000);
 };
+
+const DOC_CATEGORIES = [
+  { key: 'photo', label: 'Photos', icon: ImageIcon },
+  { key: 'certification', label: 'Vendor Certifications', icon: BadgeCheck },
+  { key: 'quotation', label: 'Quotations', icon: ReceiptText },
+  { key: 'document', label: 'Other Documents', icon: FileText },
+];
+const fmtSize = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
 const DueChip = ({ date, testid }) => {
   const n = daysUntil(date);
@@ -54,6 +62,51 @@ export default function EquipmentMaster() {
   const [logTarget, setLogTarget] = useState(null); // {equipment, kind: 'maintenance'|'replacement'}
   const [logDate, setLogDate] = useState('');
   const [logRemarks, setLogRemarks] = useState('');
+  const [docsTarget, setDocsTarget] = useState(null);
+  const [docCategory, setDocCategory] = useState('photo');
+  const [uploading, setUploading] = useState(false);
+
+  const uploadDoc = async (fileList) => {
+    if (!fileList?.length) return;
+    setUploading(true);
+    try {
+      for (const f of Array.from(fileList)) {
+        const fd = new FormData();
+        fd.append('file', f);
+        fd.append('category', docCategory);
+        const res = await fetch(`${API_URL}/api/production/equipment/${docsTarget.id}/files`, {
+          method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` }, body: fd,
+        });
+        if (!res.ok) throw new Error((await res.json()).detail || 'Upload failed');
+        const meta = await res.json();
+        setDocsTarget((t) => ({ ...t, attachments: [...(t.attachments || []), meta] }));
+      }
+      toast.success('Uploaded');
+      loadAll();
+    } catch (e) { toast.error(typeof e.message === 'string' ? e.message : 'Upload failed'); }
+    finally { setUploading(false); }
+  };
+
+  const downloadDoc = async (f) => {
+    try {
+      const res = await fetch(`${API_URL}/api/production/equipment/${docsTarget.id}/files/${f.id}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = f.filename; a.click();
+      URL.revokeObjectURL(url);
+    } catch { toast.error('Download failed'); }
+  };
+
+  const deleteDoc = async (f) => {
+    if (!window.confirm(`Delete "${f.filename}"?`)) return;
+    const res = await fetch(`${API_URL}/api/production/equipment/${docsTarget.id}/files/${f.id}`, { method: 'DELETE', headers: authHeaders() });
+    if (!res.ok) return toast.error('Delete failed');
+    setDocsTarget((t) => ({ ...t, attachments: (t.attachments || []).filter((x) => x.id !== f.id) }));
+    toast.success('File deleted');
+    loadAll();
+  };
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -287,6 +340,14 @@ export default function EquipmentMaster() {
                             <td className="px-4 py-3 text-right tabular-nums">{e.procurement_lead_time_days ? `${e.procurement_lead_time_days}d` : '—'}</td>
                             <td className="px-4 py-3 text-right tabular-nums">{e.min_stock_level ?? '—'}</td>
                             <td className="px-4 py-3 whitespace-nowrap">
+                              <Button size="icon" variant="ghost" className="h-7 w-7 relative" title="Photos, certifications & documents"
+                                onClick={() => { setDocsTarget(e); setDocCategory('photo'); }}
+                                data-testid={`eq-docs-${e.name.replace(/\s/g, '-')}`}>
+                                <Paperclip className="h-3.5 w-3.5 text-slate-600" />
+                                {(e.attachments || []).length > 0 && (
+                                  <span className="absolute -top-1 -right-1 h-4 min-w-4 px-0.5 rounded-full bg-[#002FA7] text-white text-[9px] leading-4 text-center font-semibold">{e.attachments.length}</span>
+                                )}
+                              </Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Log maintenance done"
                                 onClick={() => { setLogTarget({ equipment: e, kind: 'maintenance' }); setLogDate(new Date().toISOString().slice(0, 10)); }}
                                 data-testid={`eq-log-maint-${e.name.replace(/\s/g, '-')}`}>
@@ -474,6 +535,58 @@ export default function EquipmentMaster() {
             <Button variant="outline" onClick={() => setLogTarget(null)}>Cancel</Button>
             <Button onClick={submitLog} data-testid="eq-log-confirm-btn">Save Log</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Equipment documents */}
+      <Dialog open={!!docsTarget} onOpenChange={(o) => !o && setDocsTarget(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="eq-docs-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Paperclip className="h-5 w-5 text-[#002FA7]" /> Documents — {docsTarget?.name}
+            </DialogTitle>
+            <DialogDescription>Photos, vendor certifications, quotations and any other relevant documents for this equipment.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={docCategory} onChange={(e) => setDocCategory(e.target.value)} data-testid="eq-doc-category">
+              {DOC_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+            <label className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-background text-sm font-medium cursor-pointer hover:bg-slate-50" data-testid="eq-doc-upload-label">
+              <Upload className="h-4 w-4" /> {uploading ? 'Uploading…' : 'Upload files'}
+              <input type="file" multiple className="hidden" disabled={uploading}
+                accept={docCategory === 'photo' ? 'image/*' : undefined}
+                onChange={(e) => { uploadDoc(e.target.files); e.target.value = ''; }} data-testid="eq-doc-file-input" />
+            </label>
+            <span className="text-xs text-muted-foreground">Max 15 MB per file</span>
+          </div>
+          {DOC_CATEGORIES.map(({ key, label, icon: Icon }) => {
+            const files = (docsTarget?.attachments || []).filter((f) => f.category === key);
+            if (files.length === 0) return null;
+            return (
+              <div key={key} className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><Icon className="h-3.5 w-3.5" /> {label} ({files.length})</p>
+                <div className="divide-y rounded-md border">
+                  {files.map((f) => (
+                    <div key={f.id} className="flex items-center gap-2 px-3 py-2 text-sm" data-testid={`eq-doc-file-${f.id}`}>
+                      <span className="flex-1 truncate">{f.filename}</span>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">{fmtSize(f.size)} · {f.uploaded_by} · {(f.uploaded_at || '').slice(0, 10)}</span>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => downloadDoc(f)} data-testid={`eq-doc-download-${f.id}`}>
+                        <Download className="h-3.5 w-3.5 text-[#002FA7]" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => deleteDoc(f)} data-testid={`eq-doc-delete-${f.id}`}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {(docsTarget?.attachments || []).length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-6 border border-dashed rounded-md" data-testid="eq-docs-empty">
+              No documents yet — pick a category and upload photos, certifications or quotations.
+            </p>
+          )}
         </DialogContent>
       </Dialog>
     </div>
