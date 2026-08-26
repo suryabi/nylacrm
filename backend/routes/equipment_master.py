@@ -55,6 +55,16 @@ class EquipmentIn(BaseModel):
 class LogDateBody(BaseModel):
     date: Optional[str] = None  # YYYY-MM-DD, default today
     remarks: Optional[str] = None
+    photo_ids: List[str] = []
+
+
+async def _log_photos_meta(tenant_id: str, equipment_id: str, photo_ids: List[str]) -> list:
+    """Resolve uploaded attachment ids into embedded log-photo references."""
+    if not photo_ids:
+        return []
+    eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id}, {"_id": 0, "attachments": 1})
+    by_id = {f["id"]: f for f in (eq or {}).get("attachments", [])}
+    return [{"id": pid, "filename": by_id[pid]["filename"]} for pid in photo_ids if pid in by_id]
 
 
 def _add_days(date_str: Optional[str], days: Optional[int]) -> Optional[str]:
@@ -240,6 +250,7 @@ async def log_maintenance(equipment_id: str, body: LogDateBody, current_user: di
     date = body.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     next_due = _add_days(date, eq.get("maintenance_frequency_days"))
     entry = {"date": date, "remarks": body.remarks, "by": current_user.get("name") or current_user.get("email"),
+             "photos": await _log_photos_meta(tenant_id, equipment_id, body.photo_ids),
              "at": datetime.now(timezone.utc).isoformat()}
     await db.equipment_master.update_one(
         {"tenant_id": tenant_id, "id": equipment_id},
@@ -258,6 +269,7 @@ async def log_replacement(equipment_id: str, body: LogDateBody, current_user: di
     date = body.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     next_due = _add_days(date, eq.get("replacement_frequency_days"))
     entry = {"date": date, "remarks": body.remarks, "by": current_user.get("name") or current_user.get("email"),
+             "photos": await _log_photos_meta(tenant_id, equipment_id, body.photo_ids),
              "at": datetime.now(timezone.utc).isoformat()}
     await db.equipment_master.update_one(
         {"tenant_id": tenant_id, "id": equipment_id},

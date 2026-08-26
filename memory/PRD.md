@@ -2791,3 +2791,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — 26 Jun 2026: Camera capture for equipment photos
 - "Take Photo" button in Documents dialog: <input type="file" accept="image/*" capture="environment"> opens the phone rear camera directly; upload forced to 'photo' category (auto-named PHOT_..._NN). Desktop falls back to file picker.
 - Verified in mobile viewport via Playwright: capture attrs present, simulated capture uploaded and thumbnail appeared.
+
+## Update — 26 Jun 2026: Maintenance photo log
+- LogDateBody gains photo_ids; log-maintenance/log-replacement embed {id, filename} photo refs into the log entry (_log_photos_meta resolves from attachments).
+- Log dialog: "Take Photo" (camera capture) + "From gallery" buttons upload immediately as photo category (auto-named), thumbnails preview in dialog, ids sent with the log. Fixed babel error (await inside setState updater).
+- Verified via Playwright + API: log entry stored with photos [{id, filename PHOT_5_Micron_Filter_03.jpg}].

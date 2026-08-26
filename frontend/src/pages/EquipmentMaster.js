@@ -76,6 +76,27 @@ export default function EquipmentMaster() {
   const [logTarget, setLogTarget] = useState(null); // {equipment, kind: 'maintenance'|'replacement'}
   const [logDate, setLogDate] = useState('');
   const [logRemarks, setLogRemarks] = useState('');
+  const [logPhotos, setLogPhotos] = useState([]);
+  const [logUploading, setLogUploading] = useState(false);
+
+  const uploadLogPhoto = async (fileList) => {
+    if (!fileList?.length) return;
+    setLogUploading(true);
+    try {
+      for (const f of Array.from(fileList)) {
+        const fd = new FormData();
+        fd.append('file', f);
+        fd.append('category', 'photo');
+        const res = await fetch(`${API_URL}/api/production/equipment/${logTarget.equipment.id}/files`, {
+          method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` }, body: fd,
+        });
+        if (!res.ok) throw new Error((await res.json()).detail || 'Upload failed');
+        const meta = await res.json();
+        setLogPhotos((p) => [...p, meta]);
+      }
+    } catch (e) { toast.error(typeof e.message === 'string' ? e.message : 'Photo upload failed'); }
+    finally { setLogUploading(false); }
+  };
   const [docsTarget, setDocsTarget] = useState(null);
   const [docCategory, setDocCategory] = useState('photo');
   const [uploading, setUploading] = useState(false);
@@ -226,11 +247,12 @@ export default function EquipmentMaster() {
 
   const submitLog = async () => {
     const res = await fetch(`${API_URL}/api/production/equipment/${logTarget.equipment.id}/log-${logTarget.kind}`, {
-      method: 'POST', headers: authHeaders(), body: JSON.stringify({ date: logDate || null, remarks: logRemarks || null }),
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ date: logDate || null, remarks: logRemarks || null, photo_ids: logPhotos.map((p) => p.id) }),
     });
     if (!res.ok) return toast.error((await res.json()).detail || 'Failed');
-    toast.success(`${logTarget.kind === 'maintenance' ? 'Maintenance' : 'Replacement'} logged — next due date updated`);
-    setLogTarget(null); setLogDate(''); setLogRemarks('');
+    toast.success(`${logTarget.kind === 'maintenance' ? 'Maintenance' : 'Replacement'} logged${logPhotos.length ? ` with ${logPhotos.length} photo${logPhotos.length === 1 ? '' : 's'}` : ''} — next due date updated`);
+    setLogTarget(null); setLogDate(''); setLogRemarks(''); setLogPhotos([]);
     loadAll();
   };
 
@@ -364,12 +386,12 @@ export default function EquipmentMaster() {
                                 )}
                               </Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Log maintenance done"
-                                onClick={() => { setLogTarget({ equipment: e, kind: 'maintenance' }); setLogDate(new Date().toISOString().slice(0, 10)); }}
+                                onClick={() => { setLogTarget({ equipment: e, kind: 'maintenance' }); setLogDate(new Date().toISOString().slice(0, 10)); setLogPhotos([]); }}
                                 data-testid={`eq-log-maint-${e.name.replace(/\s/g, '-')}`}>
                                 <CalendarCheck className="h-3.5 w-3.5 text-emerald-600" />
                               </Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Log replacement done"
-                                onClick={() => { setLogTarget({ equipment: e, kind: 'replacement' }); setLogDate(new Date().toISOString().slice(0, 10)); }}
+                                onClick={() => { setLogTarget({ equipment: e, kind: 'replacement' }); setLogDate(new Date().toISOString().slice(0, 10)); setLogPhotos([]); }}
                                 data-testid={`eq-log-repl-${e.name.replace(/\s/g, '-')}`}>
                                 <Repeat className="h-3.5 w-3.5 text-indigo-600" />
                               </Button>
@@ -545,6 +567,33 @@ export default function EquipmentMaster() {
           <div className="space-y-3">
             <div><Label>Date</Label><Input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} className="mt-1" data-testid="eq-log-date" /></div>
             <div><Label>Remarks</Label><Textarea rows={2} value={logRemarks} onChange={(e) => setLogRemarks(e.target.value)} className="mt-1" /></div>
+            <div>
+              <Label>Evidence Photos</Label>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <label className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md bg-[#002FA7] text-white text-sm font-medium cursor-pointer hover:bg-[#00227A]" data-testid="eq-log-camera-label">
+                  <CameraIcon className="h-4 w-4" /> {logUploading ? 'Uploading…' : 'Take Photo'}
+                  <input type="file" accept="image/*" capture="environment" className="hidden" disabled={logUploading}
+                    onChange={(e) => { uploadLogPhoto(e.target.files); e.target.value = ''; }} data-testid="eq-log-camera-input" />
+                </label>
+                <label className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-background text-sm font-medium cursor-pointer hover:bg-slate-50" data-testid="eq-log-upload-label">
+                  <Upload className="h-4 w-4" /> From gallery
+                  <input type="file" accept="image/*" multiple className="hidden" disabled={logUploading}
+                    onChange={(e) => { uploadLogPhoto(e.target.files); e.target.value = ''; }} data-testid="eq-log-upload-input" />
+                </label>
+              </div>
+              {logPhotos.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2" data-testid="eq-log-photos">
+                  {logPhotos.map((p) => (
+                    <div key={p.id} className="w-16">
+                      <AuthImg src={`${API_URL}/api/production/equipment/${logTarget?.equipment?.id}/files/${p.id}`} alt={p.filename}
+                        className="w-16 h-16 object-cover rounded-md border" testid={`eq-log-photo-${p.id}`} />
+                      <p className="truncate text-[9px] text-muted-foreground mt-0.5">{p.filename}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground mt-1">Photos are saved with this log entry and also appear under the equipment's Photos.</p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLogTarget(null)}>Cancel</Button>
