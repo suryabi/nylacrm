@@ -30,7 +30,7 @@ const daysUntil = (d) => {
 const DOC_CATEGORIES = [
   { key: 'photo', label: 'Photos', icon: ImageIcon },
   { key: 'certification', label: 'Vendor Certifications', icon: BadgeCheck },
-  { key: 'quotation', label: 'Quotations', icon: ReceiptText },
+  { key: 'quotation', label: 'Vendor Documents / Quotations', icon: ReceiptText },
   { key: 'document', label: 'Other Documents', icon: FileText },
 ];
 const fmtSize = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);

@@ -2778,3 +2778,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - EquipmentMaster.js: paperclip button per row with count badge → Documents dialog (category select, multi-file upload, grouped lists per category, authenticated blob download, delete with confirm).
 - NOTE: page uses localStorage 'session_token' (not 'token').
 - Tested: curl upload/download/delete + invalid-category rejection; UI verified via Playwright. Demo data left in Preview: type + "Demo Booster Pump" with one certification file.
+
+## Update — 26 Jun 2026: Equipment file auto-naming convention
+- Upload endpoint renames files: {TYPE}_{Equipment_Name}_{NN}{ext}. Prefix map: photo→PHOT, certification→CERT, quotation→VEND (UI label "Vendor Documents / Quotations"), document→OTHE.
+- Name: spaces→underscores, non-alnum stripped, >3 words truncated to first 3. Serial per equipment+type from max existing serial+1 (delete-safe). original_filename kept in meta.
+- Verified in Preview: VEND_5_Micron_Filter_01/02.pdf, CERT_5_Micron_Filter_01.pdf, PHOT_5_Micron_Filter_01.jpg, CERT_High_Efficiency_Particulate_01.pdf, OTHE_5_Micron_Filter_01.pdf. Demo equipment "5 Micron Filter" + "High Efficiency Particulate Air Filter Assembly" left in Preview.

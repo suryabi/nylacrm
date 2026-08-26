@@ -275,6 +275,28 @@ from fastapi.responses import FileResponse
 EQ_UPLOAD_DIR = "/app/backend/uploads/equipment_docs"
 EQ_MAX_FILE_MB = 15
 EQ_CATEGORIES = {"photo", "certification", "quotation", "document"}
+EQ_TYPE_PREFIX = {"photo": "PHOT", "certification": "CERT", "quotation": "VEND", "document": "OTHE"}
+
+
+def _eq_file_basename(equipment_name: str, category: str) -> str:
+    """TYPE_Equipment_Name (first 3 words if longer), spaces → underscores."""
+    import re as _re
+    words = (equipment_name or "equipment").strip().split()
+    if len(words) > 3:
+        words = words[:3]
+    name_part = _re.sub(r"[^A-Za-z0-9_]", "", "_".join(words).replace(" ", "_"))
+    return f"{EQ_TYPE_PREFIX[category]}_{name_part}"
+
+
+def _next_serial(attachments: list, base: str) -> int:
+    """Per equipment + doc-type serial: max existing serial for this base + 1."""
+    import re as _re
+    top = 0
+    for f in attachments or []:
+        m = _re.match(rf"^{_re.escape(base)}_(\d+)\.", f.get("filename") or "")
+        if m:
+            top = max(top, int(m.group(1)))
+    return top + 1
 
 
 @router.post("/{equipment_id}/files")
@@ -282,7 +304,8 @@ async def upload_equipment_file(equipment_id: str, file: UploadFile = File(...),
                                 category: str = Form("document"),
                                 current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
-    eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id}, {"_id": 0, "id": 1})
+    eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id},
+                                            {"_id": 0, "id": 1, "name": 1, "attachments": 1})
     if not eq:
         raise HTTPException(404, "Equipment not found")
     if category not in EQ_CATEGORIES:
@@ -292,10 +315,15 @@ async def upload_equipment_file(equipment_id: str, file: UploadFile = File(...),
         raise HTTPException(400, f"File too large (max {EQ_MAX_FILE_MB} MB)")
     os.makedirs(EQ_UPLOAD_DIR, exist_ok=True)
     file_id = str(uuid.uuid4())
-    safe_name = os.path.basename(file.filename or "file")
+    original_name = os.path.basename(file.filename or "file")
+    ext = os.path.splitext(original_name)[1].lower()
+    base = _eq_file_basename(eq.get("name"), category)
+    serial = _next_serial(eq.get("attachments"), base)
+    safe_name = f"{base}_{serial:02d}{ext}"
     with open(os.path.join(EQ_UPLOAD_DIR, f"{file_id}_{safe_name}"), "wb") as fh:
         fh.write(content)
-    meta = {"id": file_id, "filename": safe_name, "size": len(content),
+    meta = {"id": file_id, "filename": safe_name, "original_filename": original_name,
+            "size": len(content),
             "content_type": file.content_type, "category": category,
             "uploaded_by": current_user.get("name") or current_user.get("email"),
             "uploaded_at": datetime.now(timezone.utc).isoformat()}
