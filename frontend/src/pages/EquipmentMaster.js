@@ -35,6 +35,20 @@ const DOC_CATEGORIES = [
 ];
 const fmtSize = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
+const AuthImg = ({ src, alt, className, onClick, testid }) => {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    let obj;
+    fetch(src, { headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } })
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((b) => { if (b) { obj = URL.createObjectURL(b); setUrl(obj); } })
+      .catch(() => {});
+    return () => { if (obj) URL.revokeObjectURL(obj); };
+  }, [src]);
+  if (!url) return <div className={`${className} bg-slate-100 animate-pulse`} data-testid={testid} />;
+  return <img src={url} alt={alt} className={className} onClick={onClick} data-testid={testid} />;
+};
+
 const DueChip = ({ date, testid }) => {
   const n = daysUntil(date);
   if (n == null) return <span className="text-muted-foreground text-xs">—</span>;
@@ -65,6 +79,7 @@ export default function EquipmentMaster() {
   const [docsTarget, setDocsTarget] = useState(null);
   const [docCategory, setDocCategory] = useState('photo');
   const [uploading, setUploading] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
 
   const uploadDoc = async (fileList) => {
     if (!fileList?.length) return;
@@ -562,6 +577,25 @@ export default function EquipmentMaster() {
           {DOC_CATEGORIES.map(({ key, label, icon: Icon }) => {
             const files = (docsTarget?.attachments || []).filter((f) => f.category === key);
             if (files.length === 0) return null;
+            if (key === 'photo') {
+              return (
+                <div key={key} className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><Icon className="h-3.5 w-3.5" /> {label} ({files.length})</p>
+                  <div className="flex flex-wrap gap-2">
+                    {files.map((f) => (
+                      <div key={f.id} className="relative group" data-testid={`eq-doc-thumb-${f.id}`}>
+                        <AuthImg src={`${API_URL}/api/production/equipment/${docsTarget.id}/files/${f.id}`} alt={f.filename}
+                          className="w-24 h-24 object-cover rounded-md border cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => setPreviewFile(f)} testid={`eq-doc-thumb-img-${f.id}`} />
+                        <button type="button" className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white text-[10px] leading-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => deleteDoc(f)} title="Delete" data-testid={`eq-doc-delete-${f.id}`}>✕</button>
+                        <p className="w-24 truncate text-[10px] text-muted-foreground mt-0.5">{f.filename}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
             return (
               <div key={key} className="space-y-1.5">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><Icon className="h-3.5 w-3.5" /> {label} ({files.length})</p>
@@ -587,6 +621,29 @@ export default function EquipmentMaster() {
               No documents yet — pick a category and upload photos, certifications or quotations.
             </p>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Photo preview lightbox */}
+      <Dialog open={!!previewFile} onOpenChange={(o) => !o && setPreviewFile(null)}>
+        <DialogContent className="sm:max-w-3xl" data-testid="eq-photo-preview-dialog">
+          <DialogHeader>
+            <DialogTitle className="text-base">{previewFile?.filename}</DialogTitle>
+            <DialogDescription>{previewFile ? `${fmtSize(previewFile.size)} · uploaded by ${previewFile.uploaded_by} on ${(previewFile.uploaded_at || '').slice(0, 10)}` : ''}</DialogDescription>
+          </DialogHeader>
+          {previewFile && docsTarget && (
+            <AuthImg src={`${API_URL}/api/production/equipment/${docsTarget.id}/files/${previewFile.id}`} alt={previewFile.filename}
+              className="w-full max-h-[65vh] object-contain rounded-md bg-slate-50" testid="eq-photo-preview-img" />
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => downloadDoc(previewFile)} data-testid="eq-photo-preview-download">
+              <Download className="h-4 w-4 mr-1.5" /> Download
+            </Button>
+            <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50"
+              onClick={() => { deleteDoc(previewFile); setPreviewFile(null); }} data-testid="eq-photo-preview-delete">
+              <Trash2 className="h-4 w-4 mr-1.5" /> Delete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
