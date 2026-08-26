@@ -306,3 +306,39 @@
     max-width: calc(100vw - 1rem);
   }
 }
+
+/* ── iOS Safari fix: date/time inputs break with display:flex (WebKit bug) ──
+   Shadcn Input applies `flex` to all inputs; on iPhone/iPad this collapses the
+   date value area and taps fail to open the native picker. */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value,
+input[type="datetime-local"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+@supports (-webkit-touch-callout: none) {
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="month"] {
+    display: block;
+    min-height: 2.25rem;
+    line-height: 1.65rem;
+  }
+  /* empty date inputs render invisible on iOS — give them a visible min width */
+  input[type="date"]:not([value]),
+  input[type="date"][value=""] {
+    -webkit-min-logical-width: calc(100% - 1rem);
+  }
+}
+
+/* smoother taps on calendar days / popover buttons (iOS ghost-click prevention) */
+.rdp button, [data-radix-popper-content-wrapper] button {
+  touch-action: manipulation;
+}

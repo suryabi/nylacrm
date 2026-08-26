@@ -63,7 +63,7 @@ const DatePicker = React.forwardRef(({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-xl" align="start">
+      <PopoverContent className="w-auto p-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-xl" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
         <Calendar
           mode="single"
           selected={value}
@@ -133,7 +133,7 @@ const DateRangePicker = React.forwardRef(({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-xl" align="start">
+      <PopoverContent className="w-auto p-0 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-xl" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
         <Calendar
           mode="range"
           selected={value}

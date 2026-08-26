@@ -2805,3 +2805,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — 26 Jun 2026: Equipment documents zip export
 - GET /api/production/equipment/{id}/files-zip: in-memory zip, category folders (Photos/Certifications/Vendor_Documents/Other_Documents), filename {Equipment_Name}_documents.zip; 404 if no docs.
 - "Download all (zip)" button in Documents dialog (shows only when attachments exist). Verified: zip contained all 8 files in folders; UI download + toast confirmed via Playwright.
+
+## Update — 26 Jun 2026: iOS date-picker fix
+- Root cause: shadcn Input applies display:flex to ALL inputs; iOS Safari has a documented WebKit bug where flex-displayed date/time inputs collapse the value area and taps fail to open the native picker (desktop unaffected).
+- Fix in index.css: -webkit-appearance none + ::-webkit-date-and-time-value text-align, and iOS-only (@supports -webkit-touch-callout) display:block + min-height + min-logical-width for date/time/datetime-local/month inputs. Also touch-action: manipulation on rdp/popover buttons and onOpenAutoFocus preventDefault on DatePicker popovers.
+- Desktop verified unchanged (display stays flex, input works). True iOS verification requires user's device — asked user to check Preview URL on iPhone/iPad.
