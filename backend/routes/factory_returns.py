@@ -36,6 +36,7 @@ class FactoryReturnCreate(BaseModel):
     return_date: Optional[str] = None
     items: List[FactoryReturnItemCreate]
     remarks: Optional[str] = None
+    stock_in_shipment_id: Optional[str] = None
 
 
 class FactoryReturnStatusUpdate(BaseModel):
@@ -282,6 +283,103 @@ async def list_factory_returns(
     }
 
 
+async def _apply_invoice_adjustment(tenant_id: str, fr: dict, distributor: dict) -> dict:
+    """Create + apply a Zoho CN for a warehouse factory return against its Stock-In invoice."""
+    now = datetime.now(timezone.utc).isoformat()
+    shipment_id = fr.get("stock_in_shipment_id")
+    if not shipment_id:
+        result = {"status": "failed", "error": "No Stock-In linked to this return.", "attempted_at": now}
+    else:
+        inv_map = await db.zoho_invoice_mappings.find_one(
+            {"tenant_id": tenant_id, "source_type": "distributor_shipment",
+             "source_id": shipment_id, "status": "synced"}, {"_id": 0})
+        zoho_invoice_id = (inv_map or {}).get("zoho_invoice_id")
+        if not zoho_invoice_id:
+            result = {"status": "failed",
+                      "error": f"Stock-In {fr.get('stock_in_shipment_number') or shipment_id} has no Zoho invoice to adjust against.",
+                      "attempted_at": now}
+        else:
+            try:
+                from services.zoho_service import create_credit_note_for_factory_return
+                mapping = await create_credit_note_for_factory_return(
+                    tenant_id=tenant_id, fr=fr, distributor=distributor,
+                    reference_invoice_id=zoho_invoice_id)
+                result = {"status": "applied",
+                          "zoho_creditnote_id": mapping.get("zoho_creditnote_id"),
+                          "zoho_creditnote_number": mapping.get("zoho_creditnote_number"),
+                          "zoho_creditnote_url": mapping.get("zoho_creditnote_url"),
+                          "zoho_invoice_id": zoho_invoice_id,
+                          "amount": fr.get("total_credit_amount", 0),
+                          "adjusted_at": now}
+            except Exception as e:
+                result = {"status": "failed", "error": str(e)[:300], "attempted_at": now}
+    await db.distributor_factory_returns.update_one(
+        {"id": fr["id"], "tenant_id": tenant_id},
+        {"$set": {"invoice_adjustment": result, "updated_at": now}})
+    return result
+
+
+@router.get("/{distributor_id}/stock-in-options")
+async def stock_in_options(distributor_id: str, current_user: dict = Depends(get_current_user)):
+    """Stock-In shipments (with Zoho invoice info) to adjust factory returns against."""
+    tenant_id = get_current_tenant_id()
+    shipments = await db.distributor_shipments.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id,
+         "status": {"$in": ["confirmed", "in_transit", "delivered"]}},
+        {"_id": 0, "id": 1, "shipment_number": 1, "shipment_date": 1,
+         "total_net_amount": 1, "total_quantity": 1, "status": 1}
+    ).sort("shipment_date", -1).to_list(200)
+    maps = await db.zoho_invoice_mappings.find(
+        {"tenant_id": tenant_id, "source_type": "distributor_shipment",
+         "source_id": {"$in": [s["id"] for s in shipments]}, "status": "synced"},
+        {"_id": 0, "source_id": 1, "zoho_invoice_id": 1, "zoho_invoice_number": 1}).to_list(200)
+    by_id = {m["source_id"]: m for m in maps}
+    for s in shipments:
+        m = by_id.get(s["id"], {})
+        s["zoho_invoice_id"] = m.get("zoho_invoice_id")
+        s["zoho_invoice_number"] = m.get("zoho_invoice_number")
+    return {"shipments": shipments}
+
+
+@router.put("/{distributor_id}/factory-returns/{return_id}/adjust-invoice")
+async def adjust_factory_return_invoice(
+    distributor_id: str,
+    return_id: str,
+    data: dict = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Retry / run the Stock-In invoice adjustment (Zoho CN). Optionally link a shipment first."""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    tenant_id = get_current_tenant_id()
+    fr = await db.distributor_factory_returns.find_one(
+        {"id": return_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
+    if not fr:
+        raise HTTPException(status_code=404, detail="Factory return not found")
+    if fr.get("source") != "warehouse":
+        raise HTTPException(status_code=400, detail="Only warehouse-sourced returns adjust against Stock-In invoices")
+    if fr.get("status") not in ("confirmed", "received"):
+        raise HTTPException(status_code=400, detail="Confirm the factory return first")
+    if (fr.get("invoice_adjustment") or {}).get("status") == "applied":
+        raise HTTPException(status_code=400, detail="Already adjusted against the Stock-In invoice")
+    shipment_id = (data or {}).get("stock_in_shipment_id")
+    if shipment_id:
+        shp = await db.distributor_shipments.find_one(
+            {"id": shipment_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+            {"_id": 0, "id": 1, "shipment_number": 1})
+        if not shp:
+            raise HTTPException(status_code=404, detail="Stock-In shipment not found for this distributor")
+        fr["stock_in_shipment_id"] = shp["id"]
+        fr["stock_in_shipment_number"] = shp.get("shipment_number")
+        await db.distributor_factory_returns.update_one(
+            {"id": return_id, "tenant_id": tenant_id},
+            {"$set": {"stock_in_shipment_id": shp["id"],
+                      "stock_in_shipment_number": shp.get("shipment_number")}})
+    distributor = await db.distributors.find_one({"id": distributor_id, "tenant_id": tenant_id}, {"_id": 0})
+    result = await _apply_invoice_adjustment(tenant_id, fr, distributor)
+    return {"invoice_adjustment": result}
+
+
 @router.post("/{distributor_id}/factory-returns")
 async def create_factory_return(
     distributor_id: str,
@@ -298,8 +396,19 @@ async def create_factory_return(
     if data.source == "warehouse" and data.reason == "empty_reusable":
         raise HTTPException(status_code=400, detail="Empty/Reusable is only valid for customer return source")
 
-    # Settlement adjustment only for warehouse-sourced returns
-    requires_settlement = data.source == "warehouse"
+    # Warehouse-sourced returns are adjusted against the original Stock-In
+    # invoice (Zoho credit note), NOT the monthly settlement.
+    requires_settlement = False
+    stock_in_shipment = None
+    if data.source == "warehouse":
+        if not data.stock_in_shipment_id:
+            raise HTTPException(status_code=400,
+                                detail="Select the Stock-In (invoice) this return should be adjusted against.")
+        stock_in_shipment = await db.distributor_shipments.find_one(
+            {"id": data.stock_in_shipment_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+            {"_id": 0, "id": 1, "shipment_number": 1, "status": 1})
+        if not stock_in_shipment:
+            raise HTTPException(status_code=404, detail="Stock-In shipment not found for this distributor")
 
     # Validate distributor
     distributor = await db.distributors.find_one(
@@ -409,6 +518,9 @@ async def create_factory_return(
         "total_quantity": total_qty,
         "total_credit_amount": round(total_credit, 2),
         "requires_settlement": requires_settlement,
+        "stock_in_shipment_id": stock_in_shipment.get("id") if stock_in_shipment else None,
+        "stock_in_shipment_number": stock_in_shipment.get("shipment_number") if stock_in_shipment else None,
+        "invoice_adjustment": None,
         "status": "draft",
         "remarks": data.remarks,
         "created_at": now,
@@ -493,8 +605,17 @@ async def confirm_factory_return(
         {"$set": update}
     )
 
+    # Warehouse returns: adjust against the original Stock-In invoice (Zoho CN).
+    invoice_adjustment = None
+    if fr.get("source") == "warehouse":
+        fr_updated = {**fr, **update}
+        distributor = await db.distributors.find_one(
+            {"id": distributor_id, "tenant_id": tenant_id}, {"_id": 0})
+        invoice_adjustment = await _apply_invoice_adjustment(tenant_id, fr_updated, distributor)
+
     logger.info(f"Factory return {fr['return_number']} confirmed, stock deducted")
-    return {"message": f"Factory return {fr['return_number']} confirmed", "status": "confirmed"}
+    return {"message": f"Factory return {fr['return_number']} confirmed", "status": "confirmed",
+            "invoice_adjustment": invoice_adjustment}
 
 
 @router.put("/{distributor_id}/factory-returns/{return_id}/receive")

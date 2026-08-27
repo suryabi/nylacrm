@@ -7337,14 +7337,9 @@ async def get_settlement_preview(
                 cn[k] = cn[k].isoformat()
 
     # --- Factory Returns ---
-    factory_returns = await db.distributor_factory_returns.find({
-        "tenant_id": tenant_id,
-        "distributor_id": distributor_id,
-        "status": {"$in": ["confirmed", "received"]},
-        "return_date": {"$gte": start_date, "$lt": end_date},
-        "$or": [{"requires_settlement": True}, {"source": "warehouse"}],
-        "id": {"$nin": settled_fr_ids}
-    }, {"_id": 0}).to_list(500)
+    # Factory returns are now adjusted against the original Stock-In invoice
+    # (Zoho credit note), NOT the monthly settlement. Kept empty for shape.
+    factory_returns = []
 
     total_delivery_amount = sum(d.get('total_net_amount', 0) for d in deliveries)
     total_cn_amount = sum(cn.get('original_amount', 0) or cn.get('total_amount', 0) or 0 for cn in credit_notes)
@@ -7428,16 +7423,10 @@ async def create_settlement(
     }, {"_id": 0}).to_list(500)
     total_credit_notes_issued = sum(cn.get('original_amount', 0) or cn.get('total_amount', 0) or cn.get('amount', 0) or 0 for cn in credit_notes)
     
-    # Get adjustable factory returns in the period (not yet settled)
-    factory_returns = await db.distributor_factory_returns.find({
-        "tenant_id": tenant_id,
-        "distributor_id": distributor_id,
-        "status": {"$in": ["confirmed", "received"]},
-        "return_date": {"$gte": data.period_start, "$lte": data.period_end},
-        "$or": [{"requires_settlement": True}, {"source": "warehouse"}],
-        "id": {"$nin": settled_fr_ids}
-    }, {"_id": 0}).to_list(500)
-    total_factory_return_credit = sum(fr.get('total_credit_amount', 0) for fr in factory_returns)
+    # Factory returns are adjusted against the original Stock-In invoice (Zoho CN),
+    # not the settlement.
+    factory_returns = []
+    total_factory_return_credit = 0
     
     if not deliveries and not credit_notes and not factory_returns:
         raise HTTPException(status_code=400, detail="No unsettled deliveries, credit notes, or factory returns found for this period")
@@ -7540,6 +7529,50 @@ async def create_settlement(
     return settlement_doc
 
 
+@router.post("/{distributor_id}/settlements/{settlement_id}/detach-factory-returns")
+async def detach_factory_returns_from_settlement(
+    distributor_id: str,
+    settlement_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Correction: remove factory-return credits from an already-created settlement
+    so they can be adjusted against their Stock-In invoices instead."""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    settlement = await db.distributor_settlements.find_one(
+        {"id": settlement_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
+    if not settlement:
+        raise HTTPException(status_code=404, detail="Settlement not found")
+    if settlement.get("status") == "paid":
+        raise HTTPException(status_code=400, detail="Settlement is already paid — cannot correct it. Handle via a manual adjustment.")
+    fr_ids = settlement.get("factory_return_ids") or []
+    fr_credit = settlement.get("total_factory_return_credit") or 0
+    if not fr_ids and not fr_credit:
+        raise HTTPException(status_code=400, detail="This settlement has no factory returns to detach")
+    await db.distributor_settlements.update_one(
+        {"id": settlement_id, "tenant_id": tenant_id},
+        {"$set": {
+            "factory_return_ids": [],
+            "total_factory_returns": 0,
+            "total_factory_return_credit": 0,
+            "adjustments": round((settlement.get("adjustments") or 0) - fr_credit, 2),
+            "final_payout": round((settlement.get("final_payout") or 0) - fr_credit, 2),
+            "detached_factory_return_ids": fr_ids,
+            "detached_factory_return_credit": round(fr_credit, 2),
+            "factory_returns_detached_at": now,
+            "factory_returns_detached_by": current_user.get("id"),
+            "updated_at": now,
+            "remarks": ((settlement.get("remarks") or "") +
+                        f"\n[{now[:10]}] Factory-return credit ₹{round(fr_credit, 2)} detached — to be adjusted against Stock-In invoices.").strip(),
+        }})
+    logger.info(f"Settlement {settlement.get('settlement_number')}: detached {len(fr_ids)} factory returns (₹{fr_credit})")
+    return {"detached_factory_return_ids": fr_ids,
+            "detached_credit": round(fr_credit, 2),
+            "new_final_payout": round((settlement.get("final_payout") or 0) - fr_credit, 2)}
+
+
 @router.post("/{distributor_id}/settlements/generate-monthly")
 async def generate_monthly_settlements(
     distributor_id: str,
@@ -7615,17 +7648,11 @@ async def generate_monthly_settlements(
         "id": {"$nin": settled_cn_ids}
     }, {"_id": 0}).to_list(500)
     
-    # Get adjustable factory returns in the period (warehouse-sourced, not yet settled)
-    all_factory_returns = await db.distributor_factory_returns.find({
-        "tenant_id": tenant_id,
-        "distributor_id": distributor_id,
-        "status": {"$in": ["confirmed", "received"]},
-        "return_date": {"$gte": start_date, "$lt": end_date},
-        "$or": [{"requires_settlement": True}, {"source": "warehouse"}],
-        "id": {"$nin": settled_fr_ids}
-    }, {"_id": 0}).to_list(500)
+    # Factory returns are adjusted against the original Stock-In invoice (Zoho CN),
+    # not the monthly reconciliation.
+    all_factory_returns = []
     
-    total_independent_factory_return_credit = sum(fr.get('total_credit_amount', 0) for fr in all_factory_returns)
+    total_independent_factory_return_credit = 0
     
     if not deliveries and not all_credit_notes and not all_factory_returns:
         raise HTTPException(status_code=400, detail="No unsettled deliveries, credit notes, or factory returns found for this period")

@@ -3639,3 +3639,102 @@ async def fetch_uncategorized_bank_transactions(
     txns = result.get("banktransactions") or result.get("bank_transactions") or []
     ctx = result.get("page_context") or {}
     return {"transactions": txns, "has_more": bool(ctx.get("has_more_page")), "page": page}
+
+
+# ---------- Factory Return (distributor → factory) Credit Note ----------
+
+async def create_credit_note_for_factory_return(
+    *, tenant_id: str, fr: dict, distributor: dict, reference_invoice_id: str,
+) -> dict:
+    """Push a distributor→factory return as a Zoho CN billed to the distributor,
+    associated + applied to the original Stock-In (shipment) invoice."""
+    if not is_zoho_configured():
+        raise RuntimeError("Zoho Books integration is not configured (ZOHO_CLIENT_ID missing).")
+
+    existing = await db.zoho_invoice_mappings.find_one(
+        {"tenant_id": tenant_id, "source_type": "distributor_factory_return",
+         "source_id": fr.get("id"), "status": "synced"}, {"_id": 0})
+    if existing and existing.get("zoho_creditnote_id"):
+        logger.info(f"[zoho] CN already synced for factory return {fr.get('return_number')}; skipping.")
+        return existing
+
+    customer_id = await upsert_contact(tenant_id, {
+        "id": distributor.get("id"),
+        "account_name": distributor.get("distributor_name") or distributor.get("legal_entity_name"),
+        "legal_entity_name": distributor.get("legal_entity_name") or distributor.get("distributor_name"),
+        "gst_legal_name": distributor.get("legal_entity_name") or distributor.get("distributor_name"),
+        "gst_trade_name": distributor.get("distributor_name") or distributor.get("legal_entity_name"),
+        "gstin": distributor.get("gstin"),
+        "primary_contact_name": distributor.get("primary_contact_name"),
+        "primary_contact_email": distributor.get("primary_contact_email"),
+        "primary_contact_mobile": distributor.get("primary_contact_mobile"),
+        "billing_address": distributor.get("billing_address") or distributor.get("registered_address"),
+        "delivery_address": distributor.get("registered_address"),
+        "zoho_contact_id": distributor.get("zoho_contact_id"),
+    })
+
+    line_items = []
+    for it in fr.get("items", []):
+        qty = float(it.get("quantity") or 0)
+        rate = float(it.get("transfer_price") or 0)
+        if qty <= 0 or rate <= 0:
+            continue
+        zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
+        line_items.append({
+            "item_id": zoho_item_id,
+            "name": (it.get("sku_name") or it.get("sku_code") or "Item").strip(),
+            "quantity": qty,
+            "rate": round(rate, 2),
+            "invoice_id": reference_invoice_id,
+        })
+    if not line_items:
+        raise RuntimeError("No billable items on this factory return (missing transfer price?).")
+
+    payload = {
+        "customer_id": customer_id,
+        "reference_number": fr.get("return_number"),
+        "date": (fr.get("return_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10],
+        "line_items": line_items,
+        "invoice_id": reference_invoice_id,
+        "notes": (f"Factory return {fr.get('return_number')} adjusted against Stock-In "
+                  f"{fr.get('stock_in_shipment_number') or ''}").strip(),
+    }
+    tenant_creds = await get_credentials(tenant_id) or {}
+    cn_tmpl = (tenant_creds.get("creditnote_template_id") or "").strip()
+    if cn_tmpl:
+        payload["template_id"] = cn_tmpl
+
+    result = await _zoho_request("POST", "/books/v3/creditnotes", tenant_id=tenant_id, json=payload)
+    cn = result.get("creditnote") or {}
+    zcn_id = cn.get("creditnote_id")
+    zcn_number = cn.get("creditnote_number")
+    applied_amount = 0.0
+    if zcn_id:
+        try:
+            await _zoho_request("POST", f"/books/v3/creditnotes/{zcn_id}/status/open", tenant_id=tenant_id)
+        except Exception as e:
+            logger.warning(f"[zoho] Could not open CN {zcn_number}: {e}")
+        try:
+            bal = float(cn.get("balance") or cn.get("total") or 0)
+            if bal > 0:
+                await _zoho_request(
+                    "POST", f"/books/v3/creditnotes/{zcn_id}/invoices", tenant_id=tenant_id,
+                    json={"invoices": [{"invoice_id": reference_invoice_id, "amount_applied": round(bal, 2)}]})
+                applied_amount = round(bal, 2)
+        except Exception as e:
+            logger.warning(f"[zoho] CN {zcn_number} created but apply-to-invoice failed: {e}")
+
+    creds = await get_credentials(tenant_id) or {}
+    now = datetime.now(timezone.utc).isoformat()
+    mapping = {
+        "tenant_id": tenant_id, "source_type": "distributor_factory_return",
+        "source_id": fr.get("id"), "status": "synced",
+        "zoho_creditnote_id": zcn_id, "zoho_creditnote_number": zcn_number,
+        "zoho_creditnote_url": cn.get("creditnote_url") or _zoho_books_url(zcn_id, creds),
+        "reference_invoice_id": reference_invoice_id,
+        "applied_amount": applied_amount, "synced_at": now,
+    }
+    await db.zoho_invoice_mappings.update_one(
+        {"tenant_id": tenant_id, "source_type": "distributor_factory_return", "source_id": fr.get("id")},
+        {"$set": mapping}, upsert=True)
+    return mapping

@@ -2816,3 +2816,11 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Patched: ui/date-picker.jsx (both pickers), DeliveriesTab.jsx (reschedule), DesignRequestNewDetail.js (est date), MarketingRequestDetail.js, DeliveryOrders.js, NewMarketingRequest.js, NewDesignRequestNew.js (mr-due-input), AccountDetail.js (DateField).
 - LeadDetail.js uses native type="date" inputs — covered by the earlier iOS CSS fix.
 - Desktop verified via Playwright (design request due-date select works). iOS verification pending on user's device via Preview URL.
+
+## Update — 27 Jun 2026: Factory returns adjusted against Stock-In invoice (not settlement)
+- Warehouse-source factory returns now REQUIRE a Stock-In shipment link (dropdown via GET /api/distributors/{id}/stock-in-options); requires_settlement=false.
+- On confirm: Zoho credit note (services/zoho_service.create_credit_note_for_factory_return) billed to distributor, associated + applied to the Stock-In's Zoho invoice; result stored in invoice_adjustment {status applied|failed, zoho ids, error}. Retry/link endpoint: PUT .../factory-returns/{rid}/adjust-invoice (admin).
+- Settlements (preview/create/monthly in distributors.py) EXCLUDE factory returns entirely.
+- Correction for old settlements: POST .../settlements/{sid}/detach-factory-returns (admin, blocked when paid) zeroes FR fields, reduces adjustments/final_payout, stores detached_* audit fields; purple Undo2 button in SettlementsTab.
+- UI: DeliveriesTab FR form Stock-In dropdown + banner; table shows Invoice adjusted / Adjust invoice (red pill → dialog) / Invoice adj. on confirm states.
+- Testing agent iteration_350: backend 12/13 pass (1 skip, no period data), frontend 100%. Zoho not configured in Preview → adjustment records graceful 'failed' with clear error (expected; real CN will work in Production where Zoho is configured).

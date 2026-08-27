@@ -5,7 +5,8 @@ import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Badge } from '../ui/badge';
-import { Plus, Trash2, DollarSign, RefreshCw, FileText, Calendar, Download, Building2, ChevronLeft, ChevronRight, Send, Check, X, Truck, CreditCard, Factory, ArrowRight, ArrowDown, Package, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Plus, Trash2, DollarSign, RefreshCw, FileText, Calendar, Download, Building2, ChevronLeft, ChevronRight, Send, Check, X, Truck, CreditCard, Factory, ArrowRight, ArrowDown, Package, TrendingUp, TrendingDown, Minus, Undo2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { getTerm } from '../../context/TenantConfigContext';
 
 const MONTHS = [
@@ -41,6 +42,21 @@ export default function SettlementsTab({
   const totalPages = Math.ceil((settlementsTotal || 0) / (settlementsPageSize || 20));
 
   const toggle = (id) => setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }));
+
+  const handleDetachFactoryReturns = async (s) => {
+    const frVal = s.total_factory_return_credit || 0;
+    if (!window.confirm(`Move ₹${fmt(frVal)} of factory-return credit OUT of settlement ${s.settlement_number}?\n\nThe returns can then be adjusted against their original Stock-In invoices (credit notes). The settlement totals will be recalculated.`)) return;
+    try {
+      const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/distributors/${distributor.id}/settlements/${s.id}/detach-factory-returns`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.detail || 'Correction failed');
+      toast.success(`₹${fmt(d.detached_credit)} factory-return credit detached — adjust the returns against their Stock-In invoices from Stock Out → Factory Returns`);
+      if (fetchSettlements) fetchSettlements();
+    } catch (e) { toast.error(typeof e.message === 'string' ? e.message : 'Correction failed'); }
+  };
 
   useEffect(() => {
     if (showSettlementDialog) {
@@ -570,6 +586,14 @@ export default function SettlementsTab({
                                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600 hover:bg-emerald-50" onClick={() => handleApproveSettlement(s.id)} title="Approve"><Check className="h-3.5 w-3.5" /></Button>
                                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-orange-600 hover:bg-orange-50" onClick={() => handleRejectSettlement(s.id)} title="Reject"><X className="h-3.5 w-3.5" /></Button>
                                   </>)}
+                                  {frVal > 0 && s.status !== 'paid' && canManage && (
+                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-purple-600 hover:bg-purple-50"
+                                      onClick={() => handleDetachFactoryReturns(s)}
+                                      title={`Correction: move ₹${fmt(frVal)} factory-return credit out of this settlement (adjust against Stock-In invoices instead)`}
+                                      data-testid={`detach-fr-${s.id}`}>
+                                      <Undo2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
                                   {(canDelete || (canManage && s.status === 'draft')) && (
                                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50" onClick={() => setDeleteTarget({ type: 'settlement', id: s.id, name: s.settlement_number })} title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>
                                   )}

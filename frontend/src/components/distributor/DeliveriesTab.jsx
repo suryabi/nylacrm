@@ -227,7 +227,44 @@ export default function DeliveriesTab({
   const [factoryReturnsPage, setFactoryReturnsPage] = useState(1);
   const [factoryTimeFilter, setFactoryTimeFilter] = useState('this_month');
   const [showFactoryDialog, setShowFactoryDialog] = useState(false);
-  const [factoryForm, setFactoryForm] = useState({ distributor_location_id: '', reason: 'expired', source: 'warehouse', customer_return_id: '', return_date: new Date().toISOString().split('T')[0], remarks: '' });
+  const [factoryForm, setFactoryForm] = useState({ distributor_location_id: '', reason: 'expired', source: 'warehouse', customer_return_id: '', return_date: new Date().toISOString().split('T')[0], remarks: '', stock_in_shipment_id: '' });
+  const [stockInOptions, setStockInOptions] = useState([]);
+  const [adjustTarget, setAdjustTarget] = useState(null);
+  const [adjustShipmentId, setAdjustShipmentId] = useState('');
+  const [adjusting, setAdjusting] = useState(false);
+
+  const loadStockInOptions = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/stock-in-options`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) setStockInOptions((await res.json()).shipments || []);
+    } catch { /* noop */ }
+  };
+
+  const handleAdjustInvoice = async () => {
+    if (!adjustTarget) return;
+    setAdjusting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/factory-returns/${adjustTarget.id}/adjust-invoice`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(adjustShipmentId ? { stock_in_shipment_id: adjustShipmentId } : {})
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.detail || 'Adjustment failed');
+      const adj = d.invoice_adjustment || {};
+      if (adj.status === 'applied') {
+        toast.success(`Credit note ${adj.zoho_creditnote_number || ''} applied to the Stock-In invoice`);
+      } else {
+        toast.error(adj.error || 'Invoice adjustment failed');
+      }
+      setAdjustTarget(null);
+      setAdjustShipmentId('');
+      fetchFactoryReturns();
+    } catch (e) { toast.error(typeof e.message === 'string' ? e.message : 'Adjustment failed'); }
+    finally { setAdjusting(false); }
+  };
   const [factoryItems, setFactoryItems] = useState([{ sku_id: '', quantity: 1 }]);
   const [savingFactory, setSavingFactory] = useState(false);
   const [marginSkus, setMarginSkus] = useState([]);
@@ -457,6 +494,10 @@ export default function DeliveriesTab({
 
   const handleCreateFactoryReturn = async () => {
     if (!factoryForm.distributor_location_id || !factoryForm.reason_id || factoryItems.some(i => !i.sku_id || !i.quantity)) return;
+    if (factoryForm.source === 'warehouse' && !factoryForm.stock_in_shipment_id) {
+      toast.error('Select the Stock-In (invoice) this return should be adjusted against');
+      return;
+    }
     setSavingFactory(true);
     try {
       const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/factory-returns`, {
@@ -471,6 +512,7 @@ export default function DeliveriesTab({
           customer_return_id: factoryForm.customer_return_id,
           return_date: factoryForm.return_date,
           remarks: factoryForm.remarks,
+          stock_in_shipment_id: factoryForm.source === 'warehouse' ? factoryForm.stock_in_shipment_id : null,
           items: factoryItems.filter(i => i.sku_id && i.quantity > 0)
         })
       });
@@ -2713,12 +2755,31 @@ export default function DeliveriesTab({
                       </select>
                     </div>
 
-                    {/* Settlement Info Banner */}
+                    {/* Stock-In invoice link + info banner */}
                     {factoryForm.source === 'warehouse' ? (
-                      <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm">
-                        <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                        <p className="text-amber-800">This return will be <strong>adjusted in settlement</strong> — factory reimburses distributor at transfer price (billed price).</p>
-                      </div>
+                      <>
+                        <div className="space-y-2">
+                          <Label>Adjust against Stock-In (invoice) *</Label>
+                          <select
+                            value={factoryForm.stock_in_shipment_id}
+                            onChange={(e) => setFactoryForm(f => ({ ...f, stock_in_shipment_id: e.target.value }))}
+                            onFocus={() => { if (stockInOptions.length === 0) loadStockInOptions(); }}
+                            className="w-full text-sm border rounded-md px-3 py-2 bg-background"
+                            data-testid="factory-stockin-select"
+                          >
+                            <option value="">Select Stock-In</option>
+                            {stockInOptions.map(s => (
+                              <option key={s.id} value={s.id}>
+                                {s.shipment_number} · {s.shipment_date} · ₹{(s.total_net_amount || 0).toLocaleString('en-IN')}{s.zoho_invoice_number ? ` · Inv ${s.zoho_invoice_number}` : ' · no Zoho invoice'}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm">
+                          <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                          <p className="text-amber-800">On confirmation a <strong>credit note is applied to the selected Stock-In invoice</strong> (transfer price). This return will <strong>not</strong> appear in the monthly settlement.</p>
+                        </div>
+                      </>
                     ) : (
                       <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm">
                         <Receipt className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
@@ -2913,9 +2974,23 @@ export default function DeliveriesTab({
                     </td>
                     <td className="p-3 text-center">
                       {isSettlement ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 px-2 py-1 rounded-full border border-amber-200">
-                          <AlertTriangle className="h-3 w-3" /> Adjustable
-                        </span>
+                        fr.invoice_adjustment?.status === 'applied' ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-200" title={`CN ${fr.invoice_adjustment.zoho_creditnote_number || ''} applied to Stock-In invoice`}>
+                            <CheckCircle2 className="h-3 w-3" /> Invoice adjusted
+                          </span>
+                        ) : (fr.status === 'confirmed' || fr.status === 'received') ? (
+                          <button type="button"
+                            className="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-50 px-2 py-1 rounded-full border border-red-200 hover:bg-red-100"
+                            title={fr.invoice_adjustment?.error || 'Not yet adjusted against the Stock-In invoice — click to adjust'}
+                            onClick={() => { setAdjustTarget(fr); setAdjustShipmentId(fr.stock_in_shipment_id || ''); if (stockInOptions.length === 0) loadStockInOptions(); }}
+                            data-testid={`adjust-invoice-${fr.id}`}>
+                            <AlertTriangle className="h-3 w-3" /> Adjust invoice
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 px-2 py-1 rounded-full border border-amber-200" title="Will be adjusted against the Stock-In invoice on confirmation">
+                            <Receipt className="h-3 w-3" /> Invoice adj. on confirm
+                          </span>
+                        )
                       ) : (
                         <span className="text-xs text-muted-foreground">Tracking only</span>
                       )}
@@ -2964,6 +3039,39 @@ export default function DeliveriesTab({
       </CollapsibleContent>
     </Card>
     </Collapsible>
+
+    {/* Adjust factory return against Stock-In invoice */}
+    <Dialog open={!!adjustTarget} onOpenChange={(o) => !o && setAdjustTarget(null)}>
+      <DialogContent className="max-w-md" data-testid="adjust-invoice-dialog">
+        <DialogHeader>
+          <DialogTitle>Adjust Against Stock-In Invoice</DialogTitle>
+          <DialogDescription>
+            {adjustTarget?.return_number} · ₹{(adjustTarget?.total_credit_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} — a credit note will be created and applied to the selected Stock-In's invoice in Zoho.
+          </DialogDescription>
+        </DialogHeader>
+        {adjustTarget?.invoice_adjustment?.error && (
+          <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md p-2">Last attempt: {adjustTarget.invoice_adjustment.error}</p>
+        )}
+        <div className="space-y-2">
+          <Label>Stock-In (invoice) *</Label>
+          <select value={adjustShipmentId} onChange={(e) => setAdjustShipmentId(e.target.value)}
+            className="w-full text-sm border rounded-md px-3 py-2 bg-background" data-testid="adjust-stockin-select">
+            <option value="">Select Stock-In</option>
+            {stockInOptions.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.shipment_number} · {s.shipment_date} · ₹{(s.total_net_amount || 0).toLocaleString('en-IN')}{s.zoho_invoice_number ? ` · Inv ${s.zoho_invoice_number}` : ' · no Zoho invoice'}
+              </option>
+            ))}
+          </select>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setAdjustTarget(null)}>Cancel</Button>
+          <Button className="bg-[#002FA7] hover:bg-[#00227A]" disabled={adjusting || !adjustShipmentId} onClick={handleAdjustInvoice} data-testid="adjust-invoice-confirm">
+            {adjusting ? 'Adjusting…' : 'Create Credit Note'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </div>
   );
 }
