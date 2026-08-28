@@ -282,7 +282,8 @@ async def log_replacement(equipment_id: str, body: LogDateBody, current_user: di
 # ── Attachments (photos, certifications, quotations, documents) ──
 import os
 from fastapi import UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
+from services.object_storage import build_path, put_object, get_object, delete_object
 
 EQ_UPLOAD_DIR = "/app/backend/uploads/equipment_docs"
 EQ_MAX_FILE_MB = 15
@@ -311,6 +312,17 @@ def _next_serial(attachments: list, base: str) -> int:
     return top + 1
 
 
+async def _eq_read_file(meta: dict):
+    """Object storage first; legacy pod-local file fallback."""
+    if meta.get("storage_path"):
+        return await get_object(meta["storage_path"])
+    path = os.path.join(EQ_UPLOAD_DIR, f"{meta['id']}_{meta['filename']}")
+    if not os.path.exists(path):
+        raise HTTPException(404, "File missing from storage")
+    with open(path, "rb") as fh:
+        return fh.read(), meta.get("content_type") or "application/octet-stream"
+
+
 @router.post("/{equipment_id}/files")
 async def upload_equipment_file(equipment_id: str, file: UploadFile = File(...),
                                 category: str = Form("document"),
@@ -325,17 +337,16 @@ async def upload_equipment_file(equipment_id: str, file: UploadFile = File(...),
     content = await file.read()
     if len(content) > EQ_MAX_FILE_MB * 1024 * 1024:
         raise HTTPException(400, f"File too large (max {EQ_MAX_FILE_MB} MB)")
-    os.makedirs(EQ_UPLOAD_DIR, exist_ok=True)
     file_id = str(uuid.uuid4())
     original_name = os.path.basename(file.filename or "file")
     ext = os.path.splitext(original_name)[1].lower()
     base = _eq_file_basename(eq.get("name"), category)
     serial = _next_serial(eq.get("attachments"), base)
     safe_name = f"{base}_{serial:02d}{ext}"
-    with open(os.path.join(EQ_UPLOAD_DIR, f"{file_id}_{safe_name}"), "wb") as fh:
-        fh.write(content)
+    storage_path = build_path(tenant_id, "equipment_docs", safe_name)
+    await put_object(storage_path, content, file.content_type or "application/octet-stream")
     meta = {"id": file_id, "filename": safe_name, "original_filename": original_name,
-            "size": len(content),
+            "size": len(content), "storage_path": storage_path,
             "content_type": file.content_type, "category": category,
             "uploaded_by": current_user.get("name") or current_user.get("email"),
             "uploaded_at": datetime.now(timezone.utc).isoformat()}
@@ -357,11 +368,9 @@ async def download_equipment_file(equipment_id: str, file_id: str,
     meta = next((f for f in eq.get("attachments", []) if f["id"] == file_id), None)
     if not meta:
         raise HTTPException(404, "File not found")
-    path = os.path.join(EQ_UPLOAD_DIR, f"{file_id}_{meta['filename']}")
-    if not os.path.exists(path):
-        raise HTTPException(404, "File missing from storage")
-    return FileResponse(path, filename=meta["filename"],
-                        media_type=meta.get("content_type") or "application/octet-stream")
+    data, ctype = await _eq_read_file(meta)
+    return Response(data, media_type=meta.get("content_type") or ctype,
+                    headers={"Content-Disposition": f'attachment; filename="{meta["filename"]}"'})
 
 
 @router.delete("/{equipment_id}/files/{file_id}")
@@ -375,9 +384,15 @@ async def delete_equipment_file(equipment_id: str, file_id: str,
     meta = next((f for f in eq.get("attachments", []) if f["id"] == file_id), None)
     if not meta:
         raise HTTPException(404, "File not found")
-    path = os.path.join(EQ_UPLOAD_DIR, f"{file_id}_{meta['filename']}")
-    if os.path.exists(path):
-        os.remove(path)
+    if meta.get("storage_path"):
+        try:
+            await delete_object(meta["storage_path"])
+        except Exception:
+            pass
+    else:
+        path = os.path.join(EQ_UPLOAD_DIR, f"{file_id}_{meta['filename']}")
+        if os.path.exists(path):
+            os.remove(path)
     await db.equipment_master.update_one(
         {"tenant_id": tenant_id, "id": equipment_id},
         {"$pull": {"attachments": {"id": file_id}},
@@ -398,15 +413,16 @@ async def download_equipment_zip(equipment_id: str, current_user: dict = Depends
         raise HTTPException(404, "No documents to export")
     import io
     import zipfile
-    from fastapi.responses import Response
     folder_map = {"photo": "Photos", "certification": "Certifications",
                   "quotation": "Vendor_Documents", "document": "Other_Documents"}
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for f in attachments:
-            path = os.path.join(EQ_UPLOAD_DIR, f"{f['id']}_{f['filename']}")
-            if os.path.exists(path):
-                zf.write(path, f"{folder_map.get(f.get('category'), 'Other_Documents')}/{f['filename']}")
+            try:
+                data, _ = await _eq_read_file(f)
+            except Exception:
+                continue
+            zf.writestr(f"{folder_map.get(f.get('category'), 'Other_Documents')}/{f['filename']}", data)
     import re as _re
     zip_name = _re.sub(r"[^A-Za-z0-9_]", "", (eq.get("name") or "equipment").replace(" ", "_")) + "_documents.zip"
     return Response(buf.getvalue(), media_type="application/zip",

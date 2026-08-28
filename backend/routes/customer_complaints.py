@@ -51,6 +51,19 @@ DEPARTMENTS = [
 ADMIN_ROLES = {"ceo", "admin", "system admin", "director"}
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/heic"}
+ALLOWED_DOCUMENT_TYPES = {
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
+    "text/csv",
+    "video/mp4",
+}
+ALLOWED_ATTACHMENT_TYPES = ALLOWED_IMAGE_TYPES | ALLOWED_DOCUMENT_TYPES
 MAX_PHOTO_BYTES = 15 * 1024 * 1024  # 15 MB per photo
 
 
@@ -745,8 +758,9 @@ async def upload_photos(
     uploaded = []
     for f in files:
         content_type = f.content_type or guess_content_type(f.filename)
-        if content_type not in ALLOWED_IMAGE_TYPES:
-            raise HTTPException(status_code=400, detail=f"Unsupported file type: {content_type}")
+        if content_type not in ALLOWED_ATTACHMENT_TYPES:
+            raise HTTPException(status_code=400,
+                                detail=f"Unsupported file type: {content_type}. Allowed: images, PDF, Word, Excel, PowerPoint, TXT, CSV, MP4.")
         data = await f.read()
         if len(data) > MAX_PHOTO_BYTES:
             raise HTTPException(status_code=400, detail=f"{f.filename} exceeds 15 MB")

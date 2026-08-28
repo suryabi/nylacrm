@@ -102,6 +102,7 @@ async def create_task(task: TaskCreate, current_user: dict = Depends(get_current
     }
     
     await tdb.tasks.insert_one(task_data)
+    task_data.pop("_id", None)
     
     return task_data
 

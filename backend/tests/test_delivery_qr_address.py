@@ -246,7 +246,7 @@ class TestPromoRecipientAddressResolution:
             # Find an existing contact that has SOME address (city) — we'll
             # point our promo at it to exercise the recipient-address path.
             contact = await motor_db.contacts.find_one(
-                {"tenant_id": TENANT_ID, "$or": [{"city": {"$ne": None, "$ne": ""}}, {"delivery_address.city": {"$ne": None, "$ne": ""}}]},
+                {"tenant_id": TENANT_ID, "$or": [{"city": {"$nin": [None, ""]}}, {"delivery_address.city": {"$nin": [None, ""]}}]},
                 {"_id": 0})
             if not contact:
                 pytest.skip("No contact with an address found to seed promo recipient test")
@@ -345,8 +345,8 @@ class TestRegularAccountDeliveryRegression:
             account = await motor_db.accounts.find_one(
                 {"tenant_id": TENANT_ID,
                  "$or": [
-                     {"delivery_address.city": {"$ne": None, "$ne": ""}},
-                     {"billing_address.city": {"$ne": None, "$ne": ""}},
+                     {"delivery_address.city": {"$nin": [None, ""]}},
+                     {"billing_address.city": {"$nin": [None, ""]}},
                  ]},
                 {"_id": 0})
             if not account:

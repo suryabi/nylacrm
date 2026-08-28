@@ -86,3 +86,18 @@ async def put_object(path: str, data: bytes, content_type: str) -> dict:
 
 async def get_object(path: str) -> tuple[bytes, str]:
     return await asyncio.to_thread(_get_object_sync, path)
+
+
+def _delete_object_sync(path: str) -> bool:
+    key = _init_storage()
+    resp = requests.delete(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+    if resp.status_code == 403:
+        global _storage_key
+        _storage_key = None
+        key = _init_storage()
+        resp = requests.delete(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+    return resp.status_code in (200, 204, 404)
+
+
+async def delete_object(path: str) -> bool:
+    return await asyncio.to_thread(_delete_object_sync, path)

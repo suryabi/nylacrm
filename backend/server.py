@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, File, UploadFile, Request, Response, Form, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status as http_status, File, UploadFile, Request, Response, Form, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
@@ -3181,7 +3181,7 @@ async def activity_heartbeat(data: ActivityHeartbeat, request: Request):
     """Record user activity heartbeat - called every 30 seconds from frontend"""
     try:
         user = await get_current_user_from_cookie_or_header(request)
-    except:
+    except Exception:
         return {'status': 'skipped', 'reason': 'not authenticated'}
     
     user_id = user['id']
@@ -3675,7 +3675,7 @@ async def get_dashboard_data(current_user: dict = Depends(get_current_user)):
                     elif days_since <= 14:
                         score += 5
                     # Older than 14 days = 0 additional points
-                except:
+                except Exception:
                     pass
         
         lead['win_score'] = min(int(score), 100)
@@ -3850,7 +3850,7 @@ async def get_employee_insights(current_user: dict = Depends(get_current_user)):
             days_since_joining = (today - joining_date).days
             months_since_joining = max(1, days_since_joining // 30)  # Approximate months
             ctc_till_date = ctc_monthly * months_since_joining
-        except:
+        except Exception:
             pass
     
     # Calculate total revenue from WON leads (since joining or all time)
@@ -3879,7 +3879,7 @@ async def get_employee_insights(current_user: dict = Depends(get_current_user)):
             ]
             invoice_result = await get_tdb().invoices.aggregate(invoice_pipeline).to_list(1)
             accounts_revenue = invoice_result[0]['total'] if invoice_result else 0
-    except:
+    except Exception:
         pass
     
     total_revenue += accounts_revenue
@@ -3902,7 +3902,7 @@ async def get_employee_insights(current_user: dict = Depends(get_current_user)):
             else:
                 # Default estimate: 25% gross margin
                 gross_margin += lead_value * 0.25
-    except:
+    except Exception:
         pass
     
     # Calculate total expenses (budget requests + expense requests for this user)
@@ -3915,7 +3915,7 @@ async def get_employee_insights(current_user: dict = Depends(get_current_user)):
             'status': 'approved'
         }, {'_id': 0, 'total_budget': 1}).to_list(500)
         total_expenses += sum(b.get('total_budget', 0) or 0 for b in budget_expenses)
-    except:
+    except Exception:
         pass
     
     # Expense requests created by this user (approved only)
@@ -3925,7 +3925,7 @@ async def get_employee_insights(current_user: dict = Depends(get_current_user)):
             'status': 'approved'
         }, {'_id': 0, 'amount': 1}).to_list(500)
         total_expenses += sum(e.get('amount', 0) or 0 for e in expense_requests)
-    except:
+    except Exception:
         pass
     
     # Calculate ROI (Revenue - CTC - Expenses) / CTC * 100
@@ -3995,7 +3995,7 @@ async def get_sales_roi_summary(
     try:
         start_dt = datetime.strptime(start_date, '%Y-%m-%d')
         end_dt = datetime.strptime(end_date, '%Y-%m-%d')
-    except:
+    except Exception:
         start_dt = datetime(now.year, 3, 1)
         end_dt = now
     
@@ -5617,6 +5617,20 @@ async def create_lead_status(status: LeadStatusCreate, current_user: dict = Depe
     await db.lead_statuses.insert_one(new_status)
     return {'status': {k: v for k, v in new_status.items() if k != '_id'}, 'message': 'Status created successfully'}
 
+@api_router.put("/master/lead-statuses/reorder")
+async def reorder_lead_statuses(status_ids: List[str], current_user: dict = Depends(get_current_user)):
+    """Reorder lead statuses (Admin/Director only)"""
+    if current_user['role'].lower() not in ['ceo', 'director', 'admin', 'system admin']:
+        raise HTTPException(status_code=403, detail='Only admins can manage lead statuses')
+    
+    for i, status_id in enumerate(status_ids):
+        await db.lead_statuses.update_one({'id': status_id}, {'$set': {'order': i + 1}})
+    
+    return {'message': 'Statuses reordered successfully'}
+
+# ============= BUSINESS CATEGORY ROUTES =============
+
+
 @api_router.put("/master/lead-statuses/{status_id}")
 async def update_lead_status(status_id: str, status: LeadStatusUpdate, current_user: dict = Depends(get_current_user)):
     """Update a lead status (Admin/Director only)"""
@@ -5653,18 +5667,6 @@ async def delete_lead_status(status_id: str, current_user: dict = Depends(get_cu
     
     return {'message': 'Status deleted successfully'}
 
-@api_router.put("/master/lead-statuses/reorder")
-async def reorder_lead_statuses(status_ids: List[str], current_user: dict = Depends(get_current_user)):
-    """Reorder lead statuses (Admin/Director only)"""
-    if current_user['role'].lower() not in ['ceo', 'director', 'admin', 'system admin']:
-        raise HTTPException(status_code=403, detail='Only admins can manage lead statuses')
-    
-    for i, status_id in enumerate(status_ids):
-        await db.lead_statuses.update_one({'id': status_id}, {'$set': {'order': i + 1}})
-    
-    return {'message': 'Statuses reordered successfully'}
-
-# ============= BUSINESS CATEGORY ROUTES =============
 
 @api_router.get("/master/business-categories")
 async def get_business_categories(current_user: dict = Depends(get_current_user)):
@@ -5701,6 +5703,20 @@ async def create_business_category(category: BusinessCategoryCreate, current_use
     await db.business_categories.insert_one(doc)
     
     return {'message': 'Business category created', 'category': {**doc, '_id': None}}
+
+@api_router.put("/master/business-categories/reorder")
+async def reorder_business_categories(category_ids: List[str], current_user: dict = Depends(get_current_user)):
+    """Reorder business categories (Admin/Director only)"""
+    if current_user['role'].lower() not in ['ceo', 'director', 'admin', 'system admin']:
+        raise HTTPException(status_code=403, detail='Only admins can manage business categories')
+    
+    for i, category_id in enumerate(category_ids):
+        await db.business_categories.update_one({'id': category_id}, {'$set': {'order': i + 1}})
+    
+    return {'message': 'Categories reordered successfully'}
+
+# ============= SALES REVENUE DASHBOARD =============
+
 
 @api_router.put("/master/business-categories/{category_id}")
 async def update_business_category(
@@ -5743,18 +5759,6 @@ async def delete_business_category(category_id: str, current_user: dict = Depend
     await db.business_categories.delete_one({'id': category_id})
     return {'message': 'Business category deleted'}
 
-@api_router.put("/master/business-categories/reorder")
-async def reorder_business_categories(category_ids: List[str], current_user: dict = Depends(get_current_user)):
-    """Reorder business categories (Admin/Director only)"""
-    if current_user['role'].lower() not in ['ceo', 'director', 'admin', 'system admin']:
-        raise HTTPException(status_code=403, detail='Only admins can manage business categories')
-    
-    for i, category_id in enumerate(category_ids):
-        await db.business_categories.update_one({'id': category_id}, {'$set': {'order': i + 1}})
-    
-    return {'message': 'Categories reordered successfully'}
-
-# ============= SALES REVENUE DASHBOARD =============
 
 @api_router.get("/sales-revenue/won-leads")
 async def get_won_leads_revenue(

@@ -2824,3 +2824,15 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Correction for old settlements: POST .../settlements/{sid}/detach-factory-returns (admin, blocked when paid) zeroes FR fields, reduces adjustments/final_payout, stores detached_* audit fields; purple Undo2 button in SettlementsTab.
 - UI: DeliveriesTab FR form Stock-In dropdown + banner; table shows Invoice adjusted / Adjust invoice (red pill → dialog) / Invoice adj. on confirm states.
 - Testing agent iteration_350: backend 12/13 pass (1 skip, no period data), frontend 100%. Zoho not configured in Preview → adjustment records graceful 'failed' with clear error (expected; real CN will work in Production where Zoho is configured).
+
+## Update — 28 Jun 2026: Tasks-Internal (Customer Complaints) document uploads
+- customer_complaints.py: ALLOWED_ATTACHMENT_TYPES = images + pdf/doc/docx/xls/xlsx/ppt/pptx/txt/csv + mp4; clear rejection message for others.
+- CustomerComplaintDetail.js: input accept extended; section renamed "Photos & Documents"; non-image attachments render as file tiles (FileText icon, ext badge, filename, click-to-download); images unchanged.
+- Verified via curl (pdf upload/download OK, .exe rejected) + screenshot (PDF tile rendered). Test file cleaned up.
+
+## Update — 28 Jun 2026: Codebase lint/deploy-blocker cleanup (finish checks)
+- ObjectId serialization: added .pop("_id", None) after insert_one before returning docs in tasks.py, task_management.py (4 sites), accounts.py (2), targets.py (2), requests.py (3), credit_notes.py (existing doc).
+- Route shadowing fixed: leads.py /follow-ups moved above /{lead_id}; server.py lead-statuses/reorder + business-categories/reorder moved above their /{id} routes.
+- Ephemeral upload storage migrated to Emergent object storage (services/object_storage put/get + new delete_object): event_journeys task files + budget files, equipment_master attachments (upload/download/delete/zip). Legacy pod-local files still readable via fallback (storage_path absent → local path).
+- Ruff: duplicate event_journeys import removed; server.py `status` import aliased http_status (params no longer shadow); 22 bare excepts → except Exception (server.py, zoom_service.py, tests); F601 duplicate $ne keys → $nin in test_delivery_qr_address.py.
+- Verified: equipment upload/download/zip/delete + event task file upload/download/delete via object storage (storage_path set, bytes intact); /api/leads/follow-ups 200.

@@ -56,7 +56,6 @@ from .lead_briefs import router as lead_briefs_router
 from .water_intelligence import router as water_intelligence_router, public_router as water_public_router
 from .equipment_master import router as equipment_master_router
 from .event_journeys import router as event_journeys_router
-from .event_journeys import router as event_journeys_router
 from .cost_cards import router as cost_cards_router
 from .target_planning import router as target_planning_router
 from .proxies import router as proxies_router

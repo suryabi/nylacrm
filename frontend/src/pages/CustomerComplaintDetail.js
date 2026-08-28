@@ -16,7 +16,7 @@ import {
 } from '../components/ui/alert-dialog';
 import {
   ArrowLeft, Loader2, Upload, Trash2, Send, MessageSquare, ImageIcon,
-  Package, User, Calendar, X, MapPin, Pencil, Check, RotateCcw, CheckCircle2,
+  Package, User, Calendar, X, MapPin, Pencil, Check, RotateCcw, CheckCircle2, FileText,
 } from 'lucide-react';
 import { PRIORITY_STYLES, STATUS_STYLES, LABEL, IdleBadge, DueBadge, fmtDueDate, getDepartments, getAssignees, MultiPick } from './CustomerComplaints';
 import { useTenantConfig } from '../context/TenantConfigContext';
@@ -108,7 +108,7 @@ export default function CustomerComplaintDetail() {
         headers: { ...HEAD(), 'Content-Type': 'multipart/form-data' },
       });
       setComplaint((c) => ({ ...c, photos: [...(c.photos || []), ...res.data.photos] }));
-      toast.success(`${res.data.photos.length} photo(s) uploaded`);
+      toast.success(`${res.data.photos.length} file(s) uploaded`);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Upload failed');
     } finally {
@@ -284,10 +284,10 @@ export default function CustomerComplaintDetail() {
           {/* Photos */}
           <Card>
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Photos ({(complaint.photos || []).length})</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Photos & Documents ({(complaint.photos || []).length})</CardTitle>
               {canEdit && (
                 <>
-                  <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={onFiles} data-testid="complaint-photo-input" />
+                  <input ref={fileRef} type="file" accept="image/*,video/mp4,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" multiple hidden onChange={onFiles} data-testid="complaint-photo-input" />
                   <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading} data-testid="complaint-upload-btn">
                     {uploading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Upload className="h-4 w-4 mr-1.5" />} Upload
                   </Button>
@@ -296,7 +296,7 @@ export default function CustomerComplaintDetail() {
             </CardHeader>
             <CardContent>
               {(complaint.photos || []).length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">No photos attached yet.</p>
+                <p className="text-sm text-muted-foreground py-4 text-center">No photos or documents attached yet.</p>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {complaint.photos.map((p) => (
@@ -497,6 +497,7 @@ const CityEditor = ({ value, disabled, onSave }) => {
 // Photo thumbnail — fetched as a blob (img tags can't send auth headers).
 const PhotoThumb = ({ complaintId, photo, canEdit, onRemove }) => {
   const [url, setUrl] = useState(null);
+  const isImage = (photo.content_type || '').startsWith('image/');
   useEffect(() => {
     let revoked = null;
     axios.get(`${API}/complaints/${complaintId}/photos/${photo.id}`, { headers: HEAD(), responseType: 'blob' })
@@ -504,6 +505,26 @@ const PhotoThumb = ({ complaintId, photo, canEdit, onRemove }) => {
       .catch(() => {});
     return () => { if (revoked) URL.revokeObjectURL(revoked); };
   }, [complaintId, photo.id]);
+
+  if (!isImage) {
+    const ext = (photo.original_filename || '').split('.').pop()?.toUpperCase() || 'FILE';
+    return (
+      <div className="relative group rounded-lg border bg-slate-50 aspect-square flex flex-col items-center justify-center gap-1.5 p-2 text-center" data-testid={`complaint-photo-${photo.id}`}>
+        <a href={url || '#'} download={photo.original_filename} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1.5 w-full">
+          <FileText className="h-8 w-8 text-rose-500" />
+          <span className="text-[10px] font-semibold text-slate-500">{ext}</span>
+          <span className="text-xs text-slate-700 w-full truncate px-1">{photo.original_filename}</span>
+        </a>
+        {canEdit && (
+          <button onClick={onRemove}
+            className="absolute top-1 right-1 h-7 w-7 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Remove file" data-testid={`remove-photo-${photo.id}`}>
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="relative group rounded-lg overflow-hidden border bg-slate-50 aspect-square" data-testid={`complaint-photo-${photo.id}`}>

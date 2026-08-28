@@ -69,7 +69,7 @@ def created_qc_members(auth_headers):
     for member in created_ids:
         try:
             requests.delete(f"{BASE_URL}/api/production/qc-team/{member['id']}", headers=auth_headers)
-        except:
+        except Exception:
             pass
 
 
@@ -100,7 +100,7 @@ def created_rejection_reasons(auth_headers):
     for reason in created_ids:
         try:
             requests.delete(f"{BASE_URL}/api/production/rejection-reasons/{reason['id']}", headers=auth_headers)
-        except:
+        except Exception:
             pass
 
 

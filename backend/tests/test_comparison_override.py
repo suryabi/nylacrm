@@ -77,7 +77,7 @@ class TestComparisonOverride:
                     "field": "outstanding"
                 }
             )
-        except:
+        except Exception:
             pass
 
     def test_get_comparison_returns_override_flags(self):

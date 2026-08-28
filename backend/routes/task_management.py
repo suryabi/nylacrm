@@ -135,6 +135,7 @@ async def create_label(label: LabelCreate, current_user: dict = Depends(get_curr
     }
     
     await tdb.task_labels.insert_one(label_data)
+    label_data.pop("_id", None)
     return label_data
 
 
@@ -240,6 +241,7 @@ async def create_milestone(milestone: MilestoneCreate, current_user: dict = Depe
     }
     
     await tdb.task_milestones.insert_one(milestone_data)
+    milestone_data.pop("_id", None)
     return milestone_data
 
 
@@ -674,6 +676,7 @@ async def create_task(task: TaskCreate, current_user: dict = Depends(get_current
     }
     
     await tdb.tasks_v2.insert_one(task_data)
+    task_data.pop("_id", None)
 
     # Notify each assignee (skips creator-assigning-self via dedup in notify_users)
     try:
@@ -781,6 +784,7 @@ async def add_comment(task_id: str, comment: CommentCreate, current_user: dict =
     }
     
     await tdb.task_comments_v2.insert_one(comment_data)
+    comment_data.pop("_id", None)
     
     # Log activity
     await log_activity(tdb, task_id, 'commented', None, comment.content[:100], current_user)

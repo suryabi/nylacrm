@@ -284,6 +284,7 @@ async def create_leave_request(request: LeaveRequestCreate, current_user: dict =
     }
     
     await get_tdb().leave_requests.insert_one(request_data)
+    request_data.pop("_id", None)
     
     request_data['created_at'] = datetime.fromisoformat(request_data['created_at'])
     return LeaveRequest(**request_data)
@@ -399,6 +400,7 @@ async def create_travel_request(request: TravelRequestCreate, current_user: dict
     }
     
     await get_tdb().travel_requests.insert_one(request_data)
+    request_data.pop("_id", None)
     
     return request_data
 
@@ -563,6 +565,7 @@ async def create_budget_request(request: BudgetRequestCreate, current_user: dict
     }
     
     await get_tdb().budget_requests.insert_one(request_data)
+    request_data.pop("_id", None)
     
     return request_data
 
@@ -720,6 +723,7 @@ async def create_expense_request(request: ExpenseRequestCreate, current_user: di
     }
     
     await get_tdb().expense_requests.insert_one(request_data)
+    request_data.pop("_id", None)
     
     return request_data
 

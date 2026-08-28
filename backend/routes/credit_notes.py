@@ -503,6 +503,7 @@ async def create_credit_note_from_return(
     
     if existing:
         logger.info(f"Credit note already exists for return {return_doc.get('return_number')}")
+        existing.pop("_id", None)
         return existing
     
     credit_note_number = await generate_credit_note_number(tenant_id)

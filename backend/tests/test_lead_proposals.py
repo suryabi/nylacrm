@@ -67,7 +67,7 @@ class TestLeadProposals:
         # Cleanup - delete any test proposal
         try:
             self.session.delete(f"{BASE_URL}/api/leads/{self.test_lead_id}/proposal")
-        except:
+        except Exception:
             pass
 
     # ============= GET PROPOSAL TESTS =============
@@ -483,7 +483,7 @@ class TestProposalPermissions:
         # Cleanup
         try:
             self.approver_session.delete(f"{BASE_URL}/api/leads/{self.test_lead_id}/proposal")
-        except:
+        except Exception:
             pass
     
     def test_non_approver_cannot_review(self):

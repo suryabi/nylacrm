@@ -109,11 +109,11 @@ class TestProposalDigitalSignature:
         # Cleanup - delete test proposal and lead
         try:
             self.session.delete(f"{BASE_URL}/api/leads/{self.test_lead_id}/proposal")
-        except:
+        except Exception:
             pass
         try:
             self.session.delete(f"{BASE_URL}/api/leads/{self.test_lead_id}")
-        except:
+        except Exception:
             pass
     
     # ============= TEST 1: Upload PDF Proposal =============
@@ -445,7 +445,7 @@ class TestDigitalSignatureEdgeCases:
         try:
             self.session.delete(f"{BASE_URL}/api/leads/{self.test_lead_id}/proposal")
             self.session.delete(f"{BASE_URL}/api/leads/{self.test_lead_id}")
-        except:
+        except Exception:
             pass
     
     def test_rejected_proposal_no_signature(self):

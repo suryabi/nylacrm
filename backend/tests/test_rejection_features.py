@@ -52,7 +52,7 @@ class TestRejectionFeatures:
         for reason_id in self.created_reason_ids:
             try:
                 self.session.delete(f"{BASE_URL}/api/production/rejection-reasons/{reason_id}")
-            except:
+            except Exception:
                 pass
     
     # ─────────────────────────────────────────────────────────────

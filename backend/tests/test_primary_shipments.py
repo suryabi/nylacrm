@@ -558,7 +558,7 @@ def cleanup_test_shipments(request, auth_session):
             auth_session.delete(
                 f"{BASE_URL}/api/distributors/{TEST_DISTRIBUTOR_ID}/shipments/{shipment_id}"
             )
-        except:
+        except Exception:
             pass
     
     print(f"Cleanup: Attempted to clean up {len(shipment_ids_to_delete)} test shipments")

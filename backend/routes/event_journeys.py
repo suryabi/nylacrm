@@ -12,6 +12,31 @@ from fastapi.responses import FileResponse, Response
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from database import db
+from services.object_storage import build_path, put_object, get_object, delete_object
+
+
+async def _read_stored_file(meta: dict, legacy_dir: str):
+    """Object storage first; legacy pod-local file as fallback for old uploads."""
+    if meta.get("storage_path"):
+        data, ctype = await get_object(meta["storage_path"])
+        return data, ctype
+    path = os.path.join(legacy_dir, f"{meta['id']}_{meta['filename']}")
+    if not os.path.exists(path):
+        raise HTTPException(404, "File missing from storage")
+    with open(path, "rb") as fh:
+        return fh.read(), meta.get("content_type") or "application/octet-stream"
+
+
+async def _delete_stored_file(meta: dict, legacy_dir: str):
+    if meta.get("storage_path"):
+        try:
+            await delete_object(meta["storage_path"])
+        except Exception:
+            pass
+        return
+    path = os.path.join(legacy_dir, f"{meta['id']}_{meta['filename']}")
+    if os.path.exists(path):
+        os.remove(path)
 from utils.sm_helpers import (
     ensure_default_event_budget_sm, find_transition, find_state, user_can_trigger,
 )
@@ -398,14 +423,12 @@ async def upload_task_file(event_id: str, tid: str, file: UploadFile = File(...)
     content = await file.read()
     if len(content) > MAX_FILE_MB * 1024 * 1024:
         raise HTTPException(400, f"File too large (max {MAX_FILE_MB} MB)")
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
     file_id = str(uuid.uuid4())
     safe_name = os.path.basename(file.filename or "file")
-    path = os.path.join(UPLOAD_DIR, f"{file_id}_{safe_name}")
-    with open(path, "wb") as fh:
-        fh.write(content)
+    storage_path = build_path(tenant_id, "event_tasks", safe_name)
+    await put_object(storage_path, content, file.content_type or "application/octet-stream")
     meta = {"id": file_id, "filename": safe_name, "size": len(content),
-            "content_type": file.content_type,
+            "content_type": file.content_type, "storage_path": storage_path,
             "uploaded_by": current_user.get("name") or current_user.get("email"),
             "uploaded_at": _now()}
     await db.event_tasks.update_one(
@@ -424,10 +447,9 @@ async def download_task_file(event_id: str, tid: str, file_id: str, current_user
     meta = next((f for f in task.get("files", []) if f["id"] == file_id), None)
     if not meta:
         raise HTTPException(404, "File not found")
-    path = os.path.join(UPLOAD_DIR, f"{file_id}_{meta['filename']}")
-    if not os.path.exists(path):
-        raise HTTPException(404, "File missing from storage")
-    return FileResponse(path, filename=meta["filename"], media_type=meta.get("content_type") or "application/octet-stream")
+    data, ctype = await _read_stored_file(meta, UPLOAD_DIR)
+    return Response(data, media_type=meta.get("content_type") or ctype,
+                    headers={"Content-Disposition": f'attachment; filename="{meta["filename"]}"'})
 
 
 @router.delete("/{event_id}/tasks/{tid}/files/{file_id}")
@@ -440,9 +462,7 @@ async def delete_task_file(event_id: str, tid: str, file_id: str, current_user: 
     meta = next((f for f in task.get("files", []) if f["id"] == file_id), None)
     if not meta:
         raise HTTPException(404, "File not found")
-    path = os.path.join(UPLOAD_DIR, f"{file_id}_{meta['filename']}")
-    if os.path.exists(path):
-        os.remove(path)
+    await _delete_stored_file(meta, UPLOAD_DIR)
     await db.event_tasks.update_one(
         {"tenant_id": tenant_id, "event_id": event_id, "id": tid},
         {"$pull": {"files": {"id": file_id}}, "$set": {"updated_at": _now()}})
@@ -519,13 +539,12 @@ async def upload_budget_file(event_id: str, bid: str, file: UploadFile = File(..
     content = await file.read()
     if len(content) > MAX_FILE_MB * 1024 * 1024:
         raise HTTPException(400, f"File too large (max {MAX_FILE_MB} MB)")
-    os.makedirs(BUDGET_UPLOAD_DIR, exist_ok=True)
     file_id = str(uuid.uuid4())
     safe_name = os.path.basename(file.filename or "file")
-    with open(os.path.join(BUDGET_UPLOAD_DIR, f"{file_id}_{safe_name}"), "wb") as fh:
-        fh.write(content)
+    storage_path = build_path(tenant_id, "event_budget", safe_name)
+    await put_object(storage_path, content, file.content_type or "application/octet-stream")
     meta = {"id": file_id, "filename": safe_name, "size": len(content),
-            "content_type": file.content_type,
+            "content_type": file.content_type, "storage_path": storage_path,
             "uploaded_by": current_user.get("name") or current_user.get("email"),
             "uploaded_at": _now()}
     await db.event_budget_items.update_one(
@@ -543,10 +562,9 @@ async def download_budget_file(event_id: str, bid: str, file_id: str, current_us
     meta = next((f for f in item.get("files", []) if f["id"] == file_id), None)
     if not meta:
         raise HTTPException(404, "File not found")
-    path = os.path.join(BUDGET_UPLOAD_DIR, f"{file_id}_{meta['filename']}")
-    if not os.path.exists(path):
-        raise HTTPException(404, "File missing from storage")
-    return FileResponse(path, filename=meta["filename"], media_type=meta.get("content_type") or "application/octet-stream")
+    data, ctype = await _read_stored_file(meta, BUDGET_UPLOAD_DIR)
+    return Response(data, media_type=meta.get("content_type") or ctype,
+                    headers={"Content-Disposition": f'attachment; filename="{meta["filename"]}"'})
 
 
 @router.delete("/{event_id}/budget-items/{bid}/files/{file_id}")
@@ -559,9 +577,7 @@ async def delete_budget_file(event_id: str, bid: str, file_id: str, current_user
     meta = next((f for f in item.get("files", []) if f["id"] == file_id), None)
     if not meta:
         raise HTTPException(404, "File not found")
-    path = os.path.join(BUDGET_UPLOAD_DIR, f"{file_id}_{meta['filename']}")
-    if os.path.exists(path):
-        os.remove(path)
+    await _delete_stored_file(meta, BUDGET_UPLOAD_DIR)
     await db.event_budget_items.update_one(
         {"tenant_id": tenant_id, "event_id": event_id, "id": bid}, {"$pull": {"files": {"id": file_id}}})
     return {"deleted": True}

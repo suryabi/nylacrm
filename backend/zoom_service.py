@@ -132,7 +132,7 @@ class ZoomAPIClient:
             error_detail = ""
             try:
                 error_detail = e.response.json()
-            except:
+            except Exception:
                 error_detail = e.response.text
             raise Exception(f"Failed to create Zoom meeting: {error_detail}")
         except httpx.HTTPError as e:

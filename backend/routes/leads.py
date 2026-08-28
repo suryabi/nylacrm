@@ -432,6 +432,32 @@ async def get_leads(
     )
 
 
+@router.get("/follow-ups", response_model=List[FollowUp])
+async def get_follow_ups(
+    lead_id: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get follow-ups with optional filters"""
+    tdb = get_tdb()
+    query = {}
+    if lead_id:
+        query['lead_id'] = lead_id
+    if assigned_to:
+        assigned_to_list = assigned_to.split(',')
+        query['assigned_to'] = {'$in': assigned_to_list}
+    
+    follow_ups = await tdb.follow_ups.find(query, {'_id': 0}).sort('scheduled_date', 1).to_list(1000)
+    
+    for fu in follow_ups:
+        if isinstance(fu.get('created_at'), str):
+            fu['created_at'] = datetime.fromisoformat(fu['created_at'].replace('Z', '+00:00'))
+        if isinstance(fu.get('scheduled_date'), str):
+            fu['scheduled_date'] = datetime.fromisoformat(fu['scheduled_date'].replace('Z', '+00:00'))
+    
+    return follow_ups
+
+
 @router.get("/{lead_id}", response_model=Lead)
 async def get_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single lead by ID"""
@@ -765,31 +791,6 @@ async def create_follow_up(follow_up: FollowUpCreate, current_user: dict = Depen
     follow_up_data['scheduled_date'] = datetime.fromisoformat(follow_up_data['scheduled_date'])
     return FollowUp(**follow_up_data)
 
-
-@router.get("/follow-ups", response_model=List[FollowUp])
-async def get_follow_ups(
-    lead_id: Optional[str] = None,
-    assigned_to: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get follow-ups with optional filters"""
-    tdb = get_tdb()
-    query = {}
-    if lead_id:
-        query['lead_id'] = lead_id
-    if assigned_to:
-        assigned_to_list = assigned_to.split(',')
-        query['assigned_to'] = {'$in': assigned_to_list}
-    
-    follow_ups = await tdb.follow_ups.find(query, {'_id': 0}).sort('scheduled_date', 1).to_list(1000)
-    
-    for fu in follow_ups:
-        if isinstance(fu.get('created_at'), str):
-            fu['created_at'] = datetime.fromisoformat(fu['created_at'].replace('Z', '+00:00'))
-        if isinstance(fu.get('scheduled_date'), str):
-            fu['scheduled_date'] = datetime.fromisoformat(fu['scheduled_date'].replace('Z', '+00:00'))
-    
-    return follow_ups
 
 
 @router.put("/follow-ups/{follow_up_id}/complete")

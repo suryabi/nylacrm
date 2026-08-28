@@ -38,7 +38,7 @@ class TestLeadCreation:
         for lead_id in self.created_lead_ids:
             try:
                 requests.delete(f"{BASE_URL}/api/leads/{lead_id}", headers=self.headers)
-            except:
+            except Exception:
                 pass
     
     def test_create_lead_with_valid_region(self):

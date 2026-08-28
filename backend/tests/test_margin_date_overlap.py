@@ -49,7 +49,7 @@ class TestMarginDateOverlap:
         for margin_id in self.created_margin_ids:
             try:
                 self.session.delete(f"{BASE_URL}/api/distributors/{DISTRIBUTOR_ID}/margins/{margin_id}")
-            except:
+            except Exception:
                 pass
     
     def test_can_list_margins_for_sku(self):

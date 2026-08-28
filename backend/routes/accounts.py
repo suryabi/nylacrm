@@ -424,6 +424,7 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
     }
     
     await tdb.accounts.insert_one(account_data)
+    account_data.pop("_id", None)
 
     # Copy the lead's contacts onto the new account: same contact records, now
     # also tagged with this account_id so they show under the account's Contacts
@@ -1400,6 +1401,7 @@ async def create_account_invoice(account_id: str, invoice_data: dict, current_us
     }
     
     await tdb.invoices.insert_one(invoice)
+    invoice.pop("_id", None)
     
     return {
         'invoice': invoice,

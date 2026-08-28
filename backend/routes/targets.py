@@ -169,6 +169,7 @@ async def create_target_plan(plan: TargetPlanCreate, current_user: dict = Depend
     }
     
     await db.target_plans_v2.insert_one(plan_data)
+    plan_data.pop("_id", None)
     
     return plan_data
 
@@ -409,6 +410,7 @@ async def create_allocation(plan_id: str, allocation: AllocationCreate, current_
     }
     
     await db.target_allocations_v2.insert_one(allocation_data)
+    allocation_data.pop("_id", None)
     
     return allocation_data
 

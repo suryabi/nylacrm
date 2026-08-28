@@ -54,7 +54,7 @@ class TestLeadScoringModel:
         for cat_id in self.created_categories:
             try:
                 self.session.delete(f"{BASE_URL}/api/scoring/categories/{cat_id}")
-            except:
+            except Exception:
                 pass
     
     # ==================== SCORING MODEL TESTS ====================
