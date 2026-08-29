@@ -2836,3 +2836,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Ephemeral upload storage migrated to Emergent object storage (services/object_storage put/get + new delete_object): event_journeys task files + budget files, equipment_master attachments (upload/download/delete/zip). Legacy pod-local files still readable via fallback (storage_path absent → local path).
 - Ruff: duplicate event_journeys import removed; server.py `status` import aliased http_status (params no longer shadow); 22 bare excepts → except Exception (server.py, zoom_service.py, tests); F601 duplicate $ne keys → $nin in test_delivery_qr_address.py.
 - Verified: equipment upload/download/zip/delete + event task file upload/download/delete via object storage (storage_path set, bytes intact); /api/leads/follow-ups 200.
+
+## Update — 29 Jun 2026: Production missing-thumbnails RCA + UX hardening
+- User report (Production screenshot "5 Micron FIlter"): thumbnails blank + downloads failing. Preview verified healthy (all 4 thumbs render, legacy local files download 200).
+- RCA: Production files uploaded BEFORE the object-storage migration lived on the pod's ephemeral disk and were wiped at redeploy; attachment metadata survived → blank thumbs/404 downloads. Unrecoverable; user must re-upload. New uploads persist in Emergent object storage (uses EMERGENT_LLM_KEY from backend/.env, available in prod).
+- UX: AuthImg now shows a "missing" placeholder tile on fetch failure (instead of endless grey pulse); download of a missing file shows a clear re-upload message.

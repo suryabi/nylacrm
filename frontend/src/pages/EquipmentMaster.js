@@ -87,14 +87,23 @@ const CameraDialog = ({ open, onClose, onCapture }) => {
 
 const AuthImg = ({ src, alt, className, onClick, testid }) => {
   const [url, setUrl] = useState(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     let obj;
     fetch(src, { headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } })
-      .then((r) => (r.ok ? r.blob() : null))
-      .then((b) => { if (b) { obj = URL.createObjectURL(b); setUrl(obj); } })
-      .catch(() => {});
+      .then((r) => (r.ok ? r.blob() : Promise.reject()))
+      .then((b) => { obj = URL.createObjectURL(b); setUrl(obj); })
+      .catch(() => setFailed(true));
     return () => { if (obj) URL.revokeObjectURL(obj); };
   }, [src]);
+  if (failed) {
+    return (
+      <div className={`${className} bg-slate-100 flex flex-col items-center justify-center gap-1 text-slate-400`} data-testid={testid} title="File is missing from storage — please re-upload">
+        <ImageIcon className="h-5 w-5" />
+        <span className="text-[9px] font-medium uppercase">missing</span>
+      </div>
+    );
+  }
   if (!url) return <div className={`${className} bg-slate-100 animate-pulse`} data-testid={testid} />;
   return <img src={url} alt={alt} className={className} onClick={onClick} data-testid={testid} />;
 };
@@ -177,6 +186,7 @@ export default function EquipmentMaster() {
   const downloadDoc = async (f) => {
     try {
       const res = await fetch(`${API_URL}/api/production/equipment/${docsTarget.id}/files/${f.id}`, { headers: authHeaders() });
+      if (res.status === 404) { toast.error(`"${f.filename}" is missing from storage — it was uploaded before the storage upgrade and needs to be re-uploaded.`); return; }
       if (!res.ok) throw new Error();
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
