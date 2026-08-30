@@ -2884,3 +2884,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Period summary line: total Stored vs Zoho actual, Overall difference, plus GST/Incentive/Discount totals (backend `totals` object).
 - Fixed missing "today": revenue_analytics `_window` now computes today in IST (was UTC — hid same-day invoices until 05:30 IST). Affects the whole Revenue Analytics page consistently.
 - Tested via API (all_time → 2 rows with account/date + totals) and screenshot (full table, summary bar, columns render).
+
+## Update — Jun 2026: Revenue Analytics GST toggle
+- New "GST: Included / Excluded" pill toggle in the filter bar. exclude_gst=true reports product-line (post-discount, pre-tax) value via _ex_gst_value (sum of _skuperf_line_value per invoice; invoices without line items keep full value).
+- Applies to headline Gross/Net, ARR, and city/state/territory/category breakdowns. SKU breakdown was already ex-GST. Card label shows "(incl. GST)"/"(excl. GST)".
+- Tested: seeded invoice (95,256 incl / 90,720 excl) → totals differed by exactly 4,536 GST; UI toggle verified via screenshot; test invoice cleaned.

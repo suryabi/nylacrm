@@ -456,6 +456,7 @@ function BreakdownView() {
   const [timeFilter, setTimeFilter] = useState('this_month');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [excludeGst, setExcludeGst] = useState(false);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
 
@@ -463,7 +464,7 @@ function BreakdownView() {
     if (timeFilter === 'custom' && (!fromDate || !toDate)) return;
     setLoading(true);
     try {
-      const params = { time_filter: timeFilter, group_by: groupBy, top_n: 12 };
+      const params = { time_filter: timeFilter, group_by: groupBy, top_n: 12, exclude_gst: excludeGst };
       if (timeFilter === 'custom') { params.from_date = fromDate; params.to_date = toDate; }
       const res = await axios.get(`${API_URL}/reports/revenue-analytics`, { ...authHeaders(), params });
       setData(res.data);
@@ -473,7 +474,7 @@ function BreakdownView() {
     } finally {
       setLoading(false);
     }
-  }, [groupBy, timeFilter, fromDate, toDate]);
+  }, [groupBy, timeFilter, fromDate, toDate, excludeGst]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -525,12 +526,31 @@ function BreakdownView() {
             </div>
           </>
         )}
+        <div className="min-w-[150px]">
+          <FieldLabel>GST</FieldLabel>
+          <div className="flex overflow-hidden rounded-lg border border-slate-300" data-testid="ra-gst-toggle">
+            <button
+              onClick={() => setExcludeGst(false)}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${!excludeGst ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              data-testid="ra-gst-included"
+            >
+              Included
+            </button>
+            <button
+              onClick={() => setExcludeGst(true)}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${excludeGst ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              data-testid="ra-gst-excluded"
+            >
+              Excluded
+            </button>
+          </div>
+        </div>
       </div>
 
       {loading ? <Spinner /> : (
         <>
           <div className="grid grid-cols-1 gap-4 duration-500 animate-in fade-in-50 slide-in-from-bottom-2 sm:grid-cols-2 lg:grid-cols-4 md:gap-6">
-            <StatCard label="Gross Revenue" value={formatCurrency(totalGross)} sub={`Net ${formatCurrency(total)}`} icon={IndianRupee} gradient="cyan" testid="ra-total-revenue" />
+            <StatCard label={excludeGst ? 'Gross Revenue (excl. GST)' : 'Gross Revenue (incl. GST)'} value={formatCurrency(totalGross)} sub={`Net ${formatCurrency(total)}`} icon={IndianRupee} gradient="cyan" testid="ra-total-revenue" />
             <StatCard label="Annual Run Rate" value={formatCurrency(arr)} sub={arrSub} icon={Gauge} gradient="magenta" testid="ra-arr" />
             <StatCard label="Invoices" value={(data?.total_invoice_count || 0).toLocaleString('en-IN')} sub="Billed in period" icon={Receipt} gradient="purple" testid="ra-total-invoices" />
             <StatCard label="Segments" value={(data?.raw_group_count || 0).toLocaleString('en-IN')} sub={`By ${dimLabel}`} icon={Layers} gradient="teal" testid="ra-total-groups" />
