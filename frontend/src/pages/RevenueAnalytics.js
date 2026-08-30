@@ -487,7 +487,7 @@ function BreakdownView() {
   const [timeFilter, setTimeFilter] = useState('this_month');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [deductCn, setDeductCn] = useState(true);
+  const [deductCn, setDeductCn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
 
