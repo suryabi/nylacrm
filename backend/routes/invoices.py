@@ -806,11 +806,15 @@ class ZohoMirrorRepairRequest(BaseModel):
 async def repair_zoho_mirror_values(
     payload: Optional[ZohoMirrorRepairRequest] = None,
     dry_run: bool = Query(True),
+    time_filter: str = Query("this_month"),
+    from_date: Optional[str] = Query(None),
+    to_date: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user),
 ):
     """Re-read every Zoho-mirrored invoice's FINAL total (post-discount, incl.
     GST) from Zoho Books and correct the stored gross/net values. Older mirrors
     were written as qty×rate (pre-discount), inflating Revenue Analytics.
+    Scoped to the SAME time window the Revenue Analytics page is showing.
     `dry_run=true` only reports the mismatches; `dry_run=false` applies fixes
     (restricted to `invoice_ids` when provided) and adjusts the account
     outstanding balance by the same delta."""
@@ -820,11 +824,14 @@ async def repair_zoho_mirror_values(
     if not is_zoho_configured():
         raise HTTPException(status_code=400, detail="Zoho Books is not configured for this tenant.")
     from core.tenant import get_current_tenant_id
+    from routes.revenue_analytics import _window
+    fd, td = _window(time_filter, from_date, to_date)
     tenant_id = get_current_tenant_id()
     tdb = get_tdb()
     now = datetime.now(timezone.utc).isoformat()
     only_ids = set((payload.invoice_ids or []) if payload else [])
-    mirror_query = {"source": "zoho_books", "zoho_invoice_id": {"$nin": [None, ""]}}
+    mirror_query = {"source": "zoho_books", "zoho_invoice_id": {"$nin": [None, ""]},
+                    "invoice_date": {"$gte": fd, "$lte": td}}
     if not dry_run and only_ids:
         mirror_query["id"] = {"$in": list(only_ids)}
     mirrors = await tdb.invoices.find(
@@ -868,6 +875,7 @@ async def repair_zoho_mirror_values(
     logger.info(f"[INVOICES] Zoho mirror repair by {current_user.get('email')}: dry_run={dry_run}, "
                 f"checked={len(mirrors)}, mismatched={len([r for r in rows if 'delta' in r])}, fixed={fixed}")
     return {"dry_run": dry_run, "checked": len(mirrors),
+            "from": fd, "to": td, "time_filter": time_filter,
             "mismatched": len([r for r in rows if "delta" in r]),
             "fixed": fixed, "errors": errors, "rows": rows[:200]}
 

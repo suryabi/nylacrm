@@ -2872,3 +2872,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - New endpoint POST /api/water-intelligence/submit-urls (manage roles, max 10 links): fetches each page's og/meta title+description, dedupes by URL and title-hash, AI-summarises via the same gpt-5.5 engine, and creates articles as pending_approval REGARDLESS of relevance score (manual picks bypass the min_score filter). Docs flagged is_manual + submitted_by; AI failure falls back to page title/description.
 - UI: "Add Links" button on Water Intelligence header → dialog with multi-line URL textarea; result toast shows created/duplicates/failed; switches to Pending tab and refreshes.
 - Tested: invalid URL 400, real link created (score 55 still pending_approval), duplicate resubmit skipped, dialog + button via screenshot. Test article cleaned.
+
+## Update — Jun 2026: Zoho mirror repair scoped to page time period
+- Repair endpoint now takes time_filter/from_date/to_date (same _window resolver as revenue-analytics) and only scans mirrors with invoice_date inside the window; response includes from/to.
+- UI passes the page's selected time period, clears stale results when the period changes, and the summary shows the checked window. Custom period requires From/To dates.
+- Tested: this_month→0 checked, all_time→2, custom window respected; UI summary "2026-08-01 → 2026-08-30 · Checked 0".

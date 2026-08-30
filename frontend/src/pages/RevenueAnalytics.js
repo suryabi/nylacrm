@@ -214,11 +214,14 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
   const [selectedIds, setSelectedIds] = useState([]);
 
   const runRepair = async (apply) => {
+    if (timeFilter === 'custom' && (!fromDate || !toDate)) { toast.error('Pick the custom From/To dates first'); return; }
     setRepairBusy(true);
     try {
       const body = apply ? { invoice_ids: selectedIds } : {};
+      const qs = new URLSearchParams({ dry_run: apply ? 'false' : 'true', time_filter: timeFilter });
+      if (timeFilter === 'custom') { qs.set('from_date', fromDate); qs.set('to_date', toDate); }
       const res = await axios.post(
-        `${API_URL}/invoices/admin/zoho-mirror-repair?dry_run=${apply ? 'false' : 'true'}`,
+        `${API_URL}/invoices/admin/zoho-mirror-repair?${qs.toString()}`,
         body, authHeaders());
       setRepair(res.data);
       if (apply) {
@@ -242,6 +245,9 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
 
   const toggleId = (id) => setSelectedIds((prev) =>
     prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
+  // Stale results from another window would be misleading — clear on change.
+  useEffect(() => { setRepair(null); setSelectedIds([]); }, [timeFilter, fromDate, toDate]);
 
   const load = useCallback(async () => {
     if (timeFilter === 'custom' && (!fromDate || !toDate)) return;
@@ -331,7 +337,7 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                   </button>
                   {repair && (
                     <span className="text-xs text-slate-500" data-testid="ra-zoho-repair-summary">
-                      Checked {repair.checked} · mismatched {repair.mismatched}
+                      {repair.from} → {repair.to} · Checked {repair.checked} · mismatched {repair.mismatched}
                       {repair.errors ? ` · errors ${repair.errors}` : ''}
                       {!repair.dry_run ? ` · fixed ${repair.fixed}` : ''}
                     </span>
@@ -399,7 +405,7 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                   );
                 })()}
                 <span className="block text-[11px] text-slate-400">
-                  Compares each CRM-mirrored invoice with its final Zoho total (after discount &amp; GST). Tick the invoices you want corrected, then fix only those.
+                  Checks CRM-mirrored invoices in the time period selected above against their final Zoho totals (after discount &amp; GST). Tick the invoices you want corrected, then fix only those.
                 </span>
               </div>
             </div>
