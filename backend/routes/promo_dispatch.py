@@ -160,57 +160,99 @@ async def _generate_challan_number(tenant_id: str) -> str:
 
 
 # ───────────────────────────── Promo dispatch ───────────────────────────────
+async def _allowed_child_ids(tenant_id: str, sku_ids: list) -> dict:
+    """sku_id → [None, <generic child id>]: stock rows a promo line may draw
+    from. Bottles held under a GENERIC child SKU are physically unbranded and
+    freely dispatchable, so they count alongside null-child rows. Customer-
+    branded children stay excluded. (Production bug: warehouse stock lived
+    under the generic child — e.g. '24 Generic brand', 281 bottles — while
+    every promo query hardcoded child_sku_id=None → 'available 0'.)"""
+    out = {s: [None] for s in sku_ids if s}
+    if not out:
+        return out
+    async for cs in db.child_skus.find(
+            {"tenant_id": tenant_id, "parent_sku_id": {"$in": list(out.keys())},
+             "child_type": "generic"},
+            {"_id": 0, "id": 1, "parent_sku_id": 1}):
+        out[cs["parent_sku_id"]].append(cs["id"])
+    return out
+
+
 async def _adjust_stock_for_dispatch(tenant_id: str, dispatch: dict, items: list, *, sign: int) -> None:
     """Deduct (sign=-1) or restore (sign=+1) stock for every line of a dispatch.
-    Mirrors the exact stock-key convention used at creation so reversals land
-    on the same stock row. `items` are stored item dicts."""
+    Child-SKU aware: a line with an explicit `child_sku_id` (set by batch
+    allocation) hits exactly that row; otherwise the null-child row is used
+    first, then the SKU's generic-child row. Deductions split across rows so a
+    row is never driven negative while another still holds stock."""
     now = datetime.now(timezone.utc).isoformat()
     src_is_factory = bool(dispatch.get("is_factory"))
     distributor_id = dispatch.get("distributor_id")
     loc_id = dispatch.get("distributor_location_id")
+    allowed = await _allowed_child_ids(tenant_id, [it.get("sku_id") for it in items])
     for it in items:
         qty = it.get("quantity") or 0
         if not qty:
             continue
         batch_id = it.get("batch_id")
         if src_is_factory:
-            stock_key = {"tenant_id": tenant_id, "warehouse_location_id": loc_id, "sku_id": it.get("sku_id"),
-                         "child_sku_id": {"$in": [None]}}
+            coll = db.factory_warehouse_stock
+            base = {"tenant_id": tenant_id, "warehouse_location_id": loc_id, "sku_id": it.get("sku_id")}
             if batch_id and batch_id != "__legacy__":
-                stock_key["batch_id"] = batch_id
-            await db.factory_warehouse_stock.update_one(
-                stock_key, {"$inc": {"quantity": sign * qty}, "$set": {"updated_at": now}})
+                base["batch_id"] = batch_id
         else:
-            stock_key = {"tenant_id": tenant_id, "distributor_id": distributor_id,
-                         "distributor_location_id": loc_id, "sku_id": it.get("sku_id"),
-                         "child_sku_id": {"$in": [None]}}
-            stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
-            await db.distributor_stock.update_one(
-                stock_key, {"$inc": {"quantity": sign * qty}, "$set": {"updated_at": now}})
+            coll = db.distributor_stock
+            base = {"tenant_id": tenant_id, "distributor_id": distributor_id,
+                    "distributor_location_id": loc_id, "sku_id": it.get("sku_id")}
+            base["batch_id"] = batch_id if batch_id else {"$in": [None]}
+        child_vals = [it["child_sku_id"]] if it.get("child_sku_id") else allowed.get(it.get("sku_id"), [None])
+        key = {**base, "child_sku_id": {"$in": child_vals}}
+        if sign > 0:
+            await coll.update_one(key, {"$inc": {"quantity": qty}, "$set": {"updated_at": now}})
+            continue
+        # Deduction: walk matching rows (null-child first) and split as needed.
+        rows = await coll.find({**key, "quantity": {"$gt": 0}},
+                               {"_id": 0, "id": 1, "quantity": 1, "child_sku_id": 1}).to_list(100)
+        rows.sort(key=lambda r: r.get("child_sku_id") is not None)
+        remaining = qty
+        for r in rows:
+            take = min(int(r.get("quantity") or 0), remaining)
+            if take <= 0:
+                continue
+            await coll.update_one({"id": r["id"], "tenant_id": tenant_id},
+                                  {"$inc": {"quantity": -take}, "$set": {"updated_at": now}})
+            remaining -= take
+            if remaining <= 0:
+                break
+        if remaining > 0:
+            # Legacy behaviour: drive a matching row negative (audit-visible).
+            await coll.update_one(key, {"$inc": {"quantity": -remaining}, "$set": {"updated_at": now}})
 
 
 async def _check_stock_availability(tenant_id: str, *, src_is_factory: bool, src_tracks_batches: bool,
                                     distributor_id: str, loc_id: str, items: list) -> None:
-    """Raise HTTP 400 if any line lacks available stock (used at confirm time)."""
+    """Raise HTTP 400 if any line lacks available stock (used at confirm time).
+    Counts null-child AND generic-child stock rows (unbranded bottles)."""
+    allowed = await _allowed_child_ids(tenant_id, [it.get("sku_id") for it in items])
     for it in items:
         qty = it.get("quantity") or 0
         sku_id = it.get("sku_id")
         sku_name = it.get("sku_name")
         batch_id = it.get("batch_id")
+        child_vals = allowed.get(sku_id, [None])
         if qty <= 0:
             raise HTTPException(status_code=400, detail="Quantity must be greater than zero.")
         if src_is_factory and src_tracks_batches and not batch_id:
             raise HTTPException(status_code=400, detail=f"Batch is required for SKU {sku_name or sku_id}.")
         if src_is_factory:
             key = {"tenant_id": tenant_id, "warehouse_location_id": loc_id, "sku_id": sku_id,
-                   "child_sku_id": {"$in": [None]}}
+                   "child_sku_id": {"$in": child_vals}}
             if batch_id and batch_id != "__legacy__":
                 key["batch_id"] = batch_id
             rows = await db.factory_warehouse_stock.find(key, {"_id": 0, "quantity": 1}).to_list(1000)
         else:
             key = {"tenant_id": tenant_id, "distributor_id": distributor_id,
                    "distributor_location_id": loc_id, "sku_id": sku_id,
-                   "child_sku_id": {"$in": [None]}}
+                   "child_sku_id": {"$in": child_vals}}
             key["batch_id"] = batch_id if batch_id else {"$in": [None]}
             rows = await db.distributor_stock.find(key, {"_id": 0, "quantity": 1}).to_list(1000)
         available = sum((r.get("quantity") or 0) for r in rows)
@@ -234,6 +276,7 @@ async def _allocate_batches_if_needed(tenant_id: str, d: dict, items: list, disp
     loc_id = d.get("distributor_location_id")
     src_is_factory = bool(d.get("is_factory"))
     reserved = await _reserved_qty_map(tenant_id, distributor_id, loc_id, True, exclude_delivery_id=dispatch_id)
+    allowed = await _allowed_child_ids(tenant_id, [it.get("sku_id") for it in items])
     new_items: list = []
     changed = False
     for it in items:
@@ -244,17 +287,20 @@ async def _allocate_batches_if_needed(tenant_id: str, d: dict, items: list, disp
         sku_name = it.get("sku_name")
         need = int(it.get("quantity") or 0)
         unit_price = float(it.get("unit_price") or 0)
+        child_vals = allowed.get(sku_id, [None])
         if src_is_factory:
             rows = await db.factory_warehouse_stock.find(
                 {"tenant_id": tenant_id, "warehouse_location_id": loc_id, "sku_id": sku_id,
-                 "batch_id": {"$ne": None}, "quantity": {"$gt": 0}, "child_sku_id": {"$in": [None]}},
-                {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "production_date": 1, "created_at": 1}).to_list(2000)
+                 "batch_id": {"$ne": None}, "quantity": {"$gt": 0}, "child_sku_id": {"$in": child_vals}},
+                {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "production_date": 1,
+                 "created_at": 1, "child_sku_id": 1, "child_sku_name": 1}).to_list(2000)
             rows.sort(key=lambda r: (r.get("production_date") or r.get("created_at") or "9999"))
         else:
             rows = await db.distributor_stock.find(
                 {"tenant_id": tenant_id, "distributor_id": distributor_id, "distributor_location_id": loc_id,
-                 "sku_id": sku_id, "batch_id": {"$ne": None}, "quantity": {"$gt": 0}, "child_sku_id": {"$in": [None]}},
-                {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "created_at": 1}).to_list(2000)
+                 "sku_id": sku_id, "batch_id": {"$ne": None}, "quantity": {"$gt": 0}, "child_sku_id": {"$in": child_vals}},
+                {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "created_at": 1,
+                 "child_sku_id": 1, "child_sku_name": 1}).to_list(2000)
             rows.sort(key=lambda r: (r.get("created_at") or "9999"))
         remaining = need
         allocations = []
@@ -264,7 +310,7 @@ async def _allocate_batches_if_needed(tenant_id: str, d: dict, items: list, disp
             if avail <= 0:
                 continue
             take = min(avail, remaining)
-            allocations.append((bid, r.get("batch_code"), take))
+            allocations.append((bid, r.get("batch_code"), take, r.get("child_sku_id"), r.get("child_sku_name")))
             # Reserve within this allocation pass so multiple null-batch lines of
             # the same SKU don't double-allocate the same batch.
             reserved[(sku_id, bid)] = int(reserved.get((sku_id, bid), 0)) + take
@@ -276,13 +322,16 @@ async def _allocate_batches_if_needed(tenant_id: str, d: dict, items: list, disp
                 status_code=400,
                 detail=f"Insufficient stock for {sku_name or sku_id}: need {need}, available {need - remaining}.")
         changed = True
-        for bid, bcode, take in allocations:
+        for bid, bcode, take, child_id, child_name in allocations:
             line = {**it}
             line.pop("_id", None)
             line["batch_id"] = bid
             line["batch_code"] = bcode
             line["quantity"] = take
             line["line_value"] = round(take * unit_price, 2)
+            if child_id:
+                line["child_sku_id"] = child_id
+                line["child_sku_name"] = child_name
             new_items.append(line)
     if changed:
         await db.distributor_delivery_items.delete_many({"tenant_id": tenant_id, "delivery_id": dispatch_id})

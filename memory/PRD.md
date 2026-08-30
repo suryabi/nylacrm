@@ -2841,3 +2841,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - User report (Production screenshot "5 Micron FIlter"): thumbnails blank + downloads failing. Preview verified healthy (all 4 thumbs render, legacy local files download 200).
 - RCA: Production files uploaded BEFORE the object-storage migration lived on the pod's ephemeral disk and were wiped at redeploy; attachment metadata survived → blank thumbs/404 downloads. Unrecoverable; user must re-upload. New uploads persist in Emergent object storage (uses EMERGENT_LLM_KEY from backend/.env, available in prod).
 - UX: AuthImg now shows a "missing" placeholder tile on fetch failure (instead of endless grey pulse); download of a missing file shows a clear re-upload message.
+
+## Update — Jun 2026: Promo stock-out "available 0" despite warehouse stock (Production bug)
+- Root cause: `routes/promo_dispatch.py` hardcoded `child_sku_id: None` in availability check, batch FIFO allocation and stock deduction — production warehouse stock lives under the SKU's GENERIC child (e.g. "24 Generic brand", 281 bottles). Confirm failed with "need 3, available 0"; deduction would silently miss the row.
+- Fix: `_allowed_child_ids()` (null child + generic child per SKU; customer-branded children excluded) applied to `_check_stock_availability`, `_allocate_batches_if_needed` (lines now record child_sku_id/name) and `_adjust_stock_for_dispatch` (deducts from the exact row, splits across rows).
+- Preview API test: draft→confirm→complete deducted 281→278 from the generic-child row; reverse released reservation without deduction; over-demand rejected showing true availability (278). Test artifacts cleaned. Needs redeploy for Production.
