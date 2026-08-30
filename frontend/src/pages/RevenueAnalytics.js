@@ -487,6 +487,7 @@ function BreakdownView() {
   const [timeFilter, setTimeFilter] = useState('this_month');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [deductCn, setDeductCn] = useState(true);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
 
@@ -494,7 +495,7 @@ function BreakdownView() {
     if (timeFilter === 'custom' && (!fromDate || !toDate)) return;
     setLoading(true);
     try {
-      const params = { time_filter: timeFilter, group_by: groupBy, top_n: 12 };
+      const params = { time_filter: timeFilter, group_by: groupBy, top_n: 12, deduct_credit_notes: deductCn };
       if (timeFilter === 'custom') { params.from_date = fromDate; params.to_date = toDate; }
       const res = await axios.get(`${API_URL}/reports/revenue-analytics`, { ...authHeaders(), params });
       setData(res.data);
@@ -504,7 +505,7 @@ function BreakdownView() {
     } finally {
       setLoading(false);
     }
-  }, [groupBy, timeFilter, fromDate, toDate]);
+  }, [groupBy, timeFilter, fromDate, toDate, deductCn]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -556,10 +557,29 @@ function BreakdownView() {
             </div>
           </>
         )}
-        <div className="min-w-[150px]">
-          <FieldLabel>GST</FieldLabel>
+        <div className="min-w-[210px]">
+          <FieldLabel>Credit Notes / Incentives</FieldLabel>
+          <div className="flex overflow-hidden rounded-lg border border-slate-300" data-testid="ra-cn-toggle">
+            <button
+              onClick={() => setDeductCn(true)}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${deductCn ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              data-testid="ra-cn-deducted"
+            >
+              Deducted
+            </button>
+            <button
+              onClick={() => setDeductCn(false)}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${!deductCn ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              data-testid="ra-cn-ignored"
+            >
+              Not deducted
+            </button>
+          </div>
+        </div>
+        <div className="min-w-[130px]">
+          <FieldLabel>GST &amp; Discounts</FieldLabel>
           <div className="flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-500" data-testid="ra-gst-note">
-            Excluded from revenue
+            Always excluded
           </div>
         </div>
       </div>
@@ -567,7 +587,7 @@ function BreakdownView() {
       {loading ? <Spinner /> : (
         <>
           <div className="grid grid-cols-1 gap-4 duration-500 animate-in fade-in-50 slide-in-from-bottom-2 sm:grid-cols-2 lg:grid-cols-4 md:gap-6">
-            <StatCard label="Gross Revenue (excl. GST)" value={formatCurrency(totalGross)} sub={`Net ${formatCurrency(total)}`} icon={IndianRupee} gradient="cyan" testid="ra-total-revenue" />
+            <StatCard label={deductCn ? 'Gross Revenue (excl. GST, after CN)' : 'Gross Revenue (excl. GST, before CN)'} value={formatCurrency(totalGross)} sub={`Net ${formatCurrency(total)}`} icon={IndianRupee} gradient="cyan" testid="ra-total-revenue" />
             <StatCard label="Annual Run Rate" value={formatCurrency(arr)} sub={arrSub} icon={Gauge} gradient="magenta" testid="ra-arr" />
             <StatCard label="Invoices" value={(data?.total_invoice_count || 0).toLocaleString('en-IN')} sub="Billed in period" icon={Receipt} gradient="purple" testid="ra-total-invoices" />
             <StatCard label="Segments" value={(data?.raw_group_count || 0).toLocaleString('en-IN')} sub={`By ${dimLabel}`} icon={Layers} gradient="teal" testid="ra-total-groups" />

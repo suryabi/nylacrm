@@ -899,6 +899,7 @@ async def repair_zoho_mirror_values(
                           "net_invoice_value": target,
                           "zoho_total_value": round(total, 2),
                           "gst_amount": round(tax_total, 2),
+                          "incentive_amount": round(adjustment, 2),
                           "value_before_repair": round(old, 2),
                           "value_repaired_at": now, "updated_at": now}})
             if m.get("outstanding_counted") and m.get("account_id"):

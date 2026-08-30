@@ -75,6 +75,18 @@ def _ex_gst_value(inv: dict) -> float:
     return sum(_skuperf_line_value(it) for it in line_items)
 
 
+def _rev_pair(inv: dict, deduct_cn: bool = True) -> tuple[float, float]:
+    """(gross, net) revenue for one invoice under the credit-note policy.
+    Stored values are ex-GST, post-discount, NET of the invoice-level
+    sustainability incentive. deduct_cn=False rolls that incentive back and
+    ignores separate credit notes — revenue before any credit-note effect."""
+    base = _gross(inv)
+    if deduct_cn:
+        return base, base - float(inv.get("credit_note_value") or inv.get("credit_note") or 0)
+    nocn = base - float(inv.get("incentive_amount") or 0)  # incentive is negative
+    return nocn, nocn
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Time-window resolver — same options the Leads filter exposes so users get
 # a consistent UX. Returns inclusive [from_iso, to_iso] yyyy-mm-dd strings.
@@ -168,6 +180,7 @@ async def _aggregate(
     to_date: str,
     group_by: str,
     exclude_gst: bool = False,
+    deduct_cn: bool = True,
 ) -> list[dict]:
     """Group invoice revenue over [from_date, to_date]. Tenant scoping is
     automatic via get_tdb(). Returns `[{label, revenue, gross, count}]` sorted
@@ -231,8 +244,7 @@ async def _aggregate(
             gross = _ex_gst_value(inv)
             net = gross - float(inv.get("credit_note_value") or inv.get("credit_note") or 0)
         else:
-            net = _net(inv)
-            gross = _gross(inv)
+            gross, net = _rev_pair(inv, deduct_cn=deduct_cn)
         grp = groups.setdefault(label, {"label": label, "revenue": 0.0, "gross": 0.0, "count": 0})
         grp["revenue"] += net
         grp["gross"] += gross
@@ -240,14 +252,15 @@ async def _aggregate(
     return sorted(groups.values(), key=lambda g: g.get("gross", 0), reverse=True)
 
 
-async def _window_totals(from_date: str, to_date: str, exclude_gst: bool = False) -> tuple[float, float, int]:
+async def _window_totals(from_date: str, to_date: str, exclude_gst: bool = False,
+                         deduct_cn: bool = True) -> tuple[float, float, int]:
     """Headline totals for a time window, computed from the INVOICES themselves
     (not from the grouped breakdown) so Gross / Net / Invoice-count are identical
     regardless of the `group_by` dimension. Returns (gross, net, invoice_count)."""
     tdb = get_tdb()
     projection = {"_id": 0, "gross_invoice_value": 1, "gross_amount": 1, "grand_total": 1,
                   "total_amount": 1, "net_invoice_value": 1, "net_amount": 1,
-                  "credit_note_value": 1, "credit_note": 1}
+                  "credit_note_value": 1, "credit_note": 1, "incentive_amount": 1}
     if exclude_gst:
         projection.update({"items": 1, "line_items": 1})
     invoices = await tdb.invoices.find(
@@ -259,8 +272,9 @@ async def _window_totals(from_date: str, to_date: str, exclude_gst: bool = False
             _ex_gst_value(inv) - float(inv.get("credit_note_value") or inv.get("credit_note") or 0)
             for inv in invoices)
     else:
-        total_gross = sum(_gross(inv) for inv in invoices)
-        total_net = sum(_net(inv) for inv in invoices)
+        pairs = [_rev_pair(inv, deduct_cn=deduct_cn) for inv in invoices]
+        total_gross = sum(p[0] for p in pairs)
+        total_net = sum(p[1] for p in pairs)
     return total_gross, total_net, len(invoices)
 
 
@@ -272,12 +286,14 @@ async def revenue_analytics(
     to_date: Optional[str] = None,
     top_n: int = Query(15, ge=1, le=200),
     exclude_gst: bool = Query(False),
+    deduct_credit_notes: bool = Query(True),
     _user: dict = Depends(get_current_user),
 ):
-    """Revenue per group for one time window. `exclude_gst=true` reports
-    product-line (pre-tax) value instead of the billed invoice total."""
+    """Revenue per group for one time window. Revenue is always ex-GST and
+    post-discount. `deduct_credit_notes=false` shows revenue before credit
+    notes / sustainability incentives."""
     fd, td = _window(time_filter, from_date, to_date)
-    groups = await _aggregate(fd, td, group_by, exclude_gst=exclude_gst)
+    groups = await _aggregate(fd, td, group_by, exclude_gst=exclude_gst, deduct_cn=deduct_credit_notes)
 
     # Roll groups beyond `top_n` into a single "Others" bucket so the bar
     # chart doesn't degrade visually with 100 SKUs.
@@ -299,13 +315,15 @@ async def revenue_analytics(
     # group_by — so Gross / Net / Invoice-count never change when you switch the
     # breakdown dimension. (group_by only re-slices the breakdown above.) The
     # per-group sums above remain for the breakdown chart/table only.
-    headline_gross, headline_net, headline_count = await _window_totals(fd, td, exclude_gst=exclude_gst)
+    headline_gross, headline_net, headline_count = await _window_totals(
+        fd, td, exclude_gst=exclude_gst, deduct_cn=deduct_credit_notes)
     return {
         "from": fd,
         "to": td,
         "time_filter": time_filter,
         "group_by": group_by,
         "exclude_gst": exclude_gst,
+        "deduct_credit_notes": deduct_credit_notes,
         "groups": head,
         "raw_group_count": len(groups),
         "total_revenue": headline_net,

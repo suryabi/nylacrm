@@ -2900,3 +2900,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - POST /api/invoices/admin/zoho-mirror-repair/export (management roles): branded xlsx of the verification table — title with period, TOTALS row, per-invoice columns (Stored/Discount/GST/Incentive/Zoho Total/New Value excl. GST/Difference/Status), mismatched rows amber, error rows red with fetch error.
 - UI "Export Excel" button next to the verify summary; downloads via blob.
 - Tested: endpoint returns correct xlsx (verified content via openpyxl read-back incl. totals, match/mismatch/error rows); button verified via screenshot.
+
+## Update — Jun 2026: Credit-note toggle in Revenue Analytics
+- Default revenue = ex-GST, post-discount, NET of credit notes/incentives (unchanged). New "Credit Notes / Incentives: Deducted / Not deducted" toggle rolls back the invoice-level incentive (via new incentive_amount field) and ignores separate credit_note_value.
+- incentive_amount now stored on new mirrors (_ensure_mirror_invoice reads adjustment from Zoho) and set by the repair fix. Legacy invoices without it show unchanged in "Not deducted" mode.
+- Backend: deduct_credit_notes param on /reports/revenue-analytics (_rev_pair helper in _aggregate + _window_totals). UI: pill toggle + static "GST & Discounts: Always excluded" note; card label shows after CN / before CN.
+- Tested: seeded invoice (stored 86,616, incentive −4,104) → deducted vs not-deducted differ by exactly 4,104; UI toggle verified via screenshot.

@@ -1410,19 +1410,21 @@ async def _ensure_mirror_invoice(
     # Outstanding (receivable) still uses the full billed total incl. GST.
     invoice_total = None
     tax_total = 0.0
+    adj_total = 0.0
     def _zread(z):
         try:
             t = float(z.get("total")) if z.get("total") is not None else None
             tx = float(z.get("tax_total") or 0)
-            return t, tx
+            adj = float(z.get("adjustment") or 0)
+            return t, tx, adj
         except (TypeError, ValueError):
-            return None, 0.0
+            return None, 0.0, 0.0
     if zoho_invoice:
-        invoice_total, tax_total = _zread(zoho_invoice)
+        invoice_total, tax_total, adj_total = _zread(zoho_invoice)
     if invoice_total is None and zoho_invoice_id:
         try:
             res = await _zoho_request("GET", f"/books/v3/invoices/{zoho_invoice_id}", tenant_id=tenant_id)
-            invoice_total, tax_total = _zread(res.get("invoice") or {})
+            invoice_total, tax_total, adj_total = _zread(res.get("invoice") or {})
         except Exception as e:
             logger.warning(f"[zoho] Could not fetch invoice {zoho_invoice_id} total for mirror: {e}")
     if invoice_total is not None:
@@ -1470,6 +1472,7 @@ async def _ensure_mirror_invoice(
         "net_invoice_value": gross_total,
         "zoho_total_value": billed_total,
         "gst_amount": round(tax_total, 2),
+        "incentive_amount": round(adj_total, 2),
         "outstanding": outstanding_value,
         "outstanding_counted": counted,
         "items": items_list,
