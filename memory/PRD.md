@@ -2862,3 +2862,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Fix (forward): mirror now stores the FINAL Zoho invoice total (from the create/fetch response; best-effort GET fallback), and line items carry discount_percent/gross/discount/net. Fallback when Zoho unreachable = post-discount computed total.
 - Fix (historical): new admin endpoint `POST /api/invoices/admin/zoho-mirror-repair?dry_run=` re-reads each zoho_books mirror's total from Zoho, corrects gross/net, adjusts account outstanding_balance by the delta (management roles only). UI: "Verify invoice values against Zoho" + "Fix N mismatched invoices" buttons in Revenue Analytics → Revenue Reconciliation panel.
 - Preview tests: direct mirror call → 95,256 stored with correct discount line breakdown; fallback → 90,720; endpoint role-gated (403 non-admin) and iterates mirrors; UI button verified via screenshot. Zoho fetch itself only works in Production (Zoho not connected in preview). User must redeploy, then run "Verify → Fix" in Revenue Analytics.
+
+## Update — Jun 2026: Zoho mirror repair — selective fixing
+- Repair endpoint now accepts body {"invoice_ids": [...]} — when applying (dry_run=false) only those mirror ids are fixed.
+- UI: after "Verify", mismatched invoices render as a checkbox table (invoice, account, date, stored vs Zoho total, difference) with select-all; "Fix N selected invoices" applies only ticked rows.
+- Tested: backend selection filter (apply with unknown id → checked 0), role gate, UI verify flow via screenshot. Full mismatch table only demonstrable in Production (Zoho connected there).

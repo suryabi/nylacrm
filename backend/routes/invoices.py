@@ -795,8 +795,16 @@ async def regenerate_invoice(
 
 
 
+from pydantic import BaseModel
+
+
+class ZohoMirrorRepairRequest(BaseModel):
+    invoice_ids: Optional[List[str]] = None  # mirror `id`s to fix; None/empty on dry-run
+
+
 @router.post("/admin/zoho-mirror-repair")
 async def repair_zoho_mirror_values(
+    payload: Optional[ZohoMirrorRepairRequest] = None,
     dry_run: bool = Query(True),
     current_user: dict = Depends(get_current_user),
 ):
@@ -804,7 +812,8 @@ async def repair_zoho_mirror_values(
     GST) from Zoho Books and correct the stored gross/net values. Older mirrors
     were written as qty×rate (pre-discount), inflating Revenue Analytics.
     `dry_run=true` only reports the mismatches; `dry_run=false` applies fixes
-    and adjusts the account outstanding balance by the same delta."""
+    (restricted to `invoice_ids` when provided) and adjusts the account
+    outstanding balance by the same delta."""
     if (current_user.get("role") or "").lower() not in _INVOICE_REGEN_ROLES:
         raise HTTPException(status_code=403, detail="Only management roles can run this repair.")
     from services.zoho_service import _zoho_request, is_zoho_configured
@@ -814,11 +823,15 @@ async def repair_zoho_mirror_values(
     tenant_id = get_current_tenant_id()
     tdb = get_tdb()
     now = datetime.now(timezone.utc).isoformat()
+    only_ids = set((payload.invoice_ids or []) if payload else [])
+    mirror_query = {"source": "zoho_books", "zoho_invoice_id": {"$nin": [None, ""]}}
+    if not dry_run and only_ids:
+        mirror_query["id"] = {"$in": list(only_ids)}
     mirrors = await tdb.invoices.find(
-        {"source": "zoho_books", "zoho_invoice_id": {"$nin": [None, ""]}},
+        mirror_query,
         {"_id": 0, "id": 1, "invoice_no": 1, "invoice_number": 1, "zoho_invoice_id": 1,
          "gross_invoice_value": 1, "net_invoice_value": 1, "account_id": 1,
-         "outstanding_counted": 1},
+         "account_name": 1, "invoice_date": 1, "outstanding_counted": 1},
     ).to_list(5000)
     rows, fixed, errors = [], 0, 0
     for m in mirrors:
@@ -829,13 +842,16 @@ async def repair_zoho_mirror_values(
             total = float((res.get("invoice") or {}).get("total") or 0)
         except Exception as e:
             errors += 1
-            rows.append({"invoice_no": inv_no, "error": str(e)[:150]})
+            rows.append({"id": m.get("id"), "invoice_no": inv_no, "error": str(e)[:150]})
             continue
         old = float(m.get("net_invoice_value") or m.get("gross_invoice_value") or 0)
         delta = round(total - old, 2)
         if abs(delta) < 0.01:
             continue
-        rows.append({"invoice_no": inv_no, "stored_value": round(old, 2),
+        rows.append({"id": m.get("id"), "invoice_no": inv_no,
+                     "account_name": m.get("account_name"),
+                     "invoice_date": m.get("invoice_date"),
+                     "stored_value": round(old, 2),
                      "zoho_total": round(total, 2), "delta": delta})
         if not dry_run:
             await tdb.invoices.update_one(

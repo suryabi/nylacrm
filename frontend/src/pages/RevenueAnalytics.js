@@ -211,20 +211,27 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
   const [loading, setLoading] = useState(false);
   const [repair, setRepair] = useState(null);
   const [repairBusy, setRepairBusy] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
 
   const runRepair = async (apply) => {
     setRepairBusy(true);
     try {
+      const body = apply ? { invoice_ids: selectedIds } : {};
       const res = await axios.post(
         `${API_URL}/invoices/admin/zoho-mirror-repair?dry_run=${apply ? 'false' : 'true'}`,
-        {}, authHeaders());
+        body, authHeaders());
       setRepair(res.data);
       if (apply) {
         toast.success(`${res.data.fixed} invoice value(s) corrected from Zoho`);
+        setSelectedIds([]);
         load();
-      } else if (!res.data.mismatched) {
-        if (res.data.errors) toast.warning(`Could not verify ${res.data.errors} invoice(s) — Zoho fetch failed`);
-        else toast.success('All invoice values already match Zoho');
+      } else {
+        const mismatched = (res.data.rows || []).filter((r) => r.delta !== undefined);
+        setSelectedIds(mismatched.map((r) => r.id));
+        if (!res.data.mismatched) {
+          if (res.data.errors) toast.warning(`Could not verify ${res.data.errors} invoice(s) — Zoho fetch failed`);
+          else toast.success('All invoice values already match Zoho');
+        }
       }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Invoice value check failed');
@@ -232,6 +239,9 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
       setRepairBusy(false);
     }
   };
+
+  const toggleId = (id) => setSelectedIds((prev) =>
+    prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
 
   const load = useCallback(async () => {
     if (timeFilter === 'custom' && (!fromDate || !toDate)) return;
@@ -309,34 +319,87 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                   <span>{fullINR(rec.unmapped_line_revenue)} of product revenue ({rec.unmapped_identifier_count} old/unmapped SKU{rec.unmapped_identifier_count === 1 ? '' : 's'}) is shown under retired names. Map them in <span className="font-semibold">Tenant Settings → SKU Aliases</span> for clean per-SKU reporting (this does not change the totals above).</span>
                 </div>
               )}
-              <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3" data-testid="ra-zoho-repair">
-                <button
-                  onClick={() => runRepair(false)}
-                  disabled={repairBusy}
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
-                  data-testid="ra-zoho-repair-check"
-                >
-                  {repairBusy ? 'Checking…' : 'Verify invoice values against Zoho'}
-                </button>
-                {repair && repair.dry_run && repair.mismatched > 0 && (
+              <div className="space-y-3 border-t border-slate-200 pt-3" data-testid="ra-zoho-repair">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
-                    onClick={() => runRepair(true)}
+                    onClick={() => runRepair(false)}
                     disabled={repairBusy}
-                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
-                    data-testid="ra-zoho-repair-apply"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                    data-testid="ra-zoho-repair-check"
                   >
-                    Fix {repair.mismatched} mismatched invoice{repair.mismatched === 1 ? '' : 's'}
+                    {repairBusy ? 'Working…' : 'Verify invoice values against Zoho'}
                   </button>
-                )}
-                {repair && (
-                  <span className="text-xs text-slate-500" data-testid="ra-zoho-repair-summary">
-                    Checked {repair.checked} · mismatched {repair.mismatched}
-                    {repair.errors ? ` · errors ${repair.errors}` : ''}
-                    {!repair.dry_run ? ` · fixed ${repair.fixed}` : ''}
-                  </span>
-                )}
-                <span className="w-full text-[11px] text-slate-400">
-                  Compares each CRM-mirrored invoice with its final Zoho total (after discount &amp; GST) and corrects any that were stored pre-discount.
+                  {repair && (
+                    <span className="text-xs text-slate-500" data-testid="ra-zoho-repair-summary">
+                      Checked {repair.checked} · mismatched {repair.mismatched}
+                      {repair.errors ? ` · errors ${repair.errors}` : ''}
+                      {!repair.dry_run ? ` · fixed ${repair.fixed}` : ''}
+                    </span>
+                  )}
+                </div>
+                {repair && repair.dry_run && repair.mismatched > 0 && (() => {
+                  const mismatched = (repair.rows || []).filter((r) => r.delta !== undefined);
+                  const allChecked = mismatched.length > 0 && mismatched.every((r) => selectedIds.includes(r.id));
+                  return (
+                    <div className="overflow-hidden rounded-lg border border-slate-200" data-testid="ra-zoho-repair-list">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-200 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+                            <th className="px-3 py-2 text-left">
+                              <input
+                                type="checkbox"
+                                checked={allChecked}
+                                onChange={() => setSelectedIds(allChecked ? [] : mismatched.map((r) => r.id))}
+                                data-testid="ra-zoho-repair-select-all"
+                              />
+                            </th>
+                            <th className="px-3 py-2 text-left font-semibold">Invoice</th>
+                            <th className="px-3 py-2 text-left font-semibold">Account</th>
+                            <th className="px-3 py-2 text-left font-semibold">Date</th>
+                            <th className="px-3 py-2 text-right font-semibold">Stored (CRM)</th>
+                            <th className="px-3 py-2 text-right font-semibold">Zoho Total</th>
+                            <th className="px-3 py-2 text-right font-semibold">Difference</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {mismatched.map((r) => (
+                            <tr key={r.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                              <td className="px-3 py-2">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.includes(r.id)}
+                                  onChange={() => toggleId(r.id)}
+                                  data-testid={`ra-zoho-repair-row-${r.invoice_no}`}
+                                />
+                              </td>
+                              <td className="px-3 py-2 font-medium text-slate-800">{r.invoice_no}</td>
+                              <td className="px-3 py-2 text-slate-600">{r.account_name || '—'}</td>
+                              <td className="px-3 py-2 text-slate-500">{r.invoice_date || '—'}</td>
+                              <td className="px-3 py-2 text-right font-mono tabular-nums text-rose-600">{fullINR(r.stored_value)}</td>
+                              <td className="px-3 py-2 text-right font-mono tabular-nums text-emerald-700">{fullINR(r.zoho_total)}</td>
+                              <td className={`px-3 py-2 text-right font-mono tabular-nums ${r.delta < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
+                                {r.delta > 0 ? '+' : ''}{fullINR(r.delta)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-3 py-2">
+                        <span className="text-[11px] text-slate-500">{selectedIds.length} of {mismatched.length} selected</span>
+                        <button
+                          onClick={() => runRepair(true)}
+                          disabled={repairBusy || selectedIds.length === 0}
+                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                          data-testid="ra-zoho-repair-apply"
+                        >
+                          Fix {selectedIds.length} selected invoice{selectedIds.length === 1 ? '' : 's'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+                <span className="block text-[11px] text-slate-400">
+                  Compares each CRM-mirrored invoice with its final Zoho total (after discount &amp; GST). Tick the invoices you want corrected, then fix only those.
                 </span>
               </div>
             </div>
