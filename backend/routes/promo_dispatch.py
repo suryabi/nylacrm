@@ -172,10 +172,35 @@ async def _allowed_child_ids(tenant_id: str, sku_ids: list) -> dict:
         return out
     async for cs in db.child_skus.find(
             {"tenant_id": tenant_id, "parent_sku_id": {"$in": list(out.keys())},
-             "child_type": "generic"},
+             "$or": [{"child_type": "generic"},
+                     # legacy children created before child_type existed
+                     {"child_sku_name": {"$regex": "generic|unbranded", "$options": "i"}}]},
             {"_id": 0, "id": 1, "parent_sku_id": 1}):
         out[cs["parent_sku_id"]].append(cs["id"])
     return out
+
+
+async def _stock_rows_summary(tenant_id: str, src_is_factory: bool, distributor_id: str,
+                              loc_id: str, sku_id: str) -> str:
+    """Short human-readable dump of EVERY stock row for a SKU at a location —
+    appended to 'insufficient stock' errors so a production failure
+    self-reports the data shape (child/batch split) we cannot inspect."""
+    if src_is_factory:
+        cur = db.factory_warehouse_stock.find(
+            {"tenant_id": tenant_id, "warehouse_location_id": loc_id, "sku_id": sku_id},
+            {"_id": 0, "child_sku_name": 1, "batch_code": 1, "quantity": 1})
+    else:
+        cur = db.distributor_stock.find(
+            {"tenant_id": tenant_id, "distributor_id": distributor_id,
+             "distributor_location_id": loc_id, "sku_id": sku_id},
+            {"_id": 0, "child_sku_name": 1, "batch_code": 1, "quantity": 1})
+    parts = []
+    for r in await cur.to_list(50):
+        label = r.get("child_sku_name") or "no-child"
+        if r.get("batch_code"):
+            label += f"/{r['batch_code']}"
+        parts.append(f"{label}: {r.get('quantity') or 0}")
+    return "; ".join(parts)[:300] if parts else "no stock rows for this SKU at this warehouse"
 
 
 async def _adjust_stock_for_dispatch(tenant_id: str, dispatch: dict, items: list, *, sign: int) -> None:
@@ -318,9 +343,35 @@ async def _allocate_batches_if_needed(tenant_id: str, d: dict, items: list, disp
             if remaining <= 0:
                 break
         if remaining > 0:
+            # Fall back to NULL-BATCH rows (legacy stock-in / branding conversion
+            # rows on a batch-tracked warehouse carry no batch). Lines allocated
+            # here simply stay batch-less.
+            if src_is_factory:
+                nb_rows = await db.factory_warehouse_stock.find(
+                    {"tenant_id": tenant_id, "warehouse_location_id": loc_id, "sku_id": sku_id,
+                     "batch_id": None, "quantity": {"$gt": 0}, "child_sku_id": {"$in": child_vals}},
+                    {"_id": 0, "quantity": 1, "child_sku_id": 1, "child_sku_name": 1}).to_list(100)
+            else:
+                nb_rows = await db.distributor_stock.find(
+                    {"tenant_id": tenant_id, "distributor_id": distributor_id, "distributor_location_id": loc_id,
+                     "sku_id": sku_id, "batch_id": None, "quantity": {"$gt": 0}, "child_sku_id": {"$in": child_vals}},
+                    {"_id": 0, "quantity": 1, "child_sku_id": 1, "child_sku_name": 1}).to_list(100)
+            for r in nb_rows:
+                avail = int(r.get("quantity") or 0) - int(reserved.get((sku_id, None), 0))
+                if avail <= 0:
+                    continue
+                take = min(avail, remaining)
+                allocations.append((None, None, take, r.get("child_sku_id"), r.get("child_sku_name")))
+                reserved[(sku_id, None)] = int(reserved.get((sku_id, None), 0)) + take
+                remaining -= take
+                if remaining <= 0:
+                    break
+        if remaining > 0:
+            diag = await _stock_rows_summary(tenant_id, src_is_factory, distributor_id, loc_id, sku_id)
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient stock for {sku_name or sku_id}: need {need}, available {need - remaining}.")
+                detail=f"Insufficient stock for {sku_name or sku_id}: need {need}, "
+                       f"available {need - remaining}. Stock rows here → {diag}")
         changed = True
         for bid, bcode, take, child_id, child_name in allocations:
             line = {**it}
@@ -990,7 +1041,13 @@ async def confirm_promo_dispatch(distributor_id: str, dispatch_id: str, current_
             on_hand = max(on_hand_rows, derived.get(sku_id, 0)) if (not d.get("is_factory") and not tracks) else on_hand_rows
             available = on_hand - reserved_map.get((sku_id, bkey), 0)
             if available < need:
-                raise HTTPException(status_code=400, detail=f"Insufficient stock for {sku_name or sku_id}: need {need}, available {available}.")
+                diag = await _stock_rows_summary(tenant_id, bool(d.get("is_factory")), distributor_id,
+                                                 d.get("distributor_location_id"), sku_id)
+                reserved_qty = reserved_map.get((sku_id, bkey), 0)
+                raise HTTPException(status_code=400,
+                                    detail=f"Insufficient stock for {sku_name or sku_id}: need {need}, "
+                                           f"available {available} ({on_hand} on-hand, {reserved_qty} reserved). "
+                                           f"Stock rows here → {diag}")
         await db.distributor_deliveries.update_one(
             {"id": dispatch_id, "tenant_id": tenant_id},
             {"$set": {"status": "confirmed", "confirmed_at": now,
