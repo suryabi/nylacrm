@@ -209,6 +209,29 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
   const [open, setOpen] = useState(true);
   const [rec, setRec] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [repair, setRepair] = useState(null);
+  const [repairBusy, setRepairBusy] = useState(false);
+
+  const runRepair = async (apply) => {
+    setRepairBusy(true);
+    try {
+      const res = await axios.post(
+        `${API_URL}/invoices/admin/zoho-mirror-repair?dry_run=${apply ? 'false' : 'true'}`,
+        {}, authHeaders());
+      setRepair(res.data);
+      if (apply) {
+        toast.success(`${res.data.fixed} invoice value(s) corrected from Zoho`);
+        load();
+      } else if (!res.data.mismatched) {
+        if (res.data.errors) toast.warning(`Could not verify ${res.data.errors} invoice(s) — Zoho fetch failed`);
+        else toast.success('All invoice values already match Zoho');
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Invoice value check failed');
+    } finally {
+      setRepairBusy(false);
+    }
+  };
 
   const load = useCallback(async () => {
     if (timeFilter === 'custom' && (!fromDate || !toDate)) return;
@@ -286,6 +309,36 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                   <span>{fullINR(rec.unmapped_line_revenue)} of product revenue ({rec.unmapped_identifier_count} old/unmapped SKU{rec.unmapped_identifier_count === 1 ? '' : 's'}) is shown under retired names. Map them in <span className="font-semibold">Tenant Settings → SKU Aliases</span> for clean per-SKU reporting (this does not change the totals above).</span>
                 </div>
               )}
+              <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3" data-testid="ra-zoho-repair">
+                <button
+                  onClick={() => runRepair(false)}
+                  disabled={repairBusy}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                  data-testid="ra-zoho-repair-check"
+                >
+                  {repairBusy ? 'Checking…' : 'Verify invoice values against Zoho'}
+                </button>
+                {repair && repair.dry_run && repair.mismatched > 0 && (
+                  <button
+                    onClick={() => runRepair(true)}
+                    disabled={repairBusy}
+                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                    data-testid="ra-zoho-repair-apply"
+                  >
+                    Fix {repair.mismatched} mismatched invoice{repair.mismatched === 1 ? '' : 's'}
+                  </button>
+                )}
+                {repair && (
+                  <span className="text-xs text-slate-500" data-testid="ra-zoho-repair-summary">
+                    Checked {repair.checked} · mismatched {repair.mismatched}
+                    {repair.errors ? ` · errors ${repair.errors}` : ''}
+                    {!repair.dry_run ? ` · fixed ${repair.fixed}` : ''}
+                  </span>
+                )}
+                <span className="w-full text-[11px] text-slate-400">
+                  Compares each CRM-mirrored invoice with its final Zoho total (after discount &amp; GST) and corrects any that were stored pre-discount.
+                </span>
+              </div>
             </div>
           )}
         </div>

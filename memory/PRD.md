@@ -2856,3 +2856,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — Jun 2026: Promo stock-out resolved in Production
 - User confirmed the promotional stock-out now confirms successfully in Production (DC-2608-0013) and Reserved stock displays correctly on the Global Stock Dashboard.
 - Reservation model reminder: Confirm → Reserved (Available drops); Complete/Delivered → WH. Stock deducted.
+
+## Update — Jun 2026: Revenue Analytics showed pre-discount invoice value (Production, INV-002460)
+- Root cause: `zoho_service._ensure_mirror_invoice` wrote CRM mirror invoices as qty×rate (no discount, no GST) → INV-002460 stored ₹2,16,000 vs actual Zoho total ₹95,256 (58% discount + 5% GST). Revenue Analytics reads these mirror values.
+- Fix (forward): mirror now stores the FINAL Zoho invoice total (from the create/fetch response; best-effort GET fallback), and line items carry discount_percent/gross/discount/net. Fallback when Zoho unreachable = post-discount computed total.
+- Fix (historical): new admin endpoint `POST /api/invoices/admin/zoho-mirror-repair?dry_run=` re-reads each zoho_books mirror's total from Zoho, corrects gross/net, adjusts account outstanding_balance by the delta (management roles only). UI: "Verify invoice values against Zoho" + "Fix N mismatched invoices" buttons in Revenue Analytics → Revenue Reconciliation panel.
+- Preview tests: direct mirror call → 95,256 stored with correct discount line breakdown; fallback → 90,720; endpoint role-gated (403 non-admin) and iterates mirrors; UI button verified via screenshot. Zoho fetch itself only works in Production (Zoho not connected in preview). User must redeploy, then run "Verify → Fix" in Revenue Analytics.

@@ -1355,9 +1355,15 @@ async def _ensure_mirror_invoice(
     zoho_invoice_id: str,
     zoho_invoice_number: Optional[str],
     zoho_invoice_url: Optional[str],
+    zoho_invoice: Optional[dict] = None,
 ) -> None:
     """Upsert a row into the `invoices` collection so the Zoho invoice appears
     on the Account → Invoices view. Idempotent on (tenant_id, source_id).
+
+    The stored value is the FINAL Zoho invoice total (post-discount, incl. GST)
+    — taken from the Zoho create/fetch response — NOT qty×rate, which ignored
+    per-line discounts and inflated Revenue Analytics (INV-002460: ₹2.16L
+    stored vs ₹95,256 actual).
     """
     account_uuid = account.get("id") or account.get("account_uuid")
     if not account_uuid:
@@ -1381,16 +1387,40 @@ async def _ensure_mirror_invoice(
         name = (it.get("sku_name") or it.get("sku_code") or "").strip()
         qty = float(it.get("quantity", 0) or 0)
         rate = agreed_prices.get(name.lower(), float(it.get("unit_price") or 0))
-        net = qty * rate
+        try:
+            disc_pct = float(it.get("discount_percent") or 0)
+        except (TypeError, ValueError):
+            disc_pct = 0.0
+        gross = round(qty * rate, 2)
+        net = round(gross * max(0.0, 1.0 - disc_pct / 100.0), 2)
         items_list.append({
             "sku_name": name,
             "quantity": qty,
             "bottles": qty,
             "rate": rate,
+            "discount_percent": disc_pct,
+            "gross_amount": gross,
+            "discount_amount": round(gross - net, 2),
             "net_amount": net,
             "line_total": net,
         })
-    gross_total = sum(i["net_amount"] for i in items_list)
+    computed_total = round(sum(i["net_amount"] for i in items_list), 2)
+    # FINAL invoice value = Zoho's own total (discounts + GST + adjustments).
+    invoice_total = None
+    try:
+        if zoho_invoice and zoho_invoice.get("total") is not None:
+            invoice_total = float(zoho_invoice.get("total"))
+    except (TypeError, ValueError):
+        invoice_total = None
+    if invoice_total is None and zoho_invoice_id:
+        try:
+            res = await _zoho_request("GET", f"/books/v3/invoices/{zoho_invoice_id}", tenant_id=tenant_id)
+            zt = (res.get("invoice") or {}).get("total")
+            if zt is not None:
+                invoice_total = float(zt)
+        except Exception as e:
+            logger.warning(f"[zoho] Could not fetch invoice {zoho_invoice_id} total for mirror: {e}")
+    gross_total = round(invoice_total, 2) if invoice_total is not None else computed_total
     creds = await get_credentials(tenant_id) or {}
     now = datetime.now(timezone.utc).isoformat()
 
@@ -1855,6 +1885,7 @@ async def create_invoice_for_delivery(
         zoho_invoice_id=zoho_invoice_id,
         zoho_invoice_number=zoho_invoice_number,
         zoho_invoice_url=zoho_invoice_url,
+        zoho_invoice=invoice,
     )
     account_uuid = account.get("id") or account.get("account_uuid")
 
