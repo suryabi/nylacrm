@@ -875,6 +875,14 @@ async def repair_zoho_mirror_values(
         old = float(m.get("net_invoice_value") or m.get("gross_invoice_value") or 0)
         delta = round(target - old, 2)
         mismatch = abs(delta) >= 0.01
+        # Always refresh reference metadata (GST / incentive / billed total) —
+        # invoices fixed before these fields existed need them for the
+        # credit-note toggle on Revenue Analytics. Values stay untouched here.
+        await tdb.invoices.update_one(
+            {"id": m["id"]},
+            {"$set": {"gst_amount": round(tax_total, 2),
+                      "incentive_amount": round(adjustment, 2),
+                      "zoho_total_value": round(total, 2)}})
         tot_stored += old
         tot_zoho += total
         tot_target += target

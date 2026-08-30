@@ -2906,3 +2906,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - incentive_amount now stored on new mirrors (_ensure_mirror_invoice reads adjustment from Zoho) and set by the repair fix. Legacy invoices without it show unchanged in "Not deducted" mode.
 - Backend: deduct_credit_notes param on /reports/revenue-analytics (_rev_pair helper in _aggregate + _window_totals). UI: pill toggle + static "GST & Discounts: Always excluded" note; card label shows after CN / before CN.
 - Tested: seeded invoice (stored 86,616, incentive −4,104) → deducted vs not-deducted differ by exactly 4,104; UI toggle verified via screenshot.
+
+## Update — Jun 2026: CN toggle showed same number — metadata backfill fix
+- Cause: invoices fixed via the repair tool BEFORE incentive_amount existed have no stored incentive → "Not deducted" mode had nothing to add back.
+- Fix: the Verify pass (dry_run included) now always refreshes gst_amount / incentive_amount / zoho_total_value on every scanned mirror from Zoho, without touching revenue values. One Verify run after redeploy enriches all invoices and the toggle differentiates.
+- Preview: endpoint stable (Zoho-disconnected errors skip rows safely). Toggle math previously verified (4,104 incentive → exact diff).
