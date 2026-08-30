@@ -2852,3 +2852,7 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - `_allocate_batches_if_needed` now falls back to NULL-BATCH stock rows (legacy stock-in / branding conversions on batch-tracked warehouses) when batched rows can't cover demand; such lines stay batch-less and deduct correctly.
 - Both insufficient-stock errors now append `Stock rows here → <child/batch: qty list>` via `_stock_rows_summary` so a Production failure self-reports the data shape we cannot inspect.
 - Preview tests: null-batch generic-child stock (legacy child shape) draft→confirm→complete 281→278 OK; over-demand error shows diagnostic. Artifacts cleaned. Pending: user redeploy + retry in Production; if it still fails, the new error text reveals the exact stock rows.
+
+## Update — Jun 2026: Promo stock-out resolved in Production
+- User confirmed the promotional stock-out now confirms successfully in Production (DC-2608-0013) and Reserved stock displays correctly on the Global Stock Dashboard.
+- Reservation model reminder: Confirm → Reserved (Available drops); Complete/Delivered → WH. Stock deducted.
