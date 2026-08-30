@@ -74,7 +74,9 @@ def _window(
     from_date: Optional[str],
     to_date: Optional[str],
 ) -> tuple[str, str]:
-    today = datetime.now(timezone.utc).date()
+    # "Today" in IST — invoices are dated in Indian business time; using the UTC
+    # date hid today's invoices until 05:30 IST rolled the UTC calendar over.
+    today = datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
     if time_filter == "custom":
         if not from_date or not to_date:
             raise HTTPException(status_code=400, detail="from_date/to_date required for custom")

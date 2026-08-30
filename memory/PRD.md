@@ -2877,3 +2877,10 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Repair endpoint now takes time_filter/from_date/to_date (same _window resolver as revenue-analytics) and only scans mirrors with invoice_date inside the window; response includes from/to.
 - UI passes the page's selected time period, clears stale results when the period changes, and the summary shows the checked window. Custom period requires From/To dates.
 - Tested: this_month→0 checked, all_time→2, custom window respected; UI summary "2026-08-01 → 2026-08-30 · Checked 0".
+
+## Update — Jun 2026: Zoho repair table — full listing, breakdown columns, IST window fix
+- Table now lists ALL invoices in the window (matched show "✓ matches"; mismatched highlighted amber with checkbox); error rows show account/date + fetch error.
+- New per-invoice columns from Zoho: Discount, GST (tax_total), Incentive/CN (adjustment), Zoho Total — explains the difference vs stored value.
+- Period summary line: total Stored vs Zoho actual, Overall difference, plus GST/Incentive/Discount totals (backend `totals` object).
+- Fixed missing "today": revenue_analytics `_window` now computes today in IST (was UTC — hid same-day invoices until 05:30 IST). Affects the whole Revenue Analytics page consistently.
+- Tested via API (all_time → 2 rows with account/date + totals) and screenshot (full table, summary bar, columns render).

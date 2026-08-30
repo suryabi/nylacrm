@@ -229,7 +229,7 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
         setSelectedIds([]);
         load();
       } else {
-        const mismatched = (res.data.rows || []).filter((r) => r.delta !== undefined);
+        const mismatched = (res.data.rows || []).filter((r) => r.mismatch);
         setSelectedIds(mismatched.map((r) => r.id));
         if (!res.data.mismatched) {
           if (res.data.errors) toast.warning(`Could not verify ${res.data.errors} invoice(s) — Zoho fetch failed`);
@@ -343,63 +343,97 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                     </span>
                   )}
                 </div>
-                {repair && repair.dry_run && repair.mismatched > 0 && (() => {
-                  const mismatched = (repair.rows || []).filter((r) => r.delta !== undefined);
+                {repair && repair.dry_run && (repair.rows || []).length > 0 && (() => {
+                  const rows = repair.rows || [];
+                  const mismatched = rows.filter((r) => r.mismatch);
                   const allChecked = mismatched.length > 0 && mismatched.every((r) => selectedIds.includes(r.id));
+                  const t = repair.totals || {};
                   return (
                     <div className="overflow-hidden rounded-lg border border-slate-200" data-testid="ra-zoho-repair-list">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-slate-200 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
-                            <th className="px-3 py-2 text-left">
-                              <input
-                                type="checkbox"
-                                checked={allChecked}
-                                onChange={() => setSelectedIds(allChecked ? [] : mismatched.map((r) => r.id))}
-                                data-testid="ra-zoho-repair-select-all"
-                              />
-                            </th>
-                            <th className="px-3 py-2 text-left font-semibold">Invoice</th>
-                            <th className="px-3 py-2 text-left font-semibold">Account</th>
-                            <th className="px-3 py-2 text-left font-semibold">Date</th>
-                            <th className="px-3 py-2 text-right font-semibold">Stored (CRM)</th>
-                            <th className="px-3 py-2 text-right font-semibold">Zoho Total</th>
-                            <th className="px-3 py-2 text-right font-semibold">Difference</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {mismatched.map((r) => (
-                            <tr key={r.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                              <td className="px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs" data-testid="ra-zoho-repair-totals">
+                        <span className="font-semibold text-slate-700">Period summary:</span>
+                        <span className="text-slate-500">Stored (CRM) <span className="font-mono font-semibold text-slate-800">{fullINR(t.stored)}</span></span>
+                        <span className="text-slate-500">Zoho actual <span className="font-mono font-semibold text-slate-800">{fullINR(t.zoho)}</span></span>
+                        <span className={`${Math.abs(t.delta || 0) >= 0.01 ? 'text-rose-600' : 'text-emerald-700'}`}>
+                          Overall difference <span className="font-mono font-semibold">{(t.delta || 0) > 0 ? '+' : ''}{fullINR(t.delta)}</span>
+                        </span>
+                        <span className="text-slate-400">· GST {fullINR(t.tax)} · Incentive {fullINR(t.adjustment)} · Discount {fullINR(t.discount)}</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-slate-200 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+                              <th className="px-2 py-2 text-left">
                                 <input
                                   type="checkbox"
-                                  checked={selectedIds.includes(r.id)}
-                                  onChange={() => toggleId(r.id)}
-                                  data-testid={`ra-zoho-repair-row-${r.invoice_no}`}
+                                  checked={allChecked}
+                                  disabled={mismatched.length === 0}
+                                  onChange={() => setSelectedIds(allChecked ? [] : mismatched.map((r) => r.id))}
+                                  data-testid="ra-zoho-repair-select-all"
                                 />
-                              </td>
-                              <td className="px-3 py-2 font-medium text-slate-800">{r.invoice_no}</td>
-                              <td className="px-3 py-2 text-slate-600">{r.account_name || '—'}</td>
-                              <td className="px-3 py-2 text-slate-500">{r.invoice_date || '—'}</td>
-                              <td className="px-3 py-2 text-right font-mono tabular-nums text-rose-600">{fullINR(r.stored_value)}</td>
-                              <td className="px-3 py-2 text-right font-mono tabular-nums text-emerald-700">{fullINR(r.zoho_total)}</td>
-                              <td className={`px-3 py-2 text-right font-mono tabular-nums ${r.delta < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
-                                {r.delta > 0 ? '+' : ''}{fullINR(r.delta)}
-                              </td>
+                              </th>
+                              <th className="px-2 py-2 text-left font-semibold">Invoice</th>
+                              <th className="px-2 py-2 text-left font-semibold">Account</th>
+                              <th className="px-2 py-2 text-left font-semibold">Date</th>
+                              <th className="px-2 py-2 text-right font-semibold">Stored (CRM)</th>
+                              <th className="px-2 py-2 text-right font-semibold">Discount</th>
+                              <th className="px-2 py-2 text-right font-semibold">GST</th>
+                              <th className="px-2 py-2 text-right font-semibold">Incentive / CN</th>
+                              <th className="px-2 py-2 text-right font-semibold">Zoho Total</th>
+                              <th className="px-2 py-2 text-right font-semibold">Difference</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {rows.map((r) => r.error ? (
+                              <tr key={r.id || r.invoice_no} className="border-b border-slate-100 last:border-0 bg-rose-50/40">
+                                <td className="px-2 py-2" />
+                                <td className="px-2 py-2 font-medium text-slate-800">{r.invoice_no}</td>
+                                <td className="px-2 py-2 text-slate-600">{r.account_name || '—'}</td>
+                                <td className="px-2 py-2 text-slate-500">{r.invoice_date || '—'}</td>
+                                <td className="px-2 py-2 text-rose-600" colSpan={6}>Could not fetch from Zoho: {r.error}</td>
+                              </tr>
+                            ) : (
+                              <tr key={r.id} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50 ${r.mismatch ? 'bg-amber-50/40' : ''}`}>
+                                <td className="px-2 py-2">
+                                  {r.mismatch && (
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedIds.includes(r.id)}
+                                      onChange={() => toggleId(r.id)}
+                                      data-testid={`ra-zoho-repair-row-${r.invoice_no}`}
+                                    />
+                                  )}
+                                </td>
+                                <td className="px-2 py-2 font-medium text-slate-800">{r.invoice_no}</td>
+                                <td className="px-2 py-2 text-slate-600">{r.account_name || '—'}</td>
+                                <td className="px-2 py-2 text-slate-500">{r.invoice_date || '—'}</td>
+                                <td className={`px-2 py-2 text-right font-mono tabular-nums ${r.mismatch ? 'text-rose-600' : 'text-slate-700'}`}>{fullINR(r.stored_value)}</td>
+                                <td className="px-2 py-2 text-right font-mono tabular-nums text-slate-500">{fullINR(r.zoho_discount)}</td>
+                                <td className="px-2 py-2 text-right font-mono tabular-nums text-slate-500">{fullINR(r.zoho_tax)}</td>
+                                <td className="px-2 py-2 text-right font-mono tabular-nums text-slate-500">{fullINR(r.zoho_adjustment)}</td>
+                                <td className="px-2 py-2 text-right font-mono tabular-nums text-emerald-700">{fullINR(r.zoho_total)}</td>
+                                <td className={`px-2 py-2 text-right font-mono tabular-nums font-semibold ${r.mismatch ? (r.delta < 0 ? 'text-rose-600' : 'text-emerald-700') : 'text-slate-400'}`}>
+                                  {r.mismatch ? `${r.delta > 0 ? '+' : ''}${fullINR(r.delta)}` : '✓ matches'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                       <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-3 py-2">
-                        <span className="text-[11px] text-slate-500">{selectedIds.length} of {mismatched.length} selected</span>
-                        <button
-                          onClick={() => runRepair(true)}
-                          disabled={repairBusy || selectedIds.length === 0}
-                          className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
-                          data-testid="ra-zoho-repair-apply"
-                        >
-                          Fix {selectedIds.length} selected invoice{selectedIds.length === 1 ? '' : 's'}
-                        </button>
+                        <span className="text-[11px] text-slate-500">
+                          {mismatched.length === 0 ? 'All invoice values match Zoho — nothing to fix.' : `${selectedIds.length} of ${mismatched.length} mismatched selected`}
+                        </span>
+                        {mismatched.length > 0 && (
+                          <button
+                            onClick={() => runRepair(true)}
+                            disabled={repairBusy || selectedIds.length === 0}
+                            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                            data-testid="ra-zoho-repair-apply"
+                          >
+                            Fix {selectedIds.length} selected invoice{selectedIds.length === 1 ? '' : 's'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
