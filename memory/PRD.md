@@ -2867,3 +2867,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Repair endpoint now accepts body {"invoice_ids": [...]} — when applying (dry_run=false) only those mirror ids are fixed.
 - UI: after "Verify", mismatched invoices render as a checkbox table (invoice, account, date, stored vs Zoho total, difference) with select-all; "Fix N selected invoices" applies only ticked rows.
 - Tested: backend selection filter (apply with unknown id → checked 0), role gate, UI verify flow via screenshot. Full mismatch table only demonstrable in Production (Zoho connected there).
+
+## Update — Jun 2026: Water Intelligence — manual article link submission
+- New endpoint POST /api/water-intelligence/submit-urls (manage roles, max 10 links): fetches each page's og/meta title+description, dedupes by URL and title-hash, AI-summarises via the same gpt-5.5 engine, and creates articles as pending_approval REGARDLESS of relevance score (manual picks bypass the min_score filter). Docs flagged is_manual + submitted_by; AI failure falls back to page title/description.
+- UI: "Add Links" button on Water Intelligence header → dialog with multi-line URL textarea; result toast shows created/duplicates/failed; switches to Pending tab and refreshes.
+- Tested: invalid URL 400, real link created (score 55 still pending_approval), duplicate resubmit skipped, dialog + button via screenshot. Test article cleaned.

@@ -346,6 +346,140 @@ class TransitionIn(BaseModel):
     reason: Optional[str] = None
 
 
+class SubmitUrlsIn(BaseModel):
+    urls: List[str]
+
+
+_META_RE = {
+    "og_title": re.compile(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']', re.I),
+    "og_desc": re.compile(r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)["\']', re.I),
+    "og_site": re.compile(r'<meta[^>]+property=["\']og:site_name["\'][^>]+content=["\']([^"\']+)["\']', re.I),
+    "pub_time": re.compile(r'<meta[^>]+property=["\']article:published_time["\'][^>]+content=["\']([^"\']+)["\']', re.I),
+    "meta_desc": re.compile(r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']', re.I),
+    "title": re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S),
+}
+
+
+def _html_unescape(s: str) -> str:
+    import html as _html
+    return _html.unescape(s or "").strip()
+
+
+async def _fetch_article_meta(client: httpx.AsyncClient, url: str) -> dict:
+    """Best-effort page metadata for a manually submitted article link."""
+    from urllib.parse import urlparse
+    r = await client.get(url, timeout=25, follow_redirects=True,
+                         headers={"User-Agent": "Mozilla/5.0 (compatible; NylaWaterIntelligence/1.0)"})
+    r.raise_for_status()
+    html = r.text[:400000]
+    def _m(key):
+        m = _META_RE[key].search(html)
+        return _html_unescape(m.group(1)) if m else ""
+    title = _m("og_title") or re.sub(r"\s+", " ", _m("title"))
+    desc = _m("og_desc") or _m("meta_desc")
+    if not desc:
+        body = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.I | re.S)
+        body = re.sub(r"<[^>]+>", " ", body)
+        desc = re.sub(r"\s+", " ", _html_unescape(body)).strip()[:600]
+    site = _m("og_site") or (urlparse(str(r.url)).netloc or "").replace("www.", "")
+    return {
+        "source_title": (title or url)[:300],
+        "source_url": url,
+        "source_name": site[:120],
+        "source_published_at": _m("pub_time"),
+        "snippet": desc[:600],
+        "topic": "Manual submission",
+    }
+
+
+@router.post("/submit-urls")
+async def submit_article_urls(payload: SubmitUrlsIn, current_user: dict = Depends(get_current_user)):
+    """Manually add relevant article links. Each URL is fetched, AI-summarised
+    with the same engine as the daily collector, and lands in Pending Approval
+    regardless of relevance score (the submitter already judged it relevant)."""
+    if not _can_manage(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    tenant_id = get_current_tenant_id()
+    urls = []
+    for u in payload.urls or []:
+        u = (u or "").strip()
+        if u and u.lower().startswith(("http://", "https://")) and u not in urls:
+            urls.append(u)
+    if not urls:
+        raise HTTPException(status_code=400, detail="Provide at least one valid http(s) article link.")
+    if len(urls) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 links per submission.")
+
+    existing = await db[ARTICLES].find(
+        {"tenant_id": tenant_id, "source_url": {"$in": urls}}, {"_id": 0, "source_url": 1}
+    ).to_list(50)
+    dup_urls = {e["source_url"] for e in existing}
+
+    fetched, failed = [], []
+    async with httpx.AsyncClient() as client:
+        for u in urls:
+            if u in dup_urls:
+                continue
+            try:
+                fetched.append(await _fetch_article_meta(client, u))
+            except Exception as ex:
+                logger.warning(f"WaterIntel manual fetch failed {u}: {ex}")
+                failed.append({"url": u, "error": str(ex)[:150]})
+
+    # Title-hash dedupe against recent records
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    recent = await db[ARTICLES].find(
+        {"tenant_id": tenant_id, "created_at": {"$gte": cutoff}}, {"_id": 0, "dedupe_hash": 1}
+    ).to_list(5000)
+    seen_hashes = {e.get("dedupe_hash") for e in recent}
+    fresh = []
+    for it in fetched:
+        h = _dedupe_hash(it["source_title"])
+        if h in seen_hashes:
+            dup_urls.add(it["source_url"])
+            continue
+        seen_hashes.add(h)
+        it["dedupe_hash"] = h
+        fresh.append(it)
+
+    reviews_by_idx = {}
+    if fresh:
+        try:
+            reviews = await _ai_review_batch(fresh)
+            reviews_by_idx = {r.get("index"): r for r in reviews if isinstance(r, dict)}
+        except Exception as ex:
+            logger.error(f"WaterIntel manual AI review failed: {ex}")
+
+    created = []
+    for j, art in enumerate(fresh):
+        rv = reviews_by_idx.get(j) or {}
+        score = max(0, min(100, int(rv.get("relevance_score") or 0))) if rv else None
+        doc = {
+            "id": str(uuid.uuid4()), "tenant_id": tenant_id, "run_id": None,
+            "status": "pending_approval",  # manual picks are never auto-rejected
+            "rejected_reason": None,
+            "relevance_score": score if score is not None else 100,
+            "category": rv.get("category") if rv.get("category") in CATEGORIES else "Other",
+            "region": (rv.get("region") or "Global")[:60],
+            "headline": (rv.get("headline") or art["source_title"])[:160],
+            "summary": rv.get("summary") or art.get("snippet") or "",
+            "why_it_matters": rv.get("why_it_matters") or "",
+            "keywords": [str(k)[:40] for k in (rv.get("keywords") or [])][:8],
+            "source_title": art["source_title"], "source_name": art["source_name"],
+            "source_url": art["source_url"], "source_published_at": art["source_published_at"],
+            "topic": "Manual submission", "dedupe_hash": art["dedupe_hash"],
+            "is_manual": True, "submitted_by": current_user.get("name"),
+            "approved_by": None, "approved_at": None, "published_at": None,
+            "created_at": _now(), "updated_at": _now(),
+        }
+        await db[ARTICLES].insert_one({**doc})
+        doc.pop("_id", None)
+        created.append(doc)
+
+    return {"created": len(created), "duplicates": len(dup_urls),
+            "failed": failed, "articles": created}
+
+
 @router.get("")
 async def list_articles(
     status: Optional[str] = None, category: Optional[str] = None,

@@ -55,6 +55,9 @@ export default function WaterIntelligence() {
   const [showRuns, setShowRuns] = useState(false);
   const [settings, setSettings] = useState(null);
   const [runs, setRuns] = useState([]);
+  const [showAddLinks, setShowAddLinks] = useState(false);
+  const [linksText, setLinksText] = useState('');
+  const [submittingLinks, setSubmittingLinks] = useState(false);
   const LIMIT = 20;
 
   const loadStats = useCallback(async () => {
@@ -88,6 +91,27 @@ export default function WaterIntelligence() {
     const t = setInterval(() => { loadStats(); loadArticles(); }, 8000);
     return () => clearInterval(t);
   }, [running, loadStats, loadArticles]);
+
+  const submitLinks = async () => {
+    const urls = linksText.split(/\s+/).map((u) => u.trim()).filter(Boolean);
+    if (!urls.length) { toast.error('Paste at least one article link'); return; }
+    setSubmittingLinks(true);
+    try {
+      const r = await fetch(`${API_URL}/api/water-intelligence/submit-urls`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ urls }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || 'Submission failed');
+      const bits = [`${data.created} article${data.created === 1 ? '' : 's'} added to Pending`];
+      if (data.duplicates) bits.push(`${data.duplicates} duplicate${data.duplicates === 1 ? '' : 's'} skipped`);
+      if (data.failed?.length) bits.push(`${data.failed.length} link${data.failed.length === 1 ? '' : 's'} failed to load`);
+      (data.created ? toast.success : toast.warning)(bits.join(' · '));
+      if (data.failed?.length) data.failed.forEach((f) => toast.error(`${f.url}: ${f.error}`));
+      setShowAddLinks(false); setLinksText('');
+      setTab('pending_approval'); loadArticles(); loadStats();
+    } catch (e) { toast.error(e.message); }
+    finally { setSubmittingLinks(false); }
+  };
 
   const runNow = async () => {
     try {
@@ -186,6 +210,7 @@ export default function WaterIntelligence() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" className="rounded-sm" onClick={() => setShowAddLinks(true)} data-testid="wi-add-links-btn"><Sparkles className="h-4 w-4 mr-1.5" /> Add Links</Button>
           <Button variant="outline" className="rounded-sm" onClick={openRuns} data-testid="wi-runs-btn"><History className="h-4 w-4 mr-1.5" /> Runs</Button>
           <Button variant="outline" className="rounded-sm" onClick={openSettings} data-testid="wi-settings-btn"><Settings2 className="h-4 w-4 mr-1.5" /> Settings</Button>
           <Button className="rounded-sm bg-[#002FA7] hover:bg-[#00227A] text-white" onClick={runNow} disabled={running} data-testid="wi-run-now-btn">
@@ -335,6 +360,32 @@ export default function WaterIntelligence() {
       )}
 
       {/* Edit dialog */}
+      {/* Add links dialog */}
+      <Dialog open={showAddLinks} onOpenChange={(o) => { setShowAddLinks(o); if (!o) setLinksText(''); }}>
+        <DialogContent className="max-w-lg" data-testid="wi-add-links-dialog">
+          <DialogHeader>
+            <DialogTitle>Add article links</DialogTitle>
+            <DialogDescription>
+              Paste one or more article URLs (one per line, max 10). Each link is fetched and AI-summarised, then lands in Pending Approval — no relevance filter is applied to your picks.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={linksText}
+            onChange={(e) => setLinksText(e.target.value)}
+            placeholder={'https://example.com/water-industry-article\nhttps://another-site.com/awg-news'}
+            rows={5}
+            data-testid="wi-add-links-input"
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" className="rounded-sm" onClick={() => setShowAddLinks(false)} disabled={submittingLinks}>Cancel</Button>
+            <Button className="rounded-sm bg-[#002FA7] hover:bg-[#00227A] text-white" onClick={submitLinks} disabled={submittingLinks} data-testid="wi-add-links-submit">
+              {submittingLinks ? <RefreshCw className="h-4 w-4 mr-1.5 animate-spin" /> : <Send className="h-4 w-4 mr-1.5" />}
+              {submittingLinks ? 'Fetching & summarising…' : 'Add Articles'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!editArt} onOpenChange={(o) => !o && setEditArt(null)}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="wi-edit-dialog">
           <DialogHeader><DialogTitle>Edit Article</DialogTitle><DialogDescription>Refine the AI-generated content before publishing.</DialogDescription></DialogHeader>
