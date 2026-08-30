@@ -1428,7 +1428,9 @@ async def _ensure_mirror_invoice(
         except Exception as e:
             logger.warning(f"[zoho] Could not fetch invoice {zoho_invoice_id} total for mirror: {e}")
     if invoice_total is not None:
-        gross_total = round(invoice_total - tax_total, 2)   # ex-GST revenue value
+        # ex-GST, BEFORE credit note/incentive (= post-discount subtotal);
+        # the incentive is stored separately and applied at display time.
+        gross_total = round(invoice_total - tax_total - adj_total, 2)
         billed_total = round(invoice_total, 2)              # incl. GST (receivable)
     else:
         gross_total = computed_total

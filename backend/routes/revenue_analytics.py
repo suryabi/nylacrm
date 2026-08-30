@@ -77,14 +77,14 @@ def _ex_gst_value(inv: dict) -> float:
 
 def _rev_pair(inv: dict, deduct_cn: bool = True) -> tuple[float, float]:
     """(gross, net) revenue for one invoice under the credit-note policy.
-    Stored values are ex-GST, post-discount, NET of the invoice-level
-    sustainability incentive. deduct_cn=False rolls that incentive back and
-    ignores separate credit notes — revenue before any credit-note effect."""
+    Stored values are ex-GST, post-discount, BEFORE credit notes/incentives.
+    deduct_cn=True applies the invoice-level incentive (incentive_amount,
+    negative) and separate credit notes at display time."""
     base = _gross(inv)
-    if deduct_cn:
-        return base, base - float(inv.get("credit_note_value") or inv.get("credit_note") or 0)
-    nocn = base - float(inv.get("incentive_amount") or 0)  # incentive is negative
-    return nocn, nocn
+    if not deduct_cn:
+        return base, base
+    gross = base + float(inv.get("incentive_amount") or 0)
+    return gross, gross - float(inv.get("credit_note_value") or inv.get("credit_note") or 0)
 
 
 # ──────────────────────────────────────────────────────────────────────────

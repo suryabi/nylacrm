@@ -869,9 +869,11 @@ async def repair_zoho_mirror_values(
         tax_total = _zf("tax_total")
         adjustment = _zf("adjustment")          # Sustainability Incentive (negative)
         discount_total = _zf("discount_total", "discount_amount", "discount")
-        # Business rule: revenue EXCLUDES GST but is NET of credit notes /
-        # incentive adjustments → target = Zoho total − GST.
-        target = round(total - tax_total, 2)
+        # Business rule (final): stored revenue EXCLUDES GST and EXCLUDES the
+        # credit note / incentive → target = Zoho total − GST − adjustment
+        # (= post-discount subtotal). Incentives are applied via the
+        # Deducted/Not-deducted toggle on Revenue Analytics, not in storage.
+        target = round(total - tax_total - adjustment, 2)
         old = float(m.get("net_invoice_value") or m.get("gross_invoice_value") or 0)
         delta = round(target - old, 2)
         mismatch = abs(delta) >= 0.01

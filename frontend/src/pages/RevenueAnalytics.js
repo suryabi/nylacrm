@@ -382,7 +382,7 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs" data-testid="ra-zoho-repair-totals">
                         <span className="font-semibold text-slate-700">Period summary:</span>
                         <span className="text-slate-500">Stored (CRM) <span className="font-mono font-semibold text-slate-800">{fullINR(t.stored)}</span></span>
-                        <span className="text-slate-500">Correct revenue (excl. GST) <span className="font-mono font-semibold text-slate-800">{fullINR(t.target)}</span></span>
+                        <span className="text-slate-500">Correct revenue (excl. GST &amp; CN) <span className="font-mono font-semibold text-slate-800">{fullINR(t.target)}</span></span>
                         <span className={`${Math.abs(t.delta || 0) >= 0.01 ? 'text-rose-600' : 'text-emerald-700'}`}>
                           Overall difference <span className="font-mono font-semibold">{(t.delta || 0) > 0 ? '+' : ''}{fullINR(t.delta)}</span>
                         </span>
@@ -409,7 +409,7 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                               <th className="px-2 py-2 text-right font-semibold">GST</th>
                               <th className="px-2 py-2 text-right font-semibold">Incentive / CN</th>
                               <th className="px-2 py-2 text-right font-semibold">Zoho Total</th>
-                              <th className="px-2 py-2 text-right font-semibold">New Value (excl. GST)</th>
+                              <th className="px-2 py-2 text-right font-semibold">New Value (excl. GST &amp; CN)</th>
                               <th className="px-2 py-2 text-right font-semibold">Difference</th>
                             </tr>
                           </thead>
@@ -470,7 +470,7 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                   );
                 })()}
                 <span className="block text-[11px] text-slate-400">
-                  Checks CRM-mirrored invoices in the time period selected above. Fixing sets each invoice's revenue value to the Zoho amount EXCLUDING GST but net of credit notes / sustainability incentives. Tick the invoices you want corrected, then fix only those.
+                  Checks CRM-mirrored invoices in the time period selected above. Fixing sets each invoice's stored revenue to the Zoho amount EXCLUDING GST and EXCLUDING credit notes / incentives — incentives are applied only via the "Deducted" toggle above. Tick the invoices you want corrected, then fix only those.
                 </span>
               </div>
             </div>

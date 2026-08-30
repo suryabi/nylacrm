@@ -2911,3 +2911,10 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Cause: invoices fixed via the repair tool BEFORE incentive_amount existed have no stored incentive → "Not deducted" mode had nothing to add back.
 - Fix: the Verify pass (dry_run included) now always refreshes gst_amount / incentive_amount / zoho_total_value on every scanned mirror from Zoho, without touching revenue values. One Verify run after redeploy enriches all invoices and the toggle differentiates.
 - Preview: endpoint stable (Zoho-disconnected errors skip rows safely). Toggle math previously verified (4,104 incentive → exact diff).
+
+## Update — Jun 2026: Stored basis flipped to BEFORE incentive (user revert request)
+- User had fixed 1 week of invoices in Production; stored values were net of incentive. They want stored amounts WITHOUT incentive deduction.
+- Final policy: stored gross/net_invoice_value = Zoho total − GST − adjustment (= post-discount subtotal, before CN). Applied to mirror creation and repair target. incentive_amount still stored separately.
+- _rev_pair flipped: base is before-CN; "Deducted" mode ADDS incentive_amount (negative) + subtracts credit_note_value; "Not deducted" = base as-is (default).
+- Revert path for the fixed week: re-run Verify → those invoices show mismatched by the incentive → Fix restores before-incentive values (metadata backfill also runs on Verify).
+- Tested: mirror total 95256/tax 4536/adj −4104 → stored 94824; analytics diff between modes exactly 4104. UI labels updated ("New Value (excl. GST & CN)").
