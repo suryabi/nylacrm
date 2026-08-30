@@ -922,6 +922,81 @@ async def repair_zoho_mirror_values(
                        "discount": round(tot_disc, 2)}}
 
 
+class ZohoMirrorExportRequest(BaseModel):
+    rows: List[dict]
+    totals: Optional[dict] = None
+    from_date: Optional[str] = None
+    to_date: Optional[str] = None
+
+
+@router.post("/admin/zoho-mirror-repair/export")
+async def export_zoho_mirror_verification(
+    payload: ZohoMirrorExportRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Branded Excel of the invoice verification table for audit filing."""
+    if (current_user.get("role") or "").lower() not in _INVOICE_REGEN_ROLES:
+        raise HTTPException(status_code=403, detail="Only management roles can export this report.")
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    from fastapi.responses import StreamingResponse
+    from utils.excel_branding import brand_workbook
+
+    headers = ["Invoice", "Account", "Date", "Stored (CRM)", "Discount", "GST",
+               "Incentive / CN", "Zoho Total", "New Value (excl. GST)", "Difference", "Status"]
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Invoice Reconciliation"
+    period = f"{payload.from_date or ''} to {payload.to_date or ''}".strip()
+    ws.append([f"Invoice Reconciliation vs Zoho Books — {period}"])
+    ws["A1"].font = Font(bold=True, size=13, color="002FA7")
+    ws.append([])
+    ws.append(headers)
+    hdr_row = 3
+    for c in ws[hdr_row]:
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill(start_color="003048", end_color="003048", fill_type="solid")
+
+    t = payload.totals or {}
+    ws.append(["TOTALS", "", "", t.get("stored"), t.get("discount"), t.get("tax"),
+               t.get("adjustment"), t.get("zoho"), t.get("target"), t.get("delta"), ""])
+    for c in ws[hdr_row + 1]:
+        c.font = Font(bold=True, color="002FA7")
+        c.fill = PatternFill(start_color="E8EDFB", end_color="E8EDFB", fill_type="solid")
+
+    mismatch_fill = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+    error_font = Font(color="B91C1C")
+    for i, r in enumerate(payload.rows):
+        if r.get("error"):
+            ws.append([r.get("invoice_no"), r.get("account_name"), r.get("invoice_date"),
+                       "", "", "", "", "", "", "", f"Fetch failed: {r.get('error')}"])
+            for c in ws[hdr_row + 2 + i]:
+                c.font = error_font
+            continue
+        status = "Mismatch — needs fix" if r.get("mismatch") else "Matches"
+        ws.append([r.get("invoice_no"), r.get("account_name"), r.get("invoice_date"),
+                   r.get("stored_value"), r.get("zoho_discount"), r.get("zoho_tax"),
+                   r.get("zoho_adjustment"), r.get("zoho_total"), r.get("target_value"),
+                   r.get("delta"), status])
+        if r.get("mismatch"):
+            for c in ws[hdr_row + 2 + i]:
+                c.fill = mismatch_fill
+    widths = [16, 30, 12, 14, 12, 12, 14, 14, 20, 14, 26]
+    for idx, w in enumerate(widths, start=1):
+        ws.column_dimensions[ws.cell(row=hdr_row, column=idx).column_letter].width = w
+    brand_workbook(wb)
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f"Invoice Reconciliation {payload.from_date or ''} to {payload.to_date or ''}.xlsx"
+    return StreamingResponse(
+        buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 @router.delete("/{invoice_id}")
 async def delete_invoice(
     invoice_id: str,

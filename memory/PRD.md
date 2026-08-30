@@ -2895,3 +2895,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Repair tool: target value = Zoho total − GST; "New Value (excl. GST)" column added; Difference = target − stored; summary shows Correct revenue (excl. GST), Zoho billed, "GST (not counted)", Incentive, Discount. Outstanding correction uses (Zoho billed − old).
 - GST toggle removed from Revenue Analytics (replaced by static "Excluded from revenue" note); headline card labeled "Gross Revenue (excl. GST)". Backend exclude_gst param retained but unused by UI.
 - Tested: mirror with total 95256/tax 4536 → stored 90720, zoho_total_value 95256, gst_amount 4536; UI verified via screenshot.
+
+## Update — Jun 2026: Reconciliation Excel export
+- POST /api/invoices/admin/zoho-mirror-repair/export (management roles): branded xlsx of the verification table — title with period, TOTALS row, per-invoice columns (Stored/Discount/GST/Incentive/Zoho Total/New Value excl. GST/Difference/Status), mismatched rows amber, error rows red with fetch error.
+- UI "Export Excel" button next to the verify summary; downloads via blob.
+- Tested: endpoint returns correct xlsx (verified content via openpyxl read-back incl. totals, match/mismatch/error rows); button verified via screenshot.

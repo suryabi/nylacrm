@@ -243,6 +243,26 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
     }
   };
 
+  const exportRepair = async () => {
+    if (!repair) return;
+    try {
+      const res = await axios.post(
+        `${API_URL}/invoices/admin/zoho-mirror-repair/export`,
+        { rows: repair.rows || [], totals: repair.totals || {}, from_date: repair.from, to_date: repair.to },
+        { ...authHeaders(), responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Invoice Reconciliation ${repair.from} to ${repair.to}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error('Export failed');
+    }
+  };
+
   const toggleId = (id) => setSelectedIds((prev) =>
     prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
 
@@ -341,6 +361,15 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                       {repair.errors ? ` · errors ${repair.errors}` : ''}
                       {!repair.dry_run ? ` · fixed ${repair.fixed}` : ''}
                     </span>
+                  )}
+                  {repair && (repair.rows || []).length > 0 && (
+                    <button
+                      onClick={exportRepair}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                      data-testid="ra-zoho-repair-export"
+                    >
+                      Export Excel
+                    </button>
                   )}
                 </div>
                 {repair && repair.dry_run && (repair.rows || []).length > 0 && (() => {
