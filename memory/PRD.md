@@ -2918,3 +2918,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - _rev_pair flipped: base is before-CN; "Deducted" mode ADDS incentive_amount (negative) + subtracts credit_note_value; "Not deducted" = base as-is (default).
 - Revert path for the fixed week: re-run Verify → those invoices show mismatched by the incentive → Fix restores before-incentive values (metadata backfill also runs on Verify).
 - Tested: mirror total 95256/tax 4536/adj −4104 → stored 94824; analytics diff between modes exactly 4104. UI labels updated ("New Value (excl. GST & CN)").
+
+## Update — Jun 2026: Breakdown vs Compare mismatch fixed
+- Cause: compare endpoints (revenue-compare, revenue-compare-multi) called _aggregate with default deduct_cn=True (after CN) while Breakdown UI defaults to Not deducted → 54.97L vs 50.57L (diff = incentives).
+- Fix: both compare endpoints take deduct_credit_notes (default False = not deducted, matching Breakdown default); Compare tab got its own Deducted/Not-deducted pill toggle wired to the param.
+- Tested: seeded Aug invoice (94,824 base / −4,104 incentive) → Breakdown this_month 94,824 == Compare Aug default 94,824; Compare deducted 90,720. Toggle verified via screenshot.

@@ -761,6 +761,7 @@ function CompareView() {
   const [options, setOptions] = useState([]);
   const [selected, setSelected] = useState([]);
   const [groupBy, setGroupBy] = useState('city');
+  const [deductCn, setDeductCn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
 
@@ -795,6 +796,7 @@ function CompareView() {
       selected.forEach((p) => params.append('periods', p));
       params.append('group_by', groupBy);
       params.append('top_n', '12');
+      params.append('deduct_credit_notes', deductCn ? 'true' : 'false');
       const res = await axios.get(`${API_URL}/reports/revenue-compare-multi?${params.toString()}`, authHeaders());
       setData(res.data);
     } catch (e) {
@@ -803,7 +805,7 @@ function CompareView() {
     } finally {
       setLoading(false);
     }
-  }, [periodType, selected, groupBy]);
+  }, [periodType, selected, groupBy, deductCn]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -841,6 +843,25 @@ function CompareView() {
             <SelectTrigger className={SELECT_TRIGGER} data-testid="ra-cmp-groupby"><SelectValue /></SelectTrigger>
             <SelectContent className={SELECT_CONTENT}>{GROUP_BY_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className={SELECT_ITEM}>{o.label}</SelectItem>)}</SelectContent>
           </Select>
+        </div>
+        <div className="min-w-[210px]">
+          <FieldLabel>Credit Notes / Incentives</FieldLabel>
+          <div className="flex overflow-hidden rounded-lg border border-slate-300" data-testid="ra-cmp-cn-toggle">
+            <button
+              onClick={() => setDeductCn(true)}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${deductCn ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              data-testid="ra-cmp-cn-deducted"
+            >
+              Deducted
+            </button>
+            <button
+              onClick={() => setDeductCn(false)}
+              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${!deductCn ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+              data-testid="ra-cmp-cn-ignored"
+            >
+              Not deducted
+            </button>
+          </div>
         </div>
       </div>
 

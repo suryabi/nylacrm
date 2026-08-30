@@ -345,6 +345,7 @@ async def revenue_compare(
     period_b_month: int = Query(..., ge=1, le=12),
     group_by: GROUP_BY = "total",
     top_n: int = Query(15, ge=1, le=200),
+    deduct_credit_notes: bool = Query(False),
     _user: dict = Depends(get_current_user),
 ):
     """Compare revenue between two months. Paired by group label so the
@@ -356,8 +357,8 @@ async def revenue_compare(
     a_from, a_to = _month_window(period_a_year, period_a_month)
     b_from, b_to = _month_window(period_b_year, period_b_month)
 
-    a_groups = await _aggregate(a_from, a_to, group_by)
-    b_groups = await _aggregate(b_from, b_to, group_by)
+    a_groups = await _aggregate(a_from, a_to, group_by, deduct_cn=deduct_credit_notes)
+    b_groups = await _aggregate(b_from, b_to, group_by, deduct_cn=deduct_credit_notes)
 
     a_map = {g["label"]: g for g in a_groups}
     b_map = {g["label"]: g for g in b_groups}
@@ -531,6 +532,7 @@ async def revenue_compare_multi(
     periods: List[str] = Query(...),
     group_by: GROUP_BY = "total",
     top_n: int = Query(15, ge=1, le=200),
+    deduct_credit_notes: bool = Query(False),
     _user: dict = Depends(get_current_user),
 ):
     """Compare revenue across 2–4 periods of the same granularity. Rows are
@@ -554,7 +556,7 @@ async def revenue_compare_multi(
 
     aggs = []
     for r in uniq:
-        groups = await _aggregate(r["from"], r["to"], group_by)
+        groups = await _aggregate(r["from"], r["to"], group_by, deduct_cn=deduct_credit_notes)
         gmap = {g["label"]: g for g in groups}
         total = sum(g.get("gross", 0) for g in groups)
         aggs.append({"meta": r, "map": gmap, "total": total})
