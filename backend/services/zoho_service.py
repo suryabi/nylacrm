@@ -1405,22 +1405,32 @@ async def _ensure_mirror_invoice(
             "line_total": net,
         })
     computed_total = round(sum(i["net_amount"] for i in items_list), 2)
-    # FINAL invoice value = Zoho's own total (discounts + GST + adjustments).
+    # Revenue value = Zoho total MINUS GST (per business rule, Revenue Analytics
+    # excludes GST) but NET of the sustainability-incentive adjustment.
+    # Outstanding (receivable) still uses the full billed total incl. GST.
     invoice_total = None
-    try:
-        if zoho_invoice and zoho_invoice.get("total") is not None:
-            invoice_total = float(zoho_invoice.get("total"))
-    except (TypeError, ValueError):
-        invoice_total = None
+    tax_total = 0.0
+    def _zread(z):
+        try:
+            t = float(z.get("total")) if z.get("total") is not None else None
+            tx = float(z.get("tax_total") or 0)
+            return t, tx
+        except (TypeError, ValueError):
+            return None, 0.0
+    if zoho_invoice:
+        invoice_total, tax_total = _zread(zoho_invoice)
     if invoice_total is None and zoho_invoice_id:
         try:
             res = await _zoho_request("GET", f"/books/v3/invoices/{zoho_invoice_id}", tenant_id=tenant_id)
-            zt = (res.get("invoice") or {}).get("total")
-            if zt is not None:
-                invoice_total = float(zt)
+            invoice_total, tax_total = _zread(res.get("invoice") or {})
         except Exception as e:
             logger.warning(f"[zoho] Could not fetch invoice {zoho_invoice_id} total for mirror: {e}")
-    gross_total = round(invoice_total, 2) if invoice_total is not None else computed_total
+    if invoice_total is not None:
+        gross_total = round(invoice_total - tax_total, 2)   # ex-GST revenue value
+        billed_total = round(invoice_total, 2)              # incl. GST (receivable)
+    else:
+        gross_total = computed_total
+        billed_total = computed_total
     creds = await get_credentials(tenant_id) or {}
     now = datetime.now(timezone.utc).isoformat()
 
@@ -1440,7 +1450,7 @@ async def _ensure_mirror_invoice(
             {"_id": 0, "outstanding_balance": 1},
         )
         prior_balance = float((acct or {}).get("outstanding_balance") or 0)
-        outstanding_value = round(prior_balance + gross_total, 2)  # new running balance
+        outstanding_value = round(prior_balance + billed_total, 2)  # new running balance (incl. GST)
         counted = True
     else:
         # Already mirrored — keep the previously-stamped running balance and never
@@ -1458,6 +1468,8 @@ async def _ensure_mirror_invoice(
         "invoice_date": (delivery.get("delivery_date") or now)[:10],
         "gross_invoice_value": gross_total,
         "net_invoice_value": gross_total,
+        "zoho_total_value": billed_total,
+        "gst_amount": round(tax_total, 2),
         "outstanding": outstanding_value,
         "outstanding_counted": counted,
         "items": items_list,
@@ -1478,11 +1490,12 @@ async def _ensure_mirror_invoice(
             {"$set": invoice_doc, "$setOnInsert": {"created_at": now}},
             upsert=True,
         )
-        if existing_mirror is None and gross_total:
-            # First mirror: add this invoice's net to the running outstanding balance.
+        if existing_mirror is None and billed_total:
+            # First mirror: add this invoice's billed total (incl. GST) to the
+            # running outstanding balance — the customer owes the full amount.
             await db.accounts.update_one(
                 {"tenant_id": tenant_id, "$or": [{"id": account_uuid}, {"account_id": account_uuid}]},
-                {"$inc": {"outstanding_balance": round(gross_total, 2)},
+                {"$inc": {"outstanding_balance": round(billed_total, 2)},
                  "$set": {"updated_at": now}},
             )
         logger.info(

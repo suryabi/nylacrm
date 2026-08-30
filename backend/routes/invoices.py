@@ -841,7 +841,7 @@ async def repair_zoho_mirror_values(
          "account_name": 1, "invoice_date": 1, "outstanding_counted": 1},
     ).to_list(5000)
     rows, fixed, errors = [], 0, 0
-    tot_stored = tot_zoho = tot_tax = tot_adj = tot_disc = 0.0
+    tot_stored = tot_zoho = tot_target = tot_tax = tot_adj = tot_disc = 0.0
     for m in mirrors:
         inv_no = m.get("invoice_no") or m.get("invoice_number")
         try:
@@ -869,11 +869,15 @@ async def repair_zoho_mirror_values(
         tax_total = _zf("tax_total")
         adjustment = _zf("adjustment")          # Sustainability Incentive (negative)
         discount_total = _zf("discount_total", "discount_amount", "discount")
+        # Business rule: revenue EXCLUDES GST but is NET of credit notes /
+        # incentive adjustments → target = Zoho total − GST.
+        target = round(total - tax_total, 2)
         old = float(m.get("net_invoice_value") or m.get("gross_invoice_value") or 0)
-        delta = round(total - old, 2)
+        delta = round(target - old, 2)
         mismatch = abs(delta) >= 0.01
         tot_stored += old
         tot_zoho += total
+        tot_target += target
         tot_tax += tax_total
         tot_adj += adjustment
         tot_disc += discount_total
@@ -886,18 +890,24 @@ async def repair_zoho_mirror_values(
                      "zoho_tax": round(tax_total, 2),
                      "zoho_adjustment": round(adjustment, 2),
                      "zoho_total": round(total, 2),
+                     "target_value": target,
                      "delta": delta, "mismatch": mismatch})
         if mismatch and not dry_run:
             await tdb.invoices.update_one(
                 {"id": m["id"]},
-                {"$set": {"gross_invoice_value": round(total, 2),
-                          "net_invoice_value": round(total, 2),
+                {"$set": {"gross_invoice_value": target,
+                          "net_invoice_value": target,
+                          "zoho_total_value": round(total, 2),
+                          "gst_amount": round(tax_total, 2),
                           "value_before_repair": round(old, 2),
                           "value_repaired_at": now, "updated_at": now}})
             if m.get("outstanding_counted") and m.get("account_id"):
+                # Receivable stays GST-inclusive: correct it against the full
+                # Zoho billed total, not the ex-GST revenue value.
                 await tdb.accounts.update_one(
                     {"$or": [{"id": m["account_id"]}, {"account_id": m["account_id"]}]},
-                    {"$inc": {"outstanding_balance": delta}, "$set": {"updated_at": now}})
+                    {"$inc": {"outstanding_balance": round(total - old, 2)},
+                     "$set": {"updated_at": now}})
             fixed += 1
     logger.info(f"[INVOICES] Zoho mirror repair by {current_user.get('email')}: dry_run={dry_run}, "
                 f"checked={len(mirrors)}, mismatched={len([r for r in rows if 'delta' in r])}, fixed={fixed}")
@@ -906,7 +916,8 @@ async def repair_zoho_mirror_values(
             "mismatched": len([r for r in rows if r.get("mismatch")]),
             "fixed": fixed, "errors": errors, "rows": rows[:300],
             "totals": {"stored": round(tot_stored, 2), "zoho": round(tot_zoho, 2),
-                       "delta": round(tot_zoho - tot_stored, 2),
+                       "target": round(tot_target, 2),
+                       "delta": round(tot_target - tot_stored, 2),
                        "tax": round(tot_tax, 2), "adjustment": round(tot_adj, 2),
                        "discount": round(tot_disc, 2)}}
 

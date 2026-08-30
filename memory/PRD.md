@@ -2889,3 +2889,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - New "GST: Included / Excluded" pill toggle in the filter bar. exclude_gst=true reports product-line (post-discount, pre-tax) value via _ex_gst_value (sum of _skuperf_line_value per invoice; invoices without line items keep full value).
 - Applies to headline Gross/Net, ARR, and city/state/territory/category breakdowns. SKU breakdown was already ex-GST. Card label shows "(incl. GST)"/"(excl. GST)".
 - Tested: seeded invoice (95,256 incl / 90,720 excl) → totals differed by exactly 4,536 GST; UI toggle verified via screenshot; test invoice cleaned.
+
+## Update — Jun 2026: Revenue policy — GST EXCLUDED from revenue (user decision)
+- Mirror invoices (new): gross/net_invoice_value = Zoho total − tax_total (post-discount, net of incentive, EX-GST). Full billed total stored as zoho_total_value + gst_amount. Account outstanding_balance still uses full billed total (receivable incl. GST).
+- Repair tool: target value = Zoho total − GST; "New Value (excl. GST)" column added; Difference = target − stored; summary shows Correct revenue (excl. GST), Zoho billed, "GST (not counted)", Incentive, Discount. Outstanding correction uses (Zoho billed − old).
+- GST toggle removed from Revenue Analytics (replaced by static "Excluded from revenue" note); headline card labeled "Gross Revenue (excl. GST)". Backend exclude_gst param retained but unused by UI.
+- Tested: mirror with total 95256/tax 4536 → stored 90720, zoho_total_value 95256, gst_amount 4536; UI verified via screenshot.

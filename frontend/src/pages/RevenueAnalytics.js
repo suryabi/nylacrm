@@ -353,11 +353,11 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs" data-testid="ra-zoho-repair-totals">
                         <span className="font-semibold text-slate-700">Period summary:</span>
                         <span className="text-slate-500">Stored (CRM) <span className="font-mono font-semibold text-slate-800">{fullINR(t.stored)}</span></span>
-                        <span className="text-slate-500">Zoho actual <span className="font-mono font-semibold text-slate-800">{fullINR(t.zoho)}</span></span>
+                        <span className="text-slate-500">Correct revenue (excl. GST) <span className="font-mono font-semibold text-slate-800">{fullINR(t.target)}</span></span>
                         <span className={`${Math.abs(t.delta || 0) >= 0.01 ? 'text-rose-600' : 'text-emerald-700'}`}>
                           Overall difference <span className="font-mono font-semibold">{(t.delta || 0) > 0 ? '+' : ''}{fullINR(t.delta)}</span>
                         </span>
-                        <span className="text-slate-400">· GST {fullINR(t.tax)} · Incentive {fullINR(t.adjustment)} · Discount {fullINR(t.discount)}</span>
+                        <span className="text-slate-400">· Zoho billed {fullINR(t.zoho)} · GST {fullINR(t.tax)} (not counted) · Incentive {fullINR(t.adjustment)} · Discount {fullINR(t.discount)}</span>
                       </div>
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs">
@@ -380,6 +380,7 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                               <th className="px-2 py-2 text-right font-semibold">GST</th>
                               <th className="px-2 py-2 text-right font-semibold">Incentive / CN</th>
                               <th className="px-2 py-2 text-right font-semibold">Zoho Total</th>
+                              <th className="px-2 py-2 text-right font-semibold">New Value (excl. GST)</th>
                               <th className="px-2 py-2 text-right font-semibold">Difference</th>
                             </tr>
                           </thead>
@@ -390,7 +391,7 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                                 <td className="px-2 py-2 font-medium text-slate-800">{r.invoice_no}</td>
                                 <td className="px-2 py-2 text-slate-600">{r.account_name || '—'}</td>
                                 <td className="px-2 py-2 text-slate-500">{r.invoice_date || '—'}</td>
-                                <td className="px-2 py-2 text-rose-600" colSpan={6}>Could not fetch from Zoho: {r.error}</td>
+                                <td className="px-2 py-2 text-rose-600" colSpan={7}>Could not fetch from Zoho: {r.error}</td>
                               </tr>
                             ) : (
                               <tr key={r.id} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50 ${r.mismatch ? 'bg-amber-50/40' : ''}`}>
@@ -411,7 +412,8 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                                 <td className="px-2 py-2 text-right font-mono tabular-nums text-slate-500">{fullINR(r.zoho_discount)}</td>
                                 <td className="px-2 py-2 text-right font-mono tabular-nums text-slate-500">{fullINR(r.zoho_tax)}</td>
                                 <td className="px-2 py-2 text-right font-mono tabular-nums text-slate-500">{fullINR(r.zoho_adjustment)}</td>
-                                <td className="px-2 py-2 text-right font-mono tabular-nums text-emerald-700">{fullINR(r.zoho_total)}</td>
+                                <td className="px-2 py-2 text-right font-mono tabular-nums text-slate-500">{fullINR(r.zoho_total)}</td>
+                                <td className="px-2 py-2 text-right font-mono tabular-nums text-emerald-700 font-semibold">{fullINR(r.target_value)}</td>
                                 <td className={`px-2 py-2 text-right font-mono tabular-nums font-semibold ${r.mismatch ? (r.delta < 0 ? 'text-rose-600' : 'text-emerald-700') : 'text-slate-400'}`}>
                                   {r.mismatch ? `${r.delta > 0 ? '+' : ''}${fullINR(r.delta)}` : '✓ matches'}
                                 </td>
@@ -439,7 +441,7 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                   );
                 })()}
                 <span className="block text-[11px] text-slate-400">
-                  Checks CRM-mirrored invoices in the time period selected above against their final Zoho totals (after discount &amp; GST). Tick the invoices you want corrected, then fix only those.
+                  Checks CRM-mirrored invoices in the time period selected above. Fixing sets each invoice's revenue value to the Zoho amount EXCLUDING GST but net of credit notes / sustainability incentives. Tick the invoices you want corrected, then fix only those.
                 </span>
               </div>
             </div>
@@ -456,7 +458,6 @@ function BreakdownView() {
   const [timeFilter, setTimeFilter] = useState('this_month');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [excludeGst, setExcludeGst] = useState(false);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
 
@@ -464,7 +465,7 @@ function BreakdownView() {
     if (timeFilter === 'custom' && (!fromDate || !toDate)) return;
     setLoading(true);
     try {
-      const params = { time_filter: timeFilter, group_by: groupBy, top_n: 12, exclude_gst: excludeGst };
+      const params = { time_filter: timeFilter, group_by: groupBy, top_n: 12 };
       if (timeFilter === 'custom') { params.from_date = fromDate; params.to_date = toDate; }
       const res = await axios.get(`${API_URL}/reports/revenue-analytics`, { ...authHeaders(), params });
       setData(res.data);
@@ -474,7 +475,7 @@ function BreakdownView() {
     } finally {
       setLoading(false);
     }
-  }, [groupBy, timeFilter, fromDate, toDate, excludeGst]);
+  }, [groupBy, timeFilter, fromDate, toDate]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -528,21 +529,8 @@ function BreakdownView() {
         )}
         <div className="min-w-[150px]">
           <FieldLabel>GST</FieldLabel>
-          <div className="flex overflow-hidden rounded-lg border border-slate-300" data-testid="ra-gst-toggle">
-            <button
-              onClick={() => setExcludeGst(false)}
-              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${!excludeGst ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
-              data-testid="ra-gst-included"
-            >
-              Included
-            </button>
-            <button
-              onClick={() => setExcludeGst(true)}
-              className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${excludeGst ? 'bg-emerald-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
-              data-testid="ra-gst-excluded"
-            >
-              Excluded
-            </button>
+          <div className="flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-500" data-testid="ra-gst-note">
+            Excluded from revenue
           </div>
         </div>
       </div>
@@ -550,7 +538,7 @@ function BreakdownView() {
       {loading ? <Spinner /> : (
         <>
           <div className="grid grid-cols-1 gap-4 duration-500 animate-in fade-in-50 slide-in-from-bottom-2 sm:grid-cols-2 lg:grid-cols-4 md:gap-6">
-            <StatCard label={excludeGst ? 'Gross Revenue (excl. GST)' : 'Gross Revenue (incl. GST)'} value={formatCurrency(totalGross)} sub={`Net ${formatCurrency(total)}`} icon={IndianRupee} gradient="cyan" testid="ra-total-revenue" />
+            <StatCard label="Gross Revenue (excl. GST)" value={formatCurrency(totalGross)} sub={`Net ${formatCurrency(total)}`} icon={IndianRupee} gradient="cyan" testid="ra-total-revenue" />
             <StatCard label="Annual Run Rate" value={formatCurrency(arr)} sub={arrSub} icon={Gauge} gradient="magenta" testid="ra-arr" />
             <StatCard label="Invoices" value={(data?.total_invoice_count || 0).toLocaleString('en-IN')} sub="Billed in period" icon={Receipt} gradient="purple" testid="ra-total-invoices" />
             <StatCard label="Segments" value={(data?.raw_group_count || 0).toLocaleString('en-IN')} sub={`By ${dimLabel}`} icon={Layers} gradient="teal" testid="ra-total-groups" />
