@@ -9,7 +9,7 @@ import { getTerm } from '../context/TenantConfigContext';
 import {
   Globe, RefreshCw, Search, ChevronDown, ChevronRight, Factory, Warehouse,
   Boxes, Truck, Clock, PackageCheck, Loader2, ArrowDownToLine, Recycle,
-  PackageX, Undo2, CheckCircle2, FileSpreadsheet, Scale,
+  PackageX, Undo2, CheckCircle2, FileSpreadsheet, Scale, History,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { useAuth } from '../context/AuthContext';
@@ -44,6 +44,23 @@ export default function GlobalStockDashboard() {
   const { user } = useAuth();
   const isAdmin = ['CEO', 'Director', 'Admin', 'admin', 'ceo', 'director'].includes((user?.role || '').trim());
   const [showRealign, setShowRealign] = useState(false);
+  const [showMovements, setShowMovements] = useState(false);
+  const [movements, setMovements] = useState(null);
+  const [movSearch, setMovSearch] = useState('');
+  const [movLoading, setMovLoading] = useState(false);
+  const fetchMovements = async (searchTerm = '') => {
+    setMovLoading(true);
+    try {
+      const params = { limit: 300 };
+      if (searchTerm) params.search = searchTerm;
+      const res = await axios.get(`${API_URL}/api/stock-movements`, { headers: HEAD(), params });
+      setMovements(res.data.movements || []);
+    } catch (e) {
+      toast.error('Failed to load stock movements');
+    } finally {
+      setMovLoading(false);
+    }
+  };
   const [realignScan, setRealignScan] = useState(null);
   const [realignBusy, setRealignBusy] = useState(false);
   const [realigningSku, setRealigningSku] = useState(null);
@@ -255,6 +272,9 @@ export default function GlobalStockDashboard() {
               <Scale className="h-4 w-4 mr-1.5 text-amber-600" /> Reconcile
             </Button>
           )}
+          <Button variant="outline" size="sm" onClick={() => { setShowMovements(true); fetchMovements(); }} data-testid="gsd-movements-btn">
+            <History className="h-4 w-4 mr-1.5 text-sky-600" /> Movements
+          </Button>
           <Button variant="outline" size="sm" onClick={exportExcel} disabled={exporting} data-testid="gsd-export-btn">
             {exporting
               ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
@@ -410,6 +430,69 @@ export default function GlobalStockDashboard() {
       </div>
 
       {/* Child-split reconciliation dialog */}
+      <Dialog open={showMovements} onOpenChange={setShowMovements}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col" data-testid="gsd-movements-dialog">
+          <DialogHeader>
+            <DialogTitle>Stock Movement Log</DialogTitle>
+            <DialogDescription>
+              Every physical deduction and re-add — deliveries, reversals, promotional dispatches and manual repairs. Newest first.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input
+              value={movSearch}
+              onChange={(e) => setMovSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && fetchMovements(movSearch)}
+              placeholder="Search by delivery/challan no, SKU or batch…"
+              className="h-9"
+              data-testid="gsd-movements-search"
+            />
+            <Button size="sm" variant="outline" onClick={() => fetchMovements(movSearch)} disabled={movLoading} data-testid="gsd-movements-search-btn">
+              {movLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+            </Button>
+          </div>
+          <div className="flex-1 overflow-y-auto rounded-lg border">
+            {!movements ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
+            ) : movements.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">No stock movements recorded yet. Movements are logged from now on for every stock-out completion, reversal and promo dispatch.</div>
+            ) : (
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-slate-50">
+                  <tr className="border-b text-[10px] uppercase tracking-wider text-slate-500">
+                    <th className="px-3 py-2 text-left">When</th>
+                    <th className="px-3 py-2 text-left">Dir</th>
+                    <th className="px-3 py-2 text-right">Qty</th>
+                    <th className="px-3 py-2 text-left">SKU</th>
+                    <th className="px-3 py-2 text-left">Batch</th>
+                    <th className="px-3 py-2 text-left">Source</th>
+                    <th className="px-3 py-2 text-left">Reference</th>
+                    <th className="px-3 py-2 text-left">By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {movements.map((m) => (
+                    <tr key={m.id} className="border-b last:border-0 hover:bg-slate-50">
+                      <td className="px-3 py-2 whitespace-nowrap text-slate-500">{m.created_at ? new Date(m.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                      <td className="px-3 py-2">
+                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${m.direction === 'in' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                          {m.direction === 'in' ? 'IN' : 'OUT'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono font-semibold">{m.quantity}</td>
+                      <td className="px-3 py-2">{m.sku_name || m.sku_id}{m.child_sku_name ? <span className="text-slate-400"> · {m.child_sku_name}</span> : null}</td>
+                      <td className="px-3 py-2 text-slate-500">{m.batch_code || '—'}</td>
+                      <td className="px-3 py-2 text-slate-500">{(m.source_type || '').replace(/_/g, ' ')}</td>
+                      <td className="px-3 py-2 font-medium">{m.reference || '—'}</td>
+                      <td className="px-3 py-2 text-slate-500">{m.performed_by || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={showRealign} onOpenChange={setShowRealign}>
         <DialogContent className="max-w-3xl" data-testid="realign-dialog">
           <DialogHeader>

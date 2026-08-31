@@ -6090,6 +6090,19 @@ async def complete_delivery(
                 stock_key["batch_id"] = batch_id
 
         matched_primary, leftover = await _deduct_stock_with_spill(stock_coll, stock_key, qty, now)
+        try:
+            from utils.stock_ledger import log_stock_movement
+            await log_stock_movement(
+                tenant_id, direction="out", quantity=qty,
+                sku_id=item.get('sku_id'), sku_name=item.get('sku_name'),
+                child_sku_id=item_child_id, child_sku_name=item.get('child_sku_name'),
+                batch_id=batch_id, batch_code=item.get('batch_code'),
+                location_id=delivery.get('distributor_location_id'),
+                location_kind="factory" if src_is_factory else "distributor",
+                source_type="delivery", reference=delivery.get('delivery_number'),
+                performed_by=current_user.get('name'))
+        except Exception:
+            pass
         if not matched_primary or leftover:
             logger.error(
                 "Delivery %s: stock deduction anomaly — sku=%s child=%s batch=%s "
@@ -6422,7 +6435,9 @@ async def _reverse_delivery_invoice_mirror(tenant_id: str, delivery: dict) -> No
     )
 
 
-async def _readd_completed_delivery_stock(tenant_id: str, distributor_id: str, delivery: dict) -> None:
+async def _readd_completed_delivery_stock(tenant_id: str, distributor_id: str, delivery: dict,
+                                          source_type: str = "delivery_reverse",
+                                          performed_by: str = None) -> None:
     """Inverse of `complete_delivery`'s deduction: add the delivered quantities
     back to the source warehouse (factory_warehouse_stock for a factory source,
     distributor_stock otherwise), using the same batch/aggregate row convention."""
@@ -6466,6 +6481,19 @@ async def _readd_completed_delivery_stock(tenant_id: str, distributor_id: str, d
             await db.distributor_stock.update_one(
                 stock_key, {"$inc": {"quantity": qty}, "$set": {"updated_at": now}},
             )
+        try:
+            from utils.stock_ledger import log_stock_movement
+            await log_stock_movement(
+                tenant_id, direction="in", quantity=qty,
+                sku_id=item.get("sku_id"), sku_name=item.get("sku_name"),
+                child_sku_id=item.get("child_sku_id"), child_sku_name=item.get("child_sku_name"),
+                batch_id=batch_id, batch_code=item.get("batch_code"),
+                location_id=delivery.get("distributor_location_id"),
+                location_kind="factory" if src_is_factory else "distributor",
+                source_type=source_type, reference=delivery.get("delivery_number"),
+                performed_by=performed_by)
+        except Exception:
+            pass
 
 
 @router.post("/{distributor_id}/deliveries/{delivery_id}/reverse")
@@ -6521,10 +6549,28 @@ async def reverse_delivery(
     stock_readd_error = None
     if was_completed:
         try:
-            await _readd_completed_delivery_stock(tenant_id, distributor_id, delivery)
+            await _readd_completed_delivery_stock(tenant_id, distributor_id, delivery,
+                                                  performed_by=current_user.get("name"))
         except Exception as exc:
             stock_readd_error = str(exc)[:300]
             logger.exception(f"Failed to re-add stock during reverse for delivery {delivery_id}")
+    if stock_readd_error:
+        # Alert admins immediately — a reversal that couldn't return stock must
+        # never go unnoticed.
+        try:
+            from utils.notify import notify_users
+            admin_roles = {"ceo", "admin", "system admin", "system_admin", "director", "tenant_admin"}
+            admins = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "role": 1}).to_list(500)
+            admin_ids = [u["id"] for u in admins if (u.get("role") or "").lower() in admin_roles]
+            await notify_users(
+                tenant_id, admin_ids,
+                title=f"⚠ Stock NOT returned for reversed delivery {delivery.get('delivery_number')}",
+                body=f"Reversal by {current_user.get('name')} could not add the stock back to the warehouse: {stock_readd_error}. Open the delivery's Stock Audit and use 'Re-add stock now'.",
+                link=f"/distributors/{distributor_id}",
+                kind="alert", category="approval",
+                entity_type="delivery", entity_id=delivery_id)
+        except Exception:
+            logger.exception("Failed to notify admins about stock re-add failure")
 
     # 2) Void the Zoho invoice if one exists (best-effort; retry-pending flag).
     from services.zoho_service import void_invoice
@@ -6668,7 +6714,9 @@ async def manually_readd_delivery_stock(
         raise HTTPException(status_code=400, detail="Stock re-add is only available for reversed deliveries.")
     if delivery.get("stock_manual_readd_at"):
         raise HTTPException(status_code=400, detail=f"Stock was already manually re-added on {delivery.get('stock_manual_readd_at')}.")
-    await _readd_completed_delivery_stock(tenant_id, distributor_id, delivery)
+    await _readd_completed_delivery_stock(tenant_id, distributor_id, delivery,
+                                          source_type="manual_readd",
+                                          performed_by=current_user.get("name"))
     now = datetime.now(timezone.utc).isoformat()
     await db.distributor_deliveries.update_one(
         {"id": delivery_id, "tenant_id": tenant_id},

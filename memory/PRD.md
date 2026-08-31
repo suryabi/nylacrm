@@ -2930,3 +2930,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - New GET /{dist}/deliveries/{id}/stock-audit: reversal flags + per-line current warehouse stock rows (child/batch). New POST /{dist}/deliveries/{id}/readd-stock?acknowledge=true: manual one-shot re-add for reversed deliveries (guards: reversed status only, refuses double-run, requires acknowledge).
 - UI: amber History button on reversed delivery rows (Stock Out tab) → Stock Audit dialog with rows + "Re-add stock now" (hidden after manual re-add).
 - Tested: audit (missing stock visible), no-ack 400, re-add 0→3000, double-run blocked, dialog verified via screenshot. Test data cleaned.
+
+## Update — Jun 2026: Reversal alerts + Stock Movement Log
+- Reversal alerts: reverse_delivery now notifies all admin-role users (notify_users, in-app + email best-effort) when the stock re-add FAILS, linking to the distributor page / Stock Audit.
+- Stock Movement Log: new utils/stock_ledger.log_stock_movement (best-effort) + stock_movements collection. Instrumented: delivery completion deduction (OUT), delivery reverse re-add (IN), manual re-add (IN, performed_by), promo dispatch deduct/restore (OUT/IN via _adjust_stock_for_dispatch).
+- API: GET /api/stock-movements?search=&sku_id=&direction=&limit= (routes/stock_movements.py, registered at /stock-movements). UI: "Movements" button on Global Stock Dashboard → dialog with search (delivery no/SKU/batch), IN/OUT badges, qty, batch, source, reference, by.
+- Note: completed unified promos are not reversible by design (only pre-completion). Tested: OUT logged on promo complete, IN logged on manual re-add with performer, UI dialog verified via screenshot. Test rows cleaned.

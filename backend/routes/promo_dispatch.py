@@ -214,10 +214,19 @@ async def _adjust_stock_for_dispatch(tenant_id: str, dispatch: dict, items: list
     distributor_id = dispatch.get("distributor_id")
     loc_id = dispatch.get("distributor_location_id")
     allowed = await _allowed_child_ids(tenant_id, [it.get("sku_id") for it in items])
+    from utils.stock_ledger import log_stock_movement
     for it in items:
         qty = it.get("quantity") or 0
         if not qty:
             continue
+        await log_stock_movement(
+            tenant_id, direction="in" if sign > 0 else "out", quantity=qty,
+            sku_id=it.get("sku_id"), sku_name=it.get("sku_name"),
+            child_sku_id=it.get("child_sku_id"), child_sku_name=it.get("child_sku_name"),
+            batch_id=it.get("batch_id"), batch_code=it.get("batch_code"),
+            location_id=loc_id, location_kind="factory" if src_is_factory else "distributor",
+            source_type="promo_reverse" if sign > 0 else "promo",
+            reference=dispatch.get("challan_number"))
         batch_id = it.get("batch_id")
         if src_is_factory:
             coll = db.factory_warehouse_stock
