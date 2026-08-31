@@ -150,6 +150,45 @@ export default function DeliveriesTab({
 
   // Deletion history (audit) viewer
   const [showDeletionHistory, setShowDeletionHistory] = useState(false);
+
+  // Stock audit for reversed deliveries (production diagnosis + manual re-add)
+  const [stockAudit, setStockAudit] = useState(null);
+  const [stockAuditOpen, setStockAuditOpen] = useState(false);
+  const [stockAuditDelivery, setStockAuditDelivery] = useState(null);
+  const [readdingStock, setReaddingStock] = useState(false);
+  const openStockAudit = async (delivery) => {
+    setStockAuditOpen(true); setStockAudit(null); setStockAuditDelivery(delivery);
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/deliveries/${delivery.id}/stock-audit`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || 'Audit failed');
+      setStockAudit(data);
+    } catch (e) {
+      toast.error(e.message);
+      setStockAuditOpen(false);
+    }
+  };
+  const manualReaddStock = async () => {
+    if (!stockAuditDelivery) return;
+    setReaddingStock(true);
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/deliveries/${stockAuditDelivery.id}/readd-stock?acknowledge=true`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || 'Re-add failed');
+      toast.success(data.message);
+      openStockAudit(stockAuditDelivery);
+      fetchDeliveries?.();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setReaddingStock(false);
+    }
+  };
+
   const [deletionAudit, setDeletionAudit] = useState([]);
   const [deletionAuditLoading, setDeletionAuditLoading] = useState(false);
   const openDeletionHistory = async () => {
@@ -927,6 +966,66 @@ export default function DeliveriesTab({
             )}
 
             {/* Deletion history dialog */}
+            <Dialog open={stockAuditOpen} onOpenChange={setStockAuditOpen}>
+              <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="stock-audit-dialog">
+                <DialogHeader>
+                  <DialogTitle>Stock Audit — {stockAudit?.delivery_number || stockAuditDelivery?.delivery_number}</DialogTitle>
+                  <DialogDescription>
+                    Verifies whether this reversed delivery's stock returned to the source warehouse. If it didn't, use "Re-add stock now".
+                  </DialogDescription>
+                </DialogHeader>
+                {!stockAudit ? (
+                  <div className="py-6 text-center text-sm text-slate-500">Loading…</div>
+                ) : (
+                  <div className="space-y-3 text-sm">
+                    <div className="grid grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
+                      <div>Reversed from status: <span className="font-semibold">{stockAudit.reversed_from_status || '—'}</span></div>
+                      <div>Source: <span className="font-semibold">{stockAudit.source_location || '—'}</span></div>
+                      <div>Stock re-added on reverse: <span className={`font-semibold ${stockAudit.stock_readded ? 'text-emerald-700' : 'text-rose-600'}`}>{stockAudit.stock_readded ? 'Yes' : 'No'}</span></div>
+                      <div>Manual re-add: <span className="font-semibold">{stockAudit.stock_manual_readd_at ? new Date(stockAudit.stock_manual_readd_at).toLocaleString() : 'Not done'}</span></div>
+                      {stockAudit.stock_readd_error && (
+                        <div className="col-span-2 text-rose-600">Re-add error: {stockAudit.stock_readd_error}</div>
+                      )}
+                    </div>
+                    {(stockAudit.lines || []).map((ln, i) => (
+                      <div key={i} className="rounded-lg border border-slate-200 p-3">
+                        <div className="mb-1 flex items-center justify-between">
+                          <span className="font-semibold text-slate-800">{ln.sku_name}</span>
+                          <span className="text-xs text-slate-500">Delivered {ln.quantity} {ln.batch_code ? `· batch ${ln.batch_code}` : ''}</span>
+                        </div>
+                        <div className="text-xs text-slate-500">Current warehouse rows for this SKU:</div>
+                        {(ln.current_stock_rows || []).length === 0 ? (
+                          <div className="text-xs text-rose-600">No stock rows at this warehouse for this SKU.</div>
+                        ) : (
+                          <ul className="mt-1 space-y-0.5 text-xs">
+                            {ln.current_stock_rows.map((r, j) => (
+                              <li key={j} className="flex justify-between">
+                                <span>{r.child_sku_name || 'Generic / Unbranded'}{r.batch_code ? ` · ${r.batch_code}` : ' · no batch'}</span>
+                                <span className="font-mono font-semibold">{r.quantity}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ))}
+                    {stockAuditDelivery?.status === 'reversed' && !stockAudit.stock_manual_readd_at && (
+                      <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <span className="text-xs text-amber-800">If the delivered quantities are missing from the rows above, add them back:</span>
+                        <Button
+                          size="sm"
+                          className="bg-amber-600 text-white hover:bg-amber-700"
+                          disabled={readdingStock}
+                          onClick={manualReaddStock}
+                          data-testid="stock-audit-readd-btn"
+                        >
+                          {readdingStock ? 'Adding…' : 'Re-add stock now'}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
             <Dialog open={showDeletionHistory} onOpenChange={setShowDeletionHistory}>
               <DialogContent className="max-w-3xl w-[95vw] max-h-[85vh] flex flex-col" data-testid="deletion-history-dialog">
                 <DialogHeader>
@@ -2482,6 +2581,18 @@ export default function DeliveriesTab({
                           >
                             <FileText className="h-4 w-4 text-emerald-700" />
                           </Button>
+                          {canManage && delivery.status === 'reversed' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 hover:bg-amber-50"
+                              onClick={(e) => { e.stopPropagation(); openStockAudit(delivery); }}
+                              data-testid={`stock-audit-${delivery.id}`}
+                              title="Stock audit — verify the reversed stock returned to the warehouse"
+                            >
+                              <History className="h-4 w-4 text-amber-600" />
+                            </Button>
+                          )}
                           {canManage && onReverseDelivery && !['cancelled', 'reversed'].includes(delivery.status) && !delivery.settlement_id && (
                             <Button
                               variant="ghost"

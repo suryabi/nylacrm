@@ -6518,10 +6518,12 @@ async def reverse_delivery(
     now = datetime.now(timezone.utc).isoformat()
 
     # 1) Add stock back when it was physically deducted on completion.
+    stock_readd_error = None
     if was_completed:
         try:
             await _readd_completed_delivery_stock(tenant_id, distributor_id, delivery)
-        except Exception:
+        except Exception as exc:
+            stock_readd_error = str(exc)[:300]
             logger.exception(f"Failed to re-add stock during reverse for delivery {delivery_id}")
 
     # 2) Void the Zoho invoice if one exists (best-effort; retry-pending flag).
@@ -6567,7 +6569,8 @@ async def reverse_delivery(
         "reversed_by": current_user.get("id"),
         "reversed_by_name": current_user.get("name"),
         "reversed_from_status": status,
-        "stock_readded": was_completed,
+        "stock_readded": was_completed and not stock_readd_error,
+        "stock_readd_error": stock_readd_error,
         "updated_at": now,
         "applied_credit_notes": [],
         "zoho_void_pending": void_pending,
@@ -6579,6 +6582,8 @@ async def reverse_delivery(
         {"id": delivery_id, "tenant_id": tenant_id}, {"$set": set_fields})
 
     stock_msg = "stock added back" if was_completed else "stock reservation released"
+    if stock_readd_error:
+        stock_msg = f"WARNING: stock re-add FAILED ({stock_readd_error}) — use the delivery's Stock Audit to re-add"
     msg = f"Delivery {delivery.get('delivery_number')} reversed — {stock_msg}"
     if zoho_invoice_id:
         msg += " (Zoho invoice void pending — will retry)" if void_pending else " and Zoho invoice voided"
@@ -6588,6 +6593,90 @@ async def reverse_delivery(
         "zoho_void_pending": void_pending, "zoho_void_error": void_error,
         "reverted_credit_notes": reverted_notes,
     }
+
+
+@router.get("/{distributor_id}/deliveries/{delivery_id}/stock-audit")
+async def delivery_stock_audit(
+    distributor_id: str,
+    delivery_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Diagnostic: shows a delivery's reversal/stock flags and, for each line,
+    the CURRENT stock rows at the source warehouse for that SKU — so a
+    'reversed but stock missing' report can be pinpointed in production."""
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised")
+    tenant_id = get_current_tenant_id()
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    loc_id = delivery.get("distributor_location_id")
+    src_loc = await db.distributor_locations.find_one(
+        {"id": loc_id, "tenant_id": tenant_id}, {"_id": 0, "is_factory": 1, "location_name": 1})
+    src_is_factory = bool(src_loc and src_loc.get("is_factory"))
+    items = await db.distributor_delivery_items.find(
+        {"delivery_id": delivery_id, "tenant_id": tenant_id}, {"_id": 0}).to_list(200)
+    lines = []
+    for it in items:
+        if src_is_factory:
+            cur = db.factory_warehouse_stock.find(
+                {"tenant_id": tenant_id, "warehouse_location_id": loc_id, "sku_id": it.get("sku_id")},
+                {"_id": 0, "child_sku_name": 1, "child_sku_id": 1, "batch_code": 1, "batch_id": 1, "quantity": 1})
+        else:
+            cur = db.distributor_stock.find(
+                {"tenant_id": tenant_id, "distributor_id": distributor_id,
+                 "distributor_location_id": loc_id, "sku_id": it.get("sku_id")},
+                {"_id": 0, "child_sku_name": 1, "child_sku_id": 1, "batch_code": 1, "batch_id": 1, "quantity": 1})
+        lines.append({"sku_id": it.get("sku_id"), "sku_name": it.get("sku_name"),
+                      "quantity": it.get("quantity"), "batch_id": it.get("batch_id"),
+                      "batch_code": it.get("batch_code"), "child_sku_id": it.get("child_sku_id"),
+                      "current_stock_rows": await cur.to_list(100)})
+    return {
+        "delivery_number": delivery.get("delivery_number"),
+        "status": delivery.get("status"),
+        "reversed_from_status": delivery.get("reversed_from_status"),
+        "stock_readded": delivery.get("stock_readded"),
+        "stock_readd_error": delivery.get("stock_readd_error"),
+        "stock_manual_readd_at": delivery.get("stock_manual_readd_at"),
+        "source_location": (src_loc or {}).get("location_name"),
+        "is_factory_source": src_is_factory,
+        "lines": lines,
+    }
+
+
+@router.post("/{distributor_id}/deliveries/{delivery_id}/readd-stock")
+async def manually_readd_delivery_stock(
+    distributor_id: str,
+    delivery_id: str,
+    acknowledge: bool = False,
+    current_user: dict = Depends(get_current_user),
+):
+    """Manual repair: re-run the stock re-add for a REVERSED delivery whose
+    stock did not return to the warehouse. One-shot guarded — refuses if this
+    delivery was already manually re-added."""
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised")
+    if not acknowledge:
+        raise HTTPException(status_code=400, detail="Confirm explicitly (acknowledge=true) — this ADDS stock to the warehouse.")
+    tenant_id = get_current_tenant_id()
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    if (delivery.get("status") or "").lower() != "reversed":
+        raise HTTPException(status_code=400, detail="Stock re-add is only available for reversed deliveries.")
+    if delivery.get("stock_manual_readd_at"):
+        raise HTTPException(status_code=400, detail=f"Stock was already manually re-added on {delivery.get('stock_manual_readd_at')}.")
+    await _readd_completed_delivery_stock(tenant_id, distributor_id, delivery)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.distributor_deliveries.update_one(
+        {"id": delivery_id, "tenant_id": tenant_id},
+        {"$set": {"stock_readded": True, "stock_readd_error": None,
+                  "stock_manual_readd_at": now,
+                  "stock_manual_readd_by": current_user.get("name"), "updated_at": now}})
+    logger.info(f"[STOCK] Manual re-add for reversed delivery {delivery.get('delivery_number')} by {current_user.get('email')}")
+    return {"ok": True, "message": f"Stock for {delivery.get('delivery_number')} added back to the warehouse."}
 
 
 @router.post("/{distributor_id}/deliveries/{delivery_id}/reverse-zoho-cleanup")

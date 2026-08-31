@@ -2923,3 +2923,10 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Cause: compare endpoints (revenue-compare, revenue-compare-multi) called _aggregate with default deduct_cn=True (after CN) while Breakdown UI defaults to Not deducted → 54.97L vs 50.57L (diff = incentives).
 - Fix: both compare endpoints take deduct_credit_notes (default False = not deducted, matching Breakdown default); Compare tab got its own Deducted/Not-deducted pill toggle wired to the param.
 - Tested: seeded Aug invoice (94,824 base / −4,104 incentive) → Breakdown this_month 94,824 == Compare Aug default 94,824; Compare deducted 90,720. Toggle verified via screenshot.
+
+## Update — Jun 2026: Reversed stock-out — stock not returned (Production report DEL-2026-0695)
+- Preview round-trip of complete→reverse verified correct (deduct + re-add symmetric incl. upsert with $in). Production case is data-specific; cannot inspect prod.
+- Hardened reverse_delivery: re-add failures no longer stamp stock_readded=True; stores stock_readd_error and warns in the response message.
+- New GET /{dist}/deliveries/{id}/stock-audit: reversal flags + per-line current warehouse stock rows (child/batch). New POST /{dist}/deliveries/{id}/readd-stock?acknowledge=true: manual one-shot re-add for reversed deliveries (guards: reversed status only, refuses double-run, requires acknowledge).
+- UI: amber History button on reversed delivery rows (Stock Out tab) → Stock Audit dialog with rows + "Re-add stock now" (hidden after manual re-add).
+- Tested: audit (missing stock visible), no-ack 400, re-add 0→3000, double-run blocked, dialog verified via screenshot. Test data cleaned.
