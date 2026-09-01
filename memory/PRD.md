@@ -2936,3 +2936,12 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Stock Movement Log: new utils/stock_ledger.log_stock_movement (best-effort) + stock_movements collection. Instrumented: delivery completion deduction (OUT), delivery reverse re-add (IN), manual re-add (IN, performed_by), promo dispatch deduct/restore (OUT/IN via _adjust_stock_for_dispatch).
 - API: GET /api/stock-movements?search=&sku_id=&direction=&limit= (routes/stock_movements.py, registered at /stock-movements). UI: "Movements" button on Global Stock Dashboard → dialog with search (delivery no/SKU/batch), IN/OUT badges, qty, batch, source, reference, by.
 - Note: completed unified promos are not reversible by design (only pre-completion). Tested: OUT logged on promo complete, IN logged on manual re-add with performer, UI dialog verified via screenshot. Test rows cleaned.
+
+## Update — Jun 2026: Admin → Facilities module
+- New Admin module page: /admin/facilities (nav: Admin › Organization › Facilities, moduleKey `facilities`, ADMIN_ONLY_ROLES; registered in moduleRegistry under `organization`).
+- Backend routes/facilities.py (prefix /api/facilities, admin-role gated, tenant-scoped `facilities` collection):
+  - Facility CRUD: name, type (Factory/Warehouse/Administration Office/Guest House/Retail Outlet/Other), google_address (maps link rendered as "Open in Google Maps"), contact person/phone/email, notes.
+  - Hierarchy: nested floors[] each with areas[] — add/rename/delete floor, add/delete area.
+  - Files: upload photo|document via object storage (scope facility_docs), auto-renamed PHOT_/DOCU_ + first-3-words of facility name + serial (e.g. PHOT_Nyla_Bangalore_Factory_01.jpg), 15MB cap; inline download endpoint; delete removes object too; facility delete cleans all objects.
+- Frontend pages/Facilities.js: card grid, create/edit dialog, detail dialog (contacts, floors accordion with area chips, photo thumbnails via AuthImg with click-to-preview, documents list with preview/download/delete).
+- Tested via curl (create → floor → 2 areas → photo upload with correct renamed filename → list) and screenshots (list, detail dialog with floors/areas/photo grid). Test facility cleaned.

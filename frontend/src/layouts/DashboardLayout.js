@@ -291,6 +291,7 @@ const adminNavigationGroups = [
     title: 'Organization',
     items: [
       { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ADMIN_ONLY_ROLES },
+      { name: 'Facilities', href: '/admin/facilities', icon: Building, moduleKey: 'facilities', roles: ADMIN_ONLY_ROLES },
     ],
   },
   {

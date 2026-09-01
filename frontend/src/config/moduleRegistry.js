@@ -175,6 +175,7 @@ export const MODULE_REGISTRY = [
       { key: 'company_profile', label: 'Company Profile', description: 'Company information display' },
       { key: 'contacts', label: 'Contacts', description: 'Contact directory' },
       { key: 'team', label: 'Team Management', description: 'Team hierarchy & users' },
+      { key: 'facilities', label: 'Facilities', description: 'Organization facilities, floors, areas & documents' },
     ],
   },
   {

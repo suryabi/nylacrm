@@ -72,6 +72,7 @@ const CustomerComplaintDetail = lazy(() => import('./pages/CustomerComplaintDeta
 const GammaGenerator = lazy(() => import('./pages/GammaGenerator'));
 const MasterCOGSComponents = lazy(() => import('./pages/MasterCOGSComponents'));
 const AdminSkuMigrate = lazy(() => import('./pages/AdminSkuMigrate'));
+const Facilities = lazy(() => import('./pages/Facilities'));
 const VehiclesList = lazy(() => import('./pages/admin/VehiclesList'));
 const DriversList = lazy(() => import('./pages/admin/DriversList'));
 const ReversalsAudit = lazy(() => import('./pages/admin/ReversalsAudit'));
@@ -440,6 +441,7 @@ function AppRouter() {
           <Route path="/gamma-generator" element={<ProtectedRoute moduleKey="gamma_generator"><GammaGenerator /></ProtectedRoute>} />
           <Route path="/master/cogs-components" element={<ProtectedRoute moduleKey="cogs_components"><MasterCOGSComponents /></ProtectedRoute>} />
           <Route path="/admin/sku-migrate" element={<ProtectedRoute moduleKey="admin"><AdminSkuMigrate /></ProtectedRoute>} />
+          <Route path="/admin/facilities" element={<ProtectedRoute moduleKey="admin"><Facilities /></ProtectedRoute>} />
           <Route path="/admin/vehicles" element={<ProtectedRoute moduleKey="fleet_vehicles"><VehiclesList /></ProtectedRoute>} />
           <Route path="/admin/drivers" element={<ProtectedRoute moduleKey="fleet_drivers"><DriversList /></ProtectedRoute>} />
           <Route path="/admin/reversals" element={<ProtectedRoute moduleKey="reversals_log"><ReversalsAudit /></ProtectedRoute>} />
