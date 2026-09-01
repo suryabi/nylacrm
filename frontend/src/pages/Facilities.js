@@ -53,6 +53,8 @@ export default function Facilities() {
   const [areaInputs, setAreaInputs] = useState({}); // floorId -> text
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(null); // {url, filename}
+  const [photoTarget, setPhotoTarget] = useState('general'); // 'general' | floorId | `${floorId}|${areaId}`
+  const [photoFilter, setPhotoFilter] = useState('all');
 
   const load = useCallback(async () => {
     try {
@@ -70,6 +72,7 @@ export default function Facilities() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setPhotoTarget('general'); setPhotoFilter('all'); }, [detail?.id]);
 
   const openCreate = () => { setForm(EMPTY_FAC); setEditId(null); setFormOpen(true); };
   const openEdit = (f) => {
@@ -123,13 +126,18 @@ export default function Facilities() {
     if (res.ok) load(); else toast.error('Failed to remove area');
   };
 
-  const uploadFile = async (category, file) => {
+  const uploadFile = async (category, file, target) => {
     if (!file) return;
     setUploading(true);
     try {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('category', category);
+      if (target && target !== 'general') {
+        const [floorId, areaId] = target.split('|');
+        fd.append('floor_id', floorId);
+        if (areaId) fd.append('area_id', areaId);
+      }
       const res = await fetch(`${API_URL}/api/facilities/${detail.id}/files`, {
         method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` }, body: fd,
       });
@@ -169,6 +177,18 @@ export default function Facilities() {
 
   const photos = (detail?.attachments || []).filter((a) => a.category === 'photo');
   const documents = (detail?.attachments || []).filter((a) => a.category !== 'photo');
+  const locationOptions = [{ key: 'general', label: 'General (whole facility)' }];
+  (detail?.floors || []).forEach((fl) => {
+    locationOptions.push({ key: fl.id, label: fl.name });
+    (fl.areas || []).forEach((ar) => locationOptions.push({ key: `${fl.id}|${ar.id}`, label: `${fl.name} › ${ar.name}` }));
+  });
+  const photoLocation = (p) => (p.area_name ? `${p.floor_name} › ${p.area_name}` : p.floor_name || null);
+  const filteredPhotos = photos.filter((p) => {
+    if (photoFilter === 'all') return true;
+    if (photoFilter === 'general') return !p.floor_id;
+    const [fid, aid] = photoFilter.split('|');
+    return aid ? p.floor_id === fid && p.area_id === aid : p.floor_id === fid;
+  });
 
   return (
     <div className="p-6 space-y-6" data-testid="facilities-page">
@@ -334,18 +354,41 @@ export default function Facilities() {
 
               {/* Photos */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="font-semibold flex items-center gap-2"><ImageIcon className="h-4 w-4" /> Photos</h3>
-                  <label>
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { uploadFile('photo', e.target.files?.[0]); e.target.value = ''; }} data-testid="upload-photo-input" />
-                    <Button size="sm" variant="outline" disabled={uploading} asChild><span className="cursor-pointer"><Upload className="h-3.5 w-3.5 mr-1.5" />{uploading ? 'Uploading…' : 'Upload Photo'}</span></Button>
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <Select value={photoTarget} onValueChange={setPhotoTarget}>
+                      <SelectTrigger className="h-8 w-52 text-xs" data-testid="photo-location-select"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {locationOptions.map((o) => <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <label>
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => { uploadFile('photo', e.target.files?.[0], photoTarget); e.target.value = ''; }} data-testid="upload-photo-input" />
+                      <Button size="sm" variant="outline" disabled={uploading} asChild><span className="cursor-pointer"><Upload className="h-3.5 w-3.5 mr-1.5" />{uploading ? 'Uploading…' : 'Upload Photo'}</span></Button>
+                    </label>
+                  </div>
                 </div>
-                {photos.length === 0 ? <p className="text-xs text-muted-foreground">No photos uploaded.</p> : (
+                {photos.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Show:</span>
+                    <Select value={photoFilter} onValueChange={setPhotoFilter}>
+                      <SelectTrigger className="h-7 w-52 text-xs" data-testid="photo-filter-select"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All locations</SelectItem>
+                        {locationOptions.map((o) => <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {photos.length === 0 ? <p className="text-xs text-muted-foreground">No photos uploaded. Pick a floor or area above to pinpoint inspection photos.</p> : filteredPhotos.length === 0 ? <p className="text-xs text-muted-foreground">No photos for this location.</p> : (
                   <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                    {photos.map((p) => (
+                    {filteredPhotos.map((p) => (
                       <div key={p.id} className="group relative">
                         <AuthImg src={`${API_URL}/api/facilities/${detail.id}/files/${p.id}`} alt={p.filename} className="h-24 w-full object-cover rounded-md border cursor-pointer" onClick={() => previewFile(p)} testid={`photo-thumb-${p.id}`} />
+                        {photoLocation(p) && (
+                          <div className="absolute top-1 left-1 bg-emerald-600/90 text-white text-[9px] px-1.5 py-0.5 rounded max-w-[90%] truncate" data-testid={`photo-location-${p.id}`}>{photoLocation(p)}</div>
+                        )}
                         <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[9px] px-1 py-0.5 rounded-b-md truncate">{p.filename}</div>
                         <div className="absolute top-1 right-1 hidden group-hover:flex gap-1">
                           <button className="bg-white/90 rounded p-1" onClick={() => downloadFile(p)} data-testid={`download-photo-${p.id}`}><Download className="h-3 w-3" /></button>

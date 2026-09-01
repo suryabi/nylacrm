@@ -2945,3 +2945,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
   - Files: upload photo|document via object storage (scope facility_docs), auto-renamed PHOT_/DOCU_ + first-3-words of facility name + serial (e.g. PHOT_Nyla_Bangalore_Factory_01.jpg), 15MB cap; inline download endpoint; delete removes object too; facility delete cleans all objects.
 - Frontend pages/Facilities.js: card grid, create/edit dialog, detail dialog (contacts, floors accordion with area chips, photo thumbnails via AuthImg with click-to-preview, documents list with preview/download/delete).
 - Tested via curl (create → floor → 2 areas → photo upload with correct renamed filename → list) and screenshots (list, detail dialog with floors/areas/photo grid). Test facility cleaned.
+
+## Update — Jun 2026: Facility Area Photos (pinpointed inspection photos)
+- Photo uploads can target General / a floor / a floor › area (location Select next to Upload Photo). Backend validates floor_id/area_id, stores floor/area ids+names on the attachment meta.
+- Naming now includes location: PHOT_<Facility>_<Floor>_<Area>_NN.ext (e.g. PHOT_Nyla_Bangalore_Factory_Ground_Floor_Storage_Area_01.jpg).
+- Thumbnails show a green location badge; a "Show:" filter narrows the photo grid to any floor/area or General.
+- Tested: curl uploads (area-level, floor-level, invalid floor → 404, filenames correct) + screenshot (badges render, area filter shows exactly 1 photo). Test facility cleaned.

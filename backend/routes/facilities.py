@@ -33,13 +33,19 @@ def _now():
     return datetime.now(timezone.utc).isoformat()
 
 
-def _file_basename(facility_name: str, category: str) -> str:
-    """PHOT_/DOCU_ + facility name (first 3 words), spaces → underscores."""
-    words = (facility_name or "facility").strip().split()
-    if len(words) > 3:
-        words = words[:3]
-    name_part = re.sub(r"[^A-Za-z0-9_]", "", "_".join(words))
-    return f"{TYPE_PREFIX[category]}_{name_part}"
+def _clean_part(text: str, max_words: int = 3) -> str:
+    words = (text or "").strip().split()[:max_words]
+    return re.sub(r"[^A-Za-z0-9_]", "", "_".join(words))
+
+
+def _file_basename(facility_name: str, category: str, floor_name: str = None, area_name: str = None) -> str:
+    """PHOT_/DOCU_ + facility (3 words) [+ floor + area], spaces → underscores."""
+    parts = [TYPE_PREFIX[category], _clean_part(facility_name or "facility")]
+    if floor_name:
+        parts.append(_clean_part(floor_name, 2))
+    if area_name:
+        parts.append(_clean_part(area_name, 2))
+    return "_".join(p for p in parts if p)
 
 
 def _next_serial(attachments: list, base: str) -> int:
@@ -178,21 +184,34 @@ async def delete_area(facility_id: str, floor_id: str, area_id: str, current_use
 @router.post("/{facility_id}/files")
 async def upload_facility_file(facility_id: str, file: UploadFile = File(...),
                                category: str = Form("document"),
+                               floor_id: Optional[str] = Form(None),
+                               area_id: Optional[str] = Form(None),
                                current_user: dict = Depends(get_current_user)):
     _require_admin(current_user)
     tenant_id = get_current_tenant_id()
     fac = await db.facilities.find_one({"tenant_id": tenant_id, "id": facility_id},
-                                       {"_id": 0, "facility_name": 1, "attachments": 1})
+                                       {"_id": 0, "facility_name": 1, "attachments": 1, "floors": 1})
     if not fac:
         raise HTTPException(404, "Facility not found")
     if category not in CATEGORIES:
         raise HTTPException(400, "Invalid category — use photo or document")
+    floor_name = area_name = None
+    if floor_id:
+        floor = next((f for f in fac.get("floors") or [] if f.get("id") == floor_id), None)
+        if not floor:
+            raise HTTPException(404, "Floor not found")
+        floor_name = floor.get("name")
+        if area_id:
+            area = next((a for a in floor.get("areas") or [] if a.get("id") == area_id), None)
+            if not area:
+                raise HTTPException(404, "Area not found")
+            area_name = area.get("name")
     content = await file.read()
     if len(content) > MAX_FILE_MB * 1024 * 1024:
         raise HTTPException(400, f"File too large (max {MAX_FILE_MB} MB)")
     original_name = os.path.basename(file.filename or "file")
     ext = os.path.splitext(original_name)[1].lower()
-    base = _file_basename(fac.get("facility_name"), category)
+    base = _file_basename(fac.get("facility_name"), category, floor_name, area_name)
     serial = _next_serial(fac.get("attachments"), base)
     safe_name = f"{base}_{serial:02d}{ext}"
     storage_path = build_path(tenant_id, "facility_docs", safe_name)
@@ -200,6 +219,8 @@ async def upload_facility_file(facility_id: str, file: UploadFile = File(...),
     meta = {"id": str(uuid.uuid4()), "filename": safe_name, "original_filename": original_name,
             "size": len(content), "storage_path": storage_path,
             "content_type": file.content_type, "category": category,
+            "floor_id": floor_id or None, "area_id": area_id or None,
+            "floor_name": floor_name, "area_name": area_name,
             "uploaded_by": current_user.get("name") or current_user.get("email"),
             "uploaded_at": _now()}
     await db.facilities.update_one({"tenant_id": tenant_id, "id": facility_id},
