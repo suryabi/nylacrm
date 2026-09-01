@@ -73,7 +73,7 @@ class NameIn(BaseModel):
 
 @router.get("")
 async def list_facilities(current_user: dict = Depends(get_current_user)):
-    _require_admin(current_user)
+    _ = current_user  # read-only listing available to all authenticated users (used by Equipment Master)
     tenant_id = get_current_tenant_id()
     rows = await db.facilities.find({"tenant_id": tenant_id}, {"_id": 0}).sort("facility_name", 1).to_list(500)
     return {"facilities": rows, "facility_types": FACILITY_TYPES}

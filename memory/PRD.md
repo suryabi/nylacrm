@@ -2957,3 +2957,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Create/update store parent_equipment_name; renaming an equipment cascades to children's parent_equipment_name. Delete blocked (409) while children exist. List returns children_count (aggregation on parent_equipment_id).
 - UI (EquipmentMaster.js): table renders as an indented multi-level tree (└ prefix, depth×18px); "Assembly · N children" badge (also shown when has_children declared); "Part of: X" subtitle when parent filtered out. Form: Parent Equipment select (excludes self + descendants) + "Has child equipment" checkbox.
 - Tested: 3-level chain (RO Machine → Pump → Seal) via curl; cycle guard 400; delete-with-children 409; children_count/parent names correct; UI tree + form verified via screenshot. Test equipment cleaned.
+
+## Update — Jun 2026: Equipment ↔ Facility area association
+- EquipmentIn: facility_id/floor_id/area_id, validated hierarchically via _resolve_location (facility exists → floor in facility → area on floor, 400 otherwise); stores facility_name/floor_name/area_name. Empty facility clears floor/area.
+- GET /api/facilities is now readable by all authenticated users (writes still admin-only) so Equipment Master can list options.
+- UI: cascading Location selects (Facility → Floor → Area, downstream resets/disabled until parent picked) in the equipment form; table shows "📍 Facility › Floor › Area" under the equipment name.
+- Tested: create with full chain (names resolved), invalid area → 400, table location line + edit-form prefill verified via screenshot. Test equipment/facility cleaned.

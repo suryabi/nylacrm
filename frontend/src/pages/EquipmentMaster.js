@@ -7,7 +7,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
-import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon } from 'lucide-react';
+import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -19,6 +19,7 @@ const EMPTY_EQ = {
   last_maintenance_date: '', next_maintenance_due: '', last_replacement_date: '', next_replacement_due: '',
   expected_life: '', min_stock_level: '', remarks: '', vendors: [],
   parent_equipment_id: '', has_children: false,
+  facility_id: '', floor_id: '', area_id: '',
 };
 
 const EMPTY_VENDOR = { vendor_id: '', vendor_name: '', preferred: false, lead_time_days: '', last_purchase_price: '', vendor_part_code: '', contact_details: '', amc_details: '' };
@@ -152,6 +153,7 @@ export default function EquipmentMaster() {
   const [types, setTypes] = useState([]);
   const [equipment, setEquipment] = useState([]);
   const [vendors, setVendors] = useState([]);
+  const [facilities, setFacilities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -253,13 +255,15 @@ export default function EquipmentMaster() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [tRes, eRes, vRes] = await Promise.all([
+      const [tRes, eRes, vRes, fRes] = await Promise.all([
         fetch(`${API_URL}/api/production/equipment/types`, { headers: authHeaders() }),
         fetch(`${API_URL}/api/production/equipment`, { headers: authHeaders() }),
         fetch(`${API_URL}/api/inventory/vendors`, { headers: authHeaders() }),
+        fetch(`${API_URL}/api/facilities`, { headers: authHeaders() }),
       ]);
       setTypes((await tRes.json()).types || []);
       setEquipment((await eRes.json()).equipment || []);
+      setFacilities(fRes.ok ? ((await fRes.json()).facilities || []) : []);
       const vData = await vRes.json();
       setVendors(vData.vendors || vData.items || (Array.isArray(vData) ? vData : []));
     } catch { toast.error('Failed to load equipment master'); }
@@ -298,6 +302,8 @@ export default function EquipmentMaster() {
     setEditingEq(e);
     setEqForm({
       ...EMPTY_EQ, ...e,
+      facility_id: e.facility_id || '', floor_id: e.floor_id || '', area_id: e.area_id || '',
+      parent_equipment_id: e.parent_equipment_id || '',
       maintenance_frequency_days: e.maintenance_frequency_days ?? '', replacement_frequency_days: e.replacement_frequency_days ?? '',
       procurement_lead_time_days: e.procurement_lead_time_days ?? '', min_stock_level: e.min_stock_level ?? '',
       last_maintenance_date: e.last_maintenance_date || '', next_maintenance_due: e.next_maintenance_due || '',
@@ -323,6 +329,9 @@ export default function EquipmentMaster() {
         ...eqForm,
         parent_equipment_id: eqForm.parent_equipment_id || null,
         has_children: !!eqForm.has_children,
+        facility_id: eqForm.facility_id || null,
+        floor_id: (eqForm.facility_id && eqForm.floor_id) || null,
+        area_id: (eqForm.facility_id && eqForm.floor_id && eqForm.area_id) || null,
         maintenance_frequency_days: eqForm.maintenance_frequency_days === '' ? null : parseInt(eqForm.maintenance_frequency_days),
         replacement_frequency_days: eqForm.replacement_frequency_days === '' ? null : parseInt(eqForm.replacement_frequency_days),
         procurement_lead_time_days: eqForm.procurement_lead_time_days === '' ? null : parseInt(eqForm.procurement_lead_time_days),
@@ -467,6 +476,11 @@ export default function EquipmentMaster() {
                                   {e._depth === 0 && e.parent_equipment_id && (
                                     <p className="text-[11px] text-muted-foreground">Part of: {e.parent_equipment_name}</p>
                                   )}
+                                  {e.facility_name && (
+                                    <p className="text-[11px] text-muted-foreground flex items-center gap-1" data-testid={`eq-location-${e.name.replace(/\s/g, '-')}`}>
+                                      <MapPin className="h-3 w-3" />{[e.facility_name, e.floor_name, e.area_name].filter(Boolean).join(' › ')}
+                                    </p>
+                                  )}
                                   {e.expected_life && <p className="text-[11px] text-muted-foreground">Life: {e.expected_life}</p>}
                                 </div>
                               </div>
@@ -608,6 +622,34 @@ export default function EquipmentMaster() {
                 <input type="checkbox" checked={!!eqForm.has_children} onChange={(e) => setF('has_children', e.target.checked)} data-testid="eq-input-haschildren" />
                 Has child equipment <span className="text-xs text-muted-foreground">(assembly — e.g. Machine; filters usually don't)</span>
               </label>
+            </div>
+            <div className="sm:col-span-2">
+              <Label className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> Location <span className="text-xs text-muted-foreground font-normal">(Facility › Floor › Area)</span></Label>
+              <div className="mt-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={eqForm.facility_id || ''}
+                  onChange={(e) => setEqForm((p) => ({ ...p, facility_id: e.target.value, floor_id: '', area_id: '' }))} data-testid="eq-input-facility">
+                  <option value="">No facility</option>
+                  {facilities.map((f) => <option key={f.id} value={f.id}>{f.facility_name} ({f.facility_type})</option>)}
+                </select>
+                {(() => {
+                  const selFac = facilities.find((f) => f.id === eqForm.facility_id);
+                  const selFloor = (selFac?.floors || []).find((fl) => fl.id === eqForm.floor_id);
+                  return (
+                    <>
+                      <select className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50" value={eqForm.floor_id || ''} disabled={!selFac}
+                        onChange={(e) => setEqForm((p) => ({ ...p, floor_id: e.target.value, area_id: '' }))} data-testid="eq-input-floor">
+                        <option value="">{selFac ? 'Select floor…' : 'Pick facility first'}</option>
+                        {(selFac?.floors || []).map((fl) => <option key={fl.id} value={fl.id}>{fl.name}</option>)}
+                      </select>
+                      <select className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50" value={eqForm.area_id || ''} disabled={!selFloor}
+                        onChange={(e) => setF('area_id', e.target.value)} data-testid="eq-input-area">
+                        <option value="">{selFloor ? 'Select area…' : 'Pick floor first'}</option>
+                        {(selFloor?.areas || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      </select>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
             <div><Label>Maintenance Frequency (days)</Label><Input type="number" min="0" value={eqForm.maintenance_frequency_days} onChange={(e) => setF('maintenance_frequency_days', e.target.value)} className="mt-1" data-testid="eq-input-maintfreq" /></div>
             <div><Label>Replacement Frequency (days)</Label><Input type="number" min="0" value={eqForm.replacement_frequency_days} onChange={(e) => setF('replacement_frequency_days', e.target.value)} className="mt-1" data-testid="eq-input-replfreq" /></div>

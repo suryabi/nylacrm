@@ -52,6 +52,9 @@ class EquipmentIn(BaseModel):
     vendors: List[VendorAssociation] = []
     parent_equipment_id: Optional[str] = None
     has_children: bool = False
+    facility_id: Optional[str] = None
+    floor_id: Optional[str] = None
+    area_id: Optional[str] = None
 
 
 class LogDateBody(BaseModel):
@@ -160,6 +163,29 @@ async def delete_type(type_id: str, current_user: dict = Depends(get_current_use
 
 # ── Equipment / Components (child master) ────────────────────
 
+async def _resolve_location(tenant_id: str, facility_id, floor_id, area_id) -> dict:
+    """Validate facility → floor → area chain and return display names."""
+    out = {"facility_name": None, "floor_name": None, "area_name": None}
+    if not facility_id:
+        return out
+    fac = await db.facilities.find_one({"tenant_id": tenant_id, "id": facility_id},
+                                       {"_id": 0, "facility_name": 1, "floors": 1})
+    if not fac:
+        raise HTTPException(400, "Facility not found")
+    out["facility_name"] = fac["facility_name"]
+    if floor_id:
+        floor = next((f for f in fac.get("floors") or [] if f.get("id") == floor_id), None)
+        if not floor:
+            raise HTTPException(400, "Floor not found in this facility")
+        out["floor_name"] = floor.get("name")
+        if area_id:
+            area = next((a for a in floor.get("areas") or [] if a.get("id") == area_id), None)
+            if not area:
+                raise HTTPException(400, "Area not found on this floor")
+            out["area_name"] = area.get("name")
+    return out
+
+
 async def _validate_parent(tenant_id: str, parent_id: str, self_id: Optional[str] = None) -> dict:
     """Ensure parent exists and the chain has no cycle. Returns parent doc."""
     if self_id and parent_id == self_id:
@@ -231,6 +257,9 @@ async def create_equipment(data: EquipmentIn, current_user: dict = Depends(get_c
     if data.parent_equipment_id:
         parent = await _validate_parent(tenant_id, data.parent_equipment_id)
         doc["parent_equipment_name"] = parent["name"]
+    doc.update(await _resolve_location(tenant_id, data.facility_id, data.floor_id, data.area_id))
+    if not data.facility_id:
+        doc["floor_id"] = doc["area_id"] = None
     doc["vendors"] = await _hydrate_vendors(tenant_id, data.vendors)
     _compute_dues(doc)
     doc.update({
@@ -260,6 +289,9 @@ async def update_equipment(equipment_id: str, data: EquipmentIn, current_user: d
     if data.parent_equipment_id:
         parent = await _validate_parent(tenant_id, data.parent_equipment_id, self_id=equipment_id)
         updates["parent_equipment_name"] = parent["name"]
+    updates.update(await _resolve_location(tenant_id, data.facility_id, data.floor_id, data.area_id))
+    if not data.facility_id:
+        updates["floor_id"] = updates["area_id"] = None
     updates["vendors"] = await _hydrate_vendors(tenant_id, data.vendors)
     _compute_dues(updates)
     updates["equipment_type_name"] = etype["name"]
