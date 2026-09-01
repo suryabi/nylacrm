@@ -50,6 +50,8 @@ class EquipmentIn(BaseModel):
     min_stock_level: Optional[int] = None
     remarks: Optional[str] = None
     vendors: List[VendorAssociation] = []
+    parent_equipment_id: Optional[str] = None
+    has_children: bool = False
 
 
 class LogDateBody(BaseModel):
@@ -158,6 +160,25 @@ async def delete_type(type_id: str, current_user: dict = Depends(get_current_use
 
 # ── Equipment / Components (child master) ────────────────────
 
+async def _validate_parent(tenant_id: str, parent_id: str, self_id: Optional[str] = None) -> dict:
+    """Ensure parent exists and the chain has no cycle. Returns parent doc."""
+    if self_id and parent_id == self_id:
+        raise HTTPException(400, "Equipment cannot be its own parent")
+    parent = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": parent_id},
+                                                {"_id": 0, "id": 1, "name": 1, "parent_equipment_id": 1})
+    if not parent:
+        raise HTTPException(400, "Parent equipment not found")
+    seen, cur = set(), parent
+    while cur and cur.get("parent_equipment_id"):
+        pid = cur["parent_equipment_id"]
+        if pid == self_id or pid in seen:
+            raise HTTPException(400, "Invalid parent — this would create a circular hierarchy")
+        seen.add(pid)
+        cur = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": pid},
+                                                 {"_id": 0, "id": 1, "parent_equipment_id": 1})
+    return parent
+
+
 async def _hydrate_vendors(tenant_id: str, vendors: List[VendorAssociation]) -> list:
     out = []
     for v in vendors:
@@ -185,6 +206,14 @@ async def list_equipment(
                     {"make_brand": {"$regex": search, "$options": "i"}},
                     {"model_spec": {"$regex": search, "$options": "i"}}]
     items = await db.equipment_master.find(q, {"_id": 0}).sort([("equipment_type_name", 1), ("name", 1)]).to_list(2000)
+    counts = {}
+    async for row in db.equipment_master.aggregate([
+        {"$match": {"tenant_id": tenant_id, "parent_equipment_id": {"$nin": [None, ""]}}},
+        {"$group": {"_id": "$parent_equipment_id", "n": {"$sum": 1}}},
+    ]):
+        counts[row["_id"]] = row["n"]
+    for it in items:
+        it["children_count"] = counts.get(it["id"], 0)
     return {"equipment": items}
 
 
@@ -198,6 +227,10 @@ async def create_equipment(data: EquipmentIn, current_user: dict = Depends(get_c
     if not etype:
         raise HTTPException(400, "Equipment type not found")
     doc = data.dict()
+    doc["parent_equipment_name"] = None
+    if data.parent_equipment_id:
+        parent = await _validate_parent(tenant_id, data.parent_equipment_id)
+        doc["parent_equipment_name"] = parent["name"]
     doc["vendors"] = await _hydrate_vendors(tenant_id, data.vendors)
     _compute_dues(doc)
     doc.update({
@@ -223,11 +256,19 @@ async def update_equipment(equipment_id: str, data: EquipmentIn, current_user: d
     if not etype:
         raise HTTPException(400, "Equipment type not found")
     updates = data.dict()
+    updates["parent_equipment_name"] = None
+    if data.parent_equipment_id:
+        parent = await _validate_parent(tenant_id, data.parent_equipment_id, self_id=equipment_id)
+        updates["parent_equipment_name"] = parent["name"]
     updates["vendors"] = await _hydrate_vendors(tenant_id, data.vendors)
     _compute_dues(updates)
     updates["equipment_type_name"] = etype["name"]
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.equipment_master.update_one({"tenant_id": tenant_id, "id": equipment_id}, {"$set": updates})
+    if data.name.strip() != existing.get("name"):
+        await db.equipment_master.update_many(
+            {"tenant_id": tenant_id, "parent_equipment_id": equipment_id},
+            {"$set": {"parent_equipment_name": data.name.strip()}})
     return await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id}, {"_id": 0})
 
 
@@ -235,6 +276,9 @@ async def update_equipment(equipment_id: str, data: EquipmentIn, current_user: d
 async def delete_equipment(equipment_id: str, current_user: dict = Depends(get_current_user)):
     _ = current_user
     tenant_id = get_current_tenant_id()
+    n = await db.equipment_master.count_documents({"tenant_id": tenant_id, "parent_equipment_id": equipment_id})
+    if n > 0:
+        raise HTTPException(409, f"Cannot delete: {n} child equipment item(s) belong to this equipment. Reassign or delete them first.")
     res = await db.equipment_master.delete_one({"tenant_id": tenant_id, "id": equipment_id})
     if res.deleted_count == 0:
         raise HTTPException(404, "Equipment not found")

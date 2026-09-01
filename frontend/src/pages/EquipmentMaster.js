@@ -18,6 +18,7 @@ const EMPTY_EQ = {
   maintenance_frequency_days: '', replacement_frequency_days: '', procurement_lead_time_days: '',
   last_maintenance_date: '', next_maintenance_due: '', last_replacement_date: '', next_replacement_due: '',
   expected_life: '', min_stock_level: '', remarks: '', vendors: [],
+  parent_equipment_id: '', has_children: false,
 };
 
 const EMPTY_VENDOR = { vendor_id: '', vendor_name: '', preferred: false, lead_time_days: '', last_purchase_price: '', vendor_part_code: '', contact_details: '', amc_details: '' };
@@ -34,6 +35,35 @@ const DOC_CATEGORIES = [
   { key: 'document', label: 'Other Documents', icon: FileText },
 ];
 const fmtSize = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+
+// Order items as a tree: parents first, children indented beneath (multi-level).
+const buildTree = (items) => {
+  const ids = new Set(items.map((i) => i.id));
+  const byParent = {};
+  items.forEach((i) => {
+    const p = i.parent_equipment_id && ids.has(i.parent_equipment_id) ? i.parent_equipment_id : '__root__';
+    (byParent[p] = byParent[p] || []).push(i);
+  });
+  const out = [];
+  const walk = (pid, depth) => {
+    (byParent[pid] || []).forEach((i) => { out.push({ ...i, _depth: depth }); walk(i.id, depth + 1); });
+  };
+  walk('__root__', 0);
+  return out;
+};
+
+// All descendant ids of an equipment (to block circular parent selection).
+const descendantIds = (items, rootId) => {
+  const byParent = {};
+  items.forEach((i) => { if (i.parent_equipment_id) (byParent[i.parent_equipment_id] = byParent[i.parent_equipment_id] || []).push(i.id); });
+  const out = new Set();
+  const stack = [rootId];
+  while (stack.length) {
+    const cur = stack.pop();
+    (byParent[cur] || []).forEach((id) => { if (!out.has(id)) { out.add(id); stack.push(id); } });
+  }
+  return out;
+};
 
 const CameraDialog = ({ open, onClose, onCapture }) => {
   const videoRef = React.useRef(null);
@@ -291,6 +321,8 @@ export default function EquipmentMaster() {
     try {
       const payload = {
         ...eqForm,
+        parent_equipment_id: eqForm.parent_equipment_id || null,
+        has_children: !!eqForm.has_children,
         maintenance_frequency_days: eqForm.maintenance_frequency_days === '' ? null : parseInt(eqForm.maintenance_frequency_days),
         replacement_frequency_days: eqForm.replacement_frequency_days === '' ? null : parseInt(eqForm.replacement_frequency_days),
         procurement_lead_time_days: eqForm.procurement_lead_time_days === '' ? null : parseInt(eqForm.procurement_lead_time_days),
@@ -332,9 +364,9 @@ export default function EquipmentMaster() {
     loadAll();
   };
 
-  const filtered = equipment.filter((e) =>
+  const filtered = buildTree(equipment.filter((e) =>
     (!typeFilter || e.equipment_type_id === typeFilter) &&
-    (!search || `${e.name} ${e.make_brand} ${e.model_spec}`.toLowerCase().includes(search.toLowerCase())));
+    (!search || `${e.name} ${e.make_brand} ${e.model_spec}`.toLowerCase().includes(search.toLowerCase()))));
 
   const overdueM = equipment.filter((e) => daysUntil(e.next_maintenance_due) < 0 && e.next_maintenance_due).length;
   const dueSoonM = equipment.filter((e) => { const n = daysUntil(e.next_maintenance_due); return n != null && n >= 0 && n <= 30; }).length;
@@ -421,8 +453,23 @@ export default function EquipmentMaster() {
                         return (
                           <tr key={e.id} className="border-b hover:bg-slate-50/60 dark:hover:bg-slate-900/40 align-top" data-testid={`eq-row-${e.name.replace(/\s/g, '-')}`}>
                             <td className="px-4 py-3">
-                              <p className="font-semibold">{e.name}</p>
-                              {e.expected_life && <p className="text-[11px] text-muted-foreground">Life: {e.expected_life}</p>}
+                              <div style={{ paddingLeft: (e._depth || 0) * 18 }} className="flex items-start gap-1.5">
+                                {e._depth > 0 && <span className="text-slate-400 select-none">└</span>}
+                                <div>
+                                  <p className="font-semibold flex items-center gap-1.5 flex-wrap">
+                                    {e.name}
+                                    {(e.children_count > 0 || e.has_children) && (
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-indigo-50 text-indigo-700 border-indigo-200" data-testid={`eq-assembly-${e.name.replace(/\s/g, '-')}`}>
+                                        Assembly{e.children_count > 0 ? ` · ${e.children_count} child${e.children_count === 1 ? '' : 'ren'}` : ''}
+                                      </Badge>
+                                    )}
+                                  </p>
+                                  {e._depth === 0 && e.parent_equipment_id && (
+                                    <p className="text-[11px] text-muted-foreground">Part of: {e.parent_equipment_name}</p>
+                                  )}
+                                  {e.expected_life && <p className="text-[11px] text-muted-foreground">Life: {e.expected_life}</p>}
+                                </div>
+                              </div>
                             </td>
                             <td className="px-4 py-3"><Badge variant="outline">{e.equipment_type_name}</Badge></td>
                             <td className="px-4 py-3 text-xs">{[e.make_brand, e.model_spec].filter(Boolean).join(' · ') || '—'}</td>
@@ -544,6 +591,24 @@ export default function EquipmentMaster() {
             </div>
             <div><Label>Make / Brand</Label><Input value={eqForm.make_brand} onChange={(e) => setF('make_brand', e.target.value)} className="mt-1" data-testid="eq-input-make" /></div>
             <div><Label>Model / Specification</Label><Input value={eqForm.model_spec} onChange={(e) => setF('model_spec', e.target.value)} className="mt-1" data-testid="eq-input-model" /></div>
+            <div>
+              <Label>Parent Equipment <span className="text-xs text-muted-foreground">(if part of another equipment)</span></Label>
+              <select className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 text-sm" value={eqForm.parent_equipment_id || ''} onChange={(e) => setF('parent_equipment_id', e.target.value)} data-testid="eq-input-parent">
+                <option value="">None (top-level equipment)</option>
+                {(() => {
+                  const blocked = editingEq ? descendantIds(equipment, editingEq.id) : new Set();
+                  return equipment
+                    .filter((x) => (!editingEq || (x.id !== editingEq.id && !blocked.has(x.id))))
+                    .map((x) => <option key={x.id} value={x.id}>{x.name}{x.parent_equipment_name ? ` (under ${x.parent_equipment_name})` : ''}</option>);
+                })()}
+              </select>
+            </div>
+            <div className="flex items-end pb-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={!!eqForm.has_children} onChange={(e) => setF('has_children', e.target.checked)} data-testid="eq-input-haschildren" />
+                Has child equipment <span className="text-xs text-muted-foreground">(assembly — e.g. Machine; filters usually don't)</span>
+              </label>
+            </div>
             <div><Label>Maintenance Frequency (days)</Label><Input type="number" min="0" value={eqForm.maintenance_frequency_days} onChange={(e) => setF('maintenance_frequency_days', e.target.value)} className="mt-1" data-testid="eq-input-maintfreq" /></div>
             <div><Label>Replacement Frequency (days)</Label><Input type="number" min="0" value={eqForm.replacement_frequency_days} onChange={(e) => setF('replacement_frequency_days', e.target.value)} className="mt-1" data-testid="eq-input-replfreq" /></div>
             <div><Label>Last Maintenance Date</Label><Input type="date" value={eqForm.last_maintenance_date} onChange={(e) => setF('last_maintenance_date', e.target.value)} className="mt-1" data-testid="eq-input-lastmaint" /></div>

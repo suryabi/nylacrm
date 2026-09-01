@@ -2951,3 +2951,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Naming now includes location: PHOT_<Facility>_<Floor>_<Area>_NN.ext (e.g. PHOT_Nyla_Bangalore_Factory_Ground_Floor_Storage_Area_01.jpg).
 - Thumbnails show a green location badge; a "Show:" filter narrows the photo grid to any floor/area or General.
 - Tested: curl uploads (area-level, floor-level, invalid floor → 404, filenames correct) + screenshot (badges render, area filter shows exactly 1 photo). Test facility cleaned.
+
+## Update — Jun 2026: Equipment Master parent-child hierarchy (multi-level)
+- EquipmentIn: parent_equipment_id (validated: exists, not self, no circular chains — walks ancestry) + has_children flag ("assembly" declared at creation, e.g. Machine yes / Filter no).
+- Create/update store parent_equipment_name; renaming an equipment cascades to children's parent_equipment_name. Delete blocked (409) while children exist. List returns children_count (aggregation on parent_equipment_id).
+- UI (EquipmentMaster.js): table renders as an indented multi-level tree (└ prefix, depth×18px); "Assembly · N children" badge (also shown when has_children declared); "Part of: X" subtitle when parent filtered out. Form: Parent Equipment select (excludes self + descendants) + "Has child equipment" checkbox.
+- Tested: 3-level chain (RO Machine → Pump → Seal) via curl; cycle guard 400; delete-with-children 409; children_count/parent names correct; UI tree + form verified via screenshot. Test equipment cleaned.
