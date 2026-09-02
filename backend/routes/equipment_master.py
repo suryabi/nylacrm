@@ -43,6 +43,7 @@ class EquipmentIn(BaseModel):
     replacement_frequency_days: Optional[int] = None
     maintenance_start_date: Optional[str] = None   # YYYY-MM-DD
     replacement_start_date: Optional[str] = None
+    photo_inspections_per_month: Optional[int] = None
     procurement_lead_time_days: Optional[int] = None
     last_maintenance_date: Optional[str] = None   # YYYY-MM-DD
     next_maintenance_due: Optional[str] = None

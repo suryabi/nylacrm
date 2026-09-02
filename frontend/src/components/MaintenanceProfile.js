@@ -160,11 +160,17 @@ export const MaintenanceProfile = ({ equipment, onClose }) => {
           <div className="py-10 text-center text-muted-foreground"><RefreshCw className="h-5 w-5 animate-spin mx-auto" /></div>
         ) : profile && (
           <div className="space-y-5">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
               <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Schedule</p><p className="font-semibold" data-testid="mp-frequency">{profile.frequency_label}</p></div>
               <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Start Date</p><p className="font-semibold">{profile.maintenance_start_date || '—'}</p></div>
               <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Last Done</p><p className="font-semibold">{profile.last_maintenance_date || '—'}</p></div>
               <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Records</p><p className="font-semibold">{profile.stats.completed} done · {profile.stats.incomplete} incomplete</p></div>
+              <div className="rounded-lg border p-3" data-testid="mp-photo-insp">
+                <p className="text-xs text-muted-foreground">Photo Inspections</p>
+                <p className="font-semibold">{profile.photo_inspection?.per_month
+                  ? `${profile.photo_inspection.done_this_month}/${profile.photo_inspection.per_month} this month`
+                  : '—'}</p>
+              </div>
             </div>
 
             <div className="rounded-lg border p-3">

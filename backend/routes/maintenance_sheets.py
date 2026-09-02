@@ -3,6 +3,7 @@ camera-captured timestamped photos, immutable records with correction audit trai
 import base64
 import io
 import os
+import random
 import uuid
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -97,6 +98,33 @@ def _stamp_photo(content: bytes, stamp_text: str) -> bytes:
     return out.getvalue()
 
 
+INVALID_QR_MSG = "This QR code is not valid for today's maintenance."
+
+
+async def _ensure_photo_assignments(tenant_id: str, equipment_id: str, month: str, n_required):
+    """Randomly mark min(N, scheduled) slots in the month as photo-required (never disclosed on the sheet)."""
+    if not n_required or n_required <= 0:
+        return
+    start, end = _month_bounds(month)
+    slots = await db.maintenance_slots.find(
+        {"tenant_id": tenant_id, "equipment_id": equipment_id,
+         "date": {"$gte": start.isoformat(), "$lte": end.isoformat()}},
+        {"_id": 0, "id": 1, "date": 1, "photo_required": 1, "submitted": 1}).to_list(400)
+    assigned = sum(1 for s in slots if s.get("photo_required"))
+    need = min(int(n_required), len(slots)) - assigned
+    if need <= 0:
+        return
+    today = datetime.now(IST).date().isoformat()
+    future = [s for s in slots if not s.get("photo_required") and not s.get("submitted") and s["date"] >= today]
+    others = [s for s in slots if not s.get("photo_required") and s not in future]
+    pool = future if len(future) >= need else future + others
+    pick = random.sample(pool, min(need, len(pool)))
+    if pick:
+        await db.maintenance_slots.update_many(
+            {"tenant_id": tenant_id, "id": {"$in": [s["id"] for s in pick]}},
+            {"$set": {"photo_required": True}})
+
+
 async def _get_equipment(tenant_id: str, equipment_id: str) -> dict:
     eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id}, {"_id": 0})
     if not eq:
@@ -129,6 +157,7 @@ async def maintenance_sheet(equipment_id: str, month: str = Query(...), origin: 
             await db.maintenance_slots.insert_one({**slot})
             slot.pop("_id", None)
             slots[d] = slot
+    await _ensure_photo_assignments(tenant_id, equipment_id, month, eq.get("photo_inspections_per_month"))
 
     days = []
     cur = start
@@ -164,12 +193,22 @@ async def maintenance_profile(equipment_id: str, current_user: dict = Depends(ge
     records = await db.maintenance_records.find(
         {"tenant_id": tenant_id, "equipment_id": equipment_id}, {"_id": 0}).sort("scheduled_date", -1).to_list(200)
     n_done = sum(1 for r in records if r["status"] == "completed")
+    month = today.strftime("%Y-%m")
+    m_start, m_end = _month_bounds(month)
+    month_slots = await db.maintenance_slots.find(
+        {"tenant_id": tenant_id, "equipment_id": equipment_id,
+         "date": {"$gte": m_start.isoformat(), "$lte": m_end.isoformat()}},
+        {"_id": 0, "photo_required": 1, "submitted": 1}).to_list(400)
+    photo_assigned = sum(1 for s in month_slots if s.get("photo_required"))
+    photo_done = sum(1 for s in month_slots if s.get("photo_required") and s.get("submitted"))
     return {"equipment": {"id": eq["id"], "name": eq["name"], "type": eq.get("equipment_type_name")},
             "frequency_days": freq, "frequency_label": _freq_label(freq),
             "maintenance_start_date": eq.get("maintenance_start_date"),
             "last_maintenance_date": eq.get("last_maintenance_date"),
             "next_maintenance_due": eq.get("next_maintenance_due"),
             "upcoming_dates": upcoming, "records": records,
+            "photo_inspection": {"per_month": eq.get("photo_inspections_per_month"),
+                                 "assigned_this_month": photo_assigned, "done_this_month": photo_done},
             "stats": {"total": len(records), "completed": n_done, "incomplete": len(records) - n_done}}
 
 
@@ -191,11 +230,11 @@ async def scan_status(token: str, current_user: dict = Depends(get_current_user)
     base = {"equipment_name": eq["name"], "equipment_id": eq["id"],
             "equipment_type": eq.get("equipment_type_name"), "scheduled_date": slot["date"], "today": today}
     if slot["date"] != today:
-        return {**base, "valid": False, "message": "This QR code is not valid for today."}
+        return {**base, "valid": False, "message": INVALID_QR_MSG}
     if slot.get("submitted"):
         rec = await db.maintenance_records.find_one({"tenant_id": tenant_id, "slot_id": slot["id"]}, {"_id": 0})
         return {**base, "valid": True, "already_submitted": True, "record": rec}
-    return {**base, "valid": True, "already_submitted": False}
+    return {**base, "valid": True, "already_submitted": False, "photo_required": bool(slot.get("photo_required"))}
 
 
 @router.post("/scan/{token}/photo")
@@ -204,7 +243,7 @@ async def scan_photo(token: str, file: UploadFile = File(...), current_user: dic
     slot = await _slot_by_token(tenant_id, token)
     today = datetime.now(IST)
     if slot["date"] != today.date().isoformat():
-        raise HTTPException(400, "This QR code is not valid for today.")
+        raise HTTPException(400, INVALID_QR_MSG)
     if slot.get("submitted"):
         raise HTTPException(409, "Maintenance for this date is already submitted")
     content = await file.read()
@@ -239,11 +278,13 @@ async def scan_submit(token: str, body: SubmitBody, current_user: dict = Depends
     slot = await _slot_by_token(tenant_id, token)
     now = datetime.now(IST)
     if slot["date"] != now.date().isoformat():
-        raise HTTPException(400, "This QR code is not valid for today.")
+        raise HTTPException(400, INVALID_QR_MSG)
     if slot.get("submitted"):
         raise HTTPException(409, "Maintenance for this date is already submitted and cannot be edited")
     eq = await _get_equipment(tenant_id, slot["equipment_id"])
     photos = [p for p in slot.get("pending_photos") or [] if p["id"] in set(body.photo_ids)]
+    if slot.get("photo_required") and not photos:
+        raise HTTPException(400, "Photo inspection required today — capture at least one live photo before submitting.")
     rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": slot["id"],
            "equipment_id": eq["id"], "equipment_name": eq["name"],
            "scheduled_date": slot["date"], "status": body.status,
@@ -325,6 +366,19 @@ async def check_missed_maintenance() -> dict:
 
     alerts = 0
     for (tenant_id, equipment_id), slots in by_tenant_eq.items():
+        # transfer photo-inspection duty from missed days to a random future slot in the same month
+        for s in slots:
+            if not s.get("photo_required"):
+                continue
+            m_end = _month_bounds(s["date"][:7])[1]
+            cand = await db.maintenance_slots.find(
+                {"tenant_id": tenant_id, "equipment_id": equipment_id, "submitted": {"$ne": True},
+                 "photo_required": {"$ne": True}, "date": {"$gte": today, "$lte": m_end.isoformat()}},
+                {"_id": 0, "id": 1}).to_list(200)
+            if cand:
+                promoted = random.choice(cand)
+                await db.maintenance_slots.update_one({"tenant_id": tenant_id, "id": promoted["id"]},
+                                                      {"$set": {"photo_required": True}})
         eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id},
                                                 {"_id": 0, "name": 1, "facility_name": 1, "area_name": 1})
         name = (eq or {}).get("name") or "Deleted equipment"

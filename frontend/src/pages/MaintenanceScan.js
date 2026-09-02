@@ -79,6 +79,7 @@ export default function MaintenanceScan() {
 
   const submit = async () => {
     if (!status) { toast.error('Select Maintenance Complete or Incomplete'); return; }
+    if (state.photo_required && photos.length === 0) { toast.error('Photo inspection required today — capture at least one live photo first'); return; }
     setSubmitting(true);
     try {
       const res = await fetch(`${API_URL}/api/maintenance/scan/${token}/submit`, {
@@ -167,6 +168,15 @@ export default function MaintenanceScan() {
   return (
     <Shell>
       {info}
+      {state.photo_required && (
+        <div className="rounded-lg border-2 border-red-300 bg-red-50 px-4 py-3 flex items-start gap-2" data-testid="scan-photo-required-banner">
+          <Camera className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+          <div className="text-sm">
+            <p className="font-bold text-red-700">Photo inspection required today</p>
+            <p className="text-xs text-red-600">This date was randomly selected for photographic inspection. Capture at least one live camera photo before submitting.</p>
+          </div>
+        </div>
+      )}
       <Card><CardContent className="p-4 space-y-4">
         <div>
           <p className="text-sm font-semibold mb-2">Maintenance status *</p>
@@ -183,7 +193,7 @@ export default function MaintenanceScan() {
         </div>
 
         <div>
-          <p className="text-sm font-semibold mb-1">Supporting photos <span className="text-xs font-normal text-muted-foreground">(live camera only — auto date/time stamped)</span></p>
+          <p className="text-sm font-semibold mb-1">Supporting photos {state.photo_required ? <span className="text-xs font-bold text-red-600">(mandatory today)</span> : null} <span className="text-xs font-normal text-muted-foreground">(live camera only — auto date/time stamped)</span></p>
           {camError && <p className="text-xs text-red-600 mb-2">{camError}</p>}
           {!camOn ? (
             <Button variant="outline" className="w-full" onClick={startCamera} data-testid="scan-open-camera-btn"><Camera className="h-4 w-4 mr-2" /> Open Camera</Button>

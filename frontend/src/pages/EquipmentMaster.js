@@ -45,7 +45,7 @@ const EMPTY_EQ = {
   last_maintenance_date: '', next_maintenance_due: '', last_replacement_date: '', next_replacement_due: '',
   expected_life: '', min_stock_level: '', remarks: '', vendors: [],
   parent_equipment_id: '', has_children: false,
-  facility_id: '', floor_id: '', area_id: '',
+  facility_id: '', floor_id: '', area_id: '', photo_inspections_per_month: '',
 };
 
 const EMPTY_VENDOR = { vendor_id: '', vendor_name: '', preferred: false, lead_time_days: '', last_purchase_price: '', vendor_part_code: '', contact_details: '', amc_details: '' };
@@ -363,6 +363,7 @@ export default function EquipmentMaster() {
     setEqForm({
       ...EMPTY_EQ, ...e,
       facility_id: e.facility_id || '', floor_id: e.floor_id || '', area_id: e.area_id || '',
+      photo_inspections_per_month: e.photo_inspections_per_month ?? '',
       parent_equipment_id: e.parent_equipment_id || '',
       maintenance_frequency_days: e.maintenance_frequency_days ?? '', replacement_frequency_days: e.replacement_frequency_days ?? '',
       procurement_lead_time_days: e.procurement_lead_time_days ?? '', min_stock_level: e.min_stock_level ?? '',
@@ -397,6 +398,7 @@ export default function EquipmentMaster() {
         replacement_frequency_days: eqForm.replacement_frequency_days === '' ? null : parseInt(eqForm.replacement_frequency_days),
         procurement_lead_time_days: eqForm.procurement_lead_time_days === '' ? null : parseInt(eqForm.procurement_lead_time_days),
         min_stock_level: eqForm.min_stock_level === '' ? null : parseInt(eqForm.min_stock_level),
+        photo_inspections_per_month: eqForm.photo_inspections_per_month === '' || eqForm.photo_inspections_per_month == null ? null : parseInt(eqForm.photo_inspections_per_month),
         last_maintenance_date: eqForm.last_maintenance_date || null, next_maintenance_due: eqForm.next_maintenance_due || null,
         last_replacement_date: eqForm.last_replacement_date || null, next_replacement_due: eqForm.next_replacement_due || null,
         maintenance_start_date: eqForm.maintenance_start_date || null, replacement_start_date: eqForm.replacement_start_date || null,
@@ -779,6 +781,7 @@ export default function EquipmentMaster() {
               <div><Label>Maintenance Start Date <span className="text-xs text-muted-foreground">(schedule begins)</span></Label><Input type="date" value={eqForm.maintenance_start_date} onChange={(e) => setF('maintenance_start_date', e.target.value)} className="mt-1" data-testid="eq-input-maintstart" /></div>
               <div><Label>Last Maintenance Date</Label><Input type="date" value={eqForm.last_maintenance_date} onChange={(e) => setF('last_maintenance_date', e.target.value)} className="mt-1" data-testid="eq-input-lastmaint" /></div>
               <div><Label>Next Maintenance Due <span className="text-xs text-muted-foreground">(blank = auto)</span></Label><Input type="date" value={eqForm.next_maintenance_due} onChange={(e) => setF('next_maintenance_due', e.target.value)} className="mt-1" /></div>
+              <div><Label>Photo Inspections / Month <span className="text-xs text-muted-foreground">(random, not disclosed)</span></Label><Input type="number" min="0" value={eqForm.photo_inspections_per_month} onChange={(e) => setF('photo_inspections_per_month', e.target.value)} placeholder="e.g. 5" className="mt-1" data-testid="eq-input-photoinsp" /></div>
             </FormSection>
 
             {/* 4 — Replacement Schedule */}

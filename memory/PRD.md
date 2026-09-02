@@ -3024,3 +3024,13 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — Jun 2026: Sheet margins tightened + kiosk onboarding gap highlights
 - Printable sheet: @page margin 7mm→4mm, side paddings removed (banner 3mm/4mm, meta/footer flush), cells grew (min-height 29→32mm, QR 15→17mm; compact 6-row mode 24→27mm/13→15mm). Verified full-bleed A4 landscape render.
 - Factory Staff: amber banner "N staff can't log in to the QC kiosk yet" listing names when a member has neither face nor PIN; their row is amber-tinted with an "Onboarding pending" chip. Verified via screenshot (Suresh flagged, Raju with Face(7)+PIN not flagged).
+
+## Update — Jun 2026: QR validation message + random photo inspections
+- QR validation: rejection text everywhere is now exactly "This QR code is not valid for today's maintenance." (scan status, photo upload, submit); server-date (IST) validation blocks submissions on expired/future QRs (verified via API).
+- Random photo inspections:
+  - Equipment field photo_inspections_per_month (EquipmentIn + form input in Maintenance section, "random, not disclosed").
+  - _ensure_photo_assignments: on sheet generation, randomly marks min(N, scheduled) slots photo_required (prefers future unsubmitted); idempotent per month. Sheet response NEVER includes photo_required (verified no leak).
+  - Scan reveals photo_required only on the actual day; submit enforces ≥1 live camera photo (400 otherwise) — client also blocks with red "Photo inspection required today" banner + "(mandatory today)" label.
+  - Missed photo-required day → check_missed_maintenance promotes a random future unsubmitted slot in the same month so the monthly quota stays intact.
+  - Profile returns photo_inspection {per_month, assigned_this_month, done_this_month}; MaintenanceProfile shows "Photo Inspections x/y this month" card.
+- Tested via API: 5 random slots assigned, no sheet leak, submit-without-photo 400, with-photo success, wrong-day message exact, future-token submit blocked, profile stats correct. Test data cleaned.
