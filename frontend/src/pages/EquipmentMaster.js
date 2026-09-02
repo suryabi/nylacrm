@@ -7,7 +7,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
-import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon, MapPin, AlertTriangle } from 'lucide-react';
+import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon, MapPin, AlertTriangle, ChevronDown, Layers, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { MaintenanceProfile } from '../components/MaintenanceProfile';
 
@@ -35,6 +35,20 @@ const FreqSelect = ({ value, onChange, testid }) => {
     </select>
   );
 };
+
+const FormSection = ({ icon: Icon, title, hint, open, onToggle, children, testid, tint = 'text-indigo-600' }) => (
+  <div className="rounded-xl border overflow-hidden">
+    <button type="button" onClick={onToggle}
+      className="w-full flex items-center gap-2.5 px-4 py-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/50 dark:hover:bg-slate-900 text-left transition-colors"
+      data-testid={testid}>
+      <Icon className={`h-4 w-4 shrink-0 ${tint}`} />
+      <span className="font-semibold text-sm">{title}</span>
+      {!open && hint && <span className="text-xs text-muted-foreground truncate hidden sm:inline">— {hint}</span>}
+      <ChevronDown className={`h-4 w-4 ml-auto shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+    </button>
+    {open && <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t">{children}</div>}
+  </div>
+);
 
 const EMPTY_EQ = {
   name: '', equipment_type_id: '', make_brand: '', model_spec: '',
@@ -206,6 +220,9 @@ export default function EquipmentMaster() {
   const [showEqForm, setShowEqForm] = useState(false);
   const [editingEq, setEditingEq] = useState(null);
   const [eqForm, setEqForm] = useState(EMPTY_EQ);
+  const DEFAULT_SECS = { basic: true, hierarchy: false, maintenance: true, replacement: false, procurement: false, vendors: false };
+  const [openSecs, setOpenSecs] = useState(DEFAULT_SECS);
+  const toggleSec = (k) => setOpenSecs((s) => ({ ...s, [k]: !s[k] }));
   const [saving, setSaving] = useState(false);
   const [showTypeForm, setShowTypeForm] = useState(false);
   const [editingType, setEditingType] = useState(null);
@@ -344,9 +361,17 @@ export default function EquipmentMaster() {
     loadAll();
   };
 
-  const openNewEq = () => { setEditingEq(null); setEqForm({ ...EMPTY_EQ, equipment_type_id: typeFilter || '' }); setShowEqForm(true); };
+  const openNewEq = () => { setEditingEq(null); setEqForm({ ...EMPTY_EQ, equipment_type_id: typeFilter || '' }); setOpenSecs(DEFAULT_SECS); setShowEqForm(true); };
   const openEditEq = (e) => {
     setEditingEq(e);
+    setOpenSecs({
+      basic: true,
+      hierarchy: !!(e.parent_equipment_id || e.has_children || e.facility_id),
+      maintenance: !!(e.maintenance_frequency_days || e.last_maintenance_date || e.maintenance_start_date),
+      replacement: !!(e.replacement_frequency_days || e.last_replacement_date || e.replacement_start_date),
+      procurement: !!(e.procurement_lead_time_days || e.min_stock_level || e.expected_life || e.remarks),
+      vendors: (e.vendors || []).length > 0,
+    });
     setEqForm({
       ...EMPTY_EQ, ...e,
       facility_id: e.facility_id || '', floor_id: e.floor_id || '', area_id: e.area_id || '',
@@ -683,90 +708,127 @@ export default function EquipmentMaster() {
             <DialogTitle>{editingEq ? `Edit ${editingEq.name}` : 'Add Equipment / Component'}</DialogTitle>
             <DialogDescription>Maintenance & replacement schedules auto-compute next due dates from last date + frequency.</DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label>Name *</Label>
-              <Input value={eqForm.name} onChange={(e) => setF('name', e.target.value)} placeholder="e.g. 5 Micron Filter" className="mt-1" data-testid="eq-input-name" />
-            </div>
-            <div>
-              <Label>Equipment Type *</Label>
-              <select className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 text-sm" value={eqForm.equipment_type_id} onChange={(e) => setF('equipment_type_id', e.target.value)} data-testid="eq-input-type">
-                <option value="">Select type…</option>
-                {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </div>
-            <div><Label>Make / Brand</Label><Input value={eqForm.make_brand} onChange={(e) => setF('make_brand', e.target.value)} className="mt-1" data-testid="eq-input-make" /></div>
-            <div><Label>Model / Specification</Label><Input value={eqForm.model_spec} onChange={(e) => setF('model_spec', e.target.value)} className="mt-1" data-testid="eq-input-model" /></div>
-            <div>
-              <Label>Parent Equipment <span className="text-xs text-muted-foreground">(if part of another equipment)</span></Label>
-              <select className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 text-sm" value={eqForm.parent_equipment_id || ''} onChange={(e) => setF('parent_equipment_id', e.target.value)} data-testid="eq-input-parent">
-                <option value="">None (top-level equipment)</option>
-                {(() => {
-                  const blocked = editingEq ? descendantIds(equipment, editingEq.id) : new Set();
-                  return equipment
-                    .filter((x) => (!editingEq || (x.id !== editingEq.id && !blocked.has(x.id))))
-                    .map((x) => <option key={x.id} value={x.id}>{x.name}{x.parent_equipment_name ? ` (under ${x.parent_equipment_name})` : ''}</option>);
-                })()}
-              </select>
-            </div>
-            <div className="flex items-end pb-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={!!eqForm.has_children} onChange={(e) => setF('has_children', e.target.checked)} data-testid="eq-input-haschildren" />
-                Has child equipment <span className="text-xs text-muted-foreground">(assembly — e.g. Machine; filters usually don't)</span>
-              </label>
-            </div>
-            <div className="sm:col-span-2">
-              <Label className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> Location <span className="text-xs text-muted-foreground font-normal">(Facility › Floor › Area)</span></Label>
-              <div className="mt-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={eqForm.facility_id || ''}
-                  onChange={(e) => setEqForm((p) => ({ ...p, facility_id: e.target.value, floor_id: '', area_id: '' }))} data-testid="eq-input-facility">
-                  <option value="">No facility</option>
-                  {facilities.map((f) => <option key={f.id} value={f.id}>{f.facility_name} ({f.facility_type})</option>)}
-                </select>
-                {(() => {
-                  const selFac = facilities.find((f) => f.id === eqForm.facility_id);
-                  const selFloor = (selFac?.floors || []).find((fl) => fl.id === eqForm.floor_id);
-                  return (
-                    <>
-                      <select className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50" value={eqForm.floor_id || ''} disabled={!selFac}
-                        onChange={(e) => setEqForm((p) => ({ ...p, floor_id: e.target.value, area_id: '' }))} data-testid="eq-input-floor">
-                        <option value="">{selFac ? 'Select floor…' : 'Pick facility first'}</option>
-                        {(selFac?.floors || []).map((fl) => <option key={fl.id} value={fl.id}>{fl.name}</option>)}
-                      </select>
-                      <select className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50" value={eqForm.area_id || ''} disabled={!selFloor}
-                        onChange={(e) => setF('area_id', e.target.value)} data-testid="eq-input-area">
-                        <option value="">{selFloor ? 'Select area…' : 'Pick floor first'}</option>
-                        {(selFloor?.areas || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                      </select>
-                    </>
-                  );
-                })()}
+          <div className="space-y-3">
+            {/* 1 — Basic Details */}
+            <FormSection icon={Cog} title="Basic Details" open={openSecs.basic} onToggle={() => toggleSec('basic')}
+              hint={[eqForm.name, types.find((t) => t.id === eqForm.equipment_type_id)?.name].filter(Boolean).join(' · ') || 'name & type'}
+              testid="eq-sec-basic">
+              <div>
+                <Label>Name *</Label>
+                <Input value={eqForm.name} onChange={(e) => setF('name', e.target.value)} placeholder="e.g. 5 Micron Filter" className="mt-1" data-testid="eq-input-name" />
               </div>
-            </div>
-            <div><Label>Maintenance Frequency</Label><FreqSelect value={eqForm.maintenance_frequency_days} onChange={(v) => setF('maintenance_frequency_days', v)} testid="eq-input-maintfreq" /></div>
-            <div><Label>Replacement Frequency</Label><FreqSelect value={eqForm.replacement_frequency_days} onChange={(v) => setF('replacement_frequency_days', v)} testid="eq-input-replfreq" /></div>
-            <div><Label>Maintenance Start Date <span className="text-xs text-muted-foreground">(schedule begins)</span></Label><Input type="date" value={eqForm.maintenance_start_date} onChange={(e) => setF('maintenance_start_date', e.target.value)} className="mt-1" data-testid="eq-input-maintstart" /></div>
-            <div><Label>Replacement Start Date <span className="text-xs text-muted-foreground">(schedule begins)</span></Label><Input type="date" value={eqForm.replacement_start_date} onChange={(e) => setF('replacement_start_date', e.target.value)} className="mt-1" data-testid="eq-input-replstart" /></div>
-            <div><Label>Last Maintenance Date</Label><Input type="date" value={eqForm.last_maintenance_date} onChange={(e) => setF('last_maintenance_date', e.target.value)} className="mt-1" data-testid="eq-input-lastmaint" /></div>
-            <div><Label>Next Maintenance Due <span className="text-xs text-muted-foreground">(blank = auto)</span></Label><Input type="date" value={eqForm.next_maintenance_due} onChange={(e) => setF('next_maintenance_due', e.target.value)} className="mt-1" /></div>
-            <div><Label>Last Replacement Date</Label><Input type="date" value={eqForm.last_replacement_date} onChange={(e) => setF('last_replacement_date', e.target.value)} className="mt-1" data-testid="eq-input-lastrepl" /></div>
-            <div><Label>Next Replacement Due <span className="text-xs text-muted-foreground">(blank = auto)</span></Label><Input type="date" value={eqForm.next_replacement_due} onChange={(e) => setF('next_replacement_due', e.target.value)} className="mt-1" /></div>
-            <div><Label>Procurement Lead Time (days)</Label><Input type="number" min="0" value={eqForm.procurement_lead_time_days} onChange={(e) => setF('procurement_lead_time_days', e.target.value)} className="mt-1" data-testid="eq-input-leadtime" /></div>
-            <div><Label>Expected Life / Usage Limit</Label><Input placeholder="e.g. 6 months / 50,000 L" value={eqForm.expected_life} onChange={(e) => setF('expected_life', e.target.value)} className="mt-1" /></div>
-            <div><Label>Minimum Stock / Reorder Level</Label><Input type="number" min="0" value={eqForm.min_stock_level} onChange={(e) => setF('min_stock_level', e.target.value)} className="mt-1" data-testid="eq-input-minstock" /></div>
-            <div className="sm:col-span-2"><Label>Remarks / Maintenance Instructions</Label><Textarea rows={2} value={eqForm.remarks} onChange={(e) => setF('remarks', e.target.value)} className="mt-1" /></div>
-          </div>
+              <div>
+                <Label>Equipment Type *</Label>
+                <select className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 text-sm" value={eqForm.equipment_type_id} onChange={(e) => setF('equipment_type_id', e.target.value)} data-testid="eq-input-type">
+                  <option value="">Select type…</option>
+                  {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              <div><Label>Make / Brand</Label><Input value={eqForm.make_brand} onChange={(e) => setF('make_brand', e.target.value)} className="mt-1" data-testid="eq-input-make" /></div>
+              <div><Label>Model / Specification</Label><Input value={eqForm.model_spec} onChange={(e) => setF('model_spec', e.target.value)} className="mt-1" data-testid="eq-input-model" /></div>
+            </FormSection>
 
-          {/* Vendor associations */}
-          <div className="border-t pt-4 mt-2">
-            <div className="flex items-center justify-between mb-2">
-              <Label className="text-base font-semibold">Vendor Associations</Label>
-              <Button size="sm" variant="outline" onClick={() => setEqForm((p) => ({ ...p, vendors: [...p.vendors, { ...EMPTY_VENDOR }] }))} data-testid="eq-add-vendor-btn">
-                <Plus className="h-3.5 w-3.5 mr-1" /> Add Vendor
-              </Button>
-            </div>
-            {eqForm.vendors.length === 0 && <p className="text-xs text-muted-foreground">No vendors associated yet.</p>}
-            <div className="space-y-3">
+            {/* 2 — Hierarchy & Location */}
+            <FormSection icon={Layers} title="Hierarchy & Location" tint="text-emerald-600" open={openSecs.hierarchy} onToggle={() => toggleSec('hierarchy')}
+              hint={[
+                eqForm.parent_equipment_id ? `part of ${(equipment.find((x) => x.id === eqForm.parent_equipment_id) || {}).name || 'parent'}` : null,
+                eqForm.facility_id ? (facilities.find((f) => f.id === eqForm.facility_id) || {}).facility_name : null,
+              ].filter(Boolean).join(' · ') || 'parent equipment, facility, floor & area'}
+              testid="eq-sec-hierarchy">
+              <div>
+                <Label>Parent Equipment <span className="text-xs text-muted-foreground">(if part of another equipment)</span></Label>
+                <select className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 text-sm" value={eqForm.parent_equipment_id || ''} onChange={(e) => setF('parent_equipment_id', e.target.value)} data-testid="eq-input-parent">
+                  <option value="">None (top-level equipment)</option>
+                  {(() => {
+                    const blocked = editingEq ? descendantIds(equipment, editingEq.id) : new Set();
+                    return equipment
+                      .filter((x) => (!editingEq || (x.id !== editingEq.id && !blocked.has(x.id))))
+                      .map((x) => <option key={x.id} value={x.id}>{x.name}{x.parent_equipment_name ? ` (under ${x.parent_equipment_name})` : ''}</option>);
+                  })()}
+                </select>
+              </div>
+              <div className="flex items-end pb-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={!!eqForm.has_children} onChange={(e) => setF('has_children', e.target.checked)} data-testid="eq-input-haschildren" />
+                  Has child equipment <span className="text-xs text-muted-foreground">(assembly — e.g. Machine)</span>
+                </label>
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> Location <span className="text-xs text-muted-foreground font-normal">(Facility › Floor › Area)</span></Label>
+                <div className="mt-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={eqForm.facility_id || ''}
+                    onChange={(e) => setEqForm((p) => ({ ...p, facility_id: e.target.value, floor_id: '', area_id: '' }))} data-testid="eq-input-facility">
+                    <option value="">No facility</option>
+                    {facilities.map((f) => <option key={f.id} value={f.id}>{f.facility_name} ({f.facility_type})</option>)}
+                  </select>
+                  {(() => {
+                    const selFac = facilities.find((f) => f.id === eqForm.facility_id);
+                    const selFloor = (selFac?.floors || []).find((fl) => fl.id === eqForm.floor_id);
+                    return (
+                      <>
+                        <select className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50" value={eqForm.floor_id || ''} disabled={!selFac}
+                          onChange={(e) => setEqForm((p) => ({ ...p, floor_id: e.target.value, area_id: '' }))} data-testid="eq-input-floor">
+                          <option value="">{selFac ? 'Select floor…' : 'Pick facility first'}</option>
+                          {(selFac?.floors || []).map((fl) => <option key={fl.id} value={fl.id}>{fl.name}</option>)}
+                        </select>
+                        <select className="h-10 rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50" value={eqForm.area_id || ''} disabled={!selFloor}
+                          onChange={(e) => setF('area_id', e.target.value)} data-testid="eq-input-area">
+                          <option value="">{selFloor ? 'Select area…' : 'Pick floor first'}</option>
+                          {(selFloor?.areas || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </FormSection>
+
+            {/* 3 — Maintenance Schedule */}
+            <FormSection icon={CalendarCheck} title="Maintenance Schedule" tint="text-blue-600" open={openSecs.maintenance} onToggle={() => toggleSec('maintenance')}
+              hint={freqLabel(eqForm.maintenance_frequency_days) ? `${freqLabel(eqForm.maintenance_frequency_days)}${eqForm.maintenance_start_date ? ` · from ${eqForm.maintenance_start_date}` : ''}` : 'frequency & dates'}
+              testid="eq-sec-maintenance">
+              <div><Label>Maintenance Frequency</Label><FreqSelect value={eqForm.maintenance_frequency_days} onChange={(v) => setF('maintenance_frequency_days', v)} testid="eq-input-maintfreq" /></div>
+              <div><Label>Maintenance Start Date <span className="text-xs text-muted-foreground">(schedule begins)</span></Label><Input type="date" value={eqForm.maintenance_start_date} onChange={(e) => setF('maintenance_start_date', e.target.value)} className="mt-1" data-testid="eq-input-maintstart" /></div>
+              <div><Label>Last Maintenance Date</Label><Input type="date" value={eqForm.last_maintenance_date} onChange={(e) => setF('last_maintenance_date', e.target.value)} className="mt-1" data-testid="eq-input-lastmaint" /></div>
+              <div><Label>Next Maintenance Due <span className="text-xs text-muted-foreground">(blank = auto)</span></Label><Input type="date" value={eqForm.next_maintenance_due} onChange={(e) => setF('next_maintenance_due', e.target.value)} className="mt-1" /></div>
+            </FormSection>
+
+            {/* 4 — Replacement Schedule */}
+            <FormSection icon={Repeat} title="Replacement Schedule" tint="text-violet-600" open={openSecs.replacement} onToggle={() => toggleSec('replacement')}
+              hint={freqLabel(eqForm.replacement_frequency_days) ? `${freqLabel(eqForm.replacement_frequency_days)}${eqForm.replacement_start_date ? ` · from ${eqForm.replacement_start_date}` : ''}` : 'frequency & dates'}
+              testid="eq-sec-replacement">
+              <div><Label>Replacement Frequency</Label><FreqSelect value={eqForm.replacement_frequency_days} onChange={(v) => setF('replacement_frequency_days', v)} testid="eq-input-replfreq" /></div>
+              <div><Label>Replacement Start Date <span className="text-xs text-muted-foreground">(schedule begins)</span></Label><Input type="date" value={eqForm.replacement_start_date} onChange={(e) => setF('replacement_start_date', e.target.value)} className="mt-1" data-testid="eq-input-replstart" /></div>
+              <div><Label>Last Replacement Date</Label><Input type="date" value={eqForm.last_replacement_date} onChange={(e) => setF('last_replacement_date', e.target.value)} className="mt-1" data-testid="eq-input-lastrepl" /></div>
+              <div><Label>Next Replacement Due <span className="text-xs text-muted-foreground">(blank = auto)</span></Label><Input type="date" value={eqForm.next_replacement_due} onChange={(e) => setF('next_replacement_due', e.target.value)} className="mt-1" /></div>
+            </FormSection>
+
+            {/* 5 — Procurement, Stock & Remarks */}
+            <FormSection icon={ShoppingCart} title="Procurement, Stock & Remarks" tint="text-amber-600" open={openSecs.procurement} onToggle={() => toggleSec('procurement')}
+              hint={[
+                eqForm.procurement_lead_time_days !== '' && eqForm.procurement_lead_time_days != null ? `${eqForm.procurement_lead_time_days}d lead` : null,
+                eqForm.min_stock_level !== '' && eqForm.min_stock_level != null ? `min ${eqForm.min_stock_level}` : null,
+              ].filter(Boolean).join(' · ') || 'lead time, life, reorder level & notes'}
+              testid="eq-sec-procurement">
+              <div><Label>Procurement Lead Time (days)</Label><Input type="number" min="0" value={eqForm.procurement_lead_time_days} onChange={(e) => setF('procurement_lead_time_days', e.target.value)} className="mt-1" data-testid="eq-input-leadtime" /></div>
+              <div><Label>Expected Life / Usage Limit</Label><Input placeholder="e.g. 6 months / 50,000 L" value={eqForm.expected_life} onChange={(e) => setF('expected_life', e.target.value)} className="mt-1" /></div>
+              <div><Label>Minimum Stock / Reorder Level</Label><Input type="number" min="0" value={eqForm.min_stock_level} onChange={(e) => setF('min_stock_level', e.target.value)} className="mt-1" data-testid="eq-input-minstock" /></div>
+              <div className="sm:col-span-2"><Label>Remarks / Maintenance Instructions</Label><Textarea rows={2} value={eqForm.remarks} onChange={(e) => setF('remarks', e.target.value)} className="mt-1" /></div>
+            </FormSection>
+
+            {/* 6 — Vendor Associations */}
+            <FormSection icon={Users} title="Vendor Associations" tint="text-rose-600" open={openSecs.vendors} onToggle={() => toggleSec('vendors')}
+              hint={eqForm.vendors.length ? `${eqForm.vendors.length} vendor${eqForm.vendors.length === 1 ? '' : 's'} linked` : 'link suppliers, prices & AMC'}
+              testid="eq-sec-vendors">
+              <div className="sm:col-span-2 space-y-3">
+                <div className="flex items-center justify-between">
+                  {eqForm.vendors.length === 0
+                    ? <p className="text-xs text-muted-foreground">No vendors associated yet.</p>
+                    : <p className="text-xs text-muted-foreground">{eqForm.vendors.length} vendor{eqForm.vendors.length === 1 ? '' : 's'}</p>}
+                  <Button size="sm" variant="outline" onClick={() => setEqForm((p) => ({ ...p, vendors: [...p.vendors, { ...EMPTY_VENDOR }] }))} data-testid="eq-add-vendor-btn">
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Add Vendor
+                  </Button>
+                </div>
               {eqForm.vendors.map((v, i) => (
                 <div key={i} className="rounded-lg border p-3 grid grid-cols-1 sm:grid-cols-3 gap-3 relative" data-testid={`eq-vendor-row-${i}`}>
                   <div>
@@ -805,8 +867,9 @@ export default function EquipmentMaster() {
                     <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove
                   </Button>
                 </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </FormSection>
           </div>
 
           <DialogFooter>

@@ -2992,3 +2992,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - check_missed_maintenance(): finds maintenance_slots with date < today (IST), submitted != true, missed_notified != true; groups per tenant+equipment; notifies all admin-role users via notify_users (in-app + email best-effort) with equipment name, missed date list, location; marks slots missed_notified (once-only).
 - Scheduler missed_maintenance_scheduler() registered in server.py startup: runs 30s after boot, then every 6h. Manual admin trigger: POST /api/maintenance/missed-check.
 - Tested: generated daily sheet → yesterday's slot unsubmitted → run 1 {missed:1, alerts:1}, notification doc verified ("⚠ Missed maintenance: …"), run 2 {0,0} dedupe. Test data + notifications cleaned.
+
+## Update — Jun 2026: Equipment form reorganized into collapsible sections
+- New FormSection component (EquipmentMaster.js): icon + title + collapsed-state hint + animated chevron toggle.
+- Six sections: Basic Details (Cog), Hierarchy & Location (Layers, emerald), Maintenance Schedule (CalendarCheck, blue), Replacement Schedule (Repeat, violet), Procurement Stock & Remarks (ShoppingCart, amber), Vendor Associations (Users, rose).
+- Defaults: new equipment opens Basic + Maintenance only; editing auto-expands sections that contain data. Collapsed headers show summaries (e.g. "Weekly · from 2026-06-01", "2 vendors linked").
+- Frontend-only; verified via screenshot (all 6 sections render, collapsed sections hide fields, expand works).

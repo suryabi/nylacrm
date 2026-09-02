@@ -652,7 +652,7 @@ export default function COGSCalculator() {
                   if (data.records_deleted) parts.push(`${data.records_deleted} orphan row${data.records_deleted === 1 ? '' : 's'} removed`);
                   if (data.records_backfilled) parts.push(`${data.records_backfilled} legacy row${data.records_backfilled === 1 ? '' : 's'} re-linked`);
                   alert(parts.length ? parts.join(', ') + '.' : 'Already in sync with SKU Management.');
-                  fetchData();
+                  loadCOGSData();
                 } catch (e) {
                   alert(`Sync failed: ${e?.message || e}`);
                 }
