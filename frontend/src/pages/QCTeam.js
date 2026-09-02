@@ -17,7 +17,7 @@ export default function QCTeam() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', role: '' });
+  const [form, setForm] = useState({ name: '', role: '', designation: '', department: '', phone: '', employee_id: '' });
   const [saving, setSaving] = useState(false);
   const [faceMember, setFaceMember] = useState(null);
   const [pinMember, setPinMember] = useState(null);
@@ -27,7 +27,7 @@ export default function QCTeam() {
       const { data } = await axios.get(`${API_URL}/production/qc-team`, { headers: getAuthHeaders() });
       setMembers(data);
     } catch {
-      toast.error('Failed to load QC team');
+      toast.error('Failed to load factory staff');
     } finally {
       setLoading(false);
     }
@@ -48,7 +48,7 @@ export default function QCTeam() {
       }
       setShowForm(false);
       setEditing(null);
-      setForm({ name: '', role: '' });
+      setForm({ name: '', role: '', designation: '', department: '', phone: '', employee_id: '' });
       fetchMembers();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to save');
@@ -58,7 +58,7 @@ export default function QCTeam() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this QC team member?')) return;
+    if (!window.confirm('Delete this staff member?')) return;
     try {
       await axios.delete(`${API_URL}/production/qc-team/${id}`, { headers: getAuthHeaders() });
       toast.success('Member deleted');
@@ -70,7 +70,7 @@ export default function QCTeam() {
 
   const openEdit = (m) => {
     setEditing(m.id);
-    setForm({ name: m.name, role: m.role || '' });
+    setForm({ name: m.name, role: m.role || '', designation: m.designation || '', department: m.department || '', phone: m.phone || '', employee_id: m.employee_id || '' });
     setShowForm(true);
   };
 
@@ -80,19 +80,19 @@ export default function QCTeam() {
     <div className="p-6 lg:p-8 max-w-[900px] mx-auto space-y-6" data-testid="qc-team-page">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-800">QC Team</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Manage QC inspection team members</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-800">Factory Staff</h1>
+          <p className="text-sm text-slate-500 mt-0.5">All factory staff with roles & designations — QC members keep working in the mobile app</p>
         </div>
-        <button onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', role: '' }); }}
+        <button onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', role: '', designation: '', department: '', phone: '', employee_id: '' }); }}
           className="px-4 py-2 text-sm font-medium text-white bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center gap-1.5"
           data-testid="add-member-btn">
-          <Plus size={14} /> Add Member
+          <Plus size={14} /> Add Staff
         </button>
       </div>
 
       {showForm && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-          <p className="text-sm font-semibold text-slate-800">{editing ? 'Edit' : 'New'} QC Team Member</p>
+          <p className="text-sm font-semibold text-slate-800">{editing ? 'Edit' : 'New'} Staff Member</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="text-[10px] text-slate-500 mb-1 block uppercase tracking-wider">Name *</label>
@@ -101,8 +101,32 @@ export default function QCTeam() {
             </div>
             <div>
               <label className="text-[10px] text-slate-500 mb-1 block uppercase tracking-wider">Role</label>
-              <input value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
-                placeholder="e.g. QC Inspector, QC Lead" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid="member-role-input" />
+              <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white" data-testid="member-role-input">
+                <option value="">Select role…</option>
+                {['QC Inspector', 'QC Lead', 'Production Operator', 'Machine Operator', 'Packing Staff', 'Warehouse Staff', 'Housekeeping', 'Security', 'Supervisor', 'Electrician', 'Maintenance Technician', 'Driver', 'Helper', 'Other'].map(r => <option key={r} value={r}>{r}</option>)}
+                {form.role && !['QC Inspector', 'QC Lead', 'Production Operator', 'Machine Operator', 'Packing Staff', 'Warehouse Staff', 'Housekeeping', 'Security', 'Supervisor', 'Electrician', 'Maintenance Technician', 'Driver', 'Helper', 'Other'].includes(form.role) && <option value={form.role}>{form.role}</option>}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-500 mb-1 block uppercase tracking-wider">Designation</label>
+              <input value={form.designation} onChange={e => setForm(p => ({ ...p, designation: e.target.value }))}
+                placeholder="e.g. Senior Technician, Shift In-charge" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid="member-designation-input" />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-500 mb-1 block uppercase tracking-wider">Department</label>
+              <input value={form.department} onChange={e => setForm(p => ({ ...p, department: e.target.value }))}
+                placeholder="e.g. Production, Quality, Packing" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid="member-department-input" />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-500 mb-1 block uppercase tracking-wider">Phone</label>
+              <input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
+                placeholder="e.g. 98765 43210" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid="member-phone-input" />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-500 mb-1 block uppercase tracking-wider">Employee ID</label>
+              <input value={form.employee_id} onChange={e => setForm(p => ({ ...p, employee_id: e.target.value }))}
+                placeholder="e.g. NAW-042" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid="member-empid-input" />
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -122,8 +146,8 @@ export default function QCTeam() {
       {members.length === 0 ? (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
           <Users className="w-8 h-8 text-amber-400 mx-auto mb-2" />
-          <p className="text-sm text-amber-700 font-medium">No QC team members configured</p>
-          <p className="text-xs text-amber-600 mt-1">Add team members who perform quality inspections</p>
+          <p className="text-sm text-amber-700 font-medium">No factory staff configured</p>
+          <p className="text-xs text-amber-600 mt-1">Add factory staff with their roles and designations — QC members also appear in the defect-tracking mobile app</p>
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -132,6 +156,9 @@ export default function QCTeam() {
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left px-5 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Name</th>
                 <th className="text-left px-5 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Role</th>
+                <th className="text-left px-5 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Designation</th>
+                <th className="text-left px-5 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Department</th>
+                <th className="text-left px-5 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Phone</th>
                 <th className="text-left px-5 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium">Kiosk Login</th>
                 <th className="text-right px-5 py-3 text-[10px] text-slate-500 uppercase tracking-wider font-medium w-40">Actions</th>
               </tr>
@@ -139,8 +166,14 @@ export default function QCTeam() {
             <tbody className="divide-y divide-slate-100">
               {members.map(m => (
                 <tr key={m.id} className="hover:bg-slate-50 transition-colors" data-testid={`member-row-${m.id}`}>
-                  <td className="px-5 py-3 font-medium text-slate-800">{m.name}</td>
+                  <td className="px-5 py-3 font-medium text-slate-800">
+                    {m.name}
+                    {m.employee_id && <span className="block text-[10px] font-normal text-slate-400">{m.employee_id}</span>}
+                  </td>
                   <td className="px-5 py-3 text-slate-500">{m.role || '-'}</td>
+                  <td className="px-5 py-3 text-slate-500">{m.designation || '-'}</td>
+                  <td className="px-5 py-3 text-slate-500">{m.department || '-'}</td>
+                  <td className="px-5 py-3 text-slate-500">{m.phone || '-'}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
                       <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full ${m.has_face ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`} data-testid={`face-status-${m.id}`}>

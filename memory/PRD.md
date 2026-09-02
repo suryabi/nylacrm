@@ -3014,3 +3014,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Extracted FormSection (+SECTION_THEMES, dark-mode aware, columns prop) to components/FormSection.js; EquipmentMaster now imports it (local copy removed).
 - Facilities add/edit dialog reorganized: Basic Details (indigo), Address (emerald), Contact Details (blue), Notes (amber) — collapsed headers show value hints; editing auto-expands sections with data.
 - Verified via screenshots: facilities dialog sections + expand works; equipment form unaffected after refactor.
+
+## Update — Jun 2026: QC Team renamed to Factory Staff (backward compatible)
+- Rename is UI-only: nav item + moduleRegistry label now "Factory Staff"; route /qc-team, moduleKey qc_team, API /api/production/qc-team, collection qc_team ALL unchanged so the QC defect-tracking mobile app keeps working.
+- Backend QCTeamMemberCreate/Update gained OPTIONAL designation, department, phone, employee_id (persisted on create/update; _public_member passes them through; legacy name+role payloads verified working, has_face/has_pin/face_samples untouched).
+- QCTeam.js page: "Factory Staff" header, role dropdown (QC Inspector/Lead, Production/Machine Operator, Packing, Warehouse, Housekeeping, Security, Supervisor, Electrician, Maintenance Technician, Driver, Helper, Other + preserves custom legacy values), designation/department/phone/employee-ID fields, table shows new columns; existing members (Raju/Suresh with face enrolment) render fine.
+- Tested: legacy create/update payloads, new-field create, list response shape, UI screenshot. Test members cleaned.

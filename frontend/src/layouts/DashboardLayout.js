@@ -126,7 +126,7 @@ const productionNavigationGroups = [
       { name: 'QC Live Board', href: '/qc-live-board', icon: Radio, moduleKey: 'qc_live_board', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Admin', 'System Admin'] },
       { name: 'QC Tests', href: '/qc-tests', icon: FlaskConical, moduleKey: 'qc_tests', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'QC Routes', href: '/qc-routes', icon: ArrowRight, moduleKey: 'qc_routes', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
-      { name: 'QC Team', href: '/qc-team', icon: Users, moduleKey: 'qc_team', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
+      { name: 'Factory Staff', href: '/qc-team', icon: Users, moduleKey: 'qc_team', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
       { name: 'Rejection Reasons', href: '/rejection-reasons', icon: AlertTriangle, moduleKey: 'rejection_reasons', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
       { name: 'Rejection Report', href: '/rejection-report', icon: BarChart3, moduleKey: 'rejection_report', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Rejection Cost Config', href: '/production/rejection-cost-config', icon: IndianRupee, moduleKey: 'rejection_cost_config', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },

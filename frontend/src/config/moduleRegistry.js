@@ -111,7 +111,7 @@ export const MODULE_REGISTRY = [
       { key: 'qc_live_board', label: 'QC Live Board', description: 'Real-time QC monitoring board' },
       { key: 'qc_tests', label: 'QC Tests', description: 'Per-batch quality test log with retests' },
       { key: 'qc_routes', label: 'QC Routes', description: 'QC route configuration' },
-      { key: 'qc_team', label: 'QC Team', description: 'QC operator management' },
+      { key: 'qc_team', label: 'Factory Staff', description: 'Factory staff & QC operator management' },
       { key: 'rejection_reasons', label: 'Rejection Reasons', description: 'Rejection reason master' },
       { key: 'rejection_report', label: 'Rejection Report', description: 'Rejection analytics & reports' },
       { key: 'rejection_cost_config', label: 'Rejection Cost Config', description: 'Cost per rejection configuration' },

@@ -1613,10 +1613,18 @@ async def get_production_stats(current_user: dict = Depends(get_current_user)):
 class QCTeamMemberCreate(BaseModel):
     name: str
     role: Optional[str] = None
+    designation: Optional[str] = None
+    department: Optional[str] = None
+    phone: Optional[str] = None
+    employee_id: Optional[str] = None
 
 class QCTeamMemberUpdate(BaseModel):
     name: Optional[str] = None
     role: Optional[str] = None
+    designation: Optional[str] = None
+    department: Optional[str] = None
+    phone: Optional[str] = None
+    employee_id: Optional[str] = None
 
 class QCFaceEnroll(BaseModel):
     descriptors: List[List[float]]   # one or more 128-float face signatures
@@ -1675,6 +1683,10 @@ async def create_qc_team_member(data: QCTeamMemberCreate, current_user: dict = D
         "tenant_id": tenant_id,
         "name": data.name,
         "role": data.role or "",
+        "designation": data.designation or "",
+        "department": data.department or "",
+        "phone": data.phone or "",
+        "employee_id": data.employee_id or "",
         "face_descriptors": [],
         "pin_hash": None,
         "created_at": now,
@@ -1758,6 +1770,10 @@ async def update_qc_team_member(member_id: str, data: QCTeamMemberUpdate, curren
         updates["name"] = data.name
     if data.role is not None:
         updates["role"] = data.role
+    for f in ("designation", "department", "phone", "employee_id"):
+        v = getattr(data, f)
+        if v is not None:
+            updates[f] = v
     await tdb.qc_team.update_one({"id": member_id}, {"$set": updates})
     updated = await tdb.qc_team.find_one({"id": member_id})
     return _public_member(updated)
