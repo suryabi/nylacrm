@@ -2963,3 +2963,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - GET /api/facilities is now readable by all authenticated users (writes still admin-only) so Equipment Master can list options.
 - UI: cascading Location selects (Facility → Floor → Area, downstream resets/disabled until parent picked) in the equipment form; table shows "📍 Facility › Floor › Area" under the equipment name.
 - Tested: create with full chain (names resolved), invalid area → 400, table location line + edit-form prefill verified via screenshot. Test equipment/facility cleaned.
+
+## Update — Jun 2026: Child rollup alerts + location filters (Equipment Master)
+- Rollup: overdueChildCounts walks each overdue item's ancestry (multi-level) → red "N child part(s) overdue" AlertTriangle badge on every ancestor row (overdue = next_maintenance_due or next_replacement_due in the past).
+- Location filters: cascading Facility → Floor → Area selects next to the Type filter (floor/area appear only after upstream picked; downstream resets on change); filters equipment by facility_id/floor_id/area_id.
+- Frontend-only (EquipmentMaster.js). Tested via screenshot: overdue child rolled up to parent machine badge; facility filter 3→2 rows, area filter → 1 row. Test data cleaned.

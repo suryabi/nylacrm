@@ -7,7 +7,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
-import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon, MapPin } from 'lucide-react';
+import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon, MapPin, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -64,6 +64,25 @@ const descendantIds = (items, rootId) => {
     (byParent[cur] || []).forEach((id) => { if (!out.has(id)) { out.add(id); stack.push(id); } });
   }
   return out;
+};
+
+const isOverdue = (e) => (e.next_maintenance_due && daysUntil(e.next_maintenance_due) < 0) || (e.next_replacement_due && daysUntil(e.next_replacement_due) < 0);
+
+// id -> count of overdue descendant parts (multi-level rollup).
+const overdueChildCounts = (items) => {
+  const byId = Object.fromEntries(items.map((i) => [i.id, i]));
+  const counts = {};
+  items.forEach((e) => {
+    if (!isOverdue(e)) return;
+    let pid = e.parent_equipment_id;
+    const seen = new Set();
+    while (pid && byId[pid] && !seen.has(pid)) {
+      counts[pid] = (counts[pid] || 0) + 1;
+      seen.add(pid);
+      pid = byId[pid].parent_equipment_id;
+    }
+  });
+  return counts;
 };
 
 const CameraDialog = ({ open, onClose, onCapture }) => {
@@ -157,6 +176,9 @@ export default function EquipmentMaster() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [facFilter, setFacFilter] = useState('');
+  const [floorFilter, setFloorFilter] = useState('');
+  const [areaFilter, setAreaFilter] = useState('');
   const [showEqForm, setShowEqForm] = useState(false);
   const [editingEq, setEditingEq] = useState(null);
   const [eqForm, setEqForm] = useState(EMPTY_EQ);
@@ -373,8 +395,12 @@ export default function EquipmentMaster() {
     loadAll();
   };
 
+  const overdueByParent = overdueChildCounts(equipment);
   const filtered = buildTree(equipment.filter((e) =>
     (!typeFilter || e.equipment_type_id === typeFilter) &&
+    (!facFilter || e.facility_id === facFilter) &&
+    (!floorFilter || e.floor_id === floorFilter) &&
+    (!areaFilter || e.area_id === areaFilter) &&
     (!search || `${e.name} ${e.make_brand} ${e.model_spec}`.toLowerCase().includes(search.toLowerCase()))));
 
   const overdueM = equipment.filter((e) => daysUntil(e.next_maintenance_due) < 0 && e.next_maintenance_due).length;
@@ -430,6 +456,32 @@ export default function EquipmentMaster() {
                 <option value="">All Types</option>
                 {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
+              <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={facFilter}
+                onChange={(e) => { setFacFilter(e.target.value); setFloorFilter(''); setAreaFilter(''); }} data-testid="eq-facility-filter">
+                <option value="">All Facilities</option>
+                {facilities.map((f) => <option key={f.id} value={f.id}>{f.facility_name}</option>)}
+              </select>
+              {(() => {
+                const selFac = facilities.find((f) => f.id === facFilter);
+                const selFloor = (selFac?.floors || []).find((fl) => fl.id === floorFilter);
+                if (!selFac) return null;
+                return (
+                  <>
+                    <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={floorFilter}
+                      onChange={(e) => { setFloorFilter(e.target.value); setAreaFilter(''); }} data-testid="eq-floor-filter">
+                      <option value="">All Floors</option>
+                      {(selFac.floors || []).map((fl) => <option key={fl.id} value={fl.id}>{fl.name}</option>)}
+                    </select>
+                    {selFloor && (
+                      <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={areaFilter}
+                        onChange={(e) => setAreaFilter(e.target.value)} data-testid="eq-area-filter">
+                        <option value="">All Areas</option>
+                        {(selFloor.areas || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      </select>
+                    )}
+                  </>
+                );
+              })()}
             </div>
             <Card><CardContent className="p-0">
               {loading ? (
@@ -470,6 +522,11 @@ export default function EquipmentMaster() {
                                     {(e.children_count > 0 || e.has_children) && (
                                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-indigo-50 text-indigo-700 border-indigo-200" data-testid={`eq-assembly-${e.name.replace(/\s/g, '-')}`}>
                                         Assembly{e.children_count > 0 ? ` · ${e.children_count} child${e.children_count === 1 ? '' : 'ren'}` : ''}
+                                      </Badge>
+                                    )}
+                                    {overdueByParent[e.id] > 0 && (
+                                      <Badge className="text-[10px] px-1.5 py-0 bg-red-600 text-white" data-testid={`eq-child-overdue-${e.name.replace(/\s/g, '-')}`}>
+                                        <AlertTriangle className="h-3 w-3 mr-1" />{overdueByParent[e.id]} child part{overdueByParent[e.id] === 1 ? '' : 's'} overdue
                                       </Badge>
                                     )}
                                   </p>
