@@ -3009,3 +3009,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — Jun 2026: Colored section headers (equipment form)
 - FormSection now takes color prop with SECTION_THEMES map (header bg, icon, title, border, chevron per palette incl. dark mode): Basic=indigo, Hierarchy & Location=emerald, Maintenance=blue, Replacement=violet, Procurement=amber, Vendors=rose.
 - Verified via screenshot: six distinctly tinted collapsible headers.
+
+## Update — Jun 2026: Facilities form sectioned + shared FormSection
+- Extracted FormSection (+SECTION_THEMES, dark-mode aware, columns prop) to components/FormSection.js; EquipmentMaster now imports it (local copy removed).
+- Facilities add/edit dialog reorganized: Basic Details (indigo), Address (emerald), Contact Details (blue), Notes (amber) — collapsed headers show value hints; editing auto-expands sections with data.
+- Verified via screenshots: facilities dialog sections + expand works; equipment form unaffected after refactor.

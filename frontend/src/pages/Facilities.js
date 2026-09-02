@@ -8,8 +8,9 @@ import { Badge } from '../components/ui/badge';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '../components/ui/accordion';
-import { Building2, Plus, Pencil, Trash2, MapPin, Phone, Mail, User, Layers, Paperclip, Download, Upload, FileText, Image as ImageIcon, X, ExternalLink } from 'lucide-react';
+import { Building2, Plus, Pencil, Trash2, MapPin, Phone, Mail, User, Layers, Paperclip, Download, Upload, FileText, Image as ImageIcon, X, ExternalLink, Info, StickyNote } from 'lucide-react';
 import { toast } from 'sonner';
+import { FormSection } from '../components/FormSection';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' });
@@ -48,6 +49,9 @@ export default function Facilities() {
   const [form, setForm] = useState(EMPTY_FAC);
   const [editId, setEditId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const DEFAULT_SECS = { basic: true, address: true, contact: false, notes: false };
+  const [openSecs, setOpenSecs] = useState(DEFAULT_SECS);
+  const toggleSec = (k) => setOpenSecs((s) => ({ ...s, [k]: !s[k] }));
   const [detail, setDetail] = useState(null); // facility for detail dialog
   const [newFloor, setNewFloor] = useState('');
   const [areaInputs, setAreaInputs] = useState({}); // floorId -> text
@@ -74,9 +78,10 @@ export default function Facilities() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setPhotoTarget('general'); setPhotoFilter('all'); }, [detail?.id]);
 
-  const openCreate = () => { setForm(EMPTY_FAC); setEditId(null); setFormOpen(true); };
+  const openCreate = () => { setForm(EMPTY_FAC); setEditId(null); setOpenSecs(DEFAULT_SECS); setFormOpen(true); };
   const openEdit = (f) => {
     setForm({ facility_name: f.facility_name || '', facility_type: f.facility_type || '', google_address: f.google_address || '', contact_person: f.contact_person || '', contact_phone: f.contact_phone || '', contact_email: f.contact_email || '', notes: f.notes || '' });
+    setOpenSecs({ basic: true, address: !!f.google_address, contact: !!(f.contact_person || f.contact_phone || f.contact_email), notes: !!f.notes });
     setEditId(f.id); setFormOpen(true);
   };
 
@@ -244,41 +249,54 @@ export default function Facilities() {
             <DialogDescription>Capture the facility details, address and contact information</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label>Facility Name *</Label>
-              <Input value={form.facility_name} onChange={(e) => setForm({ ...form, facility_name: e.target.value })} placeholder="e.g. Nyla Bangalore Factory" data-testid="facility-name-input" />
-            </div>
-            <div>
-              <Label>Facility Type *</Label>
-              <Select value={form.facility_type} onValueChange={(v) => setForm({ ...form, facility_type: v })}>
-                <SelectTrigger data-testid="facility-type-select"><SelectValue placeholder="Select type" /></SelectTrigger>
-                <SelectContent>
-                  {facilityTypes.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Google Address / Maps Link</Label>
-              <Textarea rows={2} value={form.google_address} onChange={(e) => setForm({ ...form, google_address: e.target.value })} placeholder="Full address or Google Maps link" data-testid="facility-address-input" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+            <FormSection icon={Info} title="Basic Details" color="indigo" open={openSecs.basic} onToggle={() => toggleSec('basic')}
+              hint={[form.facility_name, form.facility_type].filter(Boolean).join(' · ') || 'name & type'} testid="fac-sec-basic">
+              <div>
+                <Label>Facility Name *</Label>
+                <Input value={form.facility_name} onChange={(e) => setForm({ ...form, facility_name: e.target.value })} placeholder="e.g. Nyla Bangalore Factory" className="mt-1" data-testid="facility-name-input" />
+              </div>
+              <div>
+                <Label>Facility Type *</Label>
+                <Select value={form.facility_type} onValueChange={(v) => setForm({ ...form, facility_type: v })}>
+                  <SelectTrigger className="mt-1" data-testid="facility-type-select"><SelectValue placeholder="Select type" /></SelectTrigger>
+                  <SelectContent>
+                    {facilityTypes.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </FormSection>
+
+            <FormSection icon={MapPin} title="Address" color="emerald" columns={1} open={openSecs.address} onToggle={() => toggleSec('address')}
+              hint={form.google_address ? form.google_address.slice(0, 50) : 'google address / maps link'} testid="fac-sec-address">
+              <div>
+                <Label>Google Address / Maps Link</Label>
+                <Textarea rows={2} value={form.google_address} onChange={(e) => setForm({ ...form, google_address: e.target.value })} placeholder="Full address or Google Maps link" className="mt-1" data-testid="facility-address-input" />
+              </div>
+            </FormSection>
+
+            <FormSection icon={Phone} title="Contact Details" color="blue" open={openSecs.contact} onToggle={() => toggleSec('contact')}
+              hint={[form.contact_person, form.contact_phone].filter(Boolean).join(' · ') || 'person, phone & email'} testid="fac-sec-contact">
               <div>
                 <Label>Contact Person</Label>
-                <Input value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} data-testid="facility-contact-person-input" />
+                <Input value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} className="mt-1" data-testid="facility-contact-person-input" />
               </div>
               <div>
                 <Label>Contact Phone</Label>
-                <Input value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} data-testid="facility-contact-phone-input" />
+                <Input value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} className="mt-1" data-testid="facility-contact-phone-input" />
               </div>
-            </div>
-            <div>
-              <Label>Contact Email</Label>
-              <Input value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} data-testid="facility-contact-email-input" />
-            </div>
-            <div>
-              <Label>Notes</Label>
-              <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} data-testid="facility-notes-input" />
-            </div>
+              <div className="sm:col-span-2">
+                <Label>Contact Email</Label>
+                <Input value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} className="mt-1" data-testid="facility-contact-email-input" />
+              </div>
+            </FormSection>
+
+            <FormSection icon={StickyNote} title="Notes" color="amber" columns={1} open={openSecs.notes} onToggle={() => toggleSec('notes')}
+              hint={form.notes ? form.notes.slice(0, 50) : 'remarks & special instructions'} testid="fac-sec-notes">
+              <div>
+                <Label>Notes</Label>
+                <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="mt-1" data-testid="facility-notes-input" />
+              </div>
+            </FormSection>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
