@@ -2998,3 +2998,10 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Six sections: Basic Details (Cog), Hierarchy & Location (Layers, emerald), Maintenance Schedule (CalendarCheck, blue), Replacement Schedule (Repeat, violet), Procurement Stock & Remarks (ShoppingCart, amber), Vendor Associations (Users, rose).
 - Defaults: new equipment opens Basic + Maintenance only; editing auto-expands sections that contain data. Collapsed headers show summaries (e.g. "Weekly · from 2026-06-01", "2 vendors linked").
 - Frontend-only; verified via screenshot (all 6 sections render, collapsed sections hide fields, expand works).
+
+## Update — Jun 2026: Printable maintenance sheet redesigned (A4)
+- buildSheetHtml (MaintenanceProfile.js) reworked to match the user's sample: solid blue banner header (white title + "MONTH | X SCHEDULE" right), single-line meta row (ID, Name, Frequency, Department/Location with blank line), dark navy MON–SUN header band, QR top-right next to the date, green MAINT. DUE label, "Scan today only".
+- Alternate scheduled dates alternate background tints (due-a #e9eff6 / due-b #f7fafc) for quick visual rhythm.
+- Signature space: real sign line + "Initial after completion" under every scheduled cell (footer notes inspectors initial the same line).
+- A4: @page size A4 landscape 7mm margins, mm-based cell sizing (compact mode when 6 week-rows), print-color-adjust exact for banner/tints.
+- Verified via popup screenshot at A4-landscape viewport: 8 due-a + 7 due-b alternating, 15 signature lines, fits one page. Test data cleaned.

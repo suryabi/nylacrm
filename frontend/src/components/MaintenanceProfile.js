@@ -27,54 +27,73 @@ const AuthPhoto = ({ src, alt }) => {
 const buildSheetHtml = (sheet) => {
   const WD = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
   const cells = [];
+  let schedIdx = 0;
   for (let i = 0; i < sheet.lead_blanks; i++) cells.push('<div class="cell blank"></div>');
   sheet.days.forEach((d) => {
     if (d.scheduled) {
-      cells.push(`<div class="cell due"><div class="dn">${d.day}</div><div class="lbl">MAINT. DUE</div><div class="sub">Scan today only</div><img class="qr" src="${d.qr}" alt="QR" /><div class="init">Initial after completion</div></div>`);
+      const alt = schedIdx % 2 === 0 ? 'due-a' : 'due-b';
+      schedIdx += 1;
+      cells.push(`<div class="cell due ${alt}">
+        <div class="top"><span class="dn">${d.day}</span><img class="qr" src="${d.qr}" alt="QR" /></div>
+        <div class="lbl">MAINT. DUE</div>
+        <div class="sub">Scan today only</div>
+        <div class="sig"><div class="sigline"></div><div class="siglbl">Initial after completion</div></div>
+      </div>`);
     } else {
-      cells.push(`<div class="cell"><div class="dn">${d.day}</div><div class="nom">No scheduled<br/>maintenance</div></div>`);
+      cells.push(`<div class="cell"><div class="top"><span class="dn">${d.day}</span></div><div class="nom">No scheduled maintenance</div></div>`);
     }
   });
+  const rows = Math.ceil((sheet.lead_blanks + sheet.days.length) / 7);
   return `<!DOCTYPE html><html><head><title>${sheet.equipment.name} — Maintenance Calendar ${sheet.month_label}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;padding:24px;background:#fff}
-.hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1d4ed8;padding-bottom:12px;margin-bottom:14px}
-.hdr h1{font-size:22px;color:#1d4ed8;letter-spacing:.5px}
-.range{font-size:13px;font-weight:bold;color:#1d4ed8;text-align:right;margin-top:4px}
-.meta{display:grid;grid-template-columns:1fr 1fr;gap:2px 30px;font-size:11.5px;margin-bottom:14px}
+@page{size:A4 landscape;margin:7mm}
+html,body{width:283mm}
+body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;background:#fff}
+.banner{background:#2e5a8f;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:5.5mm 7mm}
+.banner h1{font-size:20px;letter-spacing:.5px;font-weight:800}
+.banner .range{font-size:11px;font-weight:bold;letter-spacing:.5px;white-space:nowrap}
+.meta{display:flex;gap:9mm;flex-wrap:wrap;font-size:11px;padding:4mm 7mm 3mm}
 .meta b{color:#111}
-.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-.dow{font-size:11px;font-weight:bold;color:#1d4ed8;text-align:center;padding:6px 0;border-bottom:2px solid #bfdbfe}
-.cell{border:1px solid #d1d5db;border-radius:4px;min-height:108px;padding:5px;display:flex;flex-direction:column;align-items:center;position:relative}
-.cell.blank{border:none}
-.cell.due{border-color:#1d4ed8;background:#f8fafc}
-.dn{position:absolute;top:4px;left:6px;font-size:13px;font-weight:bold}
-.lbl{margin-top:14px;font-size:9px;font-weight:bold;color:#1d4ed8;letter-spacing:.3px}
-.sub{font-size:7.5px;color:#555}
-.qr{width:58px;height:58px;margin:2px 0}
-.init{width:100%;font-size:7px;color:#475569;background:#e0e7ff;border-radius:3px;text-align:center;padding:2px 0;margin-top:auto}
-.nom{margin-top:34px;font-size:8.5px;color:#94a3b8;text-align:center}
-.ftr{display:flex;justify-content:space-between;gap:20px;margin-top:16px;padding-top:10px;border-top:1px solid #cbd5e1;font-size:10px;color:#475569}
-@media print{body{padding:8px}.cell{min-height:100px}}
+.meta .loc-line{display:inline-block;min-width:36mm;border-bottom:1px solid #64748b;height:3.4mm;vertical-align:bottom}
+.wrap{padding:0 7mm}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid #cbd5e1}
+.dow{background:#1e2b3c;color:#fff;font-size:9.5px;font-weight:bold;text-align:center;padding:2.6mm 0;letter-spacing:.8px}
+.cell{border:1px solid #d8dee7;min-height:${rows >= 6 ? 24 : 29}mm;padding:1.8mm;display:flex;flex-direction:column;background:#fff}
+.cell.blank{background:#fff}
+.cell.due-a{background:#e9eff6}
+.cell.due-b{background:#f7fafc}
+.top{display:flex;justify-content:space-between;align-items:flex-start;min-height:${rows >= 6 ? 12 : 15}mm}
+.dn{font-size:13px;font-weight:800}
+.qr{width:${rows >= 6 ? 13 : 15}mm;height:${rows >= 6 ? 13 : 15}mm}
+.lbl{font-size:8.5px;font-weight:800;color:#1a7f4e;letter-spacing:.3px;margin-top:-${rows >= 6 ? 8 : 10}mm}
+.sub{font-size:7px;color:#555;margin-top:.5mm}
+.nom{font-size:7.5px;color:#94a3b8;margin-top:2mm}
+.sig{margin-top:auto;padding-top:1.5mm}
+.sigline{border-bottom:1px solid #475569;height:${rows >= 6 ? 3 : 4.5}mm;width:85%}
+.siglbl{font-size:6.5px;color:#475569;margin-top:.6mm}
+.ftr{display:flex;justify-content:space-between;gap:10mm;padding:2.5mm 7mm;font-size:9px;color:#475569}
+@media print{.cell,.dow,.banner,.cell.due-a,.cell.due-b{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>
-<div class="hdr">
+<div class="banner">
   <h1>EQUIPMENT MAINTENANCE CALENDAR</h1>
-  <div class="range">${sheet.month_label} | ${sheet.frequency_label.toUpperCase()} SCHEDULE</div>
+  <div class="range">${sheet.month_label} &nbsp;|&nbsp; ${sheet.frequency_label.toUpperCase()} SCHEDULE</div>
 </div>
 <div class="meta">
   <div><b>Equipment ID:</b> ${sheet.equipment.id.slice(0, 8).toUpperCase()}</div>
   <div><b>Equipment Name:</b> ${sheet.equipment.name}</div>
   <div><b>Frequency:</b> ${sheet.frequency_label}</div>
-  <div><b>Department/Location:</b> ${sheet.equipment.location || '____________________'}</div>
+  <div><b>Department/Location:</b> ${sheet.equipment.location ? sheet.equipment.location : '<span class="loc-line"></span>'}</div>
 </div>
+<div class="wrap">
 <div class="grid">
   ${WD.map((w) => `<div class="dow">${w}</div>`).join('')}
   ${cells.join('')}
 </div>
+</div>
 <div class="ftr">
-  <div><b>Instructions:</b> Scan the QR code only on the printed maintenance date. Mark maintenance complete or incomplete and capture live, date-stamped photos. QR codes are valid only on their assigned date.</div>
-  <div>${sheet.equipment.name} | ${sheet.month_label}</div>
+  <div><b>Instructions:</b> Scan the QR code only on the printed maintenance date. Mark maintenance complete or incomplete and capture live, date-stamped photos. Sign on the line after completion — inspectors initial the same line during audits.</div>
+  <div style="white-space:nowrap">${sheet.equipment.name} | ${sheet.month_label}</div>
 </div>
 <script>window.onload=function(){setTimeout(function(){window.print()},400)}</script>
 </body></html>`;
