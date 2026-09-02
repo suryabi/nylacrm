@@ -3005,3 +3005,7 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Signature space: real sign line + "Initial after completion" under every scheduled cell (footer notes inspectors initial the same line).
 - A4: @page size A4 landscape 7mm margins, mm-based cell sizing (compact mode when 6 week-rows), print-color-adjust exact for banner/tints.
 - Verified via popup screenshot at A4-landscape viewport: 8 due-a + 7 due-b alternating, 15 signature lines, fits one page. Test data cleaned.
+
+## Update — Jun 2026: Colored section headers (equipment form)
+- FormSection now takes color prop with SECTION_THEMES map (header bg, icon, title, border, chevron per palette incl. dark mode): Basic=indigo, Hierarchy & Location=emerald, Maintenance=blue, Replacement=violet, Procurement=amber, Vendors=rose.
+- Verified via screenshot: six distinctly tinted collapsible headers.

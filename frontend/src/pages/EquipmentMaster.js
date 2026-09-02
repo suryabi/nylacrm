@@ -36,19 +36,31 @@ const FreqSelect = ({ value, onChange, testid }) => {
   );
 };
 
-const FormSection = ({ icon: Icon, title, hint, open, onToggle, children, testid, tint = 'text-indigo-600' }) => (
-  <div className="rounded-xl border overflow-hidden">
-    <button type="button" onClick={onToggle}
-      className="w-full flex items-center gap-2.5 px-4 py-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/50 dark:hover:bg-slate-900 text-left transition-colors"
-      data-testid={testid}>
-      <Icon className={`h-4 w-4 shrink-0 ${tint}`} />
-      <span className="font-semibold text-sm">{title}</span>
-      {!open && hint && <span className="text-xs text-muted-foreground truncate hidden sm:inline">— {hint}</span>}
-      <ChevronDown className={`h-4 w-4 ml-auto shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-    </button>
-    {open && <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t">{children}</div>}
-  </div>
-);
+const SECTION_THEMES = {
+  indigo: { head: 'bg-indigo-50/80 hover:bg-indigo-100/70 dark:bg-indigo-950/30', icon: 'text-indigo-600', title: 'text-indigo-900 dark:text-indigo-200', border: 'border-indigo-200 dark:border-indigo-900', chev: 'text-indigo-400' },
+  emerald: { head: 'bg-emerald-50/80 hover:bg-emerald-100/70 dark:bg-emerald-950/30', icon: 'text-emerald-600', title: 'text-emerald-900 dark:text-emerald-200', border: 'border-emerald-200 dark:border-emerald-900', chev: 'text-emerald-400' },
+  blue: { head: 'bg-blue-50/80 hover:bg-blue-100/70 dark:bg-blue-950/30', icon: 'text-blue-600', title: 'text-blue-900 dark:text-blue-200', border: 'border-blue-200 dark:border-blue-900', chev: 'text-blue-400' },
+  violet: { head: 'bg-violet-50/80 hover:bg-violet-100/70 dark:bg-violet-950/30', icon: 'text-violet-600', title: 'text-violet-900 dark:text-violet-200', border: 'border-violet-200 dark:border-violet-900', chev: 'text-violet-400' },
+  amber: { head: 'bg-amber-50/80 hover:bg-amber-100/70 dark:bg-amber-950/30', icon: 'text-amber-600', title: 'text-amber-900 dark:text-amber-200', border: 'border-amber-200 dark:border-amber-900', chev: 'text-amber-500' },
+  rose: { head: 'bg-rose-50/80 hover:bg-rose-100/70 dark:bg-rose-950/30', icon: 'text-rose-600', title: 'text-rose-900 dark:text-rose-200', border: 'border-rose-200 dark:border-rose-900', chev: 'text-rose-400' },
+};
+
+const FormSection = ({ icon: Icon, title, hint, open, onToggle, children, testid, color = 'indigo' }) => {
+  const t = SECTION_THEMES[color];
+  return (
+    <div className={`rounded-xl border overflow-hidden ${t.border}`}>
+      <button type="button" onClick={onToggle}
+        className={`w-full flex items-center gap-2.5 px-4 py-3 text-left transition-colors ${t.head}`}
+        data-testid={testid}>
+        <Icon className={`h-4 w-4 shrink-0 ${t.icon}`} />
+        <span className={`font-semibold text-sm ${t.title}`}>{title}</span>
+        {!open && hint && <span className="text-xs text-muted-foreground truncate hidden sm:inline">— {hint}</span>}
+        <ChevronDown className={`h-4 w-4 ml-auto shrink-0 transition-transform duration-200 ${t.chev} ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && <div className={`p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t ${t.border}`}>{children}</div>}
+    </div>
+  );
+};
 
 const EMPTY_EQ = {
   name: '', equipment_type_id: '', make_brand: '', model_spec: '',
@@ -729,7 +741,7 @@ export default function EquipmentMaster() {
             </FormSection>
 
             {/* 2 — Hierarchy & Location */}
-            <FormSection icon={Layers} title="Hierarchy & Location" tint="text-emerald-600" open={openSecs.hierarchy} onToggle={() => toggleSec('hierarchy')}
+            <FormSection icon={Layers} title="Hierarchy & Location" color="emerald" open={openSecs.hierarchy} onToggle={() => toggleSec('hierarchy')}
               hint={[
                 eqForm.parent_equipment_id ? `part of ${(equipment.find((x) => x.id === eqForm.parent_equipment_id) || {}).name || 'parent'}` : null,
                 eqForm.facility_id ? (facilities.find((f) => f.id === eqForm.facility_id) || {}).facility_name : null,
@@ -784,7 +796,7 @@ export default function EquipmentMaster() {
             </FormSection>
 
             {/* 3 — Maintenance Schedule */}
-            <FormSection icon={CalendarCheck} title="Maintenance Schedule" tint="text-blue-600" open={openSecs.maintenance} onToggle={() => toggleSec('maintenance')}
+            <FormSection icon={CalendarCheck} title="Maintenance Schedule" color="blue" open={openSecs.maintenance} onToggle={() => toggleSec('maintenance')}
               hint={freqLabel(eqForm.maintenance_frequency_days) ? `${freqLabel(eqForm.maintenance_frequency_days)}${eqForm.maintenance_start_date ? ` · from ${eqForm.maintenance_start_date}` : ''}` : 'frequency & dates'}
               testid="eq-sec-maintenance">
               <div><Label>Maintenance Frequency</Label><FreqSelect value={eqForm.maintenance_frequency_days} onChange={(v) => setF('maintenance_frequency_days', v)} testid="eq-input-maintfreq" /></div>
@@ -794,7 +806,7 @@ export default function EquipmentMaster() {
             </FormSection>
 
             {/* 4 — Replacement Schedule */}
-            <FormSection icon={Repeat} title="Replacement Schedule" tint="text-violet-600" open={openSecs.replacement} onToggle={() => toggleSec('replacement')}
+            <FormSection icon={Repeat} title="Replacement Schedule" color="violet" open={openSecs.replacement} onToggle={() => toggleSec('replacement')}
               hint={freqLabel(eqForm.replacement_frequency_days) ? `${freqLabel(eqForm.replacement_frequency_days)}${eqForm.replacement_start_date ? ` · from ${eqForm.replacement_start_date}` : ''}` : 'frequency & dates'}
               testid="eq-sec-replacement">
               <div><Label>Replacement Frequency</Label><FreqSelect value={eqForm.replacement_frequency_days} onChange={(v) => setF('replacement_frequency_days', v)} testid="eq-input-replfreq" /></div>
@@ -804,7 +816,7 @@ export default function EquipmentMaster() {
             </FormSection>
 
             {/* 5 — Procurement, Stock & Remarks */}
-            <FormSection icon={ShoppingCart} title="Procurement, Stock & Remarks" tint="text-amber-600" open={openSecs.procurement} onToggle={() => toggleSec('procurement')}
+            <FormSection icon={ShoppingCart} title="Procurement, Stock & Remarks" color="amber" open={openSecs.procurement} onToggle={() => toggleSec('procurement')}
               hint={[
                 eqForm.procurement_lead_time_days !== '' && eqForm.procurement_lead_time_days != null ? `${eqForm.procurement_lead_time_days}d lead` : null,
                 eqForm.min_stock_level !== '' && eqForm.min_stock_level != null ? `min ${eqForm.min_stock_level}` : null,
@@ -817,7 +829,7 @@ export default function EquipmentMaster() {
             </FormSection>
 
             {/* 6 — Vendor Associations */}
-            <FormSection icon={Users} title="Vendor Associations" tint="text-rose-600" open={openSecs.vendors} onToggle={() => toggleSec('vendors')}
+            <FormSection icon={Users} title="Vendor Associations" color="rose" open={openSecs.vendors} onToggle={() => toggleSec('vendors')}
               hint={eqForm.vendors.length ? `${eqForm.vendors.length} vendor${eqForm.vendors.length === 1 ? '' : 's'} linked` : 'link suppliers, prices & AMC'}
               testid="eq-sec-vendors">
               <div className="sm:col-span-2 space-y-3">
