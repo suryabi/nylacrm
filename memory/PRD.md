@@ -2974,3 +2974,16 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - New maintenance_start_date & replacement_start_date fields; _compute_dues falls back to start date when no last date: next_due = (last_date or start_date) + frequency.
 - Table shows the frequency label (e.g. "Weekly") under the Next Maintenance/Replacement chips.
 - Tested: create with Weekly + start 2026-06-01 → next due 2026-06-08; Quarterly → 2026-08-30; edit form prefill + dropdown options verified via screenshot. Test equipment cleaned.
+
+## Update — Jun 2026: QR Maintenance Sheets + scan check-in + audit trail
+- Backend routes/maintenance_sheets.py (prefix /api/maintenance; qrcode lib added to requirements):
+  - GET /equipment/{id}/sheet?month&origin → generates schedule from frequency (daily=all days; others step from maintenance_start_date/last date), upserts maintenance_slots (unique token per equipment+date), returns per-day cells with QR data-URIs pointing to {origin}/maintenance-scan/{token}.
+  - GET /scan/{token} → date-locked (IST): wrong day returns valid:false "This QR code is not valid for today."; right day returns equipment + already_submitted/record.
+  - POST /scan/{token}/photo → camera capture uploads; server burns "DD-Mon-YYYY HH:MM:SS IST" stamp into the JPEG (PIL), stores in object storage (maintenance_photos scope), pending on slot until submit.
+  - POST /scan/{token}/submit {status completed|incomplete, remarks, photo_ids} → immutable maintenance_records doc (equipment, scheduled_date, status, performed_by, completed_at IST, photos, remarks); slot locked (re-submit 409); completed updates equipment last/next maintenance dates.
+  - POST /records/{id}/correction {note, corrected_status?} → append-only corrections audit (who/when); GET /records/{id}/photos/{pid} streams stamped photo.
+- Frontend:
+  - pages/MaintenanceScan.js at public route /maintenance-scan/:token (login-gated via API; shows login prompt): invalid-day screen, Complete/Incomplete choice, live getUserMedia camera capture ONLY (no gallery picker), remarks, submit → locked confirmation.
+  - components/MaintenanceProfile.js: wrench button on each Equipment Master row → dialog with schedule stats, upcoming 10 dates, month picker + Print Sheet (popup replicating the uploaded PDF: blue header "EQUIPMENT MAINTENANCE CALENDAR", MONTH | SCHEDULE, meta rows, MON–SUN grid, MAINT. DUE/Scan today only/QR/Initial after completion cells, instructions footer, auto window.print), records list with photos (auth blob), corrections audit + Add Correction form.
+- Tested end-to-end via curl + screenshots: daily sheet 30 days all QRs; yesterday token → invalid message; today token → photo stamped upload → submit completed → 409 on resubmit → correction logged → profile shows all; equipment last/next dates advanced; print popup layout verified vs PDF. Test data + storage objects cleaned.
+- Fixed during dev: duplicated import/state/button lines in EquipmentMaster.js from a double-applied edit batch (build error) — deduped.

@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon, MapPin, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { MaintenanceProfile } from '../components/MaintenanceProfile';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' });
@@ -234,6 +235,7 @@ export default function EquipmentMaster() {
     finally { setLogUploading(false); }
   };
   const [docsTarget, setDocsTarget] = useState(null);
+  const [maintTarget, setMaintTarget] = useState(null);
   const [docCategory, setDocCategory] = useState('photo');
   const [uploading, setUploading] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
@@ -606,6 +608,11 @@ export default function EquipmentMaster() {
                                   <span className="absolute -top-1 -right-1 h-4 min-w-4 px-0.5 rounded-full bg-[#002FA7] text-white text-[9px] leading-4 text-center font-semibold">{e.attachments.length}</span>
                                 )}
                               </Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Maintenance profile, records & printable QR sheet"
+                                onClick={() => setMaintTarget(e)}
+                                data-testid={`eq-maint-profile-${e.name.replace(/\s/g, '-')}`}>
+                                <Wrench className="h-3.5 w-3.5 text-blue-700" />
+                              </Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7" title="Log maintenance done"
                                 onClick={() => { setLogTarget({ equipment: e, kind: 'maintenance' }); setLogDate(new Date().toISOString().slice(0, 10)); setLogPhotos([]); }}
                                 data-testid={`eq-log-maint-${e.name.replace(/\s/g, '-')}`}>
@@ -669,6 +676,7 @@ export default function EquipmentMaster() {
       </div>
 
       {/* Equipment form */}
+      {maintTarget && <MaintenanceProfile equipment={maintTarget} onClose={() => { setMaintTarget(null); loadAll(); }} />}
       <Dialog open={showEqForm} onOpenChange={setShowEqForm}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="eq-form-dialog">
           <DialogHeader>

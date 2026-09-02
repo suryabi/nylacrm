@@ -33,6 +33,7 @@ from .notification_settings import router as notification_settings_router
 from .invoices import router as invoices_router
 from .stock_movements import router as stock_movements_router
 from .facilities import router as facilities_router
+from .maintenance_sheets import router as maintenance_sheets_router
 from .proposals import router as proposals_router
 from .lead_proposals import router as lead_proposals_router
 from .distributors import router as distributors_router
@@ -122,6 +123,7 @@ routes_router.include_router(lead_proposals_router, tags=["Lead Proposals"])
 routes_router.include_router(distributors_router, prefix="/distributors", tags=["Distributors"])
 routes_router.include_router(stock_movements_router, prefix="/stock-movements", tags=["Stock Movements"])
 routes_router.include_router(facilities_router, prefix="/facilities", tags=["Facilities"])
+routes_router.include_router(maintenance_sheets_router, prefix="/maintenance", tags=["Maintenance Sheets"])
 
 # Task Management (GitHub-style Issue Tracker)
 routes_router.include_router(task_management_router, prefix="/task-management", tags=["Task Management"])
