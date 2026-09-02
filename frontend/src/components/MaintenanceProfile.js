@@ -47,32 +47,32 @@ const buildSheetHtml = (sheet) => {
   return `<!DOCTYPE html><html><head><title>${sheet.equipment.name} — Maintenance Calendar ${sheet.month_label}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-@page{size:A4 landscape;margin:7mm}
-html,body{width:283mm}
+@page{size:A4 landscape;margin:4mm}
+html,body{width:289mm}
 body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;background:#fff}
-.banner{background:#2e5a8f;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:5.5mm 7mm}
-.banner h1{font-size:20px;letter-spacing:.5px;font-weight:800}
+.banner{background:#2e5a8f;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:3mm 4mm}
+.banner h1{font-size:19px;letter-spacing:.5px;font-weight:800}
 .banner .range{font-size:11px;font-weight:bold;letter-spacing:.5px;white-space:nowrap}
-.meta{display:flex;gap:9mm;flex-wrap:wrap;font-size:11px;padding:4mm 7mm 3mm}
+.meta{display:flex;gap:9mm;flex-wrap:wrap;font-size:11px;padding:2.5mm 1mm 2mm}
 .meta b{color:#111}
 .meta .loc-line{display:inline-block;min-width:36mm;border-bottom:1px solid #64748b;height:3.4mm;vertical-align:bottom}
-.wrap{padding:0 7mm}
+.wrap{padding:0}
 .grid{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid #cbd5e1}
-.dow{background:#1e2b3c;color:#fff;font-size:9.5px;font-weight:bold;text-align:center;padding:2.6mm 0;letter-spacing:.8px}
-.cell{border:1px solid #d8dee7;min-height:${rows >= 6 ? 24 : 29}mm;padding:1.8mm;display:flex;flex-direction:column;background:#fff}
+.dow{background:#1e2b3c;color:#fff;font-size:9.5px;font-weight:bold;text-align:center;padding:2.2mm 0;letter-spacing:.8px}
+.cell{border:1px solid #d8dee7;min-height:${rows >= 6 ? 27 : 32}mm;padding:1.6mm;display:flex;flex-direction:column;background:#fff}
 .cell.blank{background:#fff}
 .cell.due-a{background:#e9eff6}
 .cell.due-b{background:#f7fafc}
-.top{display:flex;justify-content:space-between;align-items:flex-start;min-height:${rows >= 6 ? 12 : 15}mm}
-.dn{font-size:13px;font-weight:800}
-.qr{width:${rows >= 6 ? 13 : 15}mm;height:${rows >= 6 ? 13 : 15}mm}
-.lbl{font-size:8.5px;font-weight:800;color:#1a7f4e;letter-spacing:.3px;margin-top:-${rows >= 6 ? 8 : 10}mm}
-.sub{font-size:7px;color:#555;margin-top:.5mm}
+.top{display:flex;justify-content:space-between;align-items:flex-start;min-height:${rows >= 6 ? 14 : 17}mm}
+.dn{font-size:14px;font-weight:800}
+.qr{width:${rows >= 6 ? 15 : 17}mm;height:${rows >= 6 ? 15 : 17}mm}
+.lbl{font-size:9px;font-weight:800;color:#1a7f4e;letter-spacing:.3px;margin-top:-${rows >= 6 ? 9.5 : 12}mm}
+.sub{font-size:7.5px;color:#555;margin-top:.5mm}
 .nom{font-size:7.5px;color:#94a3b8;margin-top:2mm}
 .sig{margin-top:auto;padding-top:1.5mm}
-.sigline{border-bottom:1px solid #475569;height:${rows >= 6 ? 3 : 4.5}mm;width:85%}
-.siglbl{font-size:6.5px;color:#475569;margin-top:.6mm}
-.ftr{display:flex;justify-content:space-between;gap:10mm;padding:2.5mm 7mm;font-size:9px;color:#475569}
+.sigline{border-bottom:1px solid #475569;height:${rows >= 6 ? 3.5 : 5}mm;width:88%}
+.siglbl{font-size:6.8px;color:#475569;margin-top:.6mm}
+.ftr{display:flex;justify-content:space-between;gap:8mm;padding:2mm 1mm;font-size:9px;color:#475569}
 @media print{.cell,.dow,.banner,.cell.due-a,.cell.due-b{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>
 <div class="banner">

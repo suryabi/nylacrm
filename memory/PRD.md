@@ -3020,3 +3020,7 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Backend QCTeamMemberCreate/Update gained OPTIONAL designation, department, phone, employee_id (persisted on create/update; _public_member passes them through; legacy name+role payloads verified working, has_face/has_pin/face_samples untouched).
 - QCTeam.js page: "Factory Staff" header, role dropdown (QC Inspector/Lead, Production/Machine Operator, Packing, Warehouse, Housekeeping, Security, Supervisor, Electrician, Maintenance Technician, Driver, Helper, Other + preserves custom legacy values), designation/department/phone/employee-ID fields, table shows new columns; existing members (Raju/Suresh with face enrolment) render fine.
 - Tested: legacy create/update payloads, new-field create, list response shape, UI screenshot. Test members cleaned.
+
+## Update — Jun 2026: Sheet margins tightened + kiosk onboarding gap highlights
+- Printable sheet: @page margin 7mm→4mm, side paddings removed (banner 3mm/4mm, meta/footer flush), cells grew (min-height 29→32mm, QR 15→17mm; compact 6-row mode 24→27mm/13→15mm). Verified full-bleed A4 landscape render.
+- Factory Staff: amber banner "N staff can't log in to the QC kiosk yet" listing names when a member has neither face nor PIN; their row is amber-tinted with an "Onboarding pending" chip. Verified via screenshot (Suresh flagged, Raju with Face(7)+PIN not flagged).

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { Plus, Pencil, Trash2, Loader2, Users, X, Check, ScanFace, KeyRound, CircleCheck } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Users, X, Check, ScanFace, KeyRound, CircleCheck, AlertTriangle } from 'lucide-react';
 import { FaceEnrollModal, PinModal } from '../components/qc/FaceEnrollModal';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -76,6 +76,8 @@ export default function QCTeam() {
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>;
 
+  const missingKiosk = members.filter(m => !m.has_face && !m.has_pin);
+
   return (
     <div className="p-6 lg:p-8 max-w-[900px] mx-auto space-y-6" data-testid="qc-team-page">
       <div className="flex items-center justify-between">
@@ -89,6 +91,18 @@ export default function QCTeam() {
           <Plus size={14} /> Add Staff
         </button>
       </div>
+
+      {missingKiosk.length > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 flex items-start gap-2.5" data-testid="kiosk-gap-banner">
+          <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+          <div className="text-sm">
+            <p className="font-semibold text-amber-800">{missingKiosk.length} staff member{missingKiosk.length === 1 ? '' : 's'} can't log in to the QC kiosk yet</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              No face or PIN enrolled: <span className="font-medium">{missingKiosk.map(m => m.name).join(', ')}</span>. Use the <ScanFace size={11} className="inline -mt-0.5" /> or <KeyRound size={11} className="inline -mt-0.5" /> buttons on their row to complete onboarding.
+            </p>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
@@ -164,8 +178,10 @@ export default function QCTeam() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {members.map(m => (
-                <tr key={m.id} className="hover:bg-slate-50 transition-colors" data-testid={`member-row-${m.id}`}>
+              {members.map(m => {
+                const gap = !m.has_face && !m.has_pin;
+                return (
+                <tr key={m.id} className={`${gap ? 'bg-amber-50/70 hover:bg-amber-50' : 'hover:bg-slate-50'} transition-colors`} data-testid={`member-row-${m.id}`}>
                   <td className="px-5 py-3 font-medium text-slate-800">
                     {m.name}
                     {m.employee_id && <span className="block text-[10px] font-normal text-slate-400">{m.employee_id}</span>}
@@ -182,6 +198,11 @@ export default function QCTeam() {
                       <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full ${m.has_pin ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>
                         <KeyRound size={11} /> PIN
                       </span>
+                      {gap && (
+                        <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium" data-testid={`kiosk-gap-${m.id}`}>
+                          <AlertTriangle size={11} /> Onboarding pending
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-5 py-3 text-right">
@@ -201,7 +222,8 @@ export default function QCTeam() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
