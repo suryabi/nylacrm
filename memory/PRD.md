@@ -2968,3 +2968,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Rollup: overdueChildCounts walks each overdue item's ancestry (multi-level) → red "N child part(s) overdue" AlertTriangle badge on every ancestor row (overdue = next_maintenance_due or next_replacement_due in the past).
 - Location filters: cascading Facility → Floor → Area selects next to the Type filter (floor/area appear only after upstream picked; downstream resets on change); filters equipment by facility_id/floor_id/area_id.
 - Frontend-only (EquipmentMaster.js). Tested via screenshot: overdue child rolled up to parent machine badge; facility filter 3→2 rows, area filter → 1 row. Test data cleaned.
+
+## Update — Jun 2026: Frequency dropdowns + schedule start dates (Equipment Master)
+- Maintenance & Replacement Frequency are now dropdowns: Daily(1), Alternate Days(2), Weekly(7), Every 10 days(10), Bi-Weekly(14), Monthly(30), Quarterly(90); "No schedule" and a "Every N days (custom)" option preserves pre-existing custom values. Days stored as ints (no schema change).
+- New maintenance_start_date & replacement_start_date fields; _compute_dues falls back to start date when no last date: next_due = (last_date or start_date) + frequency.
+- Table shows the frequency label (e.g. "Weekly") under the Next Maintenance/Replacement chips.
+- Tested: create with Weekly + start 2026-06-01 → next due 2026-06-08; Quarterly → 2026-08-30; edit form prefill + dropdown options verified via screenshot. Test equipment cleaned.

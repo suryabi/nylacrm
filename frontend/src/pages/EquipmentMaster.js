@@ -13,9 +13,32 @@ import { toast } from 'sonner';
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' });
 
+const FREQ_OPTIONS = [
+  { label: 'Daily', value: 1 },
+  { label: 'Alternate Days', value: 2 },
+  { label: 'Weekly', value: 7 },
+  { label: 'Every 10 days', value: 10 },
+  { label: 'Bi-Weekly', value: 14 },
+  { label: 'Monthly', value: 30 },
+  { label: 'Quarterly', value: 90 },
+];
+const freqLabel = (days) => (FREQ_OPTIONS.find((o) => o.value === Number(days)) || {}).label || (days ? `Every ${days} days` : null);
+
+const FreqSelect = ({ value, onChange, testid }) => {
+  const known = FREQ_OPTIONS.some((o) => String(o.value) === String(value));
+  return (
+    <select className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 text-sm" value={value === '' || value == null ? '' : String(value)} onChange={(e) => onChange(e.target.value)} data-testid={testid}>
+      <option value="">No schedule</option>
+      {FREQ_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      {!known && value !== '' && value != null && <option value={String(value)}>Every {value} days (custom)</option>}
+    </select>
+  );
+};
+
 const EMPTY_EQ = {
   name: '', equipment_type_id: '', make_brand: '', model_spec: '',
   maintenance_frequency_days: '', replacement_frequency_days: '', procurement_lead_time_days: '',
+  maintenance_start_date: '', replacement_start_date: '',
   last_maintenance_date: '', next_maintenance_due: '', last_replacement_date: '', next_replacement_due: '',
   expected_life: '', min_stock_level: '', remarks: '', vendors: [],
   parent_equipment_id: '', has_children: false,
@@ -330,6 +353,7 @@ export default function EquipmentMaster() {
       procurement_lead_time_days: e.procurement_lead_time_days ?? '', min_stock_level: e.min_stock_level ?? '',
       last_maintenance_date: e.last_maintenance_date || '', next_maintenance_due: e.next_maintenance_due || '',
       last_replacement_date: e.last_replacement_date || '', next_replacement_due: e.next_replacement_due || '',
+      maintenance_start_date: e.maintenance_start_date || '', replacement_start_date: e.replacement_start_date || '',
       vendors: (e.vendors || []).map((v) => ({ ...EMPTY_VENDOR, ...v, lead_time_days: v.lead_time_days ?? '', last_purchase_price: v.last_purchase_price ?? '' })),
     });
     setShowEqForm(true);
@@ -360,6 +384,7 @@ export default function EquipmentMaster() {
         min_stock_level: eqForm.min_stock_level === '' ? null : parseInt(eqForm.min_stock_level),
         last_maintenance_date: eqForm.last_maintenance_date || null, next_maintenance_due: eqForm.next_maintenance_due || null,
         last_replacement_date: eqForm.last_replacement_date || null, next_replacement_due: eqForm.next_replacement_due || null,
+        maintenance_start_date: eqForm.maintenance_start_date || null, replacement_start_date: eqForm.replacement_start_date || null,
         vendors: eqForm.vendors.filter((v) => v.vendor_id).map((v) => ({
           ...v,
           lead_time_days: v.lead_time_days === '' ? null : parseInt(v.lead_time_days),
@@ -558,10 +583,12 @@ export default function EquipmentMaster() {
                             </td>
                             <td className="px-4 py-3">
                               <DueChip date={e.next_maintenance_due} testid={`eq-maint-due-${e.name.replace(/\s/g, '-')}`} />
+                              {freqLabel(e.maintenance_frequency_days) && <p className="text-[11px] text-muted-foreground mt-0.5">{freqLabel(e.maintenance_frequency_days)}</p>}
                               {e.last_maintenance_date && <p className="text-[11px] text-muted-foreground mt-0.5">Last: {e.last_maintenance_date}</p>}
                             </td>
                             <td className="px-4 py-3">
                               <DueChip date={e.next_replacement_due} testid={`eq-repl-due-${e.name.replace(/\s/g, '-')}`} />
+                              {freqLabel(e.replacement_frequency_days) && <p className="text-[11px] text-muted-foreground mt-0.5">{freqLabel(e.replacement_frequency_days)}</p>}
                               {orderFlag && (
                                 <Badge className="mt-1 bg-red-600 text-white block w-fit" data-testid={`eq-order-now-${e.name.replace(/\s/g, '-')}`}>
                                   <ShoppingCart className="h-3 w-3 mr-1" /> Order now
@@ -708,8 +735,10 @@ export default function EquipmentMaster() {
                 })()}
               </div>
             </div>
-            <div><Label>Maintenance Frequency (days)</Label><Input type="number" min="0" value={eqForm.maintenance_frequency_days} onChange={(e) => setF('maintenance_frequency_days', e.target.value)} className="mt-1" data-testid="eq-input-maintfreq" /></div>
-            <div><Label>Replacement Frequency (days)</Label><Input type="number" min="0" value={eqForm.replacement_frequency_days} onChange={(e) => setF('replacement_frequency_days', e.target.value)} className="mt-1" data-testid="eq-input-replfreq" /></div>
+            <div><Label>Maintenance Frequency</Label><FreqSelect value={eqForm.maintenance_frequency_days} onChange={(v) => setF('maintenance_frequency_days', v)} testid="eq-input-maintfreq" /></div>
+            <div><Label>Replacement Frequency</Label><FreqSelect value={eqForm.replacement_frequency_days} onChange={(v) => setF('replacement_frequency_days', v)} testid="eq-input-replfreq" /></div>
+            <div><Label>Maintenance Start Date <span className="text-xs text-muted-foreground">(schedule begins)</span></Label><Input type="date" value={eqForm.maintenance_start_date} onChange={(e) => setF('maintenance_start_date', e.target.value)} className="mt-1" data-testid="eq-input-maintstart" /></div>
+            <div><Label>Replacement Start Date <span className="text-xs text-muted-foreground">(schedule begins)</span></Label><Input type="date" value={eqForm.replacement_start_date} onChange={(e) => setF('replacement_start_date', e.target.value)} className="mt-1" data-testid="eq-input-replstart" /></div>
             <div><Label>Last Maintenance Date</Label><Input type="date" value={eqForm.last_maintenance_date} onChange={(e) => setF('last_maintenance_date', e.target.value)} className="mt-1" data-testid="eq-input-lastmaint" /></div>
             <div><Label>Next Maintenance Due <span className="text-xs text-muted-foreground">(blank = auto)</span></Label><Input type="date" value={eqForm.next_maintenance_due} onChange={(e) => setF('next_maintenance_due', e.target.value)} className="mt-1" /></div>
             <div><Label>Last Replacement Date</Label><Input type="date" value={eqForm.last_replacement_date} onChange={(e) => setF('last_replacement_date', e.target.value)} className="mt-1" data-testid="eq-input-lastrepl" /></div>

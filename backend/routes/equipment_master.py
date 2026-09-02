@@ -41,6 +41,8 @@ class EquipmentIn(BaseModel):
     model_spec: Optional[str] = None
     maintenance_frequency_days: Optional[int] = None
     replacement_frequency_days: Optional[int] = None
+    maintenance_start_date: Optional[str] = None   # YYYY-MM-DD
+    replacement_start_date: Optional[str] = None
     procurement_lead_time_days: Optional[int] = None
     last_maintenance_date: Optional[str] = None   # YYYY-MM-DD
     next_maintenance_due: Optional[str] = None
@@ -82,11 +84,13 @@ def _add_days(date_str: Optional[str], days: Optional[int]) -> Optional[str]:
 
 
 def _compute_dues(doc: dict):
-    """Fill next-due dates from last date + frequency when not explicitly set."""
+    """Fill next-due dates from (last date or schedule start date) + frequency when not explicitly set."""
     if not doc.get("next_maintenance_due"):
-        doc["next_maintenance_due"] = _add_days(doc.get("last_maintenance_date"), doc.get("maintenance_frequency_days"))
+        base = doc.get("last_maintenance_date") or doc.get("maintenance_start_date")
+        doc["next_maintenance_due"] = _add_days(base, doc.get("maintenance_frequency_days"))
     if not doc.get("next_replacement_due"):
-        doc["next_replacement_due"] = _add_days(doc.get("last_replacement_date"), doc.get("replacement_frequency_days"))
+        base = doc.get("last_replacement_date") or doc.get("replacement_start_date")
+        doc["next_replacement_due"] = _add_days(base, doc.get("replacement_frequency_days"))
 
 
 # ── Equipment Types (parent master) ──────────────────────────
