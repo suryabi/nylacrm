@@ -2987,3 +2987,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
   - components/MaintenanceProfile.js: wrench button on each Equipment Master row → dialog with schedule stats, upcoming 10 dates, month picker + Print Sheet (popup replicating the uploaded PDF: blue header "EQUIPMENT MAINTENANCE CALENDAR", MONTH | SCHEDULE, meta rows, MON–SUN grid, MAINT. DUE/Scan today only/QR/Initial after completion cells, instructions footer, auto window.print), records list with photos (auth blob), corrections audit + Add Correction form.
 - Tested end-to-end via curl + screenshots: daily sheet 30 days all QRs; yesterday token → invalid message; today token → photo stamped upload → submit completed → 409 on resubmit → correction logged → profile shows all; equipment last/next dates advanced; print popup layout verified vs PDF. Test data + storage objects cleaned.
 - Fixed during dev: duplicated import/state/button lines in EquipmentMaster.js from a double-applied edit batch (build error) — deduped.
+
+## Update — Jun 2026: Missed maintenance day alerts
+- check_missed_maintenance(): finds maintenance_slots with date < today (IST), submitted != true, missed_notified != true; groups per tenant+equipment; notifies all admin-role users via notify_users (in-app + email best-effort) with equipment name, missed date list, location; marks slots missed_notified (once-only).
+- Scheduler missed_maintenance_scheduler() registered in server.py startup: runs 30s after boot, then every 6h. Manual admin trigger: POST /api/maintenance/missed-check.
+- Tested: generated daily sheet → yesterday's slot unsubmitted → run 1 {missed:1, alerts:1}, notification doc verified ("⚠ Missed maintenance: …"), run 2 {0,0} dedupe. Test data + notifications cleaned.

@@ -11124,6 +11124,11 @@ async def startup_event():
         asyncio.create_task(_water_intel_scheduler())
     except Exception as e:
         logger.error(f"Failed to start Water Intelligence scheduler: {e}")
+    try:
+        from routes.maintenance_sheets import missed_maintenance_scheduler as _missed_maint
+        asyncio.create_task(_missed_maint())
+    except Exception as e:
+        logger.error(f"Failed to start missed-maintenance scheduler: {e}")
 
 
 async def _ensure_txn_indexes_bg():
