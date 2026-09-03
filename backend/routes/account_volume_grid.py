@@ -88,6 +88,7 @@ class PrefsIn(BaseModel):
     hidden: Optional[List[str]] = None
     widths: Optional[Dict[str, Any]] = None
     order: Optional[List[str]] = None
+    filters: Optional[Dict[str, Any]] = None
 
 
 @router.get("/preferences")
@@ -96,7 +97,8 @@ async def get_preferences(current_user: dict = Depends(get_current_user)):
         {"tenant_id": get_current_tenant_id(), "user_id": current_user.get("id")}, {"_id": 0})
     if not doc:
         return {"found": False}
-    return {"found": True, "hidden": doc.get("hidden"), "widths": doc.get("widths"), "order": doc.get("order")}
+    return {"found": True, "hidden": doc.get("hidden"), "widths": doc.get("widths"),
+            "order": doc.get("order"), "filters": doc.get("filters")}
 
 
 @router.put("/preferences")
@@ -104,7 +106,8 @@ async def save_preferences(payload: PrefsIn, current_user: dict = Depends(get_cu
     await db.volume_grid_user_prefs.update_one(
         {"tenant_id": get_current_tenant_id(), "user_id": current_user.get("id")},
         {"$set": {"hidden": payload.hidden or [], "widths": payload.widths or {},
-                  "order": payload.order or [], "updated_at": _now()}},
+                  "order": payload.order or [], "filters": payload.filters or {},
+                  "updated_at": _now()}},
         upsert=True)
     return {"success": True}
 

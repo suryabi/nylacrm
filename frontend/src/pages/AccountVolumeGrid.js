@@ -187,6 +187,11 @@ export default function AccountVolumeGrid() {
           if (Array.isArray(d.hidden)) setHidden(d.hidden);
           if (d.widths && typeof d.widths === 'object') setColWidths(d.widths);
           if (Array.isArray(d.order)) setColOrder(d.order);
+          if (d.filters && typeof d.filters === 'object') {
+            if (d.filters.territory) setTerritoryFilter(d.filters.territory);
+            if (d.filters.state) setStateFilter(d.filters.state);
+            if (d.filters.city) setCityFilter(d.filters.city);
+          }
         }
       } catch { /* keep local defaults */ }
       prefsLoaded.current = true;
@@ -201,10 +206,13 @@ export default function AccountVolumeGrid() {
     prefsSaveTimer.current = setTimeout(() => {
       fetch(`${API_URL}/api/account-volume-grid/preferences`, {
         method: 'PUT', headers: authHeaders(),
-        body: JSON.stringify({ hidden, widths: colWidths, order: colOrder }),
+        body: JSON.stringify({
+          hidden, widths: colWidths, order: colOrder,
+          filters: { territory: territoryFilter, state: stateFilter, city: cityFilter },
+        }),
       }).catch(() => {});
     }, 800);
-  }, [hidden, colWidths, colOrder]);
+  }, [hidden, colWidths, colOrder, territoryFilter, stateFilter, cityFilter]);
 
   // Freeze panes: measure header row height so the summary row can stick just below it
   const headerRowRef = useRef(null);

@@ -3087,3 +3087,7 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - 4 PR-populated columns marked fromPR: print_request_created_date, first_order_requested_date, first_order_qty_crates, expected_monthly_volume_crates → distinct dark-teal header (#0F4C46, teal underline, tooltip "Populated from the print request").
 - Excel export updated (headers + values; totals indexes 17,18,19; custom offset 21).
 - Verified: API values (500 qty), UI screenshot (teal headers, old col gone), export headers + EMV total.
+
+## Update — Jun 2026: Saved grid filters (per user) in Volume Tracking
+- prefs endpoints now also persist filters {territory, state, city}; frontend restores them on mount and saves via same debounced PUT (deps include the 3 filter states).
+- Verified: set Telangana → localStorage-cleared reload restored the filter (7 rows). Test filter prefs reset after.
