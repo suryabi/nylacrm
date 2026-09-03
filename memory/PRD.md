@@ -3097,3 +3097,6 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 
 ## Update — Jun 2026: First Delivery Date header color
 - first_delivery_date flagged fromDelivery → header bg #7A3B10 (burnt orange) with amber (#F59E0B) underline. Verified via computed style + screenshot.
+
+## Update — Jun 2026: "How this view works" help refreshed
+- VolumeGridHelp.js updated: new PR-sourced columns documented, header colour legend (teal/purple/orange/navy), overdue first-order flag, saved per-user view & filters, Needs-attention now includes overdue orders. Verified via dialog screenshot.
