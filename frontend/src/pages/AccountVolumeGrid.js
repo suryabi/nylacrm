@@ -21,7 +21,7 @@ const DEFAULT_HIDDEN = ['order_count', 'onboarded_date', 'last_order_sku', 'acco
 
 const BASE_COLUMNS = [
   { key: 'account_name', label: 'Account Name', type: 'text' },
-  { key: 'onboarded_date', label: 'On-boarded Date', type: 'date' },
+  { key: 'onboarded_date', label: 'On-boarded Date', type: 'date', fromAccount: true },
   { key: 'print_request_created_date', label: 'Print Request Created Date', type: 'date', fromPR: true },
   { key: 'first_order_requested_date', label: 'First Order Requested Date', type: 'date', fromPR: true },
   { key: 'first_order_qty_crates', label: 'First Order Quantity (Crates)', type: 'number', fromPR: true },
@@ -722,7 +722,7 @@ export default function AccountVolumeGrid() {
               <tr ref={headerRowRef} className="bg-[#0b192c]">
                 {visibleColumns.map((c) => (
                   <th key={c.key}
-                    className={`${TH} ${numericCol(c) ? 'text-right' : 'text-left'} cursor-pointer transition-colors hover:text-white sticky top-0 ${c.fromPR ? 'bg-[#0F4C46] shadow-[inset_0_-2px_0_#14B8A6]' : 'bg-[#0b192c] shadow-[inset_0_-1px_0_#1e293b]'} ${c.key === 'account_name' ? 'left-0 z-30 shadow-[inset_-1px_0_0_#334155,inset_0_-1px_0_#1e293b]' : 'z-20'}`}
+                    className={`${TH} ${numericCol(c) ? 'text-right' : 'text-left'} cursor-pointer transition-colors hover:text-white sticky top-0 ${c.fromPR ? 'bg-[#0F4C46] shadow-[inset_0_-2px_0_#14B8A6]' : c.fromAccount ? 'bg-[#3B2E6E] shadow-[inset_0_-2px_0_#8B5CF6]' : 'bg-[#0b192c] shadow-[inset_0_-1px_0_#1e293b]'} ${c.key === 'account_name' ? 'left-0 z-30 shadow-[inset_-1px_0_0_#334155,inset_0_-1px_0_#1e293b]' : 'z-20'}`}
                     title={c.fromPR ? 'Populated from the print request' : undefined}
                     onClick={() => toggleSort(c.key)}
                     onDragOver={(e) => e.preventDefault()}

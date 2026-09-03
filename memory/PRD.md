@@ -3091,3 +3091,6 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — Jun 2026: Saved grid filters (per user) in Volume Tracking
 - prefs endpoints now also persist filters {territory, state, city}; frontend restores them on mount and saves via same debounced PUT (deps include the 3 filter states).
 - Verified: set Telangana → localStorage-cleared reload restored the filter (7 rows). Test filter prefs reset after.
+
+## Update — Jun 2026: On-boarded Date header color
+- BASE_COLUMNS onboarded_date flagged fromAccount → header bg #3B2E6E with violet (#8B5CF6) underline; th logic: fromPR teal > fromAccount purple > default navy. Verified via computed-style check + screenshot.
