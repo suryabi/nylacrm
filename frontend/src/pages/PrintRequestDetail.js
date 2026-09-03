@@ -20,7 +20,7 @@ import {
 import {
   ArrowLeft, Printer, Tag, Calendar, Users, Building2, FileText,
   Download, Loader2, Pencil, Trash2, History, ExternalLink, Sparkles, FileCheck2,
-  Boxes, TrendingUp, Gauge,
+  Boxes, TrendingUp, Gauge, Eye,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTenantConfig } from '../context/TenantConfigContext';
@@ -68,6 +68,8 @@ export default function PrintRequestDetail() {
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
+  const [thumbs, setThumbs] = useState({});
+  const [preview, setPreview] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -160,6 +162,43 @@ export default function PrintRequestDetail() {
     } finally { setDownloadingId(null); }
   };
 
+  const isImage = (f) => (f?.content_type || '').startsWith('image/');
+  const isPdf = (f) => (f?.content_type || '') === 'application/pdf';
+
+  const fetchBlobUrl = async (file) => {
+    const res = await axios.get(`${API}/marketing-requests/files/${file.id}`, { headers: HEAD(), responseType: 'blob' });
+    return window.URL.createObjectURL(new Blob([res.data], { type: file.content_type || 'application/octet-stream' }));
+  };
+
+  useEffect(() => {
+    const imgs = (pr?.approved_design_files || []).filter(isImage);
+    if (!imgs.length) return;
+    let cancelled = false;
+    (async () => {
+      for (const f of imgs) {
+        try {
+          const url = await fetchBlobUrl(f);
+          if (cancelled) { window.URL.revokeObjectURL(url); return; }
+          setThumbs((p) => ({ ...p, [f.id]: url }));
+        } catch { /* icon fallback */ }
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pr]);
+
+  const openPreview = async (file) => {
+    if (thumbs[file.id]) { setPreview({ file, url: thumbs[file.id] }); return; }
+    setPreview({ file, url: null });
+    try {
+      const url = await fetchBlobUrl(file);
+      setPreview({ file, url });
+    } catch {
+      toast.error('Could not load preview');
+      setPreview(null);
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>;
   if (!pr) return null;
 
@@ -229,18 +268,39 @@ export default function PrintRequestDetail() {
               {files.length === 0 && (pr.approved_design_links || []).length === 0 ? (
                 <p className="text-sm text-muted-foreground">No approved design files were attached.</p>
               ) : (
-                <div className="space-y-2">
-                  {files.map((f) => (
-                    <div key={f.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2" data-testid={`print-file-${f.id}`}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FileText className="h-4 w-4 text-slate-400 shrink-0" />
-                        <span className="text-sm text-slate-700 truncate">{f.filename}</span>
-                      </div>
-                      <Button variant="ghost" size="sm" onClick={() => downloadFile(f)} disabled={downloadingId === f.id} data-testid={`print-file-dl-${f.id}`}>
-                        {downloadingId === f.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                      </Button>
+                <div className="space-y-3">
+                  {files.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {files.map((f) => (
+                        <div key={f.id} className="group rounded-xl border border-slate-200 overflow-hidden bg-white" data-testid={`print-file-${f.id}`}>
+                          <button
+                            type="button"
+                            className="relative w-full h-32 bg-slate-50 flex items-center justify-center overflow-hidden"
+                            onClick={() => (isImage(f) || isPdf(f)) ? openPreview(f) : downloadFile(f)}
+                            title={(isImage(f) || isPdf(f)) ? 'Click to preview' : 'Click to download'}
+                            data-testid={`print-file-preview-${f.id}`}
+                          >
+                            {thumbs[f.id] ? (
+                              <img src={thumbs[f.id]} alt={f.filename} className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" />
+                            ) : (
+                              <FileText className="h-10 w-10 text-slate-300" />
+                            )}
+                            {(isImage(f) || isPdf(f)) && (
+                              <span className="absolute inset-0 bg-black/0 group-hover:bg-black/35 transition-colors flex items-center justify-center">
+                                <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </span>
+                            )}
+                          </button>
+                          <div className="flex items-center justify-between gap-1 px-2.5 py-1.5 border-t border-slate-100">
+                            <span className="text-xs text-slate-700 truncate" title={f.filename}>{f.filename}</span>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0" onClick={() => downloadFile(f)} disabled={downloadingId === f.id} data-testid={`print-file-dl-${f.id}`}>
+                              {downloadingId === f.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                   {(pr.approved_design_links || []).map((lnk, i) => (
                     <a key={i} href={lnk} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm text-emerald-600 hover:bg-emerald-50" data-testid={`print-link-${i}`}>
                       <ExternalLink className="h-4 w-4" /> <span className="truncate">{lnk}</span>
@@ -394,6 +454,30 @@ export default function PrintRequestDetail() {
             <Button variant="outline" onClick={() => setShowDelete(false)} disabled={deleting}>Cancel</Button>
             <Button onClick={confirmDelete} disabled={deleting} className="bg-red-600 hover:bg-red-700" data-testid="print-delete-confirm">
               {deleting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting…</> : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Design preview */}
+      <Dialog open={!!preview} onOpenChange={(o) => { if (!o) setPreview(null); }}>
+        <DialogContent className="max-w-4xl" data-testid="print-preview-dialog">
+          <DialogHeader>
+            <DialogTitle className="truncate pr-8 text-base">{preview?.file?.filename}</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-center bg-slate-50 rounded-lg overflow-auto max-h-[70vh] min-h-[240px]">
+            {!preview?.url ? (
+              <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+            ) : isPdf(preview.file) ? (
+              <iframe src={preview.url} title={preview.file.filename} className="w-full h-[65vh] rounded-lg" />
+            ) : (
+              <img src={preview.url} alt={preview.file.filename} className="max-w-full max-h-[65vh] object-contain" data-testid="print-preview-image" />
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreview(null)}>Close</Button>
+            <Button onClick={() => downloadFile(preview.file)} disabled={downloadingId === preview?.file?.id} className="bg-emerald-600 hover:bg-emerald-700" data-testid="print-preview-download">
+              {downloadingId === preview?.file?.id ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />} Download
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -3100,3 +3100,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 
 ## Update — Jun 2026: "How this view works" help refreshed
 - VolumeGridHelp.js updated: new PR-sourced columns documented, header colour legend (teal/purple/orange/navy), overdue first-order flag, saved per-user view & filters, Needs-attention now includes overdue orders. Verified via dialog screenshot.
+
+## Update — Jun 2026: Approved design thumbnails + preview in Print Request detail
+- PrintRequestDetail.js: approved files render as thumbnail cards (image blob fetched with auth → object URL; non-images show file icon). Click thumb → preview dialog (img, or iframe for PDF) with Download button; non-previewable files download directly. testids: print-file-preview-*, print-preview-dialog, print-preview-image, print-preview-download.
+- BUG FIX: /api/marketing-requests/files/{id} now falls back to design_requests_new_files collection — approved design files from the new design module previously 404'd on download.
+- Verified via seeded PNG on PR-2026-0004: thumbnail rendered, preview dialog opened, full image shown. Test data cleaned.

@@ -407,6 +407,9 @@ async def upload_file(
 async def download_file(file_id: str, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
     row = await _get_file(tenant_id, file_id)
+    if not row:  # approved design files may live in the new design-requests module
+        row = await db.design_requests_new_files.find_one(
+            {"id": file_id, "tenant_id": tenant_id}, {"_id": 0})
     if not row:
         raise HTTPException(404, "File not found")
     try:
