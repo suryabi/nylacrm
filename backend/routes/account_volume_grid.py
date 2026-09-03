@@ -84,6 +84,31 @@ async def _get_config(tenant_id: str) -> dict:
     return doc
 
 
+class PrefsIn(BaseModel):
+    hidden: Optional[List[str]] = None
+    widths: Optional[Dict[str, Any]] = None
+    order: Optional[List[str]] = None
+
+
+@router.get("/preferences")
+async def get_preferences(current_user: dict = Depends(get_current_user)):
+    doc = await db.volume_grid_user_prefs.find_one(
+        {"tenant_id": get_current_tenant_id(), "user_id": current_user.get("id")}, {"_id": 0})
+    if not doc:
+        return {"found": False}
+    return {"found": True, "hidden": doc.get("hidden"), "widths": doc.get("widths"), "order": doc.get("order")}
+
+
+@router.put("/preferences")
+async def save_preferences(payload: PrefsIn, current_user: dict = Depends(get_current_user)):
+    await db.volume_grid_user_prefs.update_one(
+        {"tenant_id": get_current_tenant_id(), "user_id": current_user.get("id")},
+        {"$set": {"hidden": payload.hidden or [], "widths": payload.widths or {},
+                  "order": payload.order or [], "updated_at": _now()}},
+        upsert=True)
+    return {"success": True}
+
+
 @router.get("")
 async def get_grid(
     territory: Optional[str] = None, state: Optional[str] = None,

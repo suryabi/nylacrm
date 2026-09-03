@@ -3065,3 +3065,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
   - Backend GET /api/maintenance/compliance?month=YYYY-MM (maintenance_sheets.py): scores scheduled slots up to today (IST): completed / due; missed = past dates with no record; groups per equipment and per area (Facility › Floor › Area, "No location set" bucket). Returns {month, as_of, overall, equipment[], areas[] weakest-first}.
   - Frontend: month picker + Show Compliance btn (comp-month-input / comp-load-btn), overall + top-3 area KPI cards, weakest-first area bars, per-equipment table (Due/Done/Incomplete/Missed/Score) with color coding (≥85 green, ≥60 amber, else red).
   - Verified E2E: seeded daily equipment, generated sheet, QR-submitted today's slot → overall 17%, per-area 0%/33%, table correct in UI screenshot. Test data cleaned.
+
+## Update — Jun 2026: Per-user saved view preferences in Volume Tracking
+- GET/PUT /api/account-volume-grid/preferences (account_volume_grid.py): stores {hidden, widths, order} in db.volume_grid_user_prefs keyed by tenant_id+user_id (upsert).
+- AccountVolumeGrid.js: fetches prefs on mount (overrides localStorage defaults), debounced (800ms) PUT on any change to hidden/widths/order; localStorage kept only as instant-paint cache. prefsLoaded ref guards against overwriting server prefs before load.
+- Verified: curl save/read-back; UI toggle persisted after localStorage-cleared reload (cross-device simulation). Test prefs cleaned.

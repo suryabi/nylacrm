@@ -172,9 +172,36 @@ export default function AccountVolumeGrid() {
   }, [search, territoryFilter, stateFilter, cityFilter]);
   useEffect(() => { load(); }, [load]);
 
-  useEffect(() => { localStorage.setItem(LS_KEY, JSON.stringify(hidden)); }, [hidden]);
-  useEffect(() => { localStorage.setItem(LS_WIDTHS, JSON.stringify(colWidths)); }, [colWidths]);
-  useEffect(() => { localStorage.setItem(LS_ORDER, JSON.stringify(colOrder)); }, [colOrder]);
+  // Per-user saved view preferences (server-side, survives logins/devices)
+  const prefsLoaded = useRef(false);
+  const prefsSaveTimer = useRef(null);
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(`${API_URL}/api/account-volume-grid/preferences`, { headers: authHeaders() });
+        const d = await r.json();
+        if (d && d.found) {
+          if (Array.isArray(d.hidden)) setHidden(d.hidden);
+          if (d.widths && typeof d.widths === 'object') setColWidths(d.widths);
+          if (Array.isArray(d.order)) setColOrder(d.order);
+        }
+      } catch { /* keep local defaults */ }
+      prefsLoaded.current = true;
+    })();
+  }, []);
+  useEffect(() => {
+    localStorage.setItem(LS_KEY, JSON.stringify(hidden));
+    localStorage.setItem(LS_WIDTHS, JSON.stringify(colWidths));
+    localStorage.setItem(LS_ORDER, JSON.stringify(colOrder));
+    if (!prefsLoaded.current) return;
+    clearTimeout(prefsSaveTimer.current);
+    prefsSaveTimer.current = setTimeout(() => {
+      fetch(`${API_URL}/api/account-volume-grid/preferences`, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({ hidden, widths: colWidths, order: colOrder }),
+      }).catch(() => {});
+    }, 800);
+  }, [hidden, colWidths, colOrder]);
 
   // Freeze panes: measure header row height so the summary row can stick just below it
   const headerRowRef = useRef(null);
