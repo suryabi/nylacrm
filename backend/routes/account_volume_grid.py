@@ -2,7 +2,7 @@
 Auto-computed delivery metrics + manually entered Expected Monthly Volume + custom columns."""
 import uuid
 import re
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Depends
@@ -343,6 +343,15 @@ async def get_grid(
         low_soh = bool(stock_at_hand is not None and monthly and monthly > 0 and stock_at_hand < monthly / 2)
         onb = _parse_dt(a.get("activated_at"))
         age_days = (datetime.now(timezone.utc).replace(tzinfo=None) - onb.replace(tzinfo=None)).days if onb else None
+        fo_req = ((fpr.get("requested_due_date") or "")[:10] or None) if fpr else None
+        fo_overdue_days = None
+        if fo_req and not first_dt:
+            try:
+                delta = (datetime.now(timezone.utc).date() - date.fromisoformat(fo_req)).days
+                if delta > 0:
+                    fo_overdue_days = delta
+            except ValueError:
+                pass
         rows.append({
             "account_id": a["id"],
             "account_code": a.get("account_id"),
@@ -350,7 +359,9 @@ async def get_grid(
             "territory": a.get("territory"), "state": a.get("state"), "city": a.get("city"),
             "onboarded_date": (a.get("activated_at") or "")[:10] or None,
             "first_order_date": ((fpr.get("created_at") or "")[:10] or None) if fpr else None,
-            "first_order_requested_date": ((fpr.get("requested_due_date") or "")[:10] or None) if fpr else None,
+            "first_order_requested_date": fo_req,
+            "first_order_overdue": bool(fo_overdue_days),
+            "first_order_overdue_days": fo_overdue_days,
             "account_age_days": age_days,
             "avg_order_frequency_days": freq,
             "order_count": len(dels),

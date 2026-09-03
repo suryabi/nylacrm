@@ -289,7 +289,7 @@ export default function AccountVolumeGrid() {
   const sortedRows = useMemo(() => {
     const col = allColumns.find((c) => c.key === sort.key) || BASE_COLUMNS[0];
     let base = attentionOnly
-      ? rows.filter((r) => r.low_stock_at_hand || (r.account_age_days != null && r.account_age_days <= 7))
+      ? rows.filter((r) => r.low_stock_at_hand || r.first_order_overdue || (r.account_age_days != null && r.account_age_days <= 7))
       : rows;
     if (newOnly) base = base.filter((r) => r.account_age_days != null && r.account_age_days <= 7);
     if (recencyFilter.length) base = base.filter((r) => recencyFilter.includes(rowTier(r)));
@@ -495,6 +495,14 @@ export default function AccountVolumeGrid() {
     else display = typeof raw === 'number' ? raw.toLocaleString('en-IN') : String(raw);
 
     if (!editable) {
+      if (col.key === 'first_order_requested_date' && row.first_order_overdue) {
+        return (
+          <span className="tabular-nums text-red-700 font-semibold block" data-testid={`vg-fo-overdue-${row.account_code || row.account_id}`}>
+            {display}
+            <span className="block text-[10px] font-medium text-red-500 whitespace-nowrap">{row.first_order_overdue_days}d overdue · no delivery</span>
+          </span>
+        );
+      }
       const recency = RECENCY_COLS.includes(col.key) ? orderRecency(row) : null;
       if (recency) {
         return <RecencyPill recency={recency} colKey={col.key}><span className="tabular-nums">{display}</span></RecencyPill>;
@@ -640,7 +648,7 @@ export default function AccountVolumeGrid() {
           <AlertTriangle className="h-3.5 w-3.5" />
           Needs attention
           <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${attentionOnly ? 'bg-white/25 text-white' : 'bg-white text-rose-700 border border-rose-200'}`}>
-            {rows.filter((r) => r.low_stock_at_hand || (r.account_age_days != null && r.account_age_days <= 7)).length}
+            {rows.filter((r) => r.low_stock_at_hand || r.first_order_overdue || (r.account_age_days != null && r.account_age_days <= 7)).length}
           </span>
         </button>
         <button
@@ -747,7 +755,7 @@ export default function AccountVolumeGrid() {
               {sortedRows.map((row, ri) => (
                 <tr key={row.account_id} className={`border-b border-slate-100 transition-colors group ${row.is_manual ? 'bg-[#FFFDF5]' : ri % 2 ? 'bg-[#F8FAFC]' : 'bg-white'} hover:bg-[#EDF2FA]`} data-testid={`vg-row-${row.account_code || row.account_id}`}>
                   {visibleColumns.map((c) => (
-                    <td key={c.key} className={`px-3 py-2.5 align-middle whitespace-normal break-words tabular-nums ${numericCol(c) ? 'text-right' : 'text-left'} ${c.key === 'stock_at_hand_crates' && row.low_stock_at_hand ? 'bg-red-100 text-red-700 font-semibold shadow-[inset_2px_0_0_#ef4444]' : ''} ${c.key === 'account_name' ? `font-semibold text-slate-900 sticky left-0 z-10 ${row.account_age_days != null && row.account_age_days <= 7 ? 'bg-[#EAF1FF] shadow-[inset_2px_0_0_#002FA7,inset_-1px_0_0_#E2E8F0]' : `${row.is_manual ? 'bg-[#FFFCF0]' : ri % 2 ? 'bg-[#F6F8FB]' : 'bg-white'} shadow-[inset_-1px_0_0_#E2E8F0]`} group-hover:bg-[#EDF2FA]` : 'text-slate-700'}`}
+                    <td key={c.key} className={`px-3 py-2.5 align-middle whitespace-normal break-words tabular-nums ${numericCol(c) ? 'text-right' : 'text-left'} ${(c.key === 'stock_at_hand_crates' && row.low_stock_at_hand) || (c.key === 'first_order_requested_date' && row.first_order_overdue) ? 'bg-red-100 text-red-700 font-semibold shadow-[inset_2px_0_0_#ef4444]' : ''} ${c.key === 'account_name' ? `font-semibold text-slate-900 sticky left-0 z-10 ${row.account_age_days != null && row.account_age_days <= 7 ? 'bg-[#EAF1FF] shadow-[inset_2px_0_0_#002FA7,inset_-1px_0_0_#E2E8F0]' : `${row.is_manual ? 'bg-[#FFFCF0]' : ri % 2 ? 'bg-[#F6F8FB]' : 'bg-white'} shadow-[inset_-1px_0_0_#E2E8F0]`} group-hover:bg-[#EDF2FA]` : 'text-slate-700'}`}
                       data-testid={c.key === 'stock_at_hand_crates' ? `vg-soh-${row.account_code || row.account_id}${row.low_stock_at_hand ? '-low' : ''}` : undefined}>
                       {c.key === 'account_name' ? (
                         row.is_manual ? (

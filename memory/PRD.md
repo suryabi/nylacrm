@@ -3076,3 +3076,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - EMV: read-time fallback to earliest PR's starting_monthly_volume when account.expected_monthly_volume_crates is None (stays editable — edit writes account field which overrides). Plus create_print_request hook: sets account EMV from payload.starting_monthly_volume when account linked & EMV empty.
 - Frontend: 2 new BASE_COLUMNS (first_order_date, first_order_requested_date, type date) after On-boarded Date. Excel export headers/values updated; totals indexes shifted 14,15,16→16,17,18 (+2 for custom offset 18→20). NOTE: export is branded — header row is row 5, not row 1.
 - Verified: grid API + UI screenshot (Drive Folder Test Lead 06 Jun / 10 Jun), Excel export headers+values+EMV total.
+
+## Update — Jun 2026: Order Aging Flag in Volume Tracking
+- Backend row fields: first_order_overdue / first_order_overdue_days — set when first_order_requested_date has passed and account has NO delivery yet (clears automatically once first delivery lands).
+- Frontend: First Order Requested Date cell turns red (bg-red-100, "Nd overdue · no delivery" subtext, testid vg-fo-overdue-*); included in Needs-attention pill filter + count.
+- Verified: API (85d overdue for Drive Folder Test Lead) + UI screenshot with attention filter.
