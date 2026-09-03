@@ -3113,3 +3113,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — Jun 2026: 100% discount on ZOHO delivery challan (promo stock-out)
 - create_delivery_challan_for_promo_dispatch (services/zoho_service.py): each line item now carries "discount": "100%"; payload adds discount_type=item_level + is_discount_before_tax=true → Zoho challan total computes to ₹0. Notes banner mentions "100% discount applied · Final payable: ₹0 / Zero INR".
 - NOTE: Zoho tenant tokens exist only in PRODUCTION (preview has no zoho_credentials), so live push could not be tested in preview — verified payload against Zoho Books deliverychallans API docs (line-level discount supported) + syntax check. User must redeploy and create a promo challan to confirm.
+
+## Update — Jun 2026: Bottles→crates conversion for PR-sourced grid values
+- PR quantities are in BOTTLES; volume grid shows CRATES. Constant PR_BOTTLES_PER_CRATE=12 (user-directed assumption: all bottles in 12-bottle crates).
+- first_order_qty_crates = PR initial_order_quantity/12 (round 2); EMV fallback = starting_monthly_volume/12; create_print_request hook also writes EMV/12 to account.
+- Stored/manual account EMV values untouched (still take precedence).
+- Verified: 500 bottles → 41.67 crates; EMV fallback 600 → 50.0 (staged + restored test data).

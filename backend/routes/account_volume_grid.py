@@ -16,6 +16,7 @@ router = APIRouter(prefix="/account-volume-grid", tags=["Account Volume Grid"])
 CONFIG = "volume_grid_config"
 MANUAL = "volume_grid_manual_rows"
 DONE_STATUSES = ["delivered", "complete"]
+PR_BOTTLES_PER_CRATE = 12  # print-request quantities are in bottles; grid shows crates
 
 EDIT_ROLES = {"ceo", "director", "admin", "system admin", "vice president",
               "national sales head", "regional sales manager", "head of business",
@@ -304,7 +305,7 @@ async def get_grid(
         fpr = first_pr.get(a["id"]) or first_pr.get(a.get("account_id")) or first_pr.get(a.get("lead_id"))
         emv = a.get("expected_monthly_volume_crates")
         if emv is None and fpr and isinstance(fpr.get("starting_monthly_volume"), (int, float)):
-            emv = fpr["starting_monthly_volume"]
+            emv = round(fpr["starting_monthly_volume"] / PR_BOTTLES_PER_CRATE, 2)  # PR volumes are in bottles
         # Stock at the warehouse that last served this account, for the SKUs
         # it has ordered. Red-flag when below half the estimated monthly
         # consumption (Expected Monthly Volume, else Actual Monthly Consumption).
@@ -363,7 +364,7 @@ async def get_grid(
             "onboarded_date": (a.get("activated_at") or "")[:10] or None,
             "print_request_created_date": ((fpr.get("created_at") or "")[:10] or None) if fpr else None,
             "first_order_requested_date": fo_req,
-            "first_order_qty_crates": (fpr.get("initial_order_quantity") if fpr.get("initial_order_quantity") is not None else fpr.get("quantity")) if fpr else None,
+            "first_order_qty_crates": (round(((fpr.get("initial_order_quantity") if fpr.get("initial_order_quantity") is not None else fpr.get("quantity")) or 0) / PR_BOTTLES_PER_CRATE, 2) or None) if fpr else None,
             "first_order_overdue": bool(fo_overdue_days),
             "first_order_overdue_days": fo_overdue_days,
             "account_age_days": age_days,

@@ -495,11 +495,12 @@ async def create_print_request(payload: PrintRequestCreate, current_user: dict =
     await db.print_requests.insert_one(doc)
     doc.pop("_id", None)
 
-    # Auto-populate the account's Expected Monthly Volume from this print request (stays editable)
+    # Auto-populate the account's Expected Monthly Volume from this print request (stays editable).
+    # PR volumes are entered in bottles; the volume grid tracks crates (12 bottles/crate).
     if account and isinstance(payload.starting_monthly_volume, (int, float)) and account.get("expected_monthly_volume_crates") is None:
         await db.accounts.update_one(
             {"id": account["id"], "tenant_id": tenant_id},
-            {"$set": {"expected_monthly_volume_crates": payload.starting_monthly_volume}})
+            {"$set": {"expected_monthly_volume_crates": round(payload.starting_monthly_volume / 12, 2)}})
 
     if slack_post_event:
         try:
