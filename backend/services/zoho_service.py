@@ -2687,6 +2687,7 @@ async def create_delivery_challan_for_promo_dispatch(
             "name": display_name,
             "quantity": qty_bottles,
             "rate": float(it.get("unit_price", 0) or 0),
+            "discount": "100%",  # promotional — free of charge, challan total must be ₹0
             "tax_id": "",
             "tax_name": "",
             "tax_type": "",
@@ -2700,7 +2701,8 @@ async def create_delivery_challan_for_promo_dispatch(
     # Condensed to TWO short lines so the printed Zoho challan stays on ONE
     # page (the recipient details were previously 6 separate lines, which pushed
     # the notes block onto a 2nd page). Banner = 1 line; recipient = 1 line.
-    banner = "*** NOT FOR SALE · NO COMMERCIAL VALUE — Promotional stock-out (no GST, no consideration receivable) ***"
+    banner = ("*** NOT FOR SALE · NO COMMERCIAL VALUE — Promotional stock-out "
+              "(100% discount applied · Final payable: ₹0 / Zero INR · no GST, no consideration receivable) ***")
     recipient_bits = [
         f"Recipient: {dispatch.get('contact_name') or '—'}"
         + (f" ({dispatch.get('contact_company')})" if dispatch.get('contact_company') else "")
@@ -2725,6 +2727,8 @@ async def create_delivery_challan_for_promo_dispatch(
         "line_items": line_items,
         "notes": notes,
         "is_inclusive_tax": False,
+        "discount_type": "item_level",
+        "is_discount_before_tax": True,
         "gst_treatment": "out_of_scope",
         "tax_total": 0,
     }

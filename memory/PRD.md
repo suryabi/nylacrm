@@ -3109,3 +3109,7 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — Jun 2026: 100% discount footer on promo Delivery Challan
 - generate_delivery_challan_pdf (utils/pdf_generator.py): items table now ends with 3 summary rows — Total, "Discount — 100% (Promotional / Free of Charge)" (−total, emerald), and "Final Payable (Zero INR) ₹0.00" (green highlight). SPANs added for label rows.
 - Verified via direct PDF generation + text extraction (Total ₹260 → −₹260 → ₹0.00).
+
+## Update — Jun 2026: 100% discount on ZOHO delivery challan (promo stock-out)
+- create_delivery_challan_for_promo_dispatch (services/zoho_service.py): each line item now carries "discount": "100%"; payload adds discount_type=item_level + is_discount_before_tax=true → Zoho challan total computes to ₹0. Notes banner mentions "100% discount applied · Final payable: ₹0 / Zero INR".
+- NOTE: Zoho tenant tokens exist only in PRODUCTION (preview has no zoho_credentials), so live push could not be tested in preview — verified payload against Zoho Books deliverychallans API docs (line-level discount supported) + syntax check. User must redeploy and create a promo challan to confirm.
