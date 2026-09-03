@@ -3050,3 +3050,10 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
   - Gotcha fixed: routes initially written as /equipment/... under an already-prefixed router → 405; corrected to /import-template etc.
 - Frontend header buttons: Template / Export / Import (.xlsx input) + green Add Equipment; import result banner (emerald/amber) listing up to 8 row errors with dismiss.
 - Tested full round trip via curl: template → fill (2 good rows incl parent link + 2 bad rows) → import (2 created, errors reported: missing name, unknown facility) → child linked to parent with computed dues → re-import = 2 updated 0 created → export re-readable with Daily/parent columns correct. UI buttons verified via screenshot. Test rows + auto-created type cleaned.
+
+## Update — Jun 2026: Intuitive short codes in the equipment template
+- _mk_code(): initials for multi-word names, first 4 letters for single words, dedupe with numeric suffix (e.g. Pumps→PUMP, Air Water Generators→AWG, Ground Floor→GF, 1st Floor→1F, Terrace→TERR, Finished Goods Area→FGA).
+- _ensure_codes(): assigns + persists `code` on equipment_types, facilities, floors, areas (stable across downloads); runs on template download and import.
+- Template Reference sheet reorganized: EQUIPMENT TYPE CODES table (Code|Name), FREQUENCIES, LOCATION CODES table (Facility Code|Facility|Floor Code|Floor|Area Codes as "FGA = Finished Goods Area"); example row uses codes; column headers say "(name or code)".
+- Import resolves type/facility/floor/area by code OR full name (case-insensitive); auto-created types get codes too.
+- Tested: template shows codes for real tenant data (Factorty→FACT etc.); import row with PUMP/TBF/GF/FGA resolved to full names; bad code XXX errored per-row. Test data cleaned.

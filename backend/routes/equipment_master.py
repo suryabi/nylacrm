@@ -512,18 +512,68 @@ async def download_equipment_zip(equipment_id: str, current_user: dict = Depends
 
 # ── Excel template / export / bulk import ─────────────────────────────────────
 import io as _io
+import re as _rex
 import openpyxl
 from openpyxl.styles import Font, PatternFill
 
 XLSX_COLUMNS = [
-    "Name*", "Equipment Type*", "Make/Brand", "Model/Specification",
+    "Name*", "Equipment Type* (name or code)", "Make/Brand", "Model/Specification",
     "Parent Equipment", "Has Child Equipment (Yes/No)",
-    "Facility", "Floor", "Area",
+    "Facility (name or code)", "Floor (name or code)", "Area (name or code)",
     "Maintenance Frequency", "Maintenance Start Date", "Last Maintenance Date",
     "Replacement Frequency", "Replacement Start Date", "Last Replacement Date",
     "Procurement Lead Time (days)", "Expected Life", "Min Stock Level",
     "Photo Inspections per Month", "Remarks",
 ]
+
+
+def _mk_code(name: str, taken: set, maxlen: int = 6) -> str:
+    """Intuitive short code: initials for multi-word names, first 4 letters otherwise."""
+    words = _rex.findall(r"[A-Za-z0-9]+", (name or "").upper())
+    if not words:
+        base = "X"
+    elif len(words) == 1:
+        base = words[0][:4]
+    else:
+        base = "".join(w[0] for w in words)[:maxlen]
+    base = base[:maxlen] or "X"
+    code, i = base, 2
+    while code in taken:
+        code = f"{base}{i}"
+        i += 1
+    taken.add(code)
+    return code
+
+
+async def _ensure_codes(tenant_id: str):
+    """Assign persistent short codes to equipment types, facilities, floors and areas."""
+    types = await db.equipment_types.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(500)
+    taken = {t["code"] for t in types if t.get("code")}
+    for t in types:
+        if not t.get("code"):
+            t["code"] = _mk_code(t["name"], taken)
+            await db.equipment_types.update_one({"tenant_id": tenant_id, "id": t["id"]}, {"$set": {"code": t["code"]}})
+    facs = await db.facilities.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(500)
+    fac_taken = {f["code"] for f in facs if f.get("code")}
+    for f in facs:
+        changed = False
+        if not f.get("code"):
+            f["code"] = _mk_code(f["facility_name"], fac_taken)
+            changed = True
+        fl_taken = {fl.get("code") for fl in f.get("floors") or [] if fl.get("code")}
+        for fl in f.get("floors") or []:
+            if not fl.get("code"):
+                fl["code"] = _mk_code(fl["name"], fl_taken)
+                changed = True
+            ar_taken = {a.get("code") for a in fl.get("areas") or [] if a.get("code")}
+            for a in fl.get("areas") or []:
+                if not a.get("code"):
+                    a["code"] = _mk_code(a["name"], ar_taken)
+                    changed = True
+        if changed:
+            await db.facilities.update_one({"tenant_id": tenant_id, "id": f["id"]},
+                                           {"$set": {"code": f["code"], "floors": f.get("floors") or []}})
+    return types, facs
 FREQ_TO_LABEL = {1: "Daily", 2: "Alternate Days", 7: "Weekly", 10: "Every 10 days",
                  14: "Bi-Weekly", 30: "Monthly", 90: "Quarterly"}
 LABEL_TO_FREQ = {"daily": 1, "alternate days": 2, "weekly": 7, "every 10 days": 10,
@@ -591,33 +641,42 @@ def _styled_header(ws):
 async def equipment_import_template(current_user: dict = Depends(get_current_user)):
     _ = current_user
     tenant_id = get_current_tenant_id()
+    types, facs = await _ensure_codes(tenant_id)
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Equipment"
     ws.append(XLSX_COLUMNS)
     _styled_header(ws)
-    ws.append(["RO Machine 1", "Machines", "Pentair", "RO-5000", "", "Yes",
-               "Nyla Bangalore Factory", "Ground Floor", "RFC Area",
+    ex_type = types[0]["code"] if types else "MACH"
+    ex_fac = facs[0]["code"] if facs else ""
+    ws.append(["RO Machine 1", ex_type, "Pentair", "RO-5000", "", "Yes",
+               ex_fac, "GF", "RFC",
                "Weekly", "2026-06-01", "", "Quarterly", "2026-06-01", "",
                30, "5 years", 1, 4, "Example row — delete before uploading"])
     ref = wb.create_sheet("Reference")
-    ref.append(["Valid Equipment Types (auto-created if new)"])
-    types = await db.equipment_types.find({"tenant_id": tenant_id}, {"_id": 0, "name": 1}).to_list(200)
+    bold = Font(bold=True)
+    ref.append(["EQUIPMENT TYPE CODES", ""]); ref["A1"].font = bold
+    ref.append(["Code", "Equipment Type"])
     for t in types:
-        ref.append([t["name"]])
+        ref.append([t.get("code"), t["name"]])
     ref.append([])
-    ref.append(["Valid Frequencies"])
-    for v in ["Daily", "Alternate Days", "Weekly", "Every 10 days", "Bi-Weekly", "Monthly", "Quarterly", "or a number of days"]:
+    ref.append(["FREQUENCIES", ""]); ref[f"A{ref.max_row}"].font = bold
+    for v in ["Daily", "Alternate Days", "Weekly", "Every 10 days", "Bi-Weekly / Fortnightly", "Monthly", "Quarterly", "or any number of days"]:
         ref.append([v])
     ref.append([])
-    ref.append(["Facilities › Floors › Areas (must match exactly)"])
-    facs = await db.facilities.find({"tenant_id": tenant_id}, {"_id": 0, "facility_name": 1, "floors": 1}).to_list(200)
+    ref.append(["LOCATION CODES", ""]); ref[f"A{ref.max_row}"].font = bold
+    ref.append(["Facility Code", "Facility", "Floor Code", "Floor", "Area Codes"])
     for f in facs:
-        for fl in f.get("floors") or [{"name": "", "areas": []}]:
-            areas = ", ".join(a["name"] for a in fl.get("areas") or []) or "-"
-            ref.append([f["facility_name"], fl.get("name") or "-", areas])
+        floors = f.get("floors") or []
+        if not floors:
+            ref.append([f.get("code"), f["facility_name"], "", "", ""])
+        for fl in floors:
+            areas = ", ".join(f"{a.get('code')} = {a['name']}" for a in fl.get("areas") or []) or "-"
+            ref.append([f.get("code"), f["facility_name"], fl.get("code"), fl.get("name"), areas])
     ref.append([])
-    ref.append(["Notes:", "Dates must be YYYY-MM-DD. Parent Equipment is matched by exact name (row order doesn't matter). Re-uploading a row with an existing Name updates that equipment."])
+    ref.append(["Notes:", "Use the short CODES above (or the full names — both work). Dates must be YYYY-MM-DD. Parent Equipment is matched by exact name (row order doesn't matter). Re-uploading a row with an existing Name updates that equipment."])
+    for col, w in (("A", 16), ("B", 30), ("C", 12), ("D", 22), ("E", 50)):
+        ref.column_dimensions[col].width = w
     return _xlsx_response(wb, "equipment_import_template.xlsx")
 
 
@@ -657,8 +716,12 @@ async def equipment_import(file: UploadFile = File(...), current_user: dict = De
     if not header or not header[0].startswith("Name"):
         raise HTTPException(400, "Unexpected format — the first sheet must use the provided template headers")
 
-    types = {t["name"].strip().lower(): t for t in await db.equipment_types.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(500)}
-    facs = await db.facilities.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(500)
+    types_list, facs = await _ensure_codes(tenant_id)
+    types = {}
+    for t in types_list:
+        types[t["name"].strip().lower()] = t
+        if t.get("code"):
+            types[t["code"].strip().lower()] = t
     existing = {e["name"].strip().lower(): e for e in await db.equipment_master.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1}).to_list(5000)}
 
     created, updated, errors, parent_links = 0, 0, [], []
@@ -679,29 +742,34 @@ async def equipment_import(file: UploadFile = File(...), current_user: dict = De
                 raise ValueError("Equipment Type is required")
             etype = types.get(type_name.lower())
             if not etype:
+                taken = {t.get("code") for t in types.values() if t.get("code")}
                 etype = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "name": type_name,
-                         "description": "", "created_at": now}
+                         "code": _mk_code(type_name, taken), "description": "", "created_at": now}
                 await db.equipment_types.insert_one({**etype})
                 etype.pop("_id", None)
                 types[type_name.lower()] = etype
+                types[etype["code"].lower()] = etype
 
             facility_id = floor_id = area_id = None
             facility_name = floor_name = area_name = None
             fac_in = str(vals[6] or "").strip()
             if fac_in:
-                fac = next((f for f in facs if f["facility_name"].strip().lower() == fac_in.lower()), None)
+                fac = next((f for f in facs if f["facility_name"].strip().lower() == fac_in.lower()
+                            or (f.get("code") or "").lower() == fac_in.lower()), None)
                 if not fac:
-                    raise ValueError(f"Facility '{fac_in}' not found (check the Reference sheet)")
+                    raise ValueError(f"Facility '{fac_in}' not found (use a code or name from the Reference sheet)")
                 facility_id, facility_name = fac["id"], fac["facility_name"]
                 fl_in = str(vals[7] or "").strip()
                 if fl_in:
-                    fl = next((x for x in fac.get("floors") or [] if x["name"].strip().lower() == fl_in.lower()), None)
+                    fl = next((x for x in fac.get("floors") or [] if x["name"].strip().lower() == fl_in.lower()
+                               or (x.get("code") or "").lower() == fl_in.lower()), None)
                     if not fl:
                         raise ValueError(f"Floor '{fl_in}' not found in {facility_name}")
                     floor_id, floor_name = fl["id"], fl["name"]
                     ar_in = str(vals[8] or "").strip()
                     if ar_in:
-                        ar = next((a for a in fl.get("areas") or [] if a["name"].strip().lower() == ar_in.lower()), None)
+                        ar = next((a for a in fl.get("areas") or [] if a["name"].strip().lower() == ar_in.lower()
+                                   or (a.get("code") or "").lower() == ar_in.lower()), None)
                         if not ar:
                             raise ValueError(f"Area '{ar_in}' not found on {floor_name}")
                         area_id, area_name = ar["id"], ar["name"]
