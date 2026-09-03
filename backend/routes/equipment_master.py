@@ -508,3 +508,252 @@ async def download_equipment_zip(equipment_id: str, current_user: dict = Depends
     zip_name = _re.sub(r"[^A-Za-z0-9_]", "", (eq.get("name") or "equipment").replace(" ", "_")) + "_documents.zip"
     return Response(buf.getvalue(), media_type="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{zip_name}"'})
+
+
+# ── Excel template / export / bulk import ─────────────────────────────────────
+import io as _io
+import openpyxl
+from openpyxl.styles import Font, PatternFill
+
+XLSX_COLUMNS = [
+    "Name*", "Equipment Type*", "Make/Brand", "Model/Specification",
+    "Parent Equipment", "Has Child Equipment (Yes/No)",
+    "Facility", "Floor", "Area",
+    "Maintenance Frequency", "Maintenance Start Date", "Last Maintenance Date",
+    "Replacement Frequency", "Replacement Start Date", "Last Replacement Date",
+    "Procurement Lead Time (days)", "Expected Life", "Min Stock Level",
+    "Photo Inspections per Month", "Remarks",
+]
+FREQ_TO_LABEL = {1: "Daily", 2: "Alternate Days", 7: "Weekly", 10: "Every 10 days",
+                 14: "Bi-Weekly", 30: "Monthly", 90: "Quarterly"}
+LABEL_TO_FREQ = {"daily": 1, "alternate days": 2, "weekly": 7, "every 10 days": 10,
+                 "bi-weekly": 14, "biweekly": 14, "fortnightly": 14, "monthly": 30, "quarterly": 90}
+
+
+def _freq_out(days):
+    if not days:
+        return ""
+    return FREQ_TO_LABEL.get(days, str(days))
+
+
+def _freq_in(val):
+    if val is None or val == "":
+        return None
+    s = str(val).strip().lower()
+    if s in LABEL_TO_FREQ:
+        return LABEL_TO_FREQ[s]
+    try:
+        n = int(float(s))
+        return n if n > 0 else None
+    except ValueError:
+        raise ValueError(f"Invalid frequency '{val}' — use Daily/Alternate Days/Weekly/Every 10 days/Bi-Weekly/Monthly/Quarterly or a number of days")
+
+
+def _date_in(val):
+    if val is None or val == "":
+        return None
+    if isinstance(val, datetime):
+        return val.strftime("%Y-%m-%d")
+    if hasattr(val, "isoformat") and not isinstance(val, str):
+        return val.isoformat()[:10]
+    s = str(val).strip()[:10]
+    datetime.strptime(s, "%Y-%m-%d")
+    return s
+
+
+def _int_in(val, field):
+    if val is None or val == "":
+        return None
+    try:
+        return int(float(str(val).strip()))
+    except ValueError:
+        raise ValueError(f"Invalid number for {field}: '{val}'")
+
+
+def _xlsx_response(wb, filename):
+    buf = _io.BytesIO()
+    wb.save(buf)
+    return Response(buf.getvalue(),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+def _styled_header(ws):
+    fill = PatternFill(start_color="2E5A8F", end_color="2E5A8F", fill_type="solid")
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = fill
+    for i, col in enumerate(XLSX_COLUMNS, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = max(16, len(col) + 4)
+
+
+@router.get("/import-template")
+async def equipment_import_template(current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Equipment"
+    ws.append(XLSX_COLUMNS)
+    _styled_header(ws)
+    ws.append(["RO Machine 1", "Machines", "Pentair", "RO-5000", "", "Yes",
+               "Nyla Bangalore Factory", "Ground Floor", "RFC Area",
+               "Weekly", "2026-06-01", "", "Quarterly", "2026-06-01", "",
+               30, "5 years", 1, 4, "Example row — delete before uploading"])
+    ref = wb.create_sheet("Reference")
+    ref.append(["Valid Equipment Types (auto-created if new)"])
+    types = await db.equipment_types.find({"tenant_id": tenant_id}, {"_id": 0, "name": 1}).to_list(200)
+    for t in types:
+        ref.append([t["name"]])
+    ref.append([])
+    ref.append(["Valid Frequencies"])
+    for v in ["Daily", "Alternate Days", "Weekly", "Every 10 days", "Bi-Weekly", "Monthly", "Quarterly", "or a number of days"]:
+        ref.append([v])
+    ref.append([])
+    ref.append(["Facilities › Floors › Areas (must match exactly)"])
+    facs = await db.facilities.find({"tenant_id": tenant_id}, {"_id": 0, "facility_name": 1, "floors": 1}).to_list(200)
+    for f in facs:
+        for fl in f.get("floors") or [{"name": "", "areas": []}]:
+            areas = ", ".join(a["name"] for a in fl.get("areas") or []) or "-"
+            ref.append([f["facility_name"], fl.get("name") or "-", areas])
+    ref.append([])
+    ref.append(["Notes:", "Dates must be YYYY-MM-DD. Parent Equipment is matched by exact name (row order doesn't matter). Re-uploading a row with an existing Name updates that equipment."])
+    return _xlsx_response(wb, "equipment_import_template.xlsx")
+
+
+@router.get("/export")
+async def equipment_export(current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    items = await db.equipment_master.find({"tenant_id": tenant_id}, {"_id": 0}).sort([("equipment_type_name", 1), ("name", 1)]).to_list(3000)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Equipment"
+    ws.append(XLSX_COLUMNS)
+    _styled_header(ws)
+    for e in items:
+        ws.append([
+            e.get("name"), e.get("equipment_type_name"), e.get("make_brand") or "", e.get("model_spec") or "",
+            e.get("parent_equipment_name") or "", "Yes" if e.get("has_children") else "No",
+            e.get("facility_name") or "", e.get("floor_name") or "", e.get("area_name") or "",
+            _freq_out(e.get("maintenance_frequency_days")), e.get("maintenance_start_date") or "", e.get("last_maintenance_date") or "",
+            _freq_out(e.get("replacement_frequency_days")), e.get("replacement_start_date") or "", e.get("last_replacement_date") or "",
+            e.get("procurement_lead_time_days") or "", e.get("expected_life") or "", e.get("min_stock_level") if e.get("min_stock_level") is not None else "",
+            e.get("photo_inspections_per_month") or "", e.get("remarks") or "",
+        ])
+    return _xlsx_response(wb, f"equipment_export_{datetime.now(timezone.utc).strftime('%Y%m%d')}.xlsx")
+
+
+@router.post("/import")
+async def equipment_import(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    content = await file.read()
+    try:
+        wb = openpyxl.load_workbook(_io.BytesIO(content), data_only=True)
+    except Exception:
+        raise HTTPException(400, "Could not read the file — upload the .xlsx template")
+    ws = wb["Equipment"] if "Equipment" in wb.sheetnames else wb.active
+    header = [str(c.value or "").strip() for c in ws[1]]
+    if not header or not header[0].startswith("Name"):
+        raise HTTPException(400, "Unexpected format — the first sheet must use the provided template headers")
+
+    types = {t["name"].strip().lower(): t for t in await db.equipment_types.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(500)}
+    facs = await db.facilities.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(500)
+    existing = {e["name"].strip().lower(): e for e in await db.equipment_master.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1}).to_list(5000)}
+
+    created, updated, errors, parent_links = 0, 0, [], []
+    now = datetime.now(timezone.utc).isoformat()
+
+    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        vals = list(row) + [None] * (len(XLSX_COLUMNS) - len(row))
+        if not any(v not in (None, "") for v in vals):
+            continue
+        try:
+            name = str(vals[0] or "").strip()
+            if not name:
+                raise ValueError("Name is required")
+            if "example row" in str(vals[19] or "").lower():
+                continue
+            type_name = str(vals[1] or "").strip()
+            if not type_name:
+                raise ValueError("Equipment Type is required")
+            etype = types.get(type_name.lower())
+            if not etype:
+                etype = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "name": type_name,
+                         "description": "", "created_at": now}
+                await db.equipment_types.insert_one({**etype})
+                etype.pop("_id", None)
+                types[type_name.lower()] = etype
+
+            facility_id = floor_id = area_id = None
+            facility_name = floor_name = area_name = None
+            fac_in = str(vals[6] or "").strip()
+            if fac_in:
+                fac = next((f for f in facs if f["facility_name"].strip().lower() == fac_in.lower()), None)
+                if not fac:
+                    raise ValueError(f"Facility '{fac_in}' not found (check the Reference sheet)")
+                facility_id, facility_name = fac["id"], fac["facility_name"]
+                fl_in = str(vals[7] or "").strip()
+                if fl_in:
+                    fl = next((x for x in fac.get("floors") or [] if x["name"].strip().lower() == fl_in.lower()), None)
+                    if not fl:
+                        raise ValueError(f"Floor '{fl_in}' not found in {facility_name}")
+                    floor_id, floor_name = fl["id"], fl["name"]
+                    ar_in = str(vals[8] or "").strip()
+                    if ar_in:
+                        ar = next((a for a in fl.get("areas") or [] if a["name"].strip().lower() == ar_in.lower()), None)
+                        if not ar:
+                            raise ValueError(f"Area '{ar_in}' not found on {floor_name}")
+                        area_id, area_name = ar["id"], ar["name"]
+
+            doc = {
+                "name": name, "equipment_type_id": etype["id"], "equipment_type_name": etype["name"],
+                "make_brand": str(vals[2] or "").strip(), "model_spec": str(vals[3] or "").strip(),
+                "has_children": str(vals[5] or "").strip().lower() in ("yes", "y", "true", "1"),
+                "facility_id": facility_id, "floor_id": floor_id, "area_id": area_id,
+                "facility_name": facility_name, "floor_name": floor_name, "area_name": area_name,
+                "maintenance_frequency_days": _freq_in(vals[9]),
+                "maintenance_start_date": _date_in(vals[10]), "last_maintenance_date": _date_in(vals[11]),
+                "replacement_frequency_days": _freq_in(vals[12]),
+                "replacement_start_date": _date_in(vals[13]), "last_replacement_date": _date_in(vals[14]),
+                "procurement_lead_time_days": _int_in(vals[15], "Lead Time"),
+                "expected_life": str(vals[16] or "").strip(), "min_stock_level": _int_in(vals[17], "Min Stock"),
+                "photo_inspections_per_month": _int_in(vals[18], "Photo Inspections"),
+                "remarks": str(vals[19] or "").strip(),
+                "next_maintenance_due": None, "next_replacement_due": None,
+                "updated_at": now,
+            }
+            _compute_dues(doc)
+            key = name.lower()
+            if key in existing:
+                await db.equipment_master.update_one({"tenant_id": tenant_id, "id": existing[key]["id"]}, {"$set": doc})
+                eq_id = existing[key]["id"]
+                updated += 1
+            else:
+                eq_id = str(uuid.uuid4())
+                await db.equipment_master.insert_one({**doc, "id": eq_id, "tenant_id": tenant_id,
+                                                      "vendors": [], "attachments": [], "created_at": now})
+                existing[key] = {"id": eq_id, "name": name}
+                created += 1
+            parent_in = str(vals[4] or "").strip()
+            parent_links.append((idx, eq_id, name, parent_in))
+        except Exception as ex:
+            errors.append({"row": idx, "error": str(ex)})
+
+    for idx, eq_id, name, parent_in in parent_links:
+        try:
+            if not parent_in:
+                await db.equipment_master.update_one({"tenant_id": tenant_id, "id": eq_id},
+                                                     {"$set": {"parent_equipment_id": None, "parent_equipment_name": None}})
+                continue
+            p = existing.get(parent_in.lower())
+            if not p:
+                raise ValueError(f"Parent Equipment '{parent_in}' not found")
+            parent = await _validate_parent(tenant_id, p["id"], self_id=eq_id)
+            await db.equipment_master.update_one({"tenant_id": tenant_id, "id": eq_id},
+                                                 {"$set": {"parent_equipment_id": p["id"], "parent_equipment_name": parent["name"]}})
+        except Exception as ex:
+            errors.append({"row": idx, "error": f"{name}: {ex}"})
+
+    return {"created": created, "updated": updated, "errors": errors,
+            "message": f"{created} created, {updated} updated" + (f", {len(errors)} row(s) had errors" if errors else "")}

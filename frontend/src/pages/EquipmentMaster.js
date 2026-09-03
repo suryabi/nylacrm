@@ -207,6 +207,8 @@ export default function EquipmentMaster() {
   const [floorFilter, setFloorFilter] = useState('');
   const [areaFilter, setAreaFilter] = useState('');
   const [quickFilter, setQuickFilter] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
   const [showEqForm, setShowEqForm] = useState(false);
   const [editingEq, setEditingEq] = useState(null);
   const [eqForm, setEqForm] = useState(EMPTY_EQ);
@@ -441,6 +443,36 @@ export default function EquipmentMaster() {
 
   const overdueByParent = overdueChildCounts(equipment);
   const isOrderNow = (e) => { const n = daysUntil(e.next_replacement_due); return n != null && e.procurement_lead_time_days && n <= e.procurement_lead_time_days; };
+
+  const downloadXlsx = async (kind, fallbackName) => {
+    try {
+      const res = await fetch(`${API_URL}/api/production/equipment/${kind}`, { headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } });
+      if (!res.ok) throw new Error((await res.json()).detail || 'Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fallbackName; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const importXlsx = async (file) => {
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${API_URL}/api/production/equipment/import`, {
+        method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` }, body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Import failed');
+      setImportResult(data);
+      if (data.errors?.length) toast.warning(data.message); else toast.success(data.message);
+      loadAll();
+    } catch (e) { toast.error(e.message); } finally { setImporting(false); }
+  };
   const quickMatch = (e) => {
     if (!quickFilter) return true;
     if (quickFilter === 'overdue') return e.next_maintenance_due && daysUntil(e.next_maintenance_due) < 0;
@@ -476,8 +508,36 @@ export default function EquipmentMaster() {
               <p className="text-muted-foreground">Equipment, consumables, maintenance & replacement schedules, vendor associations</p>
             </div>
           </div>
-          <Button onClick={openNewEq} data-testid="eq-new-btn"><Plus className="w-4 h-4 mr-2" /> Add Equipment</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" className="h-10 rounded-lg" onClick={() => downloadXlsx('import-template', 'equipment_import_template.xlsx')} data-testid="eq-template-btn">
+              <FileText className="w-4 h-4 mr-2 text-slate-500" /> Template
+            </Button>
+            <Button variant="outline" className="h-10 rounded-lg" onClick={() => downloadXlsx('export', 'equipment_export.xlsx')} data-testid="eq-export-btn">
+              <Download className="w-4 h-4 mr-2 text-slate-500" /> Export
+            </Button>
+            <label>
+              <input type="file" accept=".xlsx" className="hidden" onChange={(e) => { importXlsx(e.target.files?.[0]); e.target.value = ''; }} data-testid="eq-import-input" />
+              <Button variant="outline" className="h-10 rounded-lg" disabled={importing} asChild>
+                <span className="cursor-pointer" data-testid="eq-import-btn"><Upload className="w-4 h-4 mr-2 text-slate-500" />{importing ? 'Importing…' : 'Import'}</span>
+              </Button>
+            </label>
+            <Button className="h-10 rounded-lg" onClick={openNewEq} data-testid="eq-new-btn"><Plus className="w-4 h-4 mr-2" /> Add Equipment</Button>
+          </div>
         </div>
+
+        {importResult && (
+          <div className={`rounded-xl border px-4 py-3 text-sm flex items-start gap-2.5 ${importResult.errors?.length ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-emerald-50 border-emerald-300 text-emerald-800'}`} data-testid="eq-import-result">
+            {importResult.errors?.length ? <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> : <BadgeCheck className="h-4 w-4 mt-0.5 shrink-0" />}
+            <div className="flex-1">
+              <p className="font-semibold">Import finished: {importResult.message}</p>
+              {(importResult.errors || []).slice(0, 8).map((er, i) => (
+                <p key={i} className="text-xs mt-0.5">Row {er.row}: {er.error}</p>
+              ))}
+              {(importResult.errors || []).length > 8 && <p className="text-xs mt-0.5">…and {importResult.errors.length - 8} more</p>}
+            </div>
+            <button onClick={() => setImportResult(null)} className="shrink-0 hover:opacity-70" data-testid="eq-import-result-close"><X className="h-4 w-4" /></button>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {[

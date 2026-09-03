@@ -3041,3 +3041,12 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Table: roomy px-5/py-4 rows, semibold uppercase slate header, merged "Next Replacement / Lead" column (lead time + min stock as meta lines; standalone Lead/Min columns removed).
 - Actions: 7×28px icons → h-9 emerald "Log" pill + h-9 Docs button with #002FA7 count badge + h-9 kebab DropdownMenu (Maintenance Profile & QR Sheet / Log Replacement / Edit / Delete with separator). All data-testids preserved (eq-log-maint-*, eq-docs-*, eq-maint-profile-*, eq-edit-*, eq-delete-*, new eq-more-actions-*).
 - Verified via screenshots + interaction test: quick filter 3→0→3 rows, kebab menu items correct, layout clean.
+
+## Update — Jun 2026: Equipment Excel template / export / bulk import
+- Backend (equipment_master.py, router prefix /production/equipment):
+  - GET /import-template → styled xlsx (Equipment sheet with 20 columns + example row; Reference sheet listing tenant equipment types, valid frequencies, Facility›Floor›Area combos, notes).
+  - GET /export → all equipment in the same columns (re-importable round trip).
+  - POST /import → parses xlsx: Name+Type required; types auto-created; frequency accepts labels (Daily/Weekly/Fortnightly/…) or day numbers; dates YYYY-MM-DD or Excel dates; facility/floor/area matched by exact name (row error otherwise); has_children Yes/No; _compute_dues applied; UPSERT by equipment name (re-import updates, never duplicates); 2-pass parent linking by name with cycle validation; per-row error report {row, error}.
+  - Gotcha fixed: routes initially written as /equipment/... under an already-prefixed router → 405; corrected to /import-template etc.
+- Frontend header buttons: Template / Export / Import (.xlsx input) + green Add Equipment; import result banner (emerald/amber) listing up to 8 row errors with dismiss.
+- Tested full round trip via curl: template → fill (2 good rows incl parent link + 2 bad rows) → import (2 created, errors reported: missing name, unknown facility) → child linked to parent with computed dues → re-import = 2 updated 0 created → export re-readable with Daily/parent columns correct. UI buttons verified via screenshot. Test rows + auto-created type cleaned.
