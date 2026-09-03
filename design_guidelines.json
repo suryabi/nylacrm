@@ -1,187 +1,203 @@
 {
-  "view_name": "Account Volume Tracking Grid",
-  "file_path": "/app/frontend/src/pages/AccountVolumeGrid.js",
-  "app_context": "Data-dense B2B FMCG/Beverage CRM spreadsheet grid view with sticky panes, custom formula columns, and consignment planner",
-  "theme": "Light mode, Swiss-precision high-contrast B2B aesthetic with #002FA7 (International Klein Blue / Royal Blue) accent, dark slate headers, and soft tonal data hierarchy",
-  
-  "typography": {
-    "font_family_base": "'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif",
-    "hierarchy": {
-      "page_title": "text-2xl font-bold tracking-tight text-slate-900",
-      "page_subtitle": "text-xs md:text-sm text-slate-500 font-normal leading-relaxed",
-      "table_header": "text-[11px] font-semibold uppercase tracking-wider text-slate-200 select-none",
-      "summary_row": "text-xs font-bold tabular-nums tracking-tight text-[#002FA7]",
-      "table_body_account_primary": "text-xs font-semibold text-slate-900 tracking-tight",
-      "table_body_account_sub": "text-[11px] text-slate-400 font-normal",
-      "table_body_data": "text-xs tabular-nums text-slate-700 font-normal",
-      "table_body_formula": "text-xs tabular-nums font-semibold text-indigo-700",
-      "section_title": "text-base font-bold text-slate-900 tracking-tight",
-      "badges_and_pills": "text-[11px] font-medium leading-none tabular-nums"
-    },
-    "tabular_nums_rule": "MUST apply 'tabular-nums' class on EVERY numeric, date, currency, crate quantity, and calculation cell to ensure vertical digit alignment across all rows."
-  },
-
-  "colors": {
-    "palette": {
-      "brand_primary": "#002FA7",
-      "brand_hover": "#00227A",
-      "brand_subtle_bg": "rgba(0, 47, 167, 0.04)",
-      "brand_border_highlight": "rgba(0, 47, 167, 0.25)",
-      "table_header_bg": "bg-[#0b192c] text-slate-100",
-      "table_header_border": "border-slate-800",
-      "summary_row_bg": "bg-[#EAF0FC] text-[#002FA7] border-b-2 border-[#002FA7]/30",
-      "row_even": "bg-white",
-      "row_odd": "bg-[#F8FAFC]",
-      "row_hover": "hover:bg-[#EDF2FA]",
-      "manual_row_bg": "bg-[#FFFDF5]",
-      "manual_row_border": "border-amber-200/60",
-      "sticky_account_border_right": "shadow-[inset_-1px_0_0_#CBD5E1]"
-    },
-    "recency_tiers": {
-      "tier_1_week": {
-        "label": "within 1 week",
-        "pill": "bg-emerald-50 text-emerald-800 border border-emerald-200/60",
-        "dot": "bg-emerald-600"
+  "theme": {
+    "archetype": "THE_PERFORMANCE_PRO_SWISS_HYBRID",
+    "mode": "light_first_with_dark_support",
+    "color_palette": {
+      "page_background": "bg-slate-50/70 dark:bg-slate-950",
+      "surface_card": "bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm",
+      "primary_brand": {
+        "hex": "#002FA7",
+        "tailwind_bg": "bg-[#002FA7] hover:bg-[#00227A]",
+        "tailwind_text": "text-[#002FA7] dark:text-blue-400"
       },
-      "tier_2_weeks": {
-        "label": "within 2 weeks",
-        "pill": "bg-emerald-50/70 text-emerald-700 border border-emerald-200/40",
-        "dot": "bg-emerald-400"
+      "kpi_accents": {
+        "all_equipment": {
+          "border": "border-slate-200 hover:border-slate-400 dark:border-slate-800",
+          "active_ring": "ring-2 ring-slate-900 bg-slate-50/80 dark:bg-slate-800/60 dark:ring-slate-300",
+          "icon_bg": "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+          "badge": "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+        },
+        "overdue": {
+          "border": "border-rose-200 hover:border-rose-400 dark:border-rose-900/50",
+          "active_ring": "ring-2 ring-rose-600 bg-rose-50/80 dark:bg-rose-950/40 dark:ring-rose-500",
+          "icon_bg": "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400",
+          "text": "text-rose-700 dark:text-rose-400",
+          "badge": "bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200"
+        },
+        "due_soon": {
+          "border": "border-amber-200 hover:border-amber-400 dark:border-amber-900/50",
+          "active_ring": "ring-2 ring-amber-500 bg-amber-50/80 dark:bg-amber-950/40 dark:ring-amber-400",
+          "icon_bg": "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
+          "text": "text-amber-700 dark:text-amber-400",
+          "badge": "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+        },
+        "order_now": {
+          "border": "border-orange-200 hover:border-orange-400 dark:border-orange-900/50",
+          "active_ring": "ring-2 ring-orange-600 bg-orange-50/80 dark:bg-orange-950/40 dark:ring-orange-500",
+          "icon_bg": "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400",
+          "text": "text-orange-700 dark:text-orange-400",
+          "badge": "bg-orange-100 text-orange-800 dark:bg-orange-900/60 dark:text-orange-200"
+        }
       },
-      "tier_3_weeks": {
-        "label": "within 3 weeks",
-        "pill": "bg-amber-50 text-amber-800 border border-amber-200/60",
-        "dot": "bg-amber-500"
-      },
-      "tier_4_plus_weeks": {
-        "label": "4+ weeks ago",
-        "pill": "bg-red-50 text-red-700 border border-red-200/60",
-        "dot": "bg-red-500"
+      "status_chips": {
+        "overdue": "bg-red-50 text-red-700 border border-red-200/80 font-medium dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50",
+        "soon": "bg-amber-50 text-amber-800 border border-amber-200/80 font-medium dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/50",
+        "ok": "bg-emerald-50 text-emerald-700 border border-emerald-200/80 font-medium dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50",
+        "assembly": "bg-indigo-50 text-indigo-700 border border-indigo-200/80 font-semibold dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/50"
       }
     },
-    "low_stock_flag": {
-      "cell_style": "bg-rose-50 text-rose-700 font-semibold border-l-2 border-rose-500 px-2.5 py-1.5 rounded-sm inline-block"
+    "typography": {
+      "brand_font": "Helvetica Neue, Helvetica, Arimo, Arial, sans-serif",
+      "h1_title": "text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white",
+      "subtitle": "text-sm text-slate-500 dark:text-slate-400",
+      "section_label": "text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400",
+      "table_header": "text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-sm",
+      "metric_number": "text-2xl sm:text-3xl font-bold tabular-nums tracking-tight",
+      "body_text": "text-sm text-slate-700 dark:text-slate-200",
+      "muted_meta": "text-xs text-slate-500 dark:text-slate-400"
     }
   },
-
-  "column_alignment_and_formatting_rules": {
-    "text_columns": {
-      "columns": ["account_name", "last_order_sku", "custom_text"],
-      "header_align": "text-left",
-      "cell_align": "text-left",
-      "rules": "Left-aligned, standard kerning, primary entity bold with secondary metadata (city, territory) in muted subtext"
+  "layout_and_components": {
+    "header_section": {
+      "container": "flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-200/70 dark:border-slate-800",
+      "title_group": "flex items-center gap-3.5",
+      "icon_wrapper": "p-2.5 rounded-xl bg-gradient-to-br from-indigo-50 to-blue-100 text-[#002FA7] dark:from-indigo-950/50 dark:to-blue-900/40 dark:text-blue-300 shadow-sm border border-blue-100/80 dark:border-blue-900/50",
+      "cta_group": "flex items-center gap-2.5",
+      "add_equipment_btn": "h-10 px-4 font-semibold text-sm rounded-lg bg-[#002FA7] hover:bg-[#00227A] text-white shadow-sm transition-transform active:scale-[0.98]"
     },
-    "numeric_columns": {
-      "columns": [
-        "avg_order_frequency_days",
-        "order_count",
-        "account_age_days",
-        "last_order_quantity",
-        "biweekly_volume_crates",
-        "expected_monthly_volume_crates",
-        "actual_monthly_consumption_crates",
-        "warehouse_stock_crates",
-        "custom_number",
-        "custom_formula"
-      ],
-      "header_align": "text-right",
-      "cell_align": "text-right",
-      "rules": "Right-aligned, tabular-nums font feature, Indian currency / number format (toLocaleString('en-IN')), empty values render as muted em-dash ('—')"
+    "interactive_kpi_cards": {
+      "pattern": "Bento KPI Grid with Quick Filter Actionability",
+      "grid_classes": "grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4",
+      "card_interaction": "cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md rounded-xl p-4 sm:p-5 border relative overflow-hidden group",
+      "click_behavior": "Clicking a KPI card sets/toggles quick filter state (e.g. clicking 'Maintenance Overdue' filters table directly to overdue items with visual active badge and a Clear quick filter pill).",
+      "cards": [
+        {
+          "id": "all",
+          "label": "Total Equipment",
+          "icon": "Cog",
+          "tooltip": "All active equipment & assembly units"
+        },
+        {
+          "id": "overdue",
+          "label": "Maintenance Overdue",
+          "icon": "AlertTriangle",
+          "tooltip": "Requires immediate maintenance attention"
+        },
+        {
+          "id": "due_soon",
+          "label": "Due in 30 Days",
+          "icon": "CalendarCheck",
+          "tooltip": "Upcoming scheduled preventive maintenance"
+        },
+        {
+          "id": "order_now",
+          "label": "Order Now (Lead Time)",
+          "icon": "ShoppingCart",
+          "tooltip": "Replacement due within vendor procurement lead time"
+        }
+      ]
     },
-    "date_columns": {
-      "columns": ["onboarded_date", "first_delivery_date", "latest_delivery_date", "custom_date"],
-      "header_align": "text-left",
-      "cell_align": "text-left",
-      "rules": "Left-aligned, tabular-nums, formatted as 'DD MMM YYYY' (e.g. 14 Aug 2024), recency pill overlay on latest_delivery_date"
+    "filter_bar": {
+      "container": "bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3",
+      "search_input": "relative flex-1 min-w-[240px] max-w-md",
+      "search_icon": "absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400",
+      "search_field": "pl-9 pr-8 h-10 rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 focus:bg-white dark:focus:bg-slate-900 text-sm transition-colors",
+      "cascading_dropdowns_group": "flex flex-wrap items-center gap-2",
+      "select_style": "h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#002FA7]/20 focus:border-[#002FA7] transition-colors",
+      "active_filters_row": "flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500",
+      "clear_all_btn": "text-xs font-medium text-[#002FA7] hover:underline dark:text-blue-400 flex items-center gap-1"
     },
-    "list_columns": {
-      "columns": ["recent_delivery_dates", "recent_delivery_crates"],
-      "header_align": "text-right for crates, text-left for dates",
-      "cell_align": "text-right for crates, text-left for dates",
-      "rules": "Stacked micro-lines (leading-tight) with newest value at top featuring recency indicator, historical values in muted slate-500"
+    "equipment_hierarchy_table": {
+      "container": "bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden",
+      "table_wrapper": "overflow-x-auto w-full divide-y divide-slate-200 dark:divide-slate-800",
+      "row_treatment": "hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors border-b border-slate-100 dark:border-slate-800/60 group",
+      "hierarchy_visuals": {
+        "tree_guideline": "Tree indent lines with subtle branch connector (└) and depth tint for parent vs nested child components",
+        "assembly_badge": "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800",
+        "overdue_rollup_badge": "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-rose-600 text-white shadow-sm animate-pulse"
+      },
+      "columns_spec": [
+        { "key": "equipment", "title": "Equipment & Location", "width": "w-[30%]", "align": "text-left" },
+        { "key": "type", "title": "Type", "width": "w-[12%]", "align": "text-left" },
+        { "key": "make_model", "title": "Make / Model", "width": "w-[14%]", "align": "text-left" },
+        { "key": "vendor", "title": "Vendors", "width": "w-[14%]", "align": "text-left" },
+        { "key": "maintenance", "title": "Next Maintenance", "width": "w-[13%]", "align": "text-left" },
+        { "key": "replacement", "title": "Next Replacement / Lead", "width": "w-[13%]", "align": "text-left" },
+        { "key": "actions", "title": "Quick Actions", "width": "w-[120px]", "align": "text-right" }
+      ]
+    },
+    "actions_redesign_touch_targets": {
+      "core_complaint_fix": "Replaced 7 tiny 14px cramped icons with high-visibility 36-40px ergonomic touch targets. Top 2 primary workflows (Log Action & Documents) are exposed directly with badge count and tooltips, while Secondary actions (Maintenance Profile, Edit, Delete) are consolidated into a clean Radix Dropdown Kebab Menu.",
+      "primary_action_1_log": {
+        "component": "Button",
+        "size": "h-8 px-2.5 sm:px-3 text-xs font-medium rounded-lg",
+        "style": "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 flex items-center gap-1.5",
+        "label": "Log",
+        "icon": "CalendarCheck"
+      },
+      "primary_action_2_docs": {
+        "component": "Button",
+        "size": "h-8 w-8 sm:w-auto sm:px-2.5 text-xs font-medium rounded-lg relative",
+        "style": "bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 flex items-center gap-1.5",
+        "badge": "absolute -top-1.5 -right-1.5 h-4 min-w-[16px] px-1 rounded-full bg-[#002FA7] text-white text-[10px] font-bold flex items-center justify-center shadow-sm",
+        "icon": "Paperclip"
+      },
+      "secondary_actions_dropdown": {
+        "trigger": "Button size='icon' variant='ghost' className='h-8 w-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'",
+        "icon": "MoreVertical / MoreHorizontal",
+        "menu_items": [
+          { "label": "Maintenance Profile & QR Sheet", "icon": "Wrench", "color": "text-blue-600" },
+          { "label": "Log Replacement Done", "icon": "Repeat", "color": "text-indigo-600" },
+          { "label": "Edit Equipment Details", "icon": "Pencil", "color": "text-slate-700" },
+          { "label": "Delete Equipment", "icon": "Trash2", "color": "text-rose-600", "separator_before": true }
+        ]
+      }
     }
   },
-
-  "default_hidden_columns_spec": {
-    "hidden_by_default_keys": [
-      "order_count",
-      "onboarded_date",
-      "last_order_sku",
-      "account_age_days"
-    ],
-    "new_column_definition": {
-      "key": "account_age_days",
-      "label": "Account Age (Days)",
-      "type": "number",
-      "calculation": "Derived from Date.now() - new Date(onboarded_date || first_delivery_date) in days",
-      "default_hidden": true
-    },
-    "implementation_notes": "Initialize hidden state with default hidden columns if localStorage is empty, while preserving user preference overrides"
+  "interactive_testing_attributes": {
+    "page": "data-testid='equipment-master-page'",
+    "kpi_total": "data-testid='eq-stat-total'",
+    "kpi_overdue": "data-testid='eq-stat-overdue'",
+    "kpi_duesoon": "data-testid='eq-stat-duesoon'",
+    "kpi_ordernow": "data-testid='eq-stat-ordernow'",
+    "new_eq_btn": "data-testid='eq-new-btn'",
+    "tab_equipment": "data-testid='eq-tab-equipment'",
+    "tab_types": "data-testid='eq-tab-types'",
+    "search": "data-testid='eq-search'",
+    "type_filter": "data-testid='eq-type-filter'",
+    "fac_filter": "data-testid='eq-facility-filter'",
+    "floor_filter": "data-testid='eq-floor-filter'",
+    "area_filter": "data-testid='eq-area-filter'",
+    "table": "data-testid='eq-table'",
+    "row_prefix": "data-testid='eq-row-[NAME]'",
+    "assembly_badge": "data-testid='eq-assembly-[NAME]'",
+    "child_overdue_badge": "data-testid='eq-child-overdue-[NAME]'",
+    "location_meta": "data-testid='eq-location-[NAME]'",
+    "maint_due": "data-testid='eq-maint-due-[NAME]'",
+    "repl_due": "data-testid='eq-repl-due-[NAME]'",
+    "order_now": "data-testid='eq-order-now-[NAME]'",
+    "docs_btn": "data-testid='eq-docs-[NAME]'",
+    "maint_profile_btn": "data-testid='eq-maint-profile-[NAME]'",
+    "log_maint_btn": "data-testid='eq-log-maint-[NAME]'",
+    "log_repl_btn": "data-testid='eq-log-repl-[NAME]'",
+    "edit_btn": "data-testid='eq-edit-[NAME]'",
+    "delete_btn": "data-testid='eq-delete-[NAME]'",
+    "dropdown_trigger": "data-testid='eq-more-actions-[NAME]'"
   },
-
-  "table_layout_and_freeze_pane_system": {
-    "container": "bg-white border border-slate-200 rounded-lg shadow-sm overflow-auto max-h-[calc(100vh-250px)]",
-    "table_element": "w-full text-xs border-collapse table-fixed select-text",
-    "row_density": {
-      "header_height": "h-11 (approx 44px)",
-      "summary_height": "h-10 (approx 40px)",
-      "body_row_height": "py-2 px-3 leading-normal",
-      "cell_padding": "px-3 py-2.5"
-    },
-    "sticky_z_index_hierarchy": {
-      "corner_header_cell_account_name": "sticky top-0 left-0 z-40 bg-[#0b192c] text-white shadow-[inset_-1px_0_0_#334155,inset_0_-1px_0_#1e293b]",
-      "table_headers": "sticky top-0 z-20 bg-[#0b192c] text-slate-100 shadow-[inset_0_-1px_0_#1e293b]",
-      "corner_summary_cell_account_name": "sticky left-0 z-35 bg-[#DFE7F7] text-[#002FA7] shadow-[inset_-1px_0_0_#CBD5E1,inset_0_-2px_0_rgba(0,47,167,0.3)]",
-      "summary_row_cells": "sticky z-15 bg-[#EAF0FC] text-[#002FA7] shadow-[inset_0_-2px_0_rgba(0,47,167,0.3)]",
-      "sticky_account_name_body_cell": "sticky left-0 z-10 bg-inherit shadow-[inset_-1px_0_0_#E2E8F0]",
-      "regular_body_cells": "z-0"
-    },
-    "zebra_striping_pattern": "Even rows bg-white, Odd rows bg-slate-50/70, Row Hover bg-[#EDF2FA] with left-accent 2px indicator"
-  },
-
-  "editable_cell_ux_guidelines": {
-    "passive_state": "w-full px-2 py-1 -mx-2 rounded hover:bg-[#002FA7]/5 hover:ring-1 hover:ring-[#002FA7]/30 transition-all text-right tabular-nums group cursor-pointer",
-    "empty_state_prompt": "text-slate-300 italic text-[11px]",
-    "active_editing_state": "h-7 w-28 rounded border-[#002FA7] ring-2 ring-[#002FA7]/20 bg-white text-xs font-semibold px-2 text-right shadow-sm",
-    "save_behavior": "Save on Enter and blur, cancel on Escape with instant visual confirmation via sonner toast"
-  },
-
-  "pending_consumption_popover_design": {
-    "badge_style": "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200",
-    "info_icon_button": "p-0.5 rounded-full text-slate-400 hover:text-[#002FA7] hover:bg-[#002FA7]/10 transition-colors",
-    "popover_content": "w-72 bg-white p-3 rounded-md shadow-lg border border-slate-200 text-xs leading-relaxed text-slate-600"
-  },
-
-  "consignment_planner_section_specs": {
-    "wrapper": "bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden mt-6",
-    "header_bar": "flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 bg-slate-50/80 border-b border-slate-200",
-    "truck_cards_grid": "grid grid-cols-1 md:grid-cols-3 gap-3.5 p-5",
-    "truck_card_style": "border border-slate-200/80 rounded-md p-3.5 bg-gradient-to-b from-white to-slate-50/50 shadow-xs hover:border-[#002FA7]/40 transition-all",
-    "utilization_badge_high": "text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60",
-    "utilization_badge_med": "text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60"
-  },
-
-  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": {
-    "framework": "React JS with Tailwind CSS and Radix/shadcn UI primitives",
-    "strict_rules": [
-      "DO NOT rewrite to third-party grid library (AG-Grid/Handsontable) - maintain incremental pure HTML table + Tailwind",
-      "DO NOT remove or rename any existing data-testid attribute",
-      "ALWAYS ensure all table headers and cells have exact matching alignment between <th> and <td>",
-      "DO NOT use emojis anywhere in UI, use lucide-react icons exclusively",
-      "ALWAYS maintain light theme visual consistency across dialogs, popovers, and tables",
-      "Default hidden columns MUST include: 'order_count', 'onboarded_date', 'last_order_sku', and 'account_age_days'",
-      "DO NOT use transition: all globally. Use targeted transitions like transition-colors and transition-transform"
-    ]
-  },
-
   "instructions_to_main_agent": [
-    "Step 1: In /app/frontend/src/pages/AccountVolumeGrid.js, update BASE_COLUMNS to include '{ key: 'account_age_days', label: 'Account Age (Days)', type: 'number' }' and adjust formula context if needed.",
-    "Step 2: Update default hidden state in useState: default to ['order_count', 'onboarded_date', 'last_order_sku', 'account_age_days'] when localStorage is empty.",
-    "Step 3: Align all column headers and cells strictly based on column_alignment_and_formatting_rules (numbers text-right, text text-left, dates text-left with tabular-nums).",
-    "Step 4: Upgrade table headers to dark slate (#0b192c) with crisp dividers, prominent sort indicators, and elegant column resize handles.",
-    "Step 5: Apply crisp zebra striping (white / slate-50/70) and hover row highlight (#EDF2FA) with matching sticky left column background synchronization.",
-    "Step 6: Style the frozen summary row with #EAF0FC background, bold #002FA7 text, tabular numbers, and clean border separator.",
-    "Step 7: Refine the warehouse stock red flag cell with soft rose badge treatment and recency pills with subtle contemporary palette.",
-    "Step 8: Verify all data-testid attributes remain functional and test user interactions."
-  ]
+    "Retain 100% of all existing API endpoints, dialogs (Add/Edit Equipment modal, Types modal, Log Maintenance/Replacement dialog with camera support, Documents modal with photo/certification categories, MaintenanceProfile component).",
+    "Replace the cramped 7 icon buttons in each row with the modern high-ergonomics action bar: Primary 'Log' (Emerald pill) + 'Docs (N)' (Slate pill with count badge) + DropdownMenu (Radix Kebab) containing QR Profile, Replacement, Edit, and Delete.",
+    "Upgrade top 4 stat cards into interactive Quick-Filter KPI tiles: clicking 'Maintenance Overdue' applies overdue filter to the list; clicking 'Due in 30 Days' filters due soon; clicking 'Order Now' filters items within procurement lead time; clicking 'Total Equipment' or active card resets back to all.",
+    "Add an Active Filter Tag bar below search & dropdowns when any filter or KPI quick-filter is active, showing item count and a one-click 'Clear all' button.",
+    "Ensure hierarchy tree indentation is visually elegant with clean connecting lines (└) and clear assembly parent/child badges.",
+    "Ensure all existing data-testid attributes are strictly preserved for automated QA regression testing.",
+    "Ensure dark mode contrast meets APCA/WCAG standards with explicit hover and focus text colors."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": {
+    "spacing": "Generous spacing (p-6 to p-8 container, p-4 on cards, gap-4 on grids). Prevent text collisions with proper padding.",
+    "touch_targets": "Minimum 36px to 40px clickable targets for all buttons and interactive dropdown triggers.",
+    "contrast": "Always explicitly define hover colors (e.g. hover:bg-slate-100 hover:text-slate-900). Never rely on transparent header/dialog backdrops.",
+    "toast_notifications": "Use sonner toast for action feedback (toast.success, toast.error).",
+    "icons": "Use lucide-react icons exclusively. No emojis as icon substitutes."
+  }
 }

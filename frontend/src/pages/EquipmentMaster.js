@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '../components/ui/card';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -7,7 +8,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
-import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon, MapPin, AlertTriangle, Layers, Users } from 'lucide-react';
+import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon, MapPin, AlertTriangle, Layers, Users, MoreVertical, X, Filter } from 'lucide-react';
 import { toast } from 'sonner';
 import { MaintenanceProfile } from '../components/MaintenanceProfile';
 import { FormSection } from '../components/FormSection';
@@ -205,6 +206,7 @@ export default function EquipmentMaster() {
   const [facFilter, setFacFilter] = useState('');
   const [floorFilter, setFloorFilter] = useState('');
   const [areaFilter, setAreaFilter] = useState('');
+  const [quickFilter, setQuickFilter] = useState('');
   const [showEqForm, setShowEqForm] = useState(false);
   const [editingEq, setEditingEq] = useState(null);
   const [eqForm, setEqForm] = useState(EMPTY_EQ);
@@ -438,7 +440,16 @@ export default function EquipmentMaster() {
   };
 
   const overdueByParent = overdueChildCounts(equipment);
+  const isOrderNow = (e) => { const n = daysUntil(e.next_replacement_due); return n != null && e.procurement_lead_time_days && n <= e.procurement_lead_time_days; };
+  const quickMatch = (e) => {
+    if (!quickFilter) return true;
+    if (quickFilter === 'overdue') return e.next_maintenance_due && daysUntil(e.next_maintenance_due) < 0;
+    if (quickFilter === 'due_soon') { const n = daysUntil(e.next_maintenance_due); return n != null && n >= 0 && n <= 30; }
+    if (quickFilter === 'order_now') return isOrderNow(e);
+    return true;
+  };
   const filtered = buildTree(equipment.filter((e) =>
+    quickMatch(e) &&
     (!typeFilter || e.equipment_type_id === typeFilter) &&
     (!facFilter || e.facility_id === facFilter) &&
     (!floorFilter || e.floor_id === floorFilter) &&
@@ -468,18 +479,39 @@ export default function EquipmentMaster() {
           <Button onClick={openNewEq} data-testid="eq-new-btn"><Plus className="w-4 h-4 mr-2" /> Add Equipment</Button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {[
-            { label: 'Equipment Items', value: equipment.length, testid: 'eq-stat-total' },
-            { label: 'Maintenance Overdue', value: overdueM, testid: 'eq-stat-overdue', red: overdueM > 0 },
-            { label: 'Due in 30 Days', value: dueSoonM, testid: 'eq-stat-duesoon' },
-            { label: 'Order Now (lead time)', value: orderNow, testid: 'eq-stat-ordernow', red: orderNow > 0 },
-          ].map((s) => (
-            <Card key={s.label}><CardContent className="p-4">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{s.label}</p>
-              <p className={`text-2xl font-bold tabular-nums ${s.red ? 'text-red-600' : ''}`} data-testid={s.testid}>{s.value}</p>
-            </CardContent></Card>
-          ))}
+            { id: '', label: 'Total Equipment', value: equipment.length, testid: 'eq-stat-total', icon: Cog,
+              iconBg: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300', border: 'border-slate-200 hover:border-slate-400 dark:border-slate-800',
+              ring: 'ring-2 ring-slate-900 bg-slate-50/80 dark:bg-slate-800/60 dark:ring-slate-300', text: 'text-slate-900 dark:text-white', sub: 'All active equipment & assemblies' },
+            { id: 'overdue', label: 'Maintenance Overdue', value: overdueM, testid: 'eq-stat-overdue', icon: AlertTriangle,
+              iconBg: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400', border: 'border-rose-200 hover:border-rose-400 dark:border-rose-900/50',
+              ring: 'ring-2 ring-rose-600 bg-rose-50/80 dark:bg-rose-950/40 dark:ring-rose-500', text: overdueM > 0 ? 'text-rose-700 dark:text-rose-400' : 'text-slate-900 dark:text-white', sub: 'Needs immediate attention' },
+            { id: 'due_soon', label: 'Due in 30 Days', value: dueSoonM, testid: 'eq-stat-duesoon', icon: CalendarCheck,
+              iconBg: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400', border: 'border-amber-200 hover:border-amber-400 dark:border-amber-900/50',
+              ring: 'ring-2 ring-amber-500 bg-amber-50/80 dark:bg-amber-950/40 dark:ring-amber-400', text: 'text-slate-900 dark:text-white', sub: 'Upcoming preventive maintenance' },
+            { id: 'order_now', label: 'Order Now (Lead Time)', value: orderNow, testid: 'eq-stat-ordernow', icon: ShoppingCart,
+              iconBg: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400', border: 'border-orange-200 hover:border-orange-400 dark:border-orange-900/50',
+              ring: 'ring-2 ring-orange-600 bg-orange-50/80 dark:bg-orange-950/40 dark:ring-orange-500', text: orderNow > 0 ? 'text-orange-700 dark:text-orange-400' : 'text-slate-900 dark:text-white', sub: 'Replacement within lead time' },
+          ].map((s) => {
+            const active = quickFilter === s.id && s.id !== '';
+            const Icon = s.icon;
+            return (
+              <button key={s.label} type="button"
+                onClick={() => setQuickFilter(s.id === '' ? '' : (quickFilter === s.id ? '' : s.id))}
+                className={`text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md rounded-xl p-4 sm:p-5 border bg-white dark:bg-slate-900 shadow-sm relative overflow-hidden group ${active ? s.ring : s.border}`}
+                data-testid={s.testid}>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{s.label}</p>
+                    <p className={`text-2xl sm:text-3xl font-bold tabular-nums tracking-tight mt-1 ${s.text}`}>{s.value}</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 hidden sm:block">{active ? 'Filtering — click to clear' : s.sub}</p>
+                  </div>
+                  <span className={`p-2.5 rounded-lg shrink-0 ${s.iconBg}`}><Icon className="h-5 w-5" /></span>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         <Tabs defaultValue="equipment">
@@ -489,41 +521,60 @@ export default function EquipmentMaster() {
           </TabsList>
 
           <TabsContent value="equipment" className="space-y-4 mt-4">
-            <div className="flex flex-wrap gap-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search name, make, model…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 w-64" data-testid="eq-search" />
+            <div className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-2">
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
+                <div className="relative flex-1 min-w-[240px] max-w-md">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input placeholder="Search name, make, model…" value={search} onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9 h-10 rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 focus:bg-white dark:focus:bg-slate-900 text-sm transition-colors" data-testid="eq-search" />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select className="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#002FA7]/20 focus:border-[#002FA7] transition-colors" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} data-testid="eq-type-filter">
+                    <option value="">All Types</option>
+                    {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                  <select className="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#002FA7]/20 focus:border-[#002FA7] transition-colors" value={facFilter}
+                    onChange={(e) => { setFacFilter(e.target.value); setFloorFilter(''); setAreaFilter(''); }} data-testid="eq-facility-filter">
+                    <option value="">All Facilities</option>
+                    {facilities.map((f) => <option key={f.id} value={f.id}>{f.facility_name}</option>)}
+                  </select>
+                  {(() => {
+                    const selFac = facilities.find((f) => f.id === facFilter);
+                    const selFloor = (selFac?.floors || []).find((fl) => fl.id === floorFilter);
+                    if (!selFac) return null;
+                    return (
+                      <>
+                        <select className="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#002FA7]/20 focus:border-[#002FA7] transition-colors" value={floorFilter}
+                          onChange={(e) => { setFloorFilter(e.target.value); setAreaFilter(''); }} data-testid="eq-floor-filter">
+                          <option value="">All Floors</option>
+                          {(selFac.floors || []).map((fl) => <option key={fl.id} value={fl.id}>{fl.name}</option>)}
+                        </select>
+                        {selFloor && (
+                          <select className="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#002FA7]/20 focus:border-[#002FA7] transition-colors" value={areaFilter}
+                            onChange={(e) => setAreaFilter(e.target.value)} data-testid="eq-area-filter">
+                            <option value="">All Areas</option>
+                            {(selFloor.areas || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                          </select>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
               </div>
-              <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} data-testid="eq-type-filter">
-                <option value="">All Types</option>
-                {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-              <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={facFilter}
-                onChange={(e) => { setFacFilter(e.target.value); setFloorFilter(''); setAreaFilter(''); }} data-testid="eq-facility-filter">
-                <option value="">All Facilities</option>
-                {facilities.map((f) => <option key={f.id} value={f.id}>{f.facility_name}</option>)}
-              </select>
-              {(() => {
-                const selFac = facilities.find((f) => f.id === facFilter);
-                const selFloor = (selFac?.floors || []).find((fl) => fl.id === floorFilter);
-                if (!selFac) return null;
-                return (
-                  <>
-                    <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={floorFilter}
-                      onChange={(e) => { setFloorFilter(e.target.value); setAreaFilter(''); }} data-testid="eq-floor-filter">
-                      <option value="">All Floors</option>
-                      {(selFac.floors || []).map((fl) => <option key={fl.id} value={fl.id}>{fl.name}</option>)}
-                    </select>
-                    {selFloor && (
-                      <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={areaFilter}
-                        onChange={(e) => setAreaFilter(e.target.value)} data-testid="eq-area-filter">
-                        <option value="">All Areas</option>
-                        {(selFloor.areas || []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                      </select>
-                    )}
-                  </>
-                );
-              })()}
+              {(quickFilter || search || typeFilter || facFilter) && (
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500" data-testid="eq-active-filters">
+                  <Filter className="h-3.5 w-3.5" />
+                  <span className="font-medium">{filtered.length} shown</span>
+                  {quickFilter && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium">
+                      {quickFilter === 'overdue' ? 'Maintenance overdue' : quickFilter === 'due_soon' ? 'Due in 30 days' : 'Order now'}
+                      <button onClick={() => setQuickFilter('')} className="hover:text-rose-600" data-testid="eq-clear-quickfilter"><X className="h-3 w-3" /></button>
+                    </span>
+                  )}
+                  <button onClick={() => { setQuickFilter(''); setSearch(''); setTypeFilter(''); setFacFilter(''); setFloorFilter(''); setAreaFilter(''); }}
+                    className="text-xs font-medium text-[#002FA7] hover:underline dark:text-blue-400 ml-auto" data-testid="eq-clear-all-filters">Clear all filters</button>
+                </div>
+              )}
             </div>
             <Card><CardContent className="p-0">
               {loading ? (
@@ -537,16 +588,14 @@ export default function EquipmentMaster() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm" data-testid="eq-table">
                     <thead>
-                      <tr className="border-b bg-slate-50 dark:bg-slate-900/50 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                        <th className="px-4 py-3">Equipment</th>
-                        <th className="px-4 py-3">Type</th>
-                        <th className="px-4 py-3">Make / Model</th>
-                        <th className="px-4 py-3">Vendors</th>
-                        <th className="px-4 py-3">Next Maintenance</th>
-                        <th className="px-4 py-3">Next Replacement</th>
-                        <th className="px-4 py-3 text-right">Lead Time</th>
-                        <th className="px-4 py-3 text-right">Min Stock</th>
-                        <th className="px-4 py-3"></th>
+                      <tr className="border-b bg-slate-50/80 dark:bg-slate-900/80 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        <th className="px-5 py-3.5">Equipment & Location</th>
+                        <th className="px-4 py-3.5">Type</th>
+                        <th className="px-4 py-3.5">Make / Model</th>
+                        <th className="px-4 py-3.5">Vendors</th>
+                        <th className="px-4 py-3.5">Next Maintenance</th>
+                        <th className="px-4 py-3.5">Next Replacement / Lead</th>
+                        <th className="px-4 py-3.5 text-right">Quick Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -554,8 +603,8 @@ export default function EquipmentMaster() {
                         const nRep = daysUntil(e.next_replacement_due);
                         const orderFlag = nRep != null && e.procurement_lead_time_days && nRep <= e.procurement_lead_time_days;
                         return (
-                          <tr key={e.id} className="border-b hover:bg-slate-50/60 dark:hover:bg-slate-900/40 align-top" data-testid={`eq-row-${e.name.replace(/\s/g, '-')}`}>
-                            <td className="px-4 py-3">
+                          <tr key={e.id} className="border-b border-slate-100 dark:border-slate-800/60 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors align-top group" data-testid={`eq-row-${e.name.replace(/\s/g, '-')}`}>
+                            <td className="px-5 py-4">
                               <div style={{ paddingLeft: (e._depth || 0) * 18 }} className="flex items-start gap-1.5">
                                 {e._depth > 0 && <span className="text-slate-400 select-none">└</span>}
                                 <div>
@@ -584,9 +633,9 @@ export default function EquipmentMaster() {
                                 </div>
                               </div>
                             </td>
-                            <td className="px-4 py-3"><Badge variant="outline">{e.equipment_type_name}</Badge></td>
-                            <td className="px-4 py-3 text-xs">{[e.make_brand, e.model_spec].filter(Boolean).join(' · ') || '—'}</td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-4"><Badge variant="outline">{e.equipment_type_name}</Badge></td>
+                            <td className="px-4 py-4 text-xs">{[e.make_brand, e.model_spec].filter(Boolean).join(' · ') || '—'}</td>
+                            <td className="px-4 py-4">
                               {(e.vendors || []).length === 0 ? <span className="text-xs text-muted-foreground">—</span> : (
                                 <div className="space-y-0.5">
                                   {e.vendors.map((v, i) => (
@@ -598,52 +647,62 @@ export default function EquipmentMaster() {
                                 </div>
                               )}
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-4">
                               <DueChip date={e.next_maintenance_due} testid={`eq-maint-due-${e.name.replace(/\s/g, '-')}`} />
                               {freqLabel(e.maintenance_frequency_days) && <p className="text-[11px] text-muted-foreground mt-0.5">{freqLabel(e.maintenance_frequency_days)}</p>}
                               {e.last_maintenance_date && <p className="text-[11px] text-muted-foreground mt-0.5">Last: {e.last_maintenance_date}</p>}
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-4">
                               <DueChip date={e.next_replacement_due} testid={`eq-repl-due-${e.name.replace(/\s/g, '-')}`} />
                               {freqLabel(e.replacement_frequency_days) && <p className="text-[11px] text-muted-foreground mt-0.5">{freqLabel(e.replacement_frequency_days)}</p>}
+                              <p className="text-[11px] text-muted-foreground mt-0.5">
+                                {e.procurement_lead_time_days ? `Lead: ${e.procurement_lead_time_days}d` : ''}{e.procurement_lead_time_days && e.min_stock_level != null ? ' · ' : ''}{e.min_stock_level != null ? `Min stock: ${e.min_stock_level}` : ''}
+                              </p>
                               {orderFlag && (
                                 <Badge className="mt-1 bg-red-600 text-white block w-fit" data-testid={`eq-order-now-${e.name.replace(/\s/g, '-')}`}>
                                   <ShoppingCart className="h-3 w-3 mr-1" /> Order now
                                 </Badge>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-right tabular-nums">{e.procurement_lead_time_days ? `${e.procurement_lead_time_days}d` : '—'}</td>
-                            <td className="px-4 py-3 text-right tabular-nums">{e.min_stock_level ?? '—'}</td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <Button size="icon" variant="ghost" className="h-7 w-7 relative" title="Photos, certifications & documents"
-                                onClick={() => { setDocsTarget(e); setDocCategory('photo'); }}
-                                data-testid={`eq-docs-${e.name.replace(/\s/g, '-')}`}>
-                                <Paperclip className="h-3.5 w-3.5 text-slate-600" />
-                                {(e.attachments || []).length > 0 && (
-                                  <span className="absolute -top-1 -right-1 h-4 min-w-4 px-0.5 rounded-full bg-[#002FA7] text-white text-[9px] leading-4 text-center font-semibold">{e.attachments.length}</span>
-                                )}
-                              </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Maintenance profile, records & printable QR sheet"
-                                onClick={() => setMaintTarget(e)}
-                                data-testid={`eq-maint-profile-${e.name.replace(/\s/g, '-')}`}>
-                                <Wrench className="h-3.5 w-3.5 text-blue-700" />
-                              </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Log maintenance done"
-                                onClick={() => { setLogTarget({ equipment: e, kind: 'maintenance' }); setLogDate(new Date().toISOString().slice(0, 10)); setLogPhotos([]); }}
-                                data-testid={`eq-log-maint-${e.name.replace(/\s/g, '-')}`}>
-                                <CalendarCheck className="h-3.5 w-3.5 text-emerald-600" />
-                              </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Log replacement done"
-                                onClick={() => { setLogTarget({ equipment: e, kind: 'replacement' }); setLogDate(new Date().toISOString().slice(0, 10)); setLogPhotos([]); }}
-                                data-testid={`eq-log-repl-${e.name.replace(/\s/g, '-')}`}>
-                                <Repeat className="h-3.5 w-3.5 text-indigo-600" />
-                              </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditEq(e)} data-testid={`eq-edit-${e.name.replace(/\s/g, '-')}`}>
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => deleteEq(e)} data-testid={`eq-delete-${e.name.replace(/\s/g, '-')}`}>
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                            <td className="px-4 py-4">
+                              <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                                <Button size="sm" className="h-9 px-3 text-xs font-medium rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 shadow-none"
+                                  onClick={() => { setLogTarget({ equipment: e, kind: 'maintenance' }); setLogDate(new Date().toISOString().slice(0, 10)); setLogPhotos([]); }}
+                                  data-testid={`eq-log-maint-${e.name.replace(/\s/g, '-')}`}>
+                                  <CalendarCheck className="h-4 w-4 mr-1.5" /> Log
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-9 px-3 text-xs font-medium rounded-lg relative bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
+                                  onClick={() => { setDocsTarget(e); setDocCategory('photo'); }}
+                                  data-testid={`eq-docs-${e.name.replace(/\s/g, '-')}`}>
+                                  <Paperclip className="h-4 w-4" />
+                                  {(e.attachments || []).length > 0 && (
+                                    <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] px-1 rounded-full bg-[#002FA7] text-white text-[10px] font-bold flex items-center justify-center shadow-sm">{e.attachments.length}</span>
+                                  )}
+                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button size="icon" variant="ghost" className="h-9 w-9 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
+                                      data-testid={`eq-more-actions-${e.name.replace(/\s/g, '-')}`}>
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-56">
+                                    <DropdownMenuItem onClick={() => setMaintTarget(e)} data-testid={`eq-maint-profile-${e.name.replace(/\s/g, '-')}`}>
+                                      <Wrench className="h-4 w-4 mr-2 text-blue-600" /> Maintenance Profile & QR Sheet
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => { setLogTarget({ equipment: e, kind: 'replacement' }); setLogDate(new Date().toISOString().slice(0, 10)); setLogPhotos([]); }} data-testid={`eq-log-repl-${e.name.replace(/\s/g, '-')}`}>
+                                      <Repeat className="h-4 w-4 mr-2 text-indigo-600" /> Log Replacement Done
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => openEditEq(e)} data-testid={`eq-edit-${e.name.replace(/\s/g, '-')}`}>
+                                      <Pencil className="h-4 w-4 mr-2 text-slate-700 dark:text-slate-300" /> Edit Equipment Details
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => deleteEq(e)} className="text-rose-600 focus:text-rose-600" data-testid={`eq-delete-${e.name.replace(/\s/g, '-')}`}>
+                                      <Trash2 className="h-4 w-4 mr-2" /> Delete Equipment
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
                             </td>
                           </tr>
                         );

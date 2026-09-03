@@ -3034,3 +3034,10 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
   - Missed photo-required day → check_missed_maintenance promotes a random future unsubmitted slot in the same month so the monthly quota stays intact.
   - Profile returns photo_inspection {per_month, assigned_this_month, done_this_month}; MaintenanceProfile shows "Photo Inspections x/y this month" card.
 - Tested via API: 5 random slots assigned, no sheet leak, submit-without-photo 400, with-photo success, wrong-day message exact, future-token submit blocked, profile stats correct. Test data cleaned.
+
+## Update — Jun 2026: Equipment Master page redesign (design_agent guidelines in /app/design_guidelines.json)
+- KPI cards → interactive quick filters (Total/Overdue/Due 30d/Order Now): icon chips, hover lift, active ring per accent (slate/rose/amber/orange); click toggles quickFilter state applied before buildTree.
+- Filter bar in white card: search with icon (h-10, rounded-lg), styled selects (#002FA7 focus ring), active-filters row with count, quick-filter pill (X to clear) + "Clear all filters".
+- Table: roomy px-5/py-4 rows, semibold uppercase slate header, merged "Next Replacement / Lead" column (lead time + min stock as meta lines; standalone Lead/Min columns removed).
+- Actions: 7×28px icons → h-9 emerald "Log" pill + h-9 Docs button with #002FA7 count badge + h-9 kebab DropdownMenu (Maintenance Profile & QR Sheet / Log Replacement / Edit / Delete with separator). All data-testids preserved (eq-log-maint-*, eq-docs-*, eq-maint-profile-*, eq-edit-*, eq-delete-*, new eq-more-actions-*).
+- Verified via screenshots + interaction test: quick filter 3→0→3 rows, kebab menu items correct, layout clean.
