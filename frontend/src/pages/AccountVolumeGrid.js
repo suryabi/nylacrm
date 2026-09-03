@@ -28,7 +28,7 @@ const BASE_COLUMNS = [
   { key: 'account_age_days', label: 'Account Age (Days)', type: 'number' },
   { key: 'avg_order_frequency_days', label: 'Average Order Frequency (Days)', type: 'number' },
   { key: 'order_count', label: 'No. of Orders', type: 'number' },
-  { key: 'first_delivery_date', label: 'First Delivery Date', type: 'date' },
+  { key: 'first_delivery_date', label: 'First Delivery Date', type: 'date', fromDelivery: true },
   { key: 'latest_delivery_date', label: 'Latest Delivery Date', type: 'date' },
   { key: 'recent_delivery_dates', label: 'Last 4 Delivery Dates', type: 'list' },
   { key: 'recent_delivery_crates', label: 'Last 4 Delivery Qty (Crates)', type: 'list' },
@@ -722,7 +722,7 @@ export default function AccountVolumeGrid() {
               <tr ref={headerRowRef} className="bg-[#0b192c]">
                 {visibleColumns.map((c) => (
                   <th key={c.key}
-                    className={`${TH} ${numericCol(c) ? 'text-right' : 'text-left'} cursor-pointer transition-colors hover:text-white sticky top-0 ${c.fromPR ? 'bg-[#0F4C46] shadow-[inset_0_-2px_0_#14B8A6]' : c.fromAccount ? 'bg-[#3B2E6E] shadow-[inset_0_-2px_0_#8B5CF6]' : 'bg-[#0b192c] shadow-[inset_0_-1px_0_#1e293b]'} ${c.key === 'account_name' ? 'left-0 z-30 shadow-[inset_-1px_0_0_#334155,inset_0_-1px_0_#1e293b]' : 'z-20'}`}
+                    className={`${TH} ${numericCol(c) ? 'text-right' : 'text-left'} cursor-pointer transition-colors hover:text-white sticky top-0 ${c.fromPR ? 'bg-[#0F4C46] shadow-[inset_0_-2px_0_#14B8A6]' : c.fromAccount ? 'bg-[#3B2E6E] shadow-[inset_0_-2px_0_#8B5CF6]' : c.fromDelivery ? 'bg-[#7A3B10] shadow-[inset_0_-2px_0_#F59E0B]' : 'bg-[#0b192c] shadow-[inset_0_-1px_0_#1e293b]'} ${c.key === 'account_name' ? 'left-0 z-30 shadow-[inset_-1px_0_0_#334155,inset_0_-1px_0_#1e293b]' : 'z-20'}`}
                     title={c.fromPR ? 'Populated from the print request' : undefined}
                     onClick={() => toggleSort(c.key)}
                     onDragOver={(e) => e.preventDefault()}

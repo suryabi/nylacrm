@@ -3094,3 +3094,6 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 
 ## Update — Jun 2026: On-boarded Date header color
 - BASE_COLUMNS onboarded_date flagged fromAccount → header bg #3B2E6E with violet (#8B5CF6) underline; th logic: fromPR teal > fromAccount purple > default navy. Verified via computed-style check + screenshot.
+
+## Update — Jun 2026: First Delivery Date header color
+- first_delivery_date flagged fromDelivery → header bg #7A3B10 (burnt orange) with amber (#F59E0B) underline. Verified via computed style + screenshot.
