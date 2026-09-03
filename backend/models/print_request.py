@@ -106,6 +106,7 @@ class PrintRequestCreate(BaseModel):
     notes: Optional[str] = None
     assigned_department_id: Optional[str] = None
     vendor_id: Optional[str] = None
+    sku_id: Optional[str] = None
 
 
 class PrintRequestUpdate(BaseModel):
@@ -117,6 +118,7 @@ class PrintRequestUpdate(BaseModel):
     notes: Optional[str] = None
     assigned_department_id: Optional[str] = None
     vendor_id: Optional[str] = None
+    sku_id: Optional[str] = None
 
 
 class PrintStatusChange(BaseModel):

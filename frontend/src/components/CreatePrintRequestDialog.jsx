@@ -9,6 +9,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { DatePicker } from './ui/date-picker';
 import { Checkbox } from './ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Loader2, Printer } from 'lucide-react';
 import { PrintRequestOrderBanner } from './PrintRequestOrderBanner';
 
@@ -23,6 +24,8 @@ export const CreatePrintRequestDialog = ({ open, onOpenChange, designRequest, de
   const [notes, setNotes] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [skus, setSkus] = useState([]);
+  const [skuId, setSkuId] = useState('');
 
   useEffect(() => {
     if (open) {
@@ -32,6 +35,10 @@ export const CreatePrintRequestDialog = ({ open, onOpenChange, designRequest, de
       setDeliveryDate(null);
       setNotes('');
       setConfirmed(false);
+      setSkuId('');
+      axios.get(`${API_URL}/master-skus`, { withCredentials: true })
+        .then((r) => setSkus((Array.isArray(r.data) ? r.data : r.data?.skus || []).filter((s) => s.is_active !== false)))
+        .catch(() => {});
     }
   }, [open, defaultMonthlyVolume]);
 
@@ -49,6 +56,7 @@ export const CreatePrintRequestDialog = ({ open, onOpenChange, designRequest, de
         starting_monthly_volume: startingMonthlyVolume === '' ? null : Number(startingMonthlyVolume),
         requested_due_date: format(deliveryDate, 'yyyy-MM-dd'),
         notes: notes || null,
+        sku_id: skuId || null,
       }, { withCredentials: true });
       toast.success(`Print Request ${data.print_number || ''} created successfully`);
       onOpenChange(false);
@@ -69,6 +77,16 @@ export const CreatePrintRequestDialog = ({ open, onOpenChange, designRequest, de
         </DialogHeader>
         <div className="space-y-3 py-1">
           <PrintRequestOrderBanner />
+          <div className="space-y-1.5">
+            <Label>SKU (bottle) <span className="text-slate-400 text-xs font-normal">— used to convert order quantities to crates</span></Label>
+            <Select value={skuId || '__none'} onValueChange={(v) => setSkuId(v === '__none' ? '' : v)}>
+              <SelectTrigger data-testid="pr-sku-select"><SelectValue placeholder="Select SKU" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">— Not specified (assumes 12 bottles/crate) —</SelectItem>
+                {skus.map((s) => <SelectItem key={s.id} value={s.id}>{s.sku_name || s.sku}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="pr-total-vol">Total Monthly Volume (Future Potential)</Label>
             <Input id="pr-total-vol" type="number" min={0} value={totalMonthlyVolume} onChange={(e) => setTotalMonthlyVolume(e.target.value)} placeholder="Pre-filled from opportunity" data-testid="pr-total-monthly-volume" />

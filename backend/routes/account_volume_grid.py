@@ -142,7 +142,8 @@ async def get_grid(
     prs = await db.print_requests.find(
         {"tenant_id": tenant_id},
         {"_id": 0, "account_id": 1, "lead_id": 1, "created_at": 1, "requested_due_date": 1,
-         "starting_monthly_volume": 1, "initial_order_quantity": 1, "quantity": 1}).to_list(10000)
+         "starting_monthly_volume": 1, "initial_order_quantity": 1, "quantity": 1,
+         "sku_bottles_per_crate": 1}).to_list(10000)
     lead_code_by_uuid: Dict[str, str] = {}
     pr_lead_ids = list({p.get("lead_id") for p in prs if p.get("lead_id")})
     if pr_lead_ids:
@@ -303,9 +304,10 @@ async def get_grid(
             else:
                 consumption_in_days = 30 - days_elapsed
         fpr = first_pr.get(a["id"]) or first_pr.get(a.get("account_id")) or first_pr.get(a.get("lead_id"))
+        pr_bpc = (fpr.get("sku_bottles_per_crate") if fpr else None) or PR_BOTTLES_PER_CRATE
         emv = a.get("expected_monthly_volume_crates")
         if emv is None and fpr and isinstance(fpr.get("starting_monthly_volume"), (int, float)):
-            emv = round(fpr["starting_monthly_volume"] / PR_BOTTLES_PER_CRATE, 2)  # PR volumes are in bottles
+            emv = round(fpr["starting_monthly_volume"] / pr_bpc, 2)  # PR volumes are in bottles
         # Stock at the warehouse that last served this account, for the SKUs
         # it has ordered. Red-flag when below half the estimated monthly
         # consumption (Expected Monthly Volume, else Actual Monthly Consumption).
@@ -364,7 +366,7 @@ async def get_grid(
             "onboarded_date": (a.get("activated_at") or "")[:10] or None,
             "print_request_created_date": ((fpr.get("created_at") or "")[:10] or None) if fpr else None,
             "first_order_requested_date": fo_req,
-            "first_order_qty_crates": (round(((fpr.get("initial_order_quantity") if fpr.get("initial_order_quantity") is not None else fpr.get("quantity")) or 0) / PR_BOTTLES_PER_CRATE, 2) or None) if fpr else None,
+            "first_order_qty_crates": (round(((fpr.get("initial_order_quantity") if fpr.get("initial_order_quantity") is not None else fpr.get("quantity")) or 0) / pr_bpc, 2) or None) if fpr else None,
             "first_order_overdue": bool(fo_overdue_days),
             "first_order_overdue_days": fo_overdue_days,
             "account_age_days": age_days,

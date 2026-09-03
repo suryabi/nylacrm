@@ -116,6 +116,21 @@ def _slack_lead_line(doc: dict) -> str:
     return f"\n:bust_in_silhouette: Lead: {label}" if label else ""
 
 
+async def _resolve_sku(tenant_id: str, sku_id: str) -> dict:
+    """Master SKU → {id, name, bottles_per_crate} (bpc from explicit field or default production packaging)."""
+    ms = await db.master_skus.find_one({"id": sku_id}, {"_id": 0})
+    if not ms:
+        raise HTTPException(400, "SKU not found")
+    bpc = ms.get("bottles_per_crate")
+    if not bpc:
+        pc = (ms.get("packaging_config") or {}).get("production") or []
+        default = next((p for p in pc if p.get("is_default")), None) or (pc[0] if pc else None)
+        if default:
+            bpc = default.get("units") or default.get("units_per_package")
+    return {"id": ms["id"], "name": ms.get("sku_name") or ms.get("sku") or "SKU",
+            "bottles_per_crate": int(bpc) if bpc else None}
+
+
 async def _can_delete(tenant_id: str, user: dict) -> bool:
     if _is_admin(user):
         return True
@@ -418,6 +433,7 @@ async def create_print_request(payload: PrintRequestCreate, current_user: dict =
         )
         if not vendor:
             raise HTTPException(400, "Vendor not found")
+    sku = await _resolve_sku(tenant_id, payload.sku_id) if payload.sku_id else None
 
     # Account + Customer Branding association (resolved via the source lead)
     account = None
@@ -466,6 +482,9 @@ async def create_print_request(payload: PrintRequestCreate, current_user: dict =
         # captured inputs
         "quantity": int(order_qty),
         "initial_order_quantity": int(order_qty),
+        "sku_id": sku["id"] if sku else None,
+        "sku_name": sku["name"] if sku else None,
+        "sku_bottles_per_crate": sku["bottles_per_crate"] if sku else None,
         "total_monthly_volume": payload.total_monthly_volume,
         "starting_monthly_volume": payload.starting_monthly_volume,
         "requested_due_date": payload.requested_due_date[:10],
@@ -496,11 +515,12 @@ async def create_print_request(payload: PrintRequestCreate, current_user: dict =
     doc.pop("_id", None)
 
     # Auto-populate the account's Expected Monthly Volume from this print request (stays editable).
-    # PR volumes are entered in bottles; the volume grid tracks crates (12 bottles/crate).
+    # PR volumes are entered in bottles; the grid tracks crates (SKU bottles-per-crate, else 12).
     if account and isinstance(payload.starting_monthly_volume, (int, float)) and account.get("expected_monthly_volume_crates") is None:
+        bpc = (sku or {}).get("bottles_per_crate") or 12
         await db.accounts.update_one(
             {"id": account["id"], "tenant_id": tenant_id},
-            {"$set": {"expected_monthly_volume_crates": round(payload.starting_monthly_volume / 12, 2)}})
+            {"$set": {"expected_monthly_volume_crates": round(payload.starting_monthly_volume / bpc, 2)}})
 
     if slack_post_event:
         try:
@@ -572,6 +592,16 @@ async def update_print_request(print_id: str, payload: PrintRequestUpdate, curre
                 raise HTTPException(400, "Vendor not found")
             upd["vendor_id"] = vendor["id"]
             upd["vendor_name"] = vendor["name"]
+    if payload.sku_id is not None:
+        if payload.sku_id == "":
+            upd["sku_id"] = None
+            upd["sku_name"] = None
+            upd["sku_bottles_per_crate"] = None
+        else:
+            sku = await _resolve_sku(tenant_id, payload.sku_id)
+            upd["sku_id"] = sku["id"]
+            upd["sku_name"] = sku["name"]
+            upd["sku_bottles_per_crate"] = sku["bottles_per_crate"]
 
     if not upd:
         raise HTTPException(400, "Nothing to update")

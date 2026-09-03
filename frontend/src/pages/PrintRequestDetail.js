@@ -56,6 +56,7 @@ export default function PrintRequestDetail() {
   const [statuses, setStatuses] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [vendors, setVendors] = useState([]);
+  const [skus, setSkus] = useState([]);
 
   const [newStatus, setNewStatus] = useState('');
   const [statusNote, setStatusNote] = useState('');
@@ -87,6 +88,9 @@ export default function PrintRequestDetail() {
     axios.get(`${API}/print-request-statuses`, { headers: HEAD() }).then((r) => setStatuses(r.data?.statuses || [])).catch(() => {});
     axios.get(`${API}/master-departments`, { headers: HEAD() }).then((r) => setDepartments(r.data?.departments || [])).catch(() => {});
     axios.get(`${API}/print-vendors`, { headers: HEAD() }).then((r) => setVendors(r.data?.vendors || [])).catch(() => {});
+    axios.get(`${API}/master-skus`, { headers: HEAD() })
+      .then((r) => setSkus((Array.isArray(r.data) ? r.data : r.data?.skus || []).filter((s) => s.is_active !== false)))
+      .catch(() => {});
   }, []);
 
   const updateStatus = async () => {
@@ -110,6 +114,7 @@ export default function PrintRequestDetail() {
       notes: pr.notes || '',
       deptId: pr.assigned_department_id || '',
       vendorId: pr.vendor_id || '',
+      skuId: pr.sku_id || '',
     });
     setEditOpen(true);
   };
@@ -128,6 +133,7 @@ export default function PrintRequestDetail() {
         notes: form.notes || '',
         assigned_department_id: form.deptId || null,
         vendor_id: form.vendorId || null,
+        sku_id: form.skuId || '',
       }, { headers: HEAD() });
       setPr(data); setEditOpen(false);
       toast.success('Print request updated');
@@ -245,6 +251,7 @@ export default function PrintRequestDetail() {
           <Card className="border border-slate-100 rounded-xl">
             <CardContent className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
               <InfoRow icon={Users} label="Lead" value={pr.lead_company || pr.lead_name} testid="print-info-lead" />
+              <InfoRow icon={Boxes} label="SKU (Bottle)" value={pr.sku_name ? `${pr.sku_name}${pr.sku_bottles_per_crate ? ` · ${pr.sku_bottles_per_crate}/crate` : ''}` : 'Not specified (12/crate assumed)'} testid="print-info-sku" />
               <InfoRow icon={Boxes} label="Initial Order Quantity" value={pr.initial_order_quantity ?? pr.quantity} testid="print-info-initial-qty" />
               {(pr.total_monthly_volume ?? null) !== null && (
                 <InfoRow icon={TrendingUp} label="Total Monthly Volume (Future Potential)" value={pr.total_monthly_volume} testid="print-info-total-volume" />
@@ -408,6 +415,16 @@ export default function PrintRequestDetail() {
                 <Label>Total Monthly Volume (Future Potential)</Label>
                 <Input type="number" min={0} value={form.totalMonthlyVolume ?? ''} onChange={(e) => setForm({ ...form, totalMonthlyVolume: e.target.value })} data-testid="print-edit-total-volume" />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>SKU (bottle)</Label>
+              <Select value={form.skuId || '__none'} onValueChange={(v) => setForm({ ...form, skuId: v === '__none' ? '' : v })}>
+                <SelectTrigger data-testid="print-edit-sku"><SelectValue placeholder="Select SKU" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">— Not specified (12 bottles/crate assumed) —</SelectItem>
+                  {skus.map((s) => <SelectItem key={s.id} value={s.id}>{s.sku_name || s.sku}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label>Production team</Label>

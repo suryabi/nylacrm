@@ -3119,3 +3119,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - first_order_qty_crates = PR initial_order_quantity/12 (round 2); EMV fallback = starting_monthly_volume/12; create_print_request hook also writes EMV/12 to account.
 - Stored/manual account EMV values untouched (still take precedence).
 - Verified: 500 bottles → 41.67 crates; EMV fallback 600 → 50.0 (staged + restored test data).
+
+## Update — Jun 2026: SKU field on Print Requests + real crate-size conversion
+- PrintRequestCreate/Update: optional sku_id. _resolve_sku() (print_requests.py) → stores sku_id, sku_name, sku_bottles_per_crate (explicit bottles_per_crate else default production packaging units). Update supports set/clear ("").
+- Volume grid conversion now uses PR's sku_bottles_per_crate when set, else 12 (PR_BOTTLES_PER_CRATE). EMV create-hook uses same bpc.
+- UI: SKU select in CreatePrintRequestDialog.jsx (pr-sku-select) + PrintRequestDetail edit dialog (print-edit-sku) + "SKU (Bottle)" InfoRow (print-info-sku) showing name · N/crate.
+- Verified: PATCH sku (330ml Silver, 24 bpc) → 500 bottles = 20.83 crates; cleared → 41.67 (12). Edit dialog dropdown lists 10 SKUs. Test changes reverted.
