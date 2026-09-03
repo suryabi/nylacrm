@@ -1093,6 +1093,8 @@ def generate_delivery_challan_pdf(
             f"₹{val:,.2f}",
         ])
     item_rows.append(["", "", Paragraph("<b>Total</b>", normal_style), str(total_qty), "", f"₹{total_value:,.2f}"])
+    item_rows.append(["", Paragraph("<b><font color='#047857'>Discount — 100% (Promotional / Free of Charge)</font></b>", normal_style), "", "", "", f"-₹{total_value:,.2f}"])
+    item_rows.append(["", Paragraph("<b>Final Payable (Zero INR)</b>", normal_style), "", "", "", "₹0.00"])
     items_table = Table(item_rows, colWidths=[24, 210, 70, 50, 70, 76])
     items_table.setStyle(TableStyle([
         ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
@@ -1103,7 +1105,14 @@ def generate_delivery_challan_pdf(
         ('ALIGN', (3, 0), (-1, -1), 'RIGHT'),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#EFF6FF')),
+        ('BACKGROUND', (0, -3), (-1, -3), colors.HexColor('#EFF6FF')),
+        ('FONTNAME', (0, -3), (-1, -3), _BOLD_FONT),
+        ('SPAN', (1, -2), (4, -2)),
+        ('BACKGROUND', (0, -2), (-1, -2), colors.HexColor('#ECFDF5')),
+        ('TEXTCOLOR', (5, -2), (5, -2), colors.HexColor('#047857')),
+        ('FONTNAME', (0, -2), (-1, -2), _BOLD_FONT),
+        ('SPAN', (1, -1), (4, -1)),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#DCFCE7')),
         ('FONTNAME', (0, -1), (-1, -1), _BOLD_FONT),
         ('TOPPADDING', (0, 0), (-1, -1), 5),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
