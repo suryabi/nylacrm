@@ -3057,3 +3057,11 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Template Reference sheet reorganized: EQUIPMENT TYPE CODES table (Code|Name), FREQUENCIES, LOCATION CODES table (Facility Code|Facility|Floor Code|Floor|Area Codes as "FGA = Finished Goods Area"); example row uses codes; column headers say "(name or code)".
 - Import resolves type/facility/floor/area by code OR full name (case-insensitive); auto-created types get codes too.
 - Tested: template shows codes for real tenant data (Factorty→FACT etc.); import row with PUMP/TBF/GF/FGA resolved to full names; bad code XXX errored per-row. Test data cleaned.
+
+## Update — Jun 2026: Frequency codes + on-screen codes + Compliance Dashboard
+- Frequency codes in template Reference sheet + import parser: D, AD, W, E10, BW/FN, M, Q (or numeric days). Verified: import with D/Q → 1/90 days.
+- Codes on screen: type code badges in Equipment Types tab and equipment table; facility/floor/area code badges in Facilities page (copy-friendly for template filling).
+- Compliance Dashboard (3rd tab on Equipment Master, /equipment-master):
+  - Backend GET /api/maintenance/compliance?month=YYYY-MM (maintenance_sheets.py): scores scheduled slots up to today (IST): completed / due; missed = past dates with no record; groups per equipment and per area (Facility › Floor › Area, "No location set" bucket). Returns {month, as_of, overall, equipment[], areas[] weakest-first}.
+  - Frontend: month picker + Show Compliance btn (comp-month-input / comp-load-btn), overall + top-3 area KPI cards, weakest-first area bars, per-equipment table (Due/Done/Incomplete/Missed/Score) with color coding (≥85 green, ≥60 amber, else red).
+  - Verified E2E: seeded daily equipment, generated sheet, QR-submitted today's slot → overall 17%, per-area 0%/33%, table correct in UI screenshot. Test data cleaned.

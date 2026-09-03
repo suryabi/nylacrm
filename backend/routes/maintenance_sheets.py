@@ -428,3 +428,77 @@ async def missed_maintenance_scheduler():
         except Exception:
             log.exception("Missed-maintenance check failed")
         await asyncio.sleep(6 * 3600)
+
+
+# ── Monthly compliance scores ────────────────────────────────────────────────
+@router.get("/compliance")
+async def maintenance_compliance(month: str = Query(...), current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    start, end = _month_bounds(month)
+    today = datetime.now(IST).date().isoformat()
+    cutoff = min(end.isoformat(), today)
+
+    slots = await db.maintenance_slots.find(
+        {"tenant_id": tenant_id, "date": {"$gte": start.isoformat(), "$lte": cutoff}},
+        {"_id": 0, "id": 1, "equipment_id": 1, "date": 1, "submitted": 1, "photo_required": 1}).to_list(5000)
+    if not slots:
+        return {"month": month, "overall": None, "equipment": [], "areas": []}
+
+    rec_by_slot = {}
+    async for r in db.maintenance_records.find(
+            {"tenant_id": tenant_id, "scheduled_date": {"$gte": start.isoformat(), "$lte": cutoff}},
+            {"_id": 0, "slot_id": 1, "status": 1, "corrections": 1}):
+        status = r["status"]
+        for c in r.get("corrections") or []:
+            if c.get("corrected_status"):
+                status = c["corrected_status"]
+        rec_by_slot[r["slot_id"]] = status
+
+    eq_ids = list({s["equipment_id"] for s in slots})
+    eq_map = {e["id"]: e for e in await db.equipment_master.find(
+        {"tenant_id": tenant_id, "id": {"$in": eq_ids}},
+        {"_id": 0, "id": 1, "name": 1, "equipment_type_name": 1,
+         "facility_name": 1, "floor_name": 1, "area_name": 1}).to_list(2000)}
+
+    per_eq, per_area = {}, {}
+    for s in slots:
+        eq = eq_map.get(s["equipment_id"])
+        if not eq:
+            continue
+        st = rec_by_slot.get(s["id"])
+        bucket = per_eq.setdefault(s["equipment_id"], {"due": 0, "completed": 0, "incomplete": 0, "missed": 0})
+        bucket["due"] += 1
+        if st == "completed":
+            bucket["completed"] += 1
+        elif st == "incomplete":
+            bucket["incomplete"] += 1
+        else:
+            bucket["missed"] += 1
+        area_key = " › ".join(x for x in [eq.get("facility_name"), eq.get("floor_name"), eq.get("area_name")] if x) or "No location set"
+        ab = per_area.setdefault(area_key, {"due": 0, "completed": 0, "equipment_ids": set()})
+        ab["due"] += 1
+        ab["equipment_ids"].add(eq["id"])
+        if st == "completed":
+            ab["completed"] += 1
+
+    equipment_rows = []
+    for eq_id, b in per_eq.items():
+        eq = eq_map[eq_id]
+        score = round(b["completed"] / b["due"] * 100) if b["due"] else None
+        equipment_rows.append({"equipment_id": eq_id, "name": eq["name"], "type": eq.get("equipment_type_name"),
+                               "location": " › ".join(x for x in [eq.get("facility_name"), eq.get("floor_name"), eq.get("area_name")] if x) or None,
+                               **b, "score": score})
+    equipment_rows.sort(key=lambda x: (x["score"] if x["score"] is not None else 999, x["name"]))
+
+    area_rows = [{"area": k, "due": v["due"], "completed": v["completed"],
+                  "equipment_count": len(v["equipment_ids"]),
+                  "score": round(v["completed"] / v["due"] * 100) if v["due"] else None}
+                 for k, v in per_area.items()]
+    area_rows.sort(key=lambda x: (x["score"] if x["score"] is not None else 999, x["area"]))
+
+    total_due = sum(b["due"] for b in per_eq.values())
+    total_done = sum(b["completed"] for b in per_eq.values())
+    overall = {"due": total_due, "completed": total_done,
+               "score": round(total_done / total_due * 100) if total_due else None}
+    return {"month": month, "as_of": cutoff, "overall": overall, "equipment": equipment_rows, "areas": area_rows}

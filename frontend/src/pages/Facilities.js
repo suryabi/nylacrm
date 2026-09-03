@@ -218,7 +218,9 @@ export default function Facilities() {
             <Card key={f.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setDetail(f)} data-testid={`facility-card-${f.id}`}>
               <CardContent className="p-4 space-y-2">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="font-semibold">{f.facility_name}</div>
+                  <div className="font-semibold flex items-center gap-2">{f.facility_name}
+                    {f.code && <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600" data-testid={`fac-code-${f.code}`}>{f.code}</span>}
+                  </div>
                   <Badge variant="outline" className="whitespace-nowrap">{f.facility_type}</Badge>
                 </div>
                 {f.google_address && (
@@ -345,6 +347,7 @@ export default function Facilities() {
                       <AccordionItem key={fl.id} value={fl.id} className="px-3">
                         <AccordionTrigger className="py-2.5 hover:no-underline" data-testid={`floor-row-${fl.id}`}>
                           <span className="flex items-center gap-2 text-sm font-medium">{fl.name}
+                            {fl.code && <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{fl.code}</span>}
                             <Badge variant="secondary" className="text-xs">{(fl.areas || []).length} areas</Badge>
                           </span>
                         </AccordionTrigger>
@@ -352,6 +355,7 @@ export default function Facilities() {
                           <div className="flex flex-wrap gap-1.5">
                             {(fl.areas || []).map((ar) => (
                               <Badge key={ar.id} variant="outline" className="gap-1 pr-1" data-testid={`area-chip-${ar.id}`}>
+                                {ar.code && <span className="font-mono text-[9px] font-bold text-slate-500">{ar.code}</span>}
                                 {ar.name}
                                 <button onClick={() => deleteArea(fl.id, ar.id)} className="hover:text-red-600" data-testid={`delete-area-${ar.id}`}><X className="h-3 w-3" /></button>
                               </Badge>

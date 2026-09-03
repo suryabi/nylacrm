@@ -100,6 +100,7 @@ def _compute_dues(doc: dict):
 async def list_types(current_user: dict = Depends(get_current_user)):
     _ = current_user
     tenant_id = get_current_tenant_id()
+    await _ensure_codes(tenant_id)
     types = await db.equipment_types.find({"tenant_id": tenant_id}, {"_id": 0}).sort("name", 1).to_list(500)
     counts = {}
     for t in types:
@@ -577,7 +578,11 @@ async def _ensure_codes(tenant_id: str):
 FREQ_TO_LABEL = {1: "Daily", 2: "Alternate Days", 7: "Weekly", 10: "Every 10 days",
                  14: "Bi-Weekly", 30: "Monthly", 90: "Quarterly"}
 LABEL_TO_FREQ = {"daily": 1, "alternate days": 2, "weekly": 7, "every 10 days": 10,
-                 "bi-weekly": 14, "biweekly": 14, "fortnightly": 14, "monthly": 30, "quarterly": 90}
+                 "bi-weekly": 14, "biweekly": 14, "fortnightly": 14, "monthly": 30, "quarterly": 90,
+                 # short codes
+                 "d": 1, "ad": 2, "w": 7, "e10": 10, "bw": 14, "fn": 14, "m": 30, "q": 90}
+FREQ_CODES = [("D", "Daily"), ("AD", "Alternate Days"), ("W", "Weekly"), ("E10", "Every 10 days"),
+              ("BW", "Bi-Weekly / Fortnightly (FN also works)"), ("M", "Monthly"), ("Q", "Quarterly")]
 
 
 def _freq_out(days):
@@ -651,7 +656,7 @@ async def equipment_import_template(current_user: dict = Depends(get_current_use
     ex_fac = facs[0]["code"] if facs else ""
     ws.append(["RO Machine 1", ex_type, "Pentair", "RO-5000", "", "Yes",
                ex_fac, "GF", "RFC",
-               "Weekly", "2026-06-01", "", "Quarterly", "2026-06-01", "",
+               "W", "2026-06-01", "", "Q", "2026-06-01", "",
                30, "5 years", 1, 4, "Example row — delete before uploading"])
     ref = wb.create_sheet("Reference")
     bold = Font(bold=True)
@@ -660,9 +665,11 @@ async def equipment_import_template(current_user: dict = Depends(get_current_use
     for t in types:
         ref.append([t.get("code"), t["name"]])
     ref.append([])
-    ref.append(["FREQUENCIES", ""]); ref[f"A{ref.max_row}"].font = bold
-    for v in ["Daily", "Alternate Days", "Weekly", "Every 10 days", "Bi-Weekly / Fortnightly", "Monthly", "Quarterly", "or any number of days"]:
-        ref.append([v])
+    ref.append(["FREQUENCY CODES", ""]); ref[f"A{ref.max_row}"].font = bold
+    ref.append(["Code", "Frequency"])
+    for code, label in FREQ_CODES:
+        ref.append([code, label])
+    ref.append(["", "…or type any number of days"])
     ref.append([])
     ref.append(["LOCATION CODES", ""]); ref[f"A{ref.max_row}"].font = bold
     ref.append(["Facility Code", "Facility", "Floor Code", "Floor", "Area Codes"])

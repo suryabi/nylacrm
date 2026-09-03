@@ -209,6 +209,18 @@ export default function EquipmentMaster() {
   const [quickFilter, setQuickFilter] = useState('');
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [compMonth, setCompMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [compliance, setCompliance] = useState(null);
+  const [compLoading, setCompLoading] = useState(false);
+
+  const loadCompliance = useCallback(async (m) => {
+    setCompLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/maintenance/compliance?month=${m}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error();
+      setCompliance(await res.json());
+    } catch { toast.error('Failed to load compliance'); } finally { setCompLoading(false); }
+  }, []);
   const [showEqForm, setShowEqForm] = useState(false);
   const [editingEq, setEditingEq] = useState(null);
   const [eqForm, setEqForm] = useState(EMPTY_EQ);
@@ -578,6 +590,7 @@ export default function EquipmentMaster() {
           <TabsList>
             <TabsTrigger value="equipment" data-testid="eq-tab-equipment">Equipment / Components</TabsTrigger>
             <TabsTrigger value="types" data-testid="eq-tab-types">Equipment Types</TabsTrigger>
+            <TabsTrigger value="compliance" data-testid="eq-tab-compliance">Compliance</TabsTrigger>
           </TabsList>
 
           <TabsContent value="equipment" className="space-y-4 mt-4">
@@ -786,7 +799,9 @@ export default function EquipmentMaster() {
                 <Card key={t.id} data-testid={`type-card-${t.name.replace(/\s|\//g, '-')}`}>
                   <CardContent className="p-4 flex items-start justify-between">
                     <div>
-                      <p className="font-semibold">{t.name}</p>
+                      <p className="font-semibold flex items-center gap-2">{t.name}
+                        {t.code && <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" data-testid={`type-code-${t.code}`}>{t.code}</span>}
+                      </p>
                       <p className="text-xs text-muted-foreground">{t.equipment_count} equipment item{t.equipment_count === 1 ? '' : 's'}</p>
                       {t.description && <p className="text-xs text-muted-foreground mt-1">{t.description}</p>}
                     </div>
@@ -806,6 +821,106 @@ export default function EquipmentMaster() {
               )}
             </div>
           </TabsContent>
+
+          <TabsContent value="compliance" className="space-y-4 mt-4">
+            {(() => {
+              const scoreColor = (s) => (s == null ? 'text-slate-400' : s >= 85 ? 'text-emerald-600' : s >= 60 ? 'text-amber-600' : 'text-rose-600');
+              const barColor = (s) => (s == null ? 'bg-slate-300' : s >= 85 ? 'bg-emerald-500' : s >= 60 ? 'bg-amber-500' : 'bg-rose-500');
+              return (
+                <>
+                  <div className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-wrap items-center gap-3">
+                    <Label className="text-sm font-semibold">Month</Label>
+                    <Input type="month" value={compMonth} onChange={(e) => setCompMonth(e.target.value)} className="h-10 w-44 rounded-lg" data-testid="comp-month-input" />
+                    <Button className="h-10 rounded-lg" onClick={() => loadCompliance(compMonth)} disabled={compLoading} data-testid="comp-load-btn">
+                      {compLoading ? 'Loading…' : 'Show Compliance'}
+                    </Button>
+                    {compliance?.as_of && <span className="text-xs text-muted-foreground">Scored on scheduled dates up to {compliance.as_of} (QR check-ins marked Complete)</span>}
+                  </div>
+
+                  {!compliance ? (
+                    <p className="text-sm text-muted-foreground px-1">Pick a month and click Show Compliance.</p>
+                  ) : !compliance.overall ? (
+                    <div className="bg-white dark:bg-slate-900 rounded-xl border p-8 text-center text-muted-foreground" data-testid="comp-empty">
+                      No scheduled maintenance found for {compliance.month}. Sheets must be generated (Maintenance profile → Print Sheet) for dates to be scored.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="rounded-xl border bg-white dark:bg-slate-900 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Overall Score</p>
+                          <p className={`text-3xl font-bold tabular-nums ${scoreColor(compliance.overall.score)}`} data-testid="comp-overall-score">{compliance.overall.score == null ? '—' : `${compliance.overall.score}%`}</p>
+                          <p className="text-[11px] text-slate-400">{compliance.overall.completed}/{compliance.overall.due} check-ins completed</p>
+                        </div>
+                        {compliance.areas.slice(0, 3).map((a) => (
+                          <div key={a.area} className="rounded-xl border bg-white dark:bg-slate-900 p-4" data-testid={`comp-area-${a.area.replace(/[^a-z0-9]/gi, '-')}`}>
+                            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 truncate" title={a.area}>{a.area}</p>
+                            <p className={`text-3xl font-bold tabular-nums ${scoreColor(a.score)}`}>{a.score == null ? '—' : `${a.score}%`}</p>
+                            <p className="text-[11px] text-slate-400">{a.completed}/{a.due} done · {a.equipment_count} equipment</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {compliance.areas.length > 0 && (
+                        <div className="bg-white dark:bg-slate-900 rounded-xl border p-4 space-y-2">
+                          <p className="text-sm font-semibold">Compliance by area <span className="text-xs font-normal text-muted-foreground">(weakest first)</span></p>
+                          {compliance.areas.map((a) => (
+                            <div key={a.area} className="flex items-center gap-3 text-sm">
+                              <span className="w-64 truncate" title={a.area}>{a.area}</span>
+                              <div className="flex-1 h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                                <div className={`h-full rounded-full ${barColor(a.score)}`} style={{ width: `${a.score || 0}%` }} />
+                              </div>
+                              <span className={`w-14 text-right font-semibold tabular-nums ${scoreColor(a.score)}`}>{a.score == null ? '—' : `${a.score}%`}</span>
+                              <span className="w-24 text-right text-xs text-muted-foreground tabular-nums">{a.completed}/{a.due} done</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="bg-white dark:bg-slate-900 rounded-xl border overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b bg-slate-50/80 dark:bg-slate-900/80 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                              <th className="px-5 py-3">Equipment</th>
+                              <th className="px-4 py-3">Location</th>
+                              <th className="px-4 py-3 text-right">Due</th>
+                              <th className="px-4 py-3 text-right">Done</th>
+                              <th className="px-4 py-3 text-right">Incomplete</th>
+                              <th className="px-4 py-3 text-right">Missed</th>
+                              <th className="px-4 py-3 w-56">Score</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {compliance.equipment.map((e) => (
+                              <tr key={e.equipment_id} className="border-b border-slate-100 dark:border-slate-800/60 hover:bg-slate-50/80 dark:hover:bg-slate-800/40" data-testid={`comp-row-${e.name.replace(/\s/g, '-')}`}>
+                                <td className="px-5 py-3">
+                                  <p className="font-semibold">{e.name}</p>
+                                  <p className="text-[11px] text-muted-foreground">{e.type}</p>
+                                </td>
+                                <td className="px-4 py-3 text-xs text-muted-foreground">{e.location || '—'}</td>
+                                <td className="px-4 py-3 text-right tabular-nums">{e.due}</td>
+                                <td className="px-4 py-3 text-right tabular-nums text-emerald-700">{e.completed}</td>
+                                <td className="px-4 py-3 text-right tabular-nums text-amber-600">{e.incomplete}</td>
+                                <td className="px-4 py-3 text-right tabular-nums text-rose-600">{e.missed}</td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex-1 h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                                      <div className={`h-full rounded-full ${barColor(e.score)}`} style={{ width: `${e.score || 0}%` }} />
+                                    </div>
+                                    <span className={`font-semibold tabular-nums ${scoreColor(e.score)}`}>{e.score == null ? '—' : `${e.score}%`}</span>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+                </>
+              );
+            })()}
+          </TabsContent>
+
         </Tabs>
       </div>
 
