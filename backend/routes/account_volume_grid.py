@@ -306,8 +306,16 @@ async def get_grid(
         fpr = first_pr.get(a["id"]) or first_pr.get(a.get("account_id")) or first_pr.get(a.get("lead_id"))
         pr_bpc = (fpr.get("sku_bottles_per_crate") if fpr else None) or PR_BOTTLES_PER_CRATE
         emv = a.get("expected_monthly_volume_crates")
-        if emv is None and fpr and isinstance(fpr.get("starting_monthly_volume"), (int, float)):
-            emv = round(fpr["starting_monthly_volume"] / pr_bpc, 2)  # PR volumes are in bottles
+        pr_smv = fpr.get("starting_monthly_volume") if fpr else None
+        if emv is None and isinstance(pr_smv, (int, float)):
+            emv = round(pr_smv / pr_bpc, 2)  # PR volumes are in bottles
+        elif (isinstance(emv, (int, float)) and isinstance(pr_smv, (int, float))
+              and pr_smv > 0 and emv == pr_smv and pr_bpc > 1):
+            # Self-heal: legacy copy stored the raw bottle value before crate conversion existed
+            emv = round(emv / pr_bpc, 2)
+            await db.accounts.update_one(
+                {"id": a["id"], "tenant_id": tenant_id},
+                {"$set": {"expected_monthly_volume_crates": emv}})
         # Stock at the warehouse that last served this account, for the SKUs
         # it has ordered. Red-flag when below half the estimated monthly
         # consumption (Expected Monthly Volume, else Actual Monthly Consumption).

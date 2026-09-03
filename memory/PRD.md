@@ -3130,3 +3130,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Grid row field print_request_created_by (PR created_by_name, live reference). BASE_COLUMNS entry fromPR (teal header); added to DEFAULT_HIDDEN; one-time migration added it to existing saved prefs' hidden arrays (so it stays hidden until users opt in).
 - Excel export: header/value added after PR Created Date; totals indexes now {18,19,20}, custom offset 22.
 - Verified: hidden by default, toggle from Columns menu shows teal header, value "Surya Yadavalli" in API. User's view restored to hidden after test.
+
+## Update — Jun 2026: Self-heal for legacy raw-bottle EMV copies
+- Root cause of user report ("EMV/first order qty in bottles on PRODUCTION"): prod build predates conversion; EMV was COPIED raw (bottles) to account by the pre-conversion hook.
+- Fix: grid GET self-heals — if stored account EMV exactly equals first PR's raw starting_monthly_volume (>0), divide by pr_bpc once and persist. First-order qty needed no data fix (computed at read).
+- Verified: staged EMV=1200 + PR smv=1200 → grid shows 100.0 and persists 100.0; idempotent. Test state restored. Prod fix requires REDEPLOY, then values heal on first grid load.
