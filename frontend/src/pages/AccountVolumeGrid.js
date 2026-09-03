@@ -22,6 +22,8 @@ const DEFAULT_HIDDEN = ['order_count', 'onboarded_date', 'last_order_sku', 'acco
 const BASE_COLUMNS = [
   { key: 'account_name', label: 'Account Name', type: 'text' },
   { key: 'onboarded_date', label: 'On-boarded Date', type: 'date' },
+  { key: 'first_order_date', label: 'First Order Date', type: 'date' },
+  { key: 'first_order_requested_date', label: 'First Order Requested Date', type: 'date' },
   { key: 'account_age_days', label: 'Account Age (Days)', type: 'number' },
   { key: 'avg_order_frequency_days', label: 'Average Order Frequency (Days)', type: 'number' },
   { key: 'order_count', label: 'No. of Orders', type: 'number' },

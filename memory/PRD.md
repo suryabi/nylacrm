@@ -3070,3 +3070,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - GET/PUT /api/account-volume-grid/preferences (account_volume_grid.py): stores {hidden, widths, order} in db.volume_grid_user_prefs keyed by tenant_id+user_id (upsert).
 - AccountVolumeGrid.js: fetches prefs on mount (overrides localStorage defaults), debounced (800ms) PUT on any change to hidden/widths/order; localStorage kept only as instant-paint cache. prefsLoaded ref guards against overwriting server prefs before load.
 - Verified: curl save/read-back; UI toggle persisted after localStorage-cleared reload (cross-device simulation). Test prefs cleaned.
+
+## Update — Jun 2026: First Order columns in Volume Tracking (from print requests)
+- Grid GET (account_volume_grid.py): loads tenant print requests, maps earliest PR per account via account_id OR lead uuid OR lead code (accounts.lead_id may hold either) → row fields first_order_date (PR created_at) and first_order_requested_date (PR requested_due_date). Computed at read → existing PRs auto-covered, no backfill script.
+- EMV: read-time fallback to earliest PR's starting_monthly_volume when account.expected_monthly_volume_crates is None (stays editable — edit writes account field which overrides). Plus create_print_request hook: sets account EMV from payload.starting_monthly_volume when account linked & EMV empty.
+- Frontend: 2 new BASE_COLUMNS (first_order_date, first_order_requested_date, type date) after On-boarded Date. Excel export headers/values updated; totals indexes shifted 14,15,16→16,17,18 (+2 for custom offset 18→20). NOTE: export is branded — header row is row 5, not row 1.
+- Verified: grid API + UI screenshot (Drive Folder Test Lead 06 Jun / 10 Jun), Excel export headers+values+EMV total.

@@ -129,10 +129,29 @@ async def get_grid(
 
     accounts = await db.accounts.find(q, {
         "_id": 0, "id": 1, "account_id": 1, "account_name": 1, "territory": 1,
-        "state": 1, "city": 1, "activated_at": 1,
+        "state": 1, "city": 1, "activated_at": 1, "lead_id": 1,
         "expected_monthly_volume_crates": 1, "volume_grid_values": 1,
         "stock_at_hand_crates_override": 1,
     }).sort("account_name", 1).to_list(5000)
+
+    # First order info per account = earliest print request linked via account or lead
+    prs = await db.print_requests.find(
+        {"tenant_id": tenant_id},
+        {"_id": 0, "account_id": 1, "lead_id": 1, "created_at": 1,
+         "requested_due_date": 1, "starting_monthly_volume": 1}).to_list(10000)
+    lead_code_by_uuid: Dict[str, str] = {}
+    pr_lead_ids = list({p.get("lead_id") for p in prs if p.get("lead_id")})
+    if pr_lead_ids:
+        async for l in db.leads.find(
+                {"tenant_id": tenant_id, "id": {"$in": pr_lead_ids}},
+                {"_id": 0, "id": 1, "lead_id": 1}):
+            if l.get("lead_id"):
+                lead_code_by_uuid[l["id"]] = l["lead_id"]
+    first_pr: Dict[str, dict] = {}
+    for p in sorted(prs, key=lambda x: x.get("created_at") or ""):
+        for key in [p.get("account_id"), p.get("lead_id"), lead_code_by_uuid.get(p.get("lead_id"))]:
+            if key and key not in first_pr:
+                first_pr[key] = p
 
     # Delivery metrics per account (dates in bottles; totals per delivery)
     acc_ids = [a["id"] for a in accounts] + [a.get("account_id") for a in accounts if a.get("account_id")]
@@ -279,7 +298,10 @@ async def get_grid(
                 actual_monthly = round(total, 2)
             else:
                 consumption_in_days = 30 - days_elapsed
+        fpr = first_pr.get(a["id"]) or first_pr.get(a.get("account_id")) or first_pr.get(a.get("lead_id"))
         emv = a.get("expected_monthly_volume_crates")
+        if emv is None and fpr and isinstance(fpr.get("starting_monthly_volume"), (int, float)):
+            emv = fpr["starting_monthly_volume"]
         # Stock at the warehouse that last served this account, for the SKUs
         # it has ordered. Red-flag when below half the estimated monthly
         # consumption (Expected Monthly Volume, else Actual Monthly Consumption).
@@ -327,6 +349,8 @@ async def get_grid(
             "account_name": a.get("account_name"),
             "territory": a.get("territory"), "state": a.get("state"), "city": a.get("city"),
             "onboarded_date": (a.get("activated_at") or "")[:10] or None,
+            "first_order_date": ((fpr.get("created_at") or "")[:10] or None) if fpr else None,
+            "first_order_requested_date": ((fpr.get("requested_due_date") or "")[:10] or None) if fpr else None,
             "account_age_days": age_days,
             "avg_order_frequency_days": freq,
             "order_count": len(dels),
@@ -361,7 +385,8 @@ async def get_grid(
             "account_id": m["id"], "account_code": None, "is_manual": True,
             "account_name": m.get("account_name") or "",
             "territory": None, "state": None, "city": None,
-            "onboarded_date": None, "account_age_days": None, "avg_order_frequency_days": None,
+            "onboarded_date": None, "first_order_date": None, "first_order_requested_date": None,
+            "account_age_days": None, "avg_order_frequency_days": None,
             "order_count": 0, "first_delivery_date": None, "latest_delivery_date": None,
             "last_order_quantity": None,
             "last_order_sku": None,
@@ -449,7 +474,8 @@ async def export_excel(
                 ctx[c["name"]] = (r.get("custom_values") or {}).get(c["id"])
         return ctx
 
-    headers = ["Account Name", "Territory", "State", "City", "On-boarded Date", "Account Age (Days)",
+    headers = ["Account Name", "Territory", "State", "City", "On-boarded Date",
+               "First Order Date", "First Order Requested Date", "Account Age (Days)",
                "Avg Order Frequency (Days)", "No. of Orders", "First Delivery Date", "Latest Delivery Date",
                "Last 4 Delivery Dates", "Last 4 Delivery Qty (Crates)",
                "Last Order Quantity (Crates)", "Last Ordered SKU", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)",
@@ -458,7 +484,9 @@ async def export_excel(
 
     def row_values(r):
         base = [r.get("account_name") or "", r.get("territory") or "", r.get("state") or "",
-                r.get("city") or "", r.get("onboarded_date") or "", r.get("account_age_days"),
+                r.get("city") or "", r.get("onboarded_date") or "",
+                r.get("first_order_date") or "", r.get("first_order_requested_date") or "",
+                r.get("account_age_days"),
                 r.get("avg_order_frequency_days"), r.get("order_count"), r.get("first_delivery_date") or "",
                 r.get("latest_delivery_date") or "",
                 "\n".join(r.get("recent_delivery_dates") or []),
@@ -479,10 +507,10 @@ async def export_excel(
 
     # Totals: only Bi-weekly, Expected Monthly, and custom columns opted into totals
     totals = [f"TOTAL — {len(rows)} rows"] + [""] * (len(headers) - 1)
-    total_indexes = {14, 15, 16}  # Bi-weekly, Expected Monthly, Actual Monthly Consumption
+    total_indexes = {16, 17, 18}  # Bi-weekly, Expected Monthly, Actual Monthly Consumption
     for j, c in enumerate(custom_cols):
         if c.get("include_in_total"):
-            total_indexes.add(18 + j)
+            total_indexes.add(20 + j)
     for i in sorted(total_indexes):
         nums = [v[i] for v in all_values if isinstance(v[i], (int, float))]
         if nums:
