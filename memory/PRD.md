@@ -3125,3 +3125,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Volume grid conversion now uses PR's sku_bottles_per_crate when set, else 12 (PR_BOTTLES_PER_CRATE). EMV create-hook uses same bpc.
 - UI: SKU select in CreatePrintRequestDialog.jsx (pr-sku-select) + PrintRequestDetail edit dialog (print-edit-sku) + "SKU (Bottle)" InfoRow (print-info-sku) showing name · N/crate.
 - Verified: PATCH sku (330ml Silver, 24 bpc) → 500 bottles = 20.83 crates; cleared → 41.67 (12). Edit dialog dropdown lists 10 SKUs. Test changes reverted.
+
+## Update — Jun 2026: Print Request Created By column (hidden by default)
+- Grid row field print_request_created_by (PR created_by_name, live reference). BASE_COLUMNS entry fromPR (teal header); added to DEFAULT_HIDDEN; one-time migration added it to existing saved prefs' hidden arrays (so it stays hidden until users opt in).
+- Excel export: header/value added after PR Created Date; totals indexes now {18,19,20}, custom offset 22.
+- Verified: hidden by default, toggle from Columns menu shows teal header, value "Surya Yadavalli" in API. User's view restored to hidden after test.

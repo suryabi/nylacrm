@@ -143,7 +143,7 @@ async def get_grid(
         {"tenant_id": tenant_id},
         {"_id": 0, "account_id": 1, "lead_id": 1, "created_at": 1, "requested_due_date": 1,
          "starting_monthly_volume": 1, "initial_order_quantity": 1, "quantity": 1,
-         "sku_bottles_per_crate": 1}).to_list(10000)
+         "sku_bottles_per_crate": 1, "created_by_name": 1}).to_list(10000)
     lead_code_by_uuid: Dict[str, str] = {}
     pr_lead_ids = list({p.get("lead_id") for p in prs if p.get("lead_id")})
     if pr_lead_ids:
@@ -365,6 +365,7 @@ async def get_grid(
             "territory": a.get("territory"), "state": a.get("state"), "city": a.get("city"),
             "onboarded_date": (a.get("activated_at") or "")[:10] or None,
             "print_request_created_date": ((fpr.get("created_at") or "")[:10] or None) if fpr else None,
+            "print_request_created_by": (fpr.get("created_by_name") or None) if fpr else None,
             "first_order_requested_date": fo_req,
             "first_order_qty_crates": (round(((fpr.get("initial_order_quantity") if fpr.get("initial_order_quantity") is not None else fpr.get("quantity")) or 0) / pr_bpc, 2) or None) if fpr else None,
             "first_order_overdue": bool(fo_overdue_days),
@@ -403,7 +404,8 @@ async def get_grid(
             "account_id": m["id"], "account_code": None, "is_manual": True,
             "account_name": m.get("account_name") or "",
             "territory": None, "state": None, "city": None,
-            "onboarded_date": None, "print_request_created_date": None, "first_order_requested_date": None,
+            "onboarded_date": None, "print_request_created_date": None, "print_request_created_by": None,
+            "first_order_requested_date": None,
             "first_order_qty_crates": None,
             "account_age_days": None, "avg_order_frequency_days": None,
             "order_count": 0, "first_delivery_date": None, "latest_delivery_date": None,
@@ -494,7 +496,8 @@ async def export_excel(
         return ctx
 
     headers = ["Account Name", "Territory", "State", "City", "On-boarded Date",
-               "Print Request Created Date", "First Order Requested Date", "First Order Quantity (Crates)",
+               "Print Request Created Date", "Print Request Created By",
+               "First Order Requested Date", "First Order Quantity (Crates)",
                "Account Age (Days)",
                "Avg Order Frequency (Days)", "No. of Orders", "First Delivery Date", "Latest Delivery Date",
                "Last 4 Delivery Dates", "Last 4 Delivery Qty (Crates)",
@@ -505,7 +508,8 @@ async def export_excel(
     def row_values(r):
         base = [r.get("account_name") or "", r.get("territory") or "", r.get("state") or "",
                 r.get("city") or "", r.get("onboarded_date") or "",
-                r.get("print_request_created_date") or "", r.get("first_order_requested_date") or "",
+                r.get("print_request_created_date") or "", r.get("print_request_created_by") or "",
+                r.get("first_order_requested_date") or "",
                 r.get("first_order_qty_crates"),
                 r.get("account_age_days"),
                 r.get("avg_order_frequency_days"), r.get("order_count"), r.get("first_delivery_date") or "",
@@ -528,10 +532,10 @@ async def export_excel(
 
     # Totals: only Bi-weekly, Expected Monthly, and custom columns opted into totals
     totals = [f"TOTAL — {len(rows)} rows"] + [""] * (len(headers) - 1)
-    total_indexes = {17, 18, 19}  # Bi-weekly, Expected Monthly, Actual Monthly Consumption
+    total_indexes = {18, 19, 20}  # Bi-weekly, Expected Monthly, Actual Monthly Consumption
     for j, c in enumerate(custom_cols):
         if c.get("include_in_total"):
-            total_indexes.add(21 + j)
+            total_indexes.add(22 + j)
     for i in sorted(total_indexes):
         nums = [v[i] for v in all_values if isinstance(v[i], (int, float))]
         if nums:

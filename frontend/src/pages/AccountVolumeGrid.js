@@ -17,12 +17,13 @@ const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('toke
 const LS_KEY = 'volume_grid_hidden_columns_v3';
 const LS_WIDTHS = 'volume_grid_col_widths';
 const LS_ORDER = 'volume_grid_col_order';
-const DEFAULT_HIDDEN = ['order_count', 'onboarded_date', 'last_order_sku', 'account_age_days', 'biweekly_volume_crates'];
+const DEFAULT_HIDDEN = ['order_count', 'onboarded_date', 'last_order_sku', 'account_age_days', 'biweekly_volume_crates', 'print_request_created_by'];
 
 const BASE_COLUMNS = [
   { key: 'account_name', label: 'Account Name', type: 'text' },
   { key: 'onboarded_date', label: 'On-boarded Date', type: 'date', fromAccount: true },
   { key: 'print_request_created_date', label: 'Print Request Created Date', type: 'date', fromPR: true },
+  { key: 'print_request_created_by', label: 'Print Request Created By', type: 'text', fromPR: true },
   { key: 'first_order_requested_date', label: 'First Order Requested Date', type: 'date', fromPR: true },
   { key: 'first_order_qty_crates', label: 'First Order Quantity (Crates)', type: 'number', fromPR: true },
   { key: 'account_age_days', label: 'Account Age (Days)', type: 'number' },
