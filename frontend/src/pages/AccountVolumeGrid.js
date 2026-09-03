@@ -22,8 +22,9 @@ const DEFAULT_HIDDEN = ['order_count', 'onboarded_date', 'last_order_sku', 'acco
 const BASE_COLUMNS = [
   { key: 'account_name', label: 'Account Name', type: 'text' },
   { key: 'onboarded_date', label: 'On-boarded Date', type: 'date' },
-  { key: 'first_order_date', label: 'First Order Date', type: 'date' },
-  { key: 'first_order_requested_date', label: 'First Order Requested Date', type: 'date' },
+  { key: 'print_request_created_date', label: 'Print Request Created Date', type: 'date', fromPR: true },
+  { key: 'first_order_requested_date', label: 'First Order Requested Date', type: 'date', fromPR: true },
+  { key: 'first_order_qty_crates', label: 'First Order Quantity (Crates)', type: 'number', fromPR: true },
   { key: 'account_age_days', label: 'Account Age (Days)', type: 'number' },
   { key: 'avg_order_frequency_days', label: 'Average Order Frequency (Days)', type: 'number' },
   { key: 'order_count', label: 'No. of Orders', type: 'number' },
@@ -34,7 +35,7 @@ const BASE_COLUMNS = [
   { key: 'last_order_quantity', label: 'Last Order Quantity (Crates)', type: 'number' },
   { key: 'last_order_sku', label: 'Last Ordered SKU', type: 'text' },
   { key: 'biweekly_volume_crates', label: 'Bi-weekly Volume (Crates)', type: 'number' },
-  { key: 'expected_monthly_volume_crates', label: 'Expected Monthly Volume (Crates)', type: 'number', editable: true },
+  { key: 'expected_monthly_volume_crates', label: 'Expected Monthly Volume (Crates)', type: 'number', editable: true, fromPR: true },
   { key: 'actual_monthly_consumption_crates', label: 'Actual Monthly Consumption (Crates)', type: 'number' },
   { key: 'stock_at_hand_crates', label: 'Stock at Hand (Crates)', type: 'number', editable: true },
 ];
@@ -713,7 +714,8 @@ export default function AccountVolumeGrid() {
               <tr ref={headerRowRef} className="bg-[#0b192c]">
                 {visibleColumns.map((c) => (
                   <th key={c.key}
-                    className={`${TH} ${numericCol(c) ? 'text-right' : 'text-left'} cursor-pointer transition-colors hover:text-white sticky top-0 bg-[#0b192c] shadow-[inset_0_-1px_0_#1e293b] ${c.key === 'account_name' ? 'left-0 z-30 shadow-[inset_-1px_0_0_#334155,inset_0_-1px_0_#1e293b]' : 'z-20'}`}
+                    className={`${TH} ${numericCol(c) ? 'text-right' : 'text-left'} cursor-pointer transition-colors hover:text-white sticky top-0 ${c.fromPR ? 'bg-[#0F4C46] shadow-[inset_0_-2px_0_#14B8A6]' : 'bg-[#0b192c] shadow-[inset_0_-1px_0_#1e293b]'} ${c.key === 'account_name' ? 'left-0 z-30 shadow-[inset_-1px_0_0_#334155,inset_0_-1px_0_#1e293b]' : 'z-20'}`}
+                    title={c.fromPR ? 'Populated from the print request' : undefined}
                     onClick={() => toggleSort(c.key)}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => { e.preventDefault(); if (dragColRef.current) moveColumn(dragColRef.current, c.key); dragColRef.current = null; }}

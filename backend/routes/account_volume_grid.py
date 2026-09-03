@@ -137,8 +137,8 @@ async def get_grid(
     # First order info per account = earliest print request linked via account or lead
     prs = await db.print_requests.find(
         {"tenant_id": tenant_id},
-        {"_id": 0, "account_id": 1, "lead_id": 1, "created_at": 1,
-         "requested_due_date": 1, "starting_monthly_volume": 1}).to_list(10000)
+        {"_id": 0, "account_id": 1, "lead_id": 1, "created_at": 1, "requested_due_date": 1,
+         "starting_monthly_volume": 1, "initial_order_quantity": 1, "quantity": 1}).to_list(10000)
     lead_code_by_uuid: Dict[str, str] = {}
     pr_lead_ids = list({p.get("lead_id") for p in prs if p.get("lead_id")})
     if pr_lead_ids:
@@ -358,8 +358,9 @@ async def get_grid(
             "account_name": a.get("account_name"),
             "territory": a.get("territory"), "state": a.get("state"), "city": a.get("city"),
             "onboarded_date": (a.get("activated_at") or "")[:10] or None,
-            "first_order_date": ((fpr.get("created_at") or "")[:10] or None) if fpr else None,
+            "print_request_created_date": ((fpr.get("created_at") or "")[:10] or None) if fpr else None,
             "first_order_requested_date": fo_req,
+            "first_order_qty_crates": (fpr.get("initial_order_quantity") if fpr.get("initial_order_quantity") is not None else fpr.get("quantity")) if fpr else None,
             "first_order_overdue": bool(fo_overdue_days),
             "first_order_overdue_days": fo_overdue_days,
             "account_age_days": age_days,
@@ -396,7 +397,8 @@ async def get_grid(
             "account_id": m["id"], "account_code": None, "is_manual": True,
             "account_name": m.get("account_name") or "",
             "territory": None, "state": None, "city": None,
-            "onboarded_date": None, "first_order_date": None, "first_order_requested_date": None,
+            "onboarded_date": None, "print_request_created_date": None, "first_order_requested_date": None,
+            "first_order_qty_crates": None,
             "account_age_days": None, "avg_order_frequency_days": None,
             "order_count": 0, "first_delivery_date": None, "latest_delivery_date": None,
             "last_order_quantity": None,
@@ -486,7 +488,8 @@ async def export_excel(
         return ctx
 
     headers = ["Account Name", "Territory", "State", "City", "On-boarded Date",
-               "First Order Date", "First Order Requested Date", "Account Age (Days)",
+               "Print Request Created Date", "First Order Requested Date", "First Order Quantity (Crates)",
+               "Account Age (Days)",
                "Avg Order Frequency (Days)", "No. of Orders", "First Delivery Date", "Latest Delivery Date",
                "Last 4 Delivery Dates", "Last 4 Delivery Qty (Crates)",
                "Last Order Quantity (Crates)", "Last Ordered SKU", "Bi-weekly Volume (Crates)", "Expected Monthly Volume (Crates)",
@@ -496,7 +499,8 @@ async def export_excel(
     def row_values(r):
         base = [r.get("account_name") or "", r.get("territory") or "", r.get("state") or "",
                 r.get("city") or "", r.get("onboarded_date") or "",
-                r.get("first_order_date") or "", r.get("first_order_requested_date") or "",
+                r.get("print_request_created_date") or "", r.get("first_order_requested_date") or "",
+                r.get("first_order_qty_crates"),
                 r.get("account_age_days"),
                 r.get("avg_order_frequency_days"), r.get("order_count"), r.get("first_delivery_date") or "",
                 r.get("latest_delivery_date") or "",
@@ -518,10 +522,10 @@ async def export_excel(
 
     # Totals: only Bi-weekly, Expected Monthly, and custom columns opted into totals
     totals = [f"TOTAL — {len(rows)} rows"] + [""] * (len(headers) - 1)
-    total_indexes = {16, 17, 18}  # Bi-weekly, Expected Monthly, Actual Monthly Consumption
+    total_indexes = {17, 18, 19}  # Bi-weekly, Expected Monthly, Actual Monthly Consumption
     for j, c in enumerate(custom_cols):
         if c.get("include_in_total"):
-            total_indexes.add(20 + j)
+            total_indexes.add(21 + j)
     for i in sorted(total_indexes):
         nums = [v[i] for v in all_values if isinstance(v[i], (int, float))]
         if nums:

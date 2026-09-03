@@ -3081,3 +3081,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Backend row fields: first_order_overdue / first_order_overdue_days — set when first_order_requested_date has passed and account has NO delivery yet (clears automatically once first delivery lands).
 - Frontend: First Order Requested Date cell turns red (bg-red-100, "Nd overdue · no delivery" subtext, testid vg-fo-overdue-*); included in Needs-attention pill filter + count.
 - Verified: API (85d overdue for Drive Folder Test Lead) + UI screenshot with attention filter.
+
+## Update — Jun 2026: PR-sourced columns rework in Volume Tracking
+- Removed "First Order Date"; renamed field to print_request_created_date (PR created_at). Added first_order_qty_crates (PR initial_order_quantity/quantity).
+- 4 PR-populated columns marked fromPR: print_request_created_date, first_order_requested_date, first_order_qty_crates, expected_monthly_volume_crates → distinct dark-teal header (#0F4C46, teal underline, tooltip "Populated from the print request").
+- Excel export updated (headers + values; totals indexes 17,18,19; custom offset 21).
+- Verified: API values (500 qty), UI screenshot (teal headers, old col gone), export headers + EMV total.
