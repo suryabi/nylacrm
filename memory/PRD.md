@@ -3141,3 +3141,6 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Facilities.js: CodeBadge component — click badge → inline input (Enter/blur saves, Esc cancels); amber "SET CODE" when missing. Applied to facility cards, floor rows, area chips. saveCode() helper.
 - Equipment import/reference sheets automatically use edited codes (same stored field).
 - Verified: API (normalize prew!→PREW, dup rejected, all 3 levels persist) + UI inline edit (GRFC saved w/ toast). Test values reverted (GR restored).
+
+## Update — Jun 2026: Prominent editable code chips
+- CodeBadge redesigned: blue-tinted bordered chip with pencil icon (text-sm; area chips text-xs), amber "SET CODE" when missing; bigger inline input (w-24, blue border). Area chips enlarged (py-1.5, text-sm) with bigger hover-red X delete button. Verified via screenshot.

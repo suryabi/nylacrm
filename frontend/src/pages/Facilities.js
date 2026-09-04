@@ -55,7 +55,7 @@ const CodeBadge = ({ code, onSave, testid, small }) => {
         onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); setVal(code || ''); } }}
         onBlur={commit}
         onClick={(e) => e.stopPropagation()}
-        className={`font-mono ${small ? 'text-[9px] w-14' : 'text-[10px] w-16'} font-bold px-1 py-0.5 rounded border border-blue-400 outline-none bg-white text-slate-700`}
+        className="font-mono text-sm font-bold w-24 px-2 py-1 rounded-md border-2 border-blue-500 outline-none bg-white text-slate-800"
         data-testid={`${testid}-input`}
       />
     );
@@ -67,10 +67,11 @@ const CodeBadge = ({ code, onSave, testid, small }) => {
       title="Click to edit code"
       onClick={(e) => { e.stopPropagation(); e.preventDefault(); setEditing(true); }}
       onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setEditing(true); } }}
-      className={`font-mono ${small ? 'text-[9px]' : 'text-[10px]'} font-bold px-1.5 py-0.5 rounded cursor-pointer ${code ? 'bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}
+      className={`inline-flex items-center gap-1.5 font-mono ${small ? 'text-xs px-2 py-0.5' : 'text-sm px-2.5 py-1'} font-bold rounded-md border cursor-pointer transition-colors ${code ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:border-blue-400' : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'}`}
       data-testid={testid}
     >
       {code || 'SET CODE'}
+      <Pencil className={small ? 'h-3 w-3 opacity-60' : 'h-3.5 w-3.5 opacity-60'} />
     </span>
   );
 };
@@ -397,10 +398,10 @@ export default function Facilities() {
                         <AccordionContent className="pb-3 space-y-2">
                           <div className="flex flex-wrap gap-1.5">
                             {(fl.areas || []).map((ar) => (
-                              <Badge key={ar.id} variant="outline" className="gap-1 pr-1" data-testid={`area-chip-${ar.id}`}>
+                              <Badge key={ar.id} variant="outline" className="gap-2 pr-1.5 py-1.5 pl-1.5 text-sm font-normal" data-testid={`area-chip-${ar.id}`}>
                                 <CodeBadge small code={ar.code} onSave={(v) => saveCode(`${detail.id}/floors/${fl.id}/areas/${ar.id}/code`, v)} testid={`area-code-${ar.id}`} />
                                 {ar.name}
-                                <button onClick={() => deleteArea(fl.id, ar.id)} className="hover:text-red-600" data-testid={`delete-area-${ar.id}`}><X className="h-3 w-3" /></button>
+                                <button onClick={() => deleteArea(fl.id, ar.id)} className="p-1 rounded hover:bg-red-50 hover:text-red-600 text-slate-400" data-testid={`delete-area-${ar.id}`}><X className="h-4 w-4" /></button>
                               </Badge>
                             ))}
                             {(fl.areas || []).length === 0 && <span className="text-xs text-muted-foreground">No areas yet — e.g. Storage Area, Rest Rooms, RFC Area, Finished Goods Area</span>}
