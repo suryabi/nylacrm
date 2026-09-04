@@ -3135,3 +3135,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Root cause of user report ("EMV/first order qty in bottles on PRODUCTION"): prod build predates conversion; EMV was COPIED raw (bottles) to account by the pre-conversion hook.
 - Fix: grid GET self-heals — if stored account EMV exactly equals first PR's raw starting_monthly_volume (>0), divide by pr_bpc once and persist. First-order qty needed no data fix (computed at read).
 - Verified: staged EMV=1200 + PR smv=1200 → grid shows 100.0 and persists 100.0; idempotent. Test state restored. Prod fix requires REDEPLOY, then values heal on first grid load.
+
+## Update — Jun 2026: User-configurable facility/floor/area codes
+- Codes still auto-populate first (_ensure_codes); now editable: PUT /api/facilities/{fid}/code, .../floors/{flid}/code, .../floors/{flid}/areas/{aid}/code (CodeIn; normalized A-Z0-9 max 6; sibling-duplicate rejection; admin only). Area update uses arrayFilters.
+- Facilities.js: CodeBadge component — click badge → inline input (Enter/blur saves, Esc cancels); amber "SET CODE" when missing. Applied to facility cards, floor rows, area chips. saveCode() helper.
+- Equipment import/reference sheets automatically use edited codes (same stored field).
+- Verified: API (normalize prew!→PREW, dup rejected, all 3 levels persist) + UI inline edit (GRFC saved w/ toast). Test values reverted (GR restored).

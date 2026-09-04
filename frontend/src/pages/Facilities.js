@@ -41,6 +41,40 @@ const AuthImg = ({ src, alt, className, onClick, testid }) => {
   return <img src={url} alt={alt} className={className} onClick={onClick} data-testid={testid} />;
 };
 
+const CodeBadge = ({ code, onSave, testid, small }) => {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(code || '');
+  useEffect(() => { setVal(code || ''); }, [code]);
+  const commit = () => { setEditing(false); if (val && val !== (code || '')) onSave(val); else setVal(code || ''); };
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={val}
+        onChange={(e) => setVal(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+        onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); setVal(code || ''); } }}
+        onBlur={commit}
+        onClick={(e) => e.stopPropagation()}
+        className={`font-mono ${small ? 'text-[9px] w-14' : 'text-[10px] w-16'} font-bold px-1 py-0.5 rounded border border-blue-400 outline-none bg-white text-slate-700`}
+        data-testid={`${testid}-input`}
+      />
+    );
+  }
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      title="Click to edit code"
+      onClick={(e) => { e.stopPropagation(); e.preventDefault(); setEditing(true); }}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setEditing(true); } }}
+      className={`font-mono ${small ? 'text-[9px]' : 'text-[10px]'} font-bold px-1.5 py-0.5 rounded cursor-pointer ${code ? 'bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}
+      data-testid={testid}
+    >
+      {code || 'SET CODE'}
+    </span>
+  );
+};
+
 export default function Facilities() {
   const [facilities, setFacilities] = useState([]);
   const [facilityTypes, setFacilityTypes] = useState([]);
@@ -77,6 +111,15 @@ export default function Facilities() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setPhotoTarget('general'); setPhotoFilter('all'); }, [detail?.id]);
+
+  const saveCode = async (path, code) => {
+    try {
+      const res = await fetch(`${API_URL}/api/facilities/${path}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ code }) });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.detail || 'Failed to update code'); return; }
+      toast.success('Code updated');
+      load();
+    } catch { toast.error('Failed to update code'); }
+  };
 
   const openCreate = () => { setForm(EMPTY_FAC); setEditId(null); setOpenSecs(DEFAULT_SECS); setFormOpen(true); };
   const openEdit = (f) => {
@@ -219,7 +262,7 @@ export default function Facilities() {
               <CardContent className="p-4 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-semibold flex items-center gap-2">{f.facility_name}
-                    {f.code && <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600" data-testid={`fac-code-${f.code}`}>{f.code}</span>}
+                    <CodeBadge code={f.code} onSave={(v) => saveCode(`${f.id}/code`, v)} testid={`fac-code-${f.id}`} />
                   </div>
                   <Badge variant="outline" className="whitespace-nowrap">{f.facility_type}</Badge>
                 </div>
@@ -347,7 +390,7 @@ export default function Facilities() {
                       <AccordionItem key={fl.id} value={fl.id} className="px-3">
                         <AccordionTrigger className="py-2.5 hover:no-underline" data-testid={`floor-row-${fl.id}`}>
                           <span className="flex items-center gap-2 text-sm font-medium">{fl.name}
-                            {fl.code && <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{fl.code}</span>}
+                            <CodeBadge code={fl.code} onSave={(v) => saveCode(`${detail.id}/floors/${fl.id}/code`, v)} testid={`floor-code-${fl.id}`} />
                             <Badge variant="secondary" className="text-xs">{(fl.areas || []).length} areas</Badge>
                           </span>
                         </AccordionTrigger>
@@ -355,7 +398,7 @@ export default function Facilities() {
                           <div className="flex flex-wrap gap-1.5">
                             {(fl.areas || []).map((ar) => (
                               <Badge key={ar.id} variant="outline" className="gap-1 pr-1" data-testid={`area-chip-${ar.id}`}>
-                                {ar.code && <span className="font-mono text-[9px] font-bold text-slate-500">{ar.code}</span>}
+                                <CodeBadge small code={ar.code} onSave={(v) => saveCode(`${detail.id}/floors/${fl.id}/areas/${ar.id}/code`, v)} testid={`area-code-${ar.id}`} />
                                 {ar.name}
                                 <button onClick={() => deleteArea(fl.id, ar.id)} className="hover:text-red-600" data-testid={`delete-area-${ar.id}`}><X className="h-3 w-3" /></button>
                               </Badge>

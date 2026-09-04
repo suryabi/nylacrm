@@ -71,6 +71,72 @@ class NameIn(BaseModel):
     name: str
 
 
+class CodeIn(BaseModel):
+    code: str
+
+
+def _norm_code(c: str) -> str:
+    c = re.sub(r"[^A-Za-z0-9]", "", c or "").upper()[:6]
+    if not c:
+        raise HTTPException(400, "Code must contain 1-6 letters/numbers")
+    return c
+
+
+@router.put("/{facility_id}/code")
+async def set_facility_code(facility_id: str, payload: CodeIn, current_user: dict = Depends(get_current_user)):
+    _require_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    code = _norm_code(payload.code)
+    dup = await db.facilities.find_one({"tenant_id": tenant_id, "code": code, "id": {"$ne": facility_id}}, {"_id": 0, "id": 1})
+    if dup:
+        raise HTTPException(400, f"Code {code} is already used by another facility")
+    r = await db.facilities.update_one({"tenant_id": tenant_id, "id": facility_id},
+                                       {"$set": {"code": code, "updated_at": _now()}})
+    if r.matched_count == 0:
+        raise HTTPException(404, "Facility not found")
+    return {"ok": True, "code": code}
+
+
+@router.put("/{facility_id}/floors/{floor_id}/code")
+async def set_floor_code(facility_id: str, floor_id: str, payload: CodeIn, current_user: dict = Depends(get_current_user)):
+    _require_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    code = _norm_code(payload.code)
+    fac = await db.facilities.find_one({"tenant_id": tenant_id, "id": facility_id}, {"_id": 0, "floors": 1})
+    if not fac:
+        raise HTTPException(404, "Facility not found")
+    if any(fl.get("code") == code and fl.get("id") != floor_id for fl in fac.get("floors") or []):
+        raise HTTPException(400, f"Code {code} is already used by another floor in this facility")
+    r = await db.facilities.update_one(
+        {"tenant_id": tenant_id, "id": facility_id, "floors.id": floor_id},
+        {"$set": {"floors.$.code": code, "updated_at": _now()}})
+    if r.matched_count == 0:
+        raise HTTPException(404, "Floor not found")
+    return {"ok": True, "code": code}
+
+
+@router.put("/{facility_id}/floors/{floor_id}/areas/{area_id}/code")
+async def set_area_code(facility_id: str, floor_id: str, area_id: str, payload: CodeIn, current_user: dict = Depends(get_current_user)):
+    _require_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    code = _norm_code(payload.code)
+    fac = await db.facilities.find_one({"tenant_id": tenant_id, "id": facility_id}, {"_id": 0, "floors": 1})
+    if not fac:
+        raise HTTPException(404, "Facility not found")
+    floor = next((fl for fl in fac.get("floors") or [] if fl.get("id") == floor_id), None)
+    if not floor:
+        raise HTTPException(404, "Floor not found")
+    if any(a.get("code") == code and a.get("id") != area_id for a in floor.get("areas") or []):
+        raise HTTPException(400, f"Code {code} is already used by another area on this floor")
+    r = await db.facilities.update_one(
+        {"tenant_id": tenant_id, "id": facility_id},
+        {"$set": {"floors.$[f].areas.$[a].code": code, "updated_at": _now()}},
+        array_filters=[{"f.id": floor_id}, {"a.id": area_id}])
+    if r.matched_count == 0:
+        raise HTTPException(404, "Area not found")
+    return {"ok": True, "code": code}
+
+
 @router.get("")
 async def list_facilities(current_user: dict = Depends(get_current_user)):
     _ = current_user  # read-only listing available to all authenticated users (used by Equipment Master)
