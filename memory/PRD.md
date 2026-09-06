@@ -3167,3 +3167,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
   - daily_digest_scheduler(): sleeps till 21:00 IST daily, sends per tenant with scheduled equipment. Wired in server.py startup next to missed-maintenance scheduler.
 - Frontend: /maintenance-status page (MaintenanceStatus.js) — date picker + prev/next day, 5 summary cards, facility cards with floor›area sections, red-highlighted missed rows, "N need attention" badges, "Email This Report" button. Menu item "Maintenance Status" (Production section; roles CEO/Director/Admin/System Admin; moduleKey maintenance_status added to registry + App.js route).
 - Verified: today's status (pending), past day (missed flag), manual digest sent to 4 admins, UI screenshot.
+
+## Update — Jun 2026: Seed data for Daily Maintenance Status (PREVIEW ONLY)
+- Added areas: Terrace›AWG Area (59e11dd4…402), 1st Floor›RO Area (ca1ac800…ab2).
+- 7 seeded equipment (daily freq, start 2026-09-01): AWG Unit 1/2 (Terrace›AWG), RO Membrane Skid + Ozone Generator (1F›RO), Prewash Pump (GF›Prewash), Labelling Machine (GF›Labeling), FG Conveyor (GF›Finished Goods). IDs in /tmp lost on restart; find by name.
+- Seeded records for 2026-09-05: 4 completed (Ravi Kumar / Anita Sharma / Mohan Das with times), 1 incomplete (Ozone Generator, remark), 3 missed (5 Micron Filter, Labelling Machine, Prewash Pump).
+- Sample digest email sent to 4 admins (totals 8/4/1/3). This is DEMO SEED DATA in preview only — production unaffected.
