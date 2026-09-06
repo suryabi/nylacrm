@@ -162,6 +162,41 @@ const CameraDialog = ({ open, onClose, onCapture }) => {
   );
 };
 
+const TypeCodeBadge = ({ type, onSave }) => {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(type.code || '');
+  useEffect(() => { setVal(type.code || ''); }, [type.code]);
+  const commit = () => { setEditing(false); if (val && val !== (type.code || '')) onSave(type.id, val); else setVal(type.code || ''); };
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={val}
+        onChange={(e) => setVal(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+        onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); setVal(type.code || ''); } }}
+        onBlur={commit}
+        onClick={(e) => e.stopPropagation()}
+        className="font-mono text-sm font-bold w-24 px-2 py-1 rounded-md border-2 border-blue-500 outline-none bg-white text-slate-800"
+        data-testid={`type-code-input-${type.id}`}
+      />
+    );
+  }
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      title="Click to edit code"
+      onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+      onKeyDown={(e) => { if (e.key === 'Enter') setEditing(true); }}
+      className={`inline-flex items-center gap-1.5 font-mono text-xs font-bold px-2 py-0.5 rounded-md border cursor-pointer transition-colors ${type.code ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:border-blue-400 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800' : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'}`}
+      data-testid={`type-code-${type.id}`}
+    >
+      {type.code || 'SET CODE'}
+      <Pencil className="h-3 w-3 opacity-60" />
+    </span>
+  );
+};
+
 const AuthImg = ({ src, alt, className, onClick, testid }) => {
   const [url, setUrl] = useState(null);
   const [failed, setFailed] = useState(false);
@@ -339,6 +374,15 @@ export default function EquipmentMaster() {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  const saveTypeCode = async (typeId, code) => {
+    try {
+      const res = await fetch(`${API_URL}/api/production/equipment/types/${typeId}/code`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ code }) });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.detail || 'Failed to update code'); return; }
+      toast.success('Code updated');
+      loadAll();
+    } catch { toast.error('Failed to update code'); }
+  };
 
   const seedDefaults = async () => {
     const res = await fetch(`${API_URL}/api/production/equipment/types/seed-defaults`, { method: 'POST', headers: authHeaders() });
@@ -800,7 +844,7 @@ export default function EquipmentMaster() {
                   <CardContent className="p-4 flex items-start justify-between">
                     <div>
                       <p className="font-semibold flex items-center gap-2">{t.name}
-                        {t.code && <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" data-testid={`type-code-${t.code}`}>{t.code}</span>}
+                        <TypeCodeBadge type={t} onSave={saveTypeCode} />
                       </p>
                       <p className="text-xs text-muted-foreground">{t.equipment_count} equipment item{t.equipment_count === 1 ? '' : 's'}</p>
                       {t.description && <p className="text-xs text-muted-foreground mt-1">{t.description}</p>}

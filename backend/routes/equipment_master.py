@@ -1,5 +1,6 @@
 """Equipment Master & Maintenance Management — production equipment hierarchy,
 maintenance/replacement schedules and vendor associations."""
+import re
 import uuid
 import logging
 from datetime import datetime, timedelta, timezone
@@ -21,6 +22,10 @@ DEFAULT_TYPES = ["Filters", "Pumps", "Air Water Generators", "RO/Membrane System
 class EquipmentTypeIn(BaseModel):
     name: str
     description: Optional[str] = None
+
+
+class TypeCodeIn(BaseModel):
+    code: str
 
 
 class VendorAssociation(BaseModel):
@@ -152,6 +157,22 @@ async def update_type(type_id: str, data: EquipmentTypeIn, current_user: dict = 
         {"tenant_id": tenant_id, "equipment_type_id": type_id},
         {"$set": {"equipment_type_name": data.name.strip()}})
     return await db.equipment_types.find_one({"tenant_id": tenant_id, "id": type_id}, {"_id": 0})
+
+
+@router.put("/types/{type_id}/code")
+async def set_type_code(type_id: str, data: TypeCodeIn, current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    code = re.sub(r"[^A-Za-z0-9]", "", data.code or "").upper()[:6]
+    if not code:
+        raise HTTPException(400, "Code must contain 1-6 letters/numbers")
+    dup = await db.equipment_types.find_one({"tenant_id": tenant_id, "code": code, "id": {"$ne": type_id}}, {"_id": 0, "id": 1})
+    if dup:
+        raise HTTPException(400, f"Code {code} is already used by another equipment type")
+    res = await db.equipment_types.update_one({"tenant_id": tenant_id, "id": type_id}, {"$set": {"code": code}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Type not found")
+    return {"ok": True, "code": code}
 
 
 @router.delete("/types/{type_id}")

@@ -3144,3 +3144,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 
 ## Update — Jun 2026: Prominent editable code chips
 - CodeBadge redesigned: blue-tinted bordered chip with pencil icon (text-sm; area chips text-xs), amber "SET CODE" when missing; bigger inline input (w-24, blue border). Area chips enlarged (py-1.5, text-sm) with bigger hover-red X delete button. Verified via screenshot.
+
+## Update — Jun 2026: Editable equipment type codes
+- PUT /api/production/equipment/types/{type_id}/code (TypeCodeIn; normalize A-Z0-9 max6; dup rejection). Added `import re` to equipment_master.py.
+- EquipmentMaster.js: TypeCodeBadge (blue chip + pencil, inline input, amber SET CODE) on Equipment Types cards; saveTypeCode helper reloads via loadAll.
+- Verified: API set TST9 + persist + revert AWG; UI 9 chips, inline input opens (screenshot).
