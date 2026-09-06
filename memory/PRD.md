@@ -3184,3 +3184,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Scan GET /scan/{token} now returns maintenance_instructions HTML + instruction_files (category=instruction). MaintenanceScan.js: collapsible green "Maintenance instructions" card (open by default; scan-instructions testids) rendering HTML + tappable reference files (blob open in new tab).
 - Equipment Master KPI cards (Total/Overdue/Due 30/Order Now) now computed from baseFiltered (search/type/facility/floor/area) — quickFilter excluded since cards drive it.
 - Verified: scan page shows instructions card with saved HTML; search "AWG" → metrics 2/2/0/0.
+
+## Update — Jun 2026: Scan camera UX (full-screen, timestamp, lightbox)
+- MaintenanceScan.js: camera now opens a full-screen overlay (fixed inset-0 z-50, object-contain video, round 16x16 shutter button, photo count, Done/X close; scan-camera-overlay testid).
+- Timestamp burned into captured photo pixels bottom-right (canvas text: en-GB dd MMM yyyy hh:mm:ss on dark bar) before upload; thumbnail preview quality raised to 0.7.
+- Tap thumbnail → full-screen lightbox (scan-photo-lightbox, tap anywhere/X to close) — no download needed.
+- Verified with injected fake getUserMedia stream: overlay, capture w/ visible timestamp, lightbox. Test pending photo cleaned.

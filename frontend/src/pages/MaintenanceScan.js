@@ -4,7 +4,7 @@ import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
-import { Wrench, CheckCircle2, XCircle, Camera, RefreshCw, Trash2, LogIn, BookOpen, FileText, Image as ImageIcon } from 'lucide-react';
+import { Wrench, CheckCircle2, XCircle, Camera, RefreshCw, Trash2, LogIn, BookOpen, FileText, Image as ImageIcon, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -21,6 +21,7 @@ export default function MaintenanceScan() {
   const [camError, setCamError] = useState('');
   const [uploading, setUploading] = useState(false);
   const [showInstr, setShowInstr] = useState(true);
+  const [photoView, setPhotoView] = useState(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
@@ -70,7 +71,19 @@ export default function MaintenanceScan() {
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    // Burn the timestamp into the photo (bottom-right)
+    const ts = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const fs = Math.max(18, Math.round(canvas.width * 0.03));
+    ctx.font = `bold ${fs}px Arial`;
+    const pad = fs * 0.6;
+    const tw = ctx.measureText(ts).width;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(canvas.width - tw - pad * 2, canvas.height - fs - pad * 1.8, tw + pad * 2, fs + pad * 1.8);
+    ctx.fillStyle = '#ffffff';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(ts, canvas.width - tw - pad, canvas.height - pad * 0.9);
     canvas.toBlob(async (blob) => {
       if (!blob) return;
       setUploading(true);
@@ -82,7 +95,7 @@ export default function MaintenanceScan() {
         });
         if (!res.ok) throw new Error((await res.json()).detail || 'Upload failed');
         const meta = await res.json();
-        setPhotos((p) => [...p, { ...meta, preview: canvas.toDataURL('image/jpeg', 0.5) }]);
+        setPhotos((p) => [...p, { ...meta, preview: canvas.toDataURL('image/jpeg', 0.7) }]);
         toast.success('Photo captured with timestamp');
       } catch (e) { toast.error(e.message); } finally { setUploading(false); }
     }, 'image/jpeg', 0.85);
@@ -243,22 +256,42 @@ export default function MaintenanceScan() {
           {!camOn ? (
             <Button variant="outline" className="w-full" onClick={startCamera} data-testid="scan-open-camera-btn"><Camera className="h-4 w-4 mr-2" /> Open Camera</Button>
           ) : (
-            <div className="space-y-2">
-              <video ref={videoRef} playsInline muted className="w-full rounded-lg bg-black aspect-video" data-testid="scan-camera-video" />
-              <div className="flex gap-2">
-                <Button className="flex-1" onClick={capture} disabled={uploading} data-testid="scan-capture-btn"><Camera className="h-4 w-4 mr-2" />{uploading ? 'Saving…' : 'Capture Photo'}</Button>
-                <Button variant="outline" onClick={stopCamera}>Close</Button>
+            <div className="fixed inset-0 z-50 bg-black flex flex-col" data-testid="scan-camera-overlay">
+              <div className="flex items-center justify-between px-4 py-3 bg-black/80">
+                <p className="text-white text-sm font-semibold truncate">{state.equipment_name} — live capture</p>
+                <button onClick={stopCamera} className="text-white/90 p-1.5 rounded-full hover:bg-white/10" data-testid="scan-camera-close"><XCircle className="h-6 w-6" /></button>
+              </div>
+              <video ref={videoRef} playsInline muted className="flex-1 min-h-0 w-full object-contain bg-black" data-testid="scan-camera-video" />
+              <div className="px-4 py-4 pb-6 bg-black/80 flex items-center justify-center gap-6">
+                <span className="text-white/70 text-xs w-20">{photos.length} photo{photos.length === 1 ? '' : 's'} taken</span>
+                <button onClick={capture} disabled={uploading} aria-label="Capture photo" data-testid="scan-capture-btn"
+                  className="h-16 w-16 rounded-full bg-white border-4 border-slate-300 flex items-center justify-center active:scale-95 transition-transform disabled:opacity-60">
+                  {uploading ? <RefreshCw className="h-6 w-6 animate-spin text-slate-700" /> : <Camera className="h-7 w-7 text-slate-800" />}
+                </button>
+                <button onClick={stopCamera} className="text-white text-sm font-semibold w-20 text-right" data-testid="scan-camera-done">Done</button>
               </div>
             </div>
           )}
           {photos.length > 0 && (
             <div className="grid grid-cols-3 gap-2 mt-2">
               {photos.map((p) => (
-                <div key={p.id} className="relative">
-                  <img src={p.preview} alt="capture" className="h-20 w-full object-cover rounded border" />
+                <div key={p.id} className="relative group">
+                  <button type="button" className="block w-full" onClick={() => setPhotoView(p.preview)} data-testid={`scan-photo-thumb-${p.id}`}>
+                    <img src={p.preview} alt="capture" className="h-20 w-full object-cover rounded border" />
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 rounded transition-colors">
+                      <Eye className="h-5 w-5 text-white opacity-0 group-hover:opacity-100" />
+                    </span>
+                  </button>
                   <button className="absolute top-0.5 right-0.5 bg-white/90 rounded p-0.5 text-red-600" onClick={() => setPhotos((x) => x.filter((y) => y.id !== p.id))}><Trash2 className="h-3 w-3" /></button>
                 </div>
               ))}
+            </div>
+          )}
+          {photoView && (
+            <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-3" onClick={() => setPhotoView(null)} data-testid="scan-photo-lightbox">
+              <img src={photoView} alt="captured preview" className="max-w-full max-h-full object-contain rounded-lg" />
+              <button className="absolute top-4 right-4 text-white/90 p-1.5 rounded-full bg-black/50" onClick={() => setPhotoView(null)} data-testid="scan-lightbox-close"><XCircle className="h-7 w-7" /></button>
+              <p className="absolute bottom-4 left-0 right-0 text-center text-white/70 text-xs">Tap anywhere to close</p>
             </div>
           )}
         </div>
