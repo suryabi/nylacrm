@@ -777,10 +777,10 @@ class MaintStaffIn(BaseModel):
 @router.put("/{equipment_id}/maintenance-staff")
 async def set_maintenance_staff(equipment_id: str, data: MaintStaffIn, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
-    users = await db.users.find({"tenant_id": tenant_id, "id": {"$in": data.user_ids}},
-                                {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1}).to_list(500)
-    by_id = {u["id"]: u for u in users}
-    staff = [{"id": uid, "name": by_id[uid].get("name") or by_id[uid].get("email"), "role": by_id[uid].get("role")}
+    members = await db.qc_team.find({"tenant_id": tenant_id, "id": {"$in": data.user_ids}},
+                                    {"_id": 0, "id": 1, "name": 1, "role": 1}).to_list(500)
+    by_id = {m["id"]: m for m in members}
+    staff = [{"id": uid, "name": by_id[uid].get("name"), "role": by_id[uid].get("role")}
              for uid in data.user_ids if uid in by_id]
     res = await db.equipment_master.update_one(
         {"tenant_id": tenant_id, "id": equipment_id},

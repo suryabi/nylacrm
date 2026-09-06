@@ -4,12 +4,23 @@ import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
-import { Wrench, CheckCircle2, XCircle, Camera, RefreshCw, Trash2, LogIn, Eye } from 'lucide-react';
+import { Wrench, CheckCircle2, XCircle, Camera, RefreshCw, Trash2, LogIn, Eye, UserCheck } from 'lucide-react';
 import { ScanInstructions } from '../components/ScanInstructions';
+import QCKioskLogin from '../components/qc/QCKioskLogin';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' });
+
+const STAFF_KEY = 'factory_staff_session';
+const STAFF_SESSION_HOURS = 12;
+const getStaffSession = () => {
+  try {
+    const s = JSON.parse(localStorage.getItem(STAFF_KEY) || 'null');
+    if (s && s.id && Date.now() - (s.at || 0) < STAFF_SESSION_HOURS * 3600 * 1000) return s;
+  } catch { /* ignore */ }
+  return null;
+};
 
 export default function MaintenanceScan() {
   const { token } = useParams();
@@ -22,8 +33,16 @@ export default function MaintenanceScan() {
   const [camError, setCamError] = useState('');
   const [uploading, setUploading] = useState(false);
   const [photoView, setPhotoView] = useState(null);
+  const [staff, setStaff] = useState(getStaffSession);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+
+  const staffLogin = (m) => {
+    const s = { id: m.id, name: m.name, role: m.role || '', at: Date.now() };
+    localStorage.setItem(STAFF_KEY, JSON.stringify(s));
+    setStaff(s);
+  };
+  const staffLogout = () => { localStorage.removeItem(STAFF_KEY); setStaff(null); };
 
   const load = useCallback(async () => {
     try {
@@ -80,6 +99,7 @@ export default function MaintenanceScan() {
       try {
         const fd = new FormData();
         fd.append('file', blob, 'capture.jpg');
+        if (staff?.id) fd.append('staff_member_id', staff.id);
         const res = await fetch(`${API_URL}/api/maintenance/scan/${token}/photo`, {
           method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` }, body: fd,
         });
@@ -98,7 +118,7 @@ export default function MaintenanceScan() {
     try {
       const res = await fetch(`${API_URL}/api/maintenance/scan/${token}/submit`, {
         method: 'POST', headers: authHeaders(),
-        body: JSON.stringify({ status, remarks: remarks || null, photo_ids: photos.map((p) => p.id) }),
+        body: JSON.stringify({ status, remarks: remarks || null, photo_ids: photos.map((p) => p.id), staff_member_id: staff?.id || null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Submit failed');
@@ -168,23 +188,6 @@ export default function MaintenanceScan() {
     );
   }
 
-  if (state.not_assigned) {
-    return (
-      <Shell>
-        {info}
-        <Card className="border-red-300"><CardContent className="py-8 text-center space-y-2" data-testid="scan-not-assigned">
-          <XCircle className="h-10 w-10 mx-auto text-red-500" />
-          <p className="font-bold text-red-600">{state.message}</p>
-          {(state.assigned_staff || []).length > 0 && (
-            <p className="text-sm text-muted-foreground">Assigned staff: <span className="font-semibold">{state.assigned_staff.join(', ')}</span></p>
-          )}
-          <p className="text-xs text-muted-foreground pt-1">If you believe you should have access, ask an admin to assign you to this equipment.</p>
-        </CardContent></Card>
-        {instructions}
-      </Shell>
-    );
-  }
-
   if (state.already_submitted) {
     const recs = state.records && state.records.length ? state.records : (state.record ? [state.record] : []);
     const r = recs[recs.length - 1] || {};
@@ -224,9 +227,51 @@ export default function MaintenanceScan() {
     );
   }
 
+  const needsStaff = state.staff_verification_required && !state.admin_bypass;
+  const assignedIds = state.assigned_staff_ids || [];
+
+  if (needsStaff && !staff) {
+    return (
+      <div className="min-h-screen bg-slate-100" data-testid="scan-staff-login">
+        <div className="pt-6 px-4 max-w-md mx-auto text-center space-y-1">
+          <p className="font-bold text-slate-800">{state.equipment_name}</p>
+          <p className="text-xs text-muted-foreground">Sign in with Face ID or PIN to record maintenance</p>
+        </div>
+        <QCKioskLogin onLogin={staffLogin} />
+      </div>
+    );
+  }
+
+  if (needsStaff && staff && assignedIds.length > 0 && !assignedIds.includes(staff.id)) {
+    return (
+      <Shell>
+        {info}
+        <Card className="border-red-300"><CardContent className="py-8 text-center space-y-2" data-testid="scan-not-assigned">
+          <XCircle className="h-10 w-10 mx-auto text-red-500" />
+          <p className="font-bold text-red-600">Only assigned maintenance staff can record maintenance for this equipment.</p>
+          <p className="text-sm text-muted-foreground">You are signed in as <span className="font-semibold">{staff.name}</span>{staff.role ? ` (${staff.role})` : ''}.</p>
+          {(state.assigned_staff || []).length > 0 && (
+            <p className="text-sm text-muted-foreground">Assigned staff: <span className="font-semibold">{state.assigned_staff.map((s) => s.name).join(', ')}</span></p>
+          )}
+          <Button variant="outline" size="sm" onClick={staffLogout} className="mt-2" data-testid="scan-switch-user-btn">
+            <UserCheck className="h-4 w-4 mr-2" /> Switch user
+          </Button>
+        </CardContent></Card>
+        {instructions}
+      </Shell>
+    );
+  }
+
   return (
     <Shell>
       {info}
+      {staff && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2" data-testid="scan-staff-chip">
+          <UserCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+          <p className="text-sm flex-1 truncate">Recording as <span className="font-bold">{staff.name}</span>{staff.role ? <span className="text-xs text-muted-foreground"> · {staff.role}</span> : null}</p>
+          <button onClick={staffLogout} className="text-xs font-semibold text-emerald-700 hover:underline shrink-0" data-testid="scan-staff-switch">Switch</button>
+        </div>
+      )}
       {state.relog && (
         <div className="rounded-lg border-2 border-blue-300 bg-blue-50 px-4 py-3 flex items-start gap-2" data-testid="scan-relog-banner">
           <RefreshCw className="h-4 w-4 text-[#002FA7] mt-0.5 shrink-0" />

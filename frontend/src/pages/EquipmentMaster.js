@@ -36,10 +36,10 @@ const AssignStaffDialog = ({ equipment, onClose }) => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/users?is_active=true`, { headers: authHeaders() })
+    fetch(`${API_URL}/api/production/qc-team`, { headers: authHeaders() })
       .then((r) => r.json())
-      .then((d) => setUsers(Array.isArray(d) ? d : d.users || []))
-      .catch(() => toast.error('Could not load users'));
+      .then((d) => setUsers(Array.isArray(d) ? d : []))
+      .catch(() => toast.error('Could not load factory staff'));
   }, []);
 
   const roles = [...new Set(users.map((u) => u.role).filter(Boolean))].sort();
@@ -59,7 +59,7 @@ const AssignStaffDialog = ({ equipment, onClose }) => {
       });
       if (!res.ok) throw new Error((await res.json()).detail || 'Save failed');
       const d = await res.json();
-      toast.success(d.maintenance_staff.length ? `${d.maintenance_staff.length} staff assigned` : 'Assignment cleared — anyone can record maintenance');
+      toast.success(d.maintenance_staff.length ? `${d.maintenance_staff.length} factory staff assigned` : 'Assignment cleared — any factory staff can record maintenance');
       onClose(true);
     } catch (e) { toast.error(e.message); } finally { setSaving(false); }
   };
@@ -69,7 +69,7 @@ const AssignStaffDialog = ({ equipment, onClose }) => {
       <DialogContent className="max-w-lg" data-testid="assign-staff-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-blue-600" /> Assign Maintenance Staff</DialogTitle>
-          <DialogDescription>{equipment.name} — only assigned staff (and admins) can record maintenance via QR scan. Leave empty to allow anyone.</DialogDescription>
+          <DialogDescription>{equipment.name} — only assigned factory staff (verified via Face ID / PIN) can record maintenance via QR scan. Leave empty to allow any factory staff.</DialogDescription>
         </DialogHeader>
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -91,15 +91,16 @@ const AssignStaffDialog = ({ equipment, onClose }) => {
                   <label key={u.id} className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 cursor-pointer text-sm ${sel.has(u.id) ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
                     data-testid={`assign-staff-user-${u.id}`}>
                     <input type="checkbox" checked={sel.has(u.id)} onChange={() => toggle(u.id)} className="h-4 w-4 accent-blue-600" />
-                    <span className="flex-1 font-medium truncate">{u.name || u.email}</span>
-                    <Badge variant="outline" className="text-[10px] shrink-0">{u.role}</Badge>
+                    <span className="flex-1 font-medium truncate">{u.name}</span>
+                    <span className="text-[10px] text-slate-400 shrink-0">{[u.has_face && 'Face ✓', u.has_pin && 'PIN ✓'].filter(Boolean).join(' · ') || 'No Face/PIN'}</span>
+                    <Badge variant="outline" className="text-[10px] shrink-0">{u.role || '—'}</Badge>
                   </label>
                 ))}
               </div>
             </div>
           ))}
-          {users.length > 0 && filtered.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No users match</p>}
-          {users.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">Loading users…</p>}
+          {users.length > 0 && filtered.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No staff match</p>}
+          {users.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No factory staff yet — add them in the Factory Staff module first</p>}
         </div>
         <DialogFooter className="items-center gap-2">
           <span className="text-xs text-muted-foreground mr-auto">{sel.size} selected</span>
