@@ -104,6 +104,14 @@ def _stamp_photo(content: bytes, stamp_text: str) -> bytes:
 
 
 INVALID_QR_MSG = "This QR code is not valid for today's maintenance."
+NOT_ASSIGNED_MSG = "Only assigned maintenance staff can record maintenance for this equipment."
+
+
+def _staff_allowed(eq: dict, current_user: dict) -> bool:
+    ids = eq.get("maintenance_staff_ids") or []
+    if not ids or current_user.get("id") in ids:
+        return True
+    return (current_user.get("role") or "").lower() in ADMIN_ROLES
 
 
 async def _ensure_photo_assignments(tenant_id: str, equipment_id: str, month: str, n_required):
@@ -315,6 +323,9 @@ async def scan_status(token: str, current_user: dict = Depends(get_current_user)
                 for f in (eq.get("attachments") or []) if f.get("category") == "instruction"]}
     if slot["date"] != today:
         return {**base, "valid": False, "message": INVALID_QR_MSG}
+    if not _staff_allowed(eq, current_user):
+        return {**base, "valid": True, "not_assigned": True, "message": NOT_ASSIGNED_MSG,
+                "assigned_staff": [s.get("name") for s in eq.get("maintenance_staff") or []]}
     if slot.get("submitted"):
         recs = await db.maintenance_records.find(
             {"tenant_id": tenant_id, "slot_id": slot["id"]}, {"_id": 0}).sort("created_at", 1).to_list(50)
@@ -330,6 +341,9 @@ async def scan_photo(token: str, file: UploadFile = File(...), current_user: dic
     today = datetime.now(IST)
     if slot["date"] != today.date().isoformat():
         raise HTTPException(400, INVALID_QR_MSG)
+    eq = await _get_equipment(tenant_id, slot["equipment_id"])
+    if not _staff_allowed(eq, current_user):
+        raise HTTPException(403, NOT_ASSIGNED_MSG)
     content = await file.read()
     if len(content) > 15 * 1024 * 1024:
         raise HTTPException(400, "Photo too large (max 15 MB)")
@@ -364,6 +378,8 @@ async def scan_submit(token: str, body: SubmitBody, current_user: dict = Depends
     if slot["date"] != now.date().isoformat():
         raise HTTPException(400, INVALID_QR_MSG)
     eq = await _get_equipment(tenant_id, slot["equipment_id"])
+    if not _staff_allowed(eq, current_user):
+        raise HTTPException(403, NOT_ASSIGNED_MSG)
     prior = await db.maintenance_records.count_documents({"tenant_id": tenant_id, "slot_id": slot["id"]})
     photos = [p for p in slot.get("pending_photos") or [] if p["id"] in set(body.photo_ids)]
     if slot.get("photo_required") and not photos and prior == 0:

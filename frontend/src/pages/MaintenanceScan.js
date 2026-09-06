@@ -168,6 +168,23 @@ export default function MaintenanceScan() {
     );
   }
 
+  if (state.not_assigned) {
+    return (
+      <Shell>
+        {info}
+        <Card className="border-red-300"><CardContent className="py-8 text-center space-y-2" data-testid="scan-not-assigned">
+          <XCircle className="h-10 w-10 mx-auto text-red-500" />
+          <p className="font-bold text-red-600">{state.message}</p>
+          {(state.assigned_staff || []).length > 0 && (
+            <p className="text-sm text-muted-foreground">Assigned staff: <span className="font-semibold">{state.assigned_staff.join(', ')}</span></p>
+          )}
+          <p className="text-xs text-muted-foreground pt-1">If you believe you should have access, ask an admin to assign you to this equipment.</p>
+        </CardContent></Card>
+        {instructions}
+      </Shell>
+    );
+  }
+
   if (state.already_submitted) {
     const recs = state.records && state.records.length ? state.records : (state.record ? [state.record] : []);
     const r = recs[recs.length - 1] || {};

@@ -28,6 +28,89 @@ const FREQ_OPTIONS = [
 ];
 const freqLabel = (days) => (FREQ_OPTIONS.find((o) => o.value === Number(days)) || {}).label || (days ? `Every ${days} days` : null);
 
+const AssignStaffDialog = ({ equipment, onClose }) => {
+  const [users, setUsers] = useState([]);
+  const [sel, setSel] = useState(() => new Set(equipment.maintenance_staff_ids || []));
+  const [roleFilter, setRoleFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/users?is_active=true`, { headers: authHeaders() })
+      .then((r) => r.json())
+      .then((d) => setUsers(Array.isArray(d) ? d : d.users || []))
+      .catch(() => toast.error('Could not load users'));
+  }, []);
+
+  const roles = [...new Set(users.map((u) => u.role).filter(Boolean))].sort();
+  const filtered = users.filter((u) =>
+    (!roleFilter || u.role === roleFilter) &&
+    (!search || `${u.name || ''} ${u.email || ''}`.toLowerCase().includes(search.toLowerCase())));
+  const grouped = {};
+  filtered.forEach((u) => { const r = u.role || 'No Role'; (grouped[r] = grouped[r] || []).push(u); });
+
+  const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/production/equipment/${equipment.id}/maintenance-staff`, {
+        method: 'PUT', headers: authHeaders(), body: JSON.stringify({ user_ids: [...sel] }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || 'Save failed');
+      const d = await res.json();
+      toast.success(d.maintenance_staff.length ? `${d.maintenance_staff.length} staff assigned` : 'Assignment cleared — anyone can record maintenance');
+      onClose(true);
+    } catch (e) { toast.error(e.message); } finally { setSaving(false); }
+  };
+
+  return (
+    <Dialog open onOpenChange={() => onClose(false)}>
+      <DialogContent className="max-w-lg" data-testid="assign-staff-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-blue-600" /> Assign Maintenance Staff</DialogTitle>
+          <DialogDescription>{equipment.name} — only assigned staff (and admins) can record maintenance via QR scan. Leave empty to allow anyone.</DialogDescription>
+        </DialogHeader>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="h-4 w-4 absolute left-2.5 top-2.5 text-slate-400" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name…" className="pl-8 h-9" data-testid="assign-staff-search" />
+          </div>
+          <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm max-w-[180px]" data-testid="assign-staff-role-filter">
+            <option value="">All roles</option>
+            {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+        <div className="max-h-[320px] overflow-y-auto space-y-3 pr-1" data-testid="assign-staff-list">
+          {Object.keys(grouped).sort().map((role) => (
+            <div key={role}>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">{role} ({grouped[role].length})</p>
+              <div className="space-y-1">
+                {grouped[role].map((u) => (
+                  <label key={u.id} className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 cursor-pointer text-sm ${sel.has(u.id) ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                    data-testid={`assign-staff-user-${u.id}`}>
+                    <input type="checkbox" checked={sel.has(u.id)} onChange={() => toggle(u.id)} className="h-4 w-4 accent-blue-600" />
+                    <span className="flex-1 font-medium truncate">{u.name || u.email}</span>
+                    <Badge variant="outline" className="text-[10px] shrink-0">{u.role}</Badge>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+          {users.length > 0 && filtered.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No users match</p>}
+          {users.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">Loading users…</p>}
+        </div>
+        <DialogFooter className="items-center gap-2">
+          <span className="text-xs text-muted-foreground mr-auto">{sel.size} selected</span>
+          <Button variant="outline" onClick={() => onClose(false)} data-testid="assign-staff-cancel">Cancel</Button>
+          <Button onClick={save} disabled={saving} style={{ backgroundColor: '#002FA7' }} data-testid="assign-staff-save">{saving ? 'Saving…' : 'Save Assignment'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const printEquipmentQr = async (e) => {
   try {
     const res = await fetch(`${API_URL}/api/maintenance/equipment/${e.id}/sticker?origin=${encodeURIComponent(window.location.origin)}`, { headers: authHeaders() });
@@ -335,6 +418,7 @@ export default function EquipmentMaster() {
   };
   const [docsTarget, setDocsTarget] = useState(null);
   const [maintTarget, setMaintTarget] = useState(null);
+  const [staffTarget, setStaffTarget] = useState(null);
   const [instrTarget, setInstrTarget] = useState(null);
   const [docCategory, setDocCategory] = useState('photo');
   const [uploading, setUploading] = useState(false);
@@ -878,6 +962,9 @@ export default function EquipmentMaster() {
                                     <DropdownMenuItem onClick={() => printEquipmentQr(e)} data-testid={`eq-print-qr-${e.name.replace(/\s/g, '-')}`}>
                                       <QrCode className="h-4 w-4 mr-2 text-emerald-600" /> Print Equipment QR Sticker
                                     </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setStaffTarget(e)} data-testid={`eq-assign-staff-${e.name.replace(/\s/g, '-')}`}>
+                                      <Users className="h-4 w-4 mr-2 text-amber-600" /> Assign Maintenance Staff{(e.maintenance_staff_ids || []).length > 0 ? ` (${e.maintenance_staff_ids.length})` : ''}
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => { setLogTarget({ equipment: e, kind: 'replacement' }); setLogDate(new Date().toISOString().slice(0, 10)); setLogPhotos([]); }} data-testid={`eq-log-repl-${e.name.replace(/\s/g, '-')}`}>
                                       <Repeat className="h-4 w-4 mr-2 text-indigo-600" /> Log Replacement Done
                                     </DropdownMenuItem>
@@ -1041,6 +1128,7 @@ export default function EquipmentMaster() {
 
       {/* Equipment form */}
       {maintTarget && <MaintenanceProfile equipment={maintTarget} onClose={() => { setMaintTarget(null); loadAll(); }} />}
+      {staffTarget && <AssignStaffDialog equipment={staffTarget} onClose={(saved) => { setStaffTarget(null); if (saved) loadAll(); }} />}
       {instrTarget && <EquipmentInstructions equipment={instrTarget} onClose={() => setInstrTarget(null)} onSaved={loadAll} />}
       <Dialog open={showEqForm} onOpenChange={setShowEqForm}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="eq-form-dialog">

@@ -3203,3 +3203,10 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - New shared component ScanInstructions.js ("How to do it — instructions", collapsible) with Maintenance / Replacement tab buttons (scan-instr-tab-maintenance / scan-instr-tab-replacement) + reference document list.
 - Backend: /scan/{token} now also returns replacement_instructions; /equipment-scan/{id} (permanent sticker QR) returns maintenance_instructions, replacement_instructions and instruction_files even when nothing is scheduled today.
 - Used on MaintenanceScan.js (form view + already-submitted view) and EquipmentScan.js (not-scheduled view). Verified in browser: both tabs render and switch correctly.
+
+## Update — Jun 2026: Maintenance staff assignment + QR scan enforcement
+- PUT /api/production/equipment/{id}/maintenance-staff {user_ids} → stores maintenance_staff_ids + maintenance_staff [{id,name,role}] snapshot on equipment.
+- Enforcement (maintenance_sheets.py `_staff_allowed`): if assignment list non-empty, only assigned users OR ADMIN_ROLES (ceo/admin/system admin/director/tenant_admin) may scan/photo/submit. Empty list = anyone. Scan GET returns not_assigned + assigned_staff names; photo/submit return 403.
+- EquipmentMaster.js: row dropdown "Assign Maintenance Staff (N)" (eq-assign-staff-*) → AssignStaffDialog: users grouped by role, role filter dropdown (assign-staff-role-filter), name search, checkboxes, pre-selects current, save via PUT.
+- MaintenanceScan.js: not_assigned view (scan-not-assigned) shows red block card + assigned staff names + instructions still visible.
+- Verified: assign API, admin bypass, non-assigned user blocked (scan flag + submit 403 + browser UI), dialog role grouping/filter/pre-selection in browser. Test assignment cleared.
