@@ -92,7 +92,7 @@ const AssignStaffDialog = ({ equipment, onClose }) => {
                     data-testid={`assign-staff-user-${u.id}`}>
                     <input type="checkbox" checked={sel.has(u.id)} onChange={() => toggle(u.id)} className="h-4 w-4 accent-blue-600" />
                     <span className="flex-1 font-medium truncate">{u.name}</span>
-                    <span className="text-[10px] text-slate-400 shrink-0">{[u.has_face && 'Face ✓', u.has_pin && 'PIN ✓'].filter(Boolean).join(' · ') || 'No Face/PIN'}</span>
+                    <span className={`text-[10px] shrink-0 ${(!u.has_face && !u.has_pin) ? 'text-amber-600 font-bold' : 'text-slate-400'}`}>{[u.has_face && 'Face ✓', u.has_pin && 'PIN ✓'].filter(Boolean).join(' · ') || 'No Face/PIN'}</span>
                     <Badge variant="outline" className="text-[10px] shrink-0">{u.role || '—'}</Badge>
                   </label>
                 ))}
@@ -102,6 +102,23 @@ const AssignStaffDialog = ({ equipment, onClose }) => {
           {users.length > 0 && filtered.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No staff match</p>}
           {users.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No factory staff yet — add them in the Factory Staff module first</p>}
         </div>
+        {(() => {
+          const unenrolled = users.filter((u) => sel.has(u.id) && !u.has_face && !u.has_pin);
+          if (unenrolled.length === 0) return null;
+          return (
+            <div className="rounded-lg border-2 border-amber-300 bg-amber-50 dark:bg-amber-950/30 px-3 py-2.5 flex items-start gap-2" data-testid="assign-staff-enroll-warning">
+              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+              <div className="text-xs flex-1">
+                <p className="font-bold text-amber-800 dark:text-amber-300">{unenrolled.map((u) => u.name).join(', ')} {unenrolled.length === 1 ? 'has' : 'have'} no Face or PIN set up</p>
+                <p className="text-amber-700 dark:text-amber-400">They can't verify their identity at the QR scan until enrolled.</p>
+              </div>
+              <Button size="sm" variant="outline" className="h-7 text-xs border-amber-400 text-amber-800 hover:bg-amber-100 shrink-0"
+                onClick={() => window.open('/qc-team', '_blank')} data-testid="assign-staff-enroll-btn">
+                Enroll now
+              </Button>
+            </div>
+          );
+        })()}
         <DialogFooter className="items-center gap-2">
           <span className="text-xs text-muted-foreground mr-auto">{sel.size} selected</span>
           <Button variant="outline" onClick={() => onClose(false)} data-testid="assign-staff-cancel">Cancel</Button>
