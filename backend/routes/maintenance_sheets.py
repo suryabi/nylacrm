@@ -40,8 +40,7 @@ def _month_bounds(month: str):
     return start, nxt - timedelta(days=1)
 
 
-def _scheduled_dates(freq_days: int, anchor: Optional[str], month: str) -> list:
-    start, end = _month_bounds(month)
+def _scheduled_dates_range(freq_days: int, anchor: Optional[str], start, end) -> list:
     if not freq_days:
         return []
     if freq_days == 1:
@@ -63,6 +62,11 @@ def _scheduled_dates(freq_days: int, anchor: Optional[str], month: str) -> list:
         out.append(a.isoformat())
         a += timedelta(days=freq_days)
     return out
+
+
+def _scheduled_dates(freq_days: int, anchor: Optional[str], month: str) -> list:
+    start, end = _month_bounds(month)
+    return _scheduled_dates_range(freq_days, anchor, start, end)
 
 
 def _qr_data_uri(url: str) -> str:
@@ -132,9 +136,11 @@ async def _get_equipment(tenant_id: str, equipment_id: str) -> dict:
     return eq
 
 
-# ── Printable sheet ──────────────────────────────────────────────────────────
+# ── Printable sheet (weekly, Monday → Sunday) ────────────────────────────────
 @router.get("/equipment/{equipment_id}/sheet")
-async def maintenance_sheet(equipment_id: str, month: str = Query(...), origin: str = Query(...),
+async def maintenance_sheet(equipment_id: str, origin: str = Query(...),
+                            week: Optional[str] = Query(None, description="Any date (YYYY-MM-DD) inside the week"),
+                            month: Optional[str] = Query(None),
                             current_user: dict = Depends(get_current_user)):
     _ = current_user
     tenant_id = get_current_tenant_id()
@@ -143,8 +149,19 @@ async def maintenance_sheet(equipment_id: str, month: str = Query(...), origin: 
     if not freq:
         raise HTTPException(400, "This equipment has no maintenance frequency set")
     anchor = eq.get("maintenance_start_date") or eq.get("last_maintenance_date")
-    sched = set(_scheduled_dates(freq, anchor, month))
-    start, end = _month_bounds(month)
+
+    if week:
+        try:
+            ref = datetime.strptime(week[:10], "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(400, "week must be YYYY-MM-DD")
+        start = ref - timedelta(days=ref.weekday())  # Monday
+        end = start + timedelta(days=6)              # Sunday
+    elif month:
+        start, end = _month_bounds(month)
+    else:
+        raise HTTPException(400, "Provide week (YYYY-MM-DD) or month (YYYY-MM)")
+    sched = set(_scheduled_dates_range(freq, anchor, start, end))
 
     slots = {s["date"]: s for s in await db.maintenance_slots.find(
         {"tenant_id": tenant_id, "equipment_id": equipment_id,
@@ -157,23 +174,31 @@ async def maintenance_sheet(equipment_id: str, month: str = Query(...), origin: 
             await db.maintenance_slots.insert_one({**slot})
             slot.pop("_id", None)
             slots[d] = slot
-    await _ensure_photo_assignments(tenant_id, equipment_id, month, eq.get("photo_inspections_per_month"))
+    for m in {start.strftime("%Y-%m"), end.strftime("%Y-%m")}:
+        await _ensure_photo_assignments(tenant_id, equipment_id, m, eq.get("photo_inspections_per_month"))
 
     days = []
     cur = start
     while cur <= end:
         d = cur.isoformat()
-        entry = {"date": d, "day": cur.day, "weekday": cur.weekday(), "scheduled": d in sched}
+        entry = {"date": d, "day": cur.day, "weekday": cur.weekday(), "scheduled": d in sched,
+                 "day_label": cur.strftime("%d %b %Y"), "weekday_label": cur.strftime("%A")}
         if d in sched:
             entry["qr"] = _qr_data_uri(f"{origin.rstrip('/')}/maintenance-scan/{slots[d]['token']}")
         days.append(entry)
         cur += timedelta(days=1)
 
     location = " › ".join(x for x in [eq.get("facility_name"), eq.get("floor_name"), eq.get("area_name")] if x)
+    if week:
+        label = f"{start.strftime('%d %b')} – {end.strftime('%d %b %Y')}".upper()
+    else:
+        label = start.strftime("%B %Y").upper()
     return {"equipment": {"id": eq["id"], "name": eq["name"], "type": eq.get("equipment_type_name"),
                           "make": eq.get("make_brand"), "model": eq.get("model_spec"), "location": location},
-            "month": month, "month_label": start.strftime("%B %Y").upper(),
-            "frequency_label": _freq_label(freq), "lead_blanks": start.weekday(), "days": days}
+            "mode": "week" if week else "month",
+            "week_start": start.isoformat(), "week_end": end.isoformat(),
+            "month": start.strftime("%Y-%m"), "month_label": label,
+            "frequency_label": _freq_label(freq), "lead_blanks": 0 if week else start.weekday(), "days": days}
 
 
 # ── Profile: schedule, upcoming, records ─────────────────────────────────────

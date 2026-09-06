@@ -3149,3 +3149,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - PUT /api/production/equipment/types/{type_id}/code (TypeCodeIn; normalize A-Z0-9 max6; dup rejection). Added `import re` to equipment_master.py.
 - EquipmentMaster.js: TypeCodeBadge (blue chip + pencil, inline input, amber SET CODE) on Equipment Types cards; saveTypeCode helper reloads via loadAll.
 - Verified: API set TST9 + persist + revert AWG; UI 9 chips, inline input opens (screenshot).
+
+## Update — Jun 2026: Weekly printable maintenance sheet (Mon→Sun)
+- Backend sheet endpoint now takes ?week=YYYY-MM-DD (any date; normalized to Monday) — returns 7 days Mon→Sun with day_label/weekday_label; month param still supported (legacy). _scheduled_dates refactored to _scheduled_dates_range. Photo assignments ensured for both months a week may span. Slots/QRs unchanged (same tokens/validation).
+- MaintenanceProfile.js: buildSheetHtml rewritten — A4 PORTRAIT, full-page table: col1 QR (27mm) + big date (34px day number, weekday, full date, "MAINTENANCE DUE" label), col2 Operator signature box, col3 Inspector signature box; ~31mm rows; alternating row tints; off days greyed "No scheduled maintenance". Week date picker (mp-week-input) + "Print Week Sheet" button.
+- Verified: API week=2026-09-03 → Mon 31 Aug–Sun 6 Sep, QRs only on scheduled days; print popup DOM: 8 rows, 4 QRs, correct 3 headers, ~122px row height.

@@ -25,58 +25,79 @@ const AuthPhoto = ({ src, alt }) => {
 };
 
 const buildSheetHtml = (sheet) => {
-  const WD = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-  const cells = [];
-  let schedIdx = 0;
-  for (let i = 0; i < sheet.lead_blanks; i++) cells.push('<div class="cell blank"></div>');
-  sheet.days.forEach((d) => {
+  const rows = sheet.days.map((d) => {
     if (d.scheduled) {
-      const alt = schedIdx % 2 === 0 ? 'due-a' : 'due-b';
-      schedIdx += 1;
-      cells.push(`<div class="cell due ${alt}">
-        <div class="top"><span class="dn">${d.day}</span><img class="qr" src="${d.qr}" alt="QR" /></div>
-        <div class="lbl">MAINT. DUE</div>
-        <div class="sub">Scan today only</div>
-        <div class="sig"><div class="sigline"></div><div class="siglbl">Initial after completion</div></div>
-      </div>`);
-    } else {
-      cells.push(`<div class="cell"><div class="top"><span class="dn">${d.day}</span></div><div class="nom">No scheduled maintenance</div></div>`);
+      return `<tr class="due">
+        <td class="datecell">
+          <div class="dwrap">
+            <img class="qr" src="${d.qr}" alt="QR" />
+            <div class="dt">
+              <div class="dn">${String(d.day).padStart(2, '0')}</div>
+              <div class="wd">${d.weekday_label.toUpperCase()}</div>
+              <div class="dl">${d.day_label}</div>
+              <div class="due-lbl">MAINTENANCE DUE — scan QR on this date only</div>
+            </div>
+          </div>
+        </td>
+        <td class="sigcell"><div class="sigbox"></div><div class="siglbl">Operator name &amp; signature</div></td>
+        <td class="sigcell"><div class="sigbox"></div><div class="siglbl">Inspector name &amp; signature</div></td>
+      </tr>`;
     }
-  });
-  const rows = Math.ceil((sheet.lead_blanks + sheet.days.length) / 7);
-  return `<!DOCTYPE html><html><head><title>${sheet.equipment.name} — Maintenance Calendar ${sheet.month_label}</title>
+    return `<tr class="off">
+      <td class="datecell">
+        <div class="dwrap">
+          <div class="noqr"></div>
+          <div class="dt">
+            <div class="dn dim">${String(d.day).padStart(2, '0')}</div>
+            <div class="wd dim">${d.weekday_label.toUpperCase()}</div>
+            <div class="dl dim">${d.day_label}</div>
+            <div class="nom">No scheduled maintenance</div>
+          </div>
+        </div>
+      </td>
+      <td class="sigcell off"><div class="nom">—</div></td>
+      <td class="sigcell off"><div class="nom">—</div></td>
+    </tr>`;
+  }).join('');
+  return `<!DOCTYPE html><html><head><title>${sheet.equipment.name} — Maintenance Week ${sheet.month_label}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-@page{size:A4 landscape;margin:4mm}
-html,body{width:289mm}
-body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;background:#fff}
-.banner{background:#2e5a8f;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:3mm 4mm}
-.banner h1{font-size:19px;letter-spacing:.5px;font-weight:800}
-.banner .range{font-size:11px;font-weight:bold;letter-spacing:.5px;white-space:nowrap}
-.meta{display:flex;gap:9mm;flex-wrap:wrap;font-size:11px;padding:2.5mm 1mm 2mm}
+@page{size:A4 portrait;margin:5mm}
+html,body{width:200mm;height:287mm}
+body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;background:#fff;display:flex;flex-direction:column}
+.banner{background:#2e5a8f;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:3.5mm 5mm}
+.banner h1{font-size:18px;letter-spacing:.5px;font-weight:800}
+.banner .range{font-size:13px;font-weight:bold;letter-spacing:.5px;white-space:nowrap}
+.meta{display:flex;gap:8mm;flex-wrap:wrap;font-size:11px;padding:2.5mm 1mm}
 .meta b{color:#111}
 .meta .loc-line{display:inline-block;min-width:36mm;border-bottom:1px solid #64748b;height:3.4mm;vertical-align:bottom}
-.wrap{padding:0}
-.grid{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid #cbd5e1}
-.dow{background:#1e2b3c;color:#fff;font-size:9.5px;font-weight:bold;text-align:center;padding:2.2mm 0;letter-spacing:.8px}
-.cell{border:1px solid #d8dee7;min-height:${rows >= 6 ? 27 : 32}mm;padding:1.6mm;display:flex;flex-direction:column;background:#fff}
-.cell.blank{background:#fff}
-.cell.due-a{background:#e9eff6}
-.cell.due-b{background:#f7fafc}
-.top{display:flex;justify-content:space-between;align-items:flex-start;min-height:${rows >= 6 ? 14 : 17}mm}
-.dn{font-size:14px;font-weight:800}
-.qr{width:${rows >= 6 ? 15 : 17}mm;height:${rows >= 6 ? 15 : 17}mm}
-.lbl{font-size:9px;font-weight:800;color:#1a7f4e;letter-spacing:.3px;margin-top:-${rows >= 6 ? 9.5 : 12}mm}
-.sub{font-size:7.5px;color:#555;margin-top:.5mm}
-.nom{font-size:7.5px;color:#94a3b8;margin-top:2mm}
-.sig{margin-top:auto;padding-top:1.5mm}
-.sigline{border-bottom:1px solid #475569;height:${rows >= 6 ? 3.5 : 5}mm;width:88%}
-.siglbl{font-size:6.8px;color:#475569;margin-top:.6mm}
-.ftr{display:flex;justify-content:space-between;gap:8mm;padding:2mm 1mm;font-size:9px;color:#475569}
-@media print{.cell,.dow,.banner,.cell.due-a,.cell.due-b{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+table{width:100%;border-collapse:collapse;flex:1}
+th{background:#1e2b3c;color:#fff;font-size:11px;font-weight:bold;letter-spacing:.8px;padding:2.5mm 2mm;border:1px solid #1e2b3c}
+th.c1{width:46%}th.c2{width:27%}th.c3{width:27%}
+td{border:1.5px solid #94a3b8;vertical-align:middle;padding:2.5mm 3mm;height:31mm}
+tr.due:nth-of-type(odd) td{background:#e9eff6}
+tr.due:nth-of-type(even) td{background:#f7fafc}
+tr.off td{background:#fafafa}
+.dwrap{display:flex;align-items:center;gap:5mm}
+.qr{width:27mm;height:27mm;flex-shrink:0}
+.noqr{width:27mm;height:27mm;flex-shrink:0;border:1px dashed #cbd5e1;border-radius:2mm}
+.dt{display:flex;flex-direction:column;gap:.6mm}
+.dn{font-size:34px;font-weight:800;line-height:1}
+.wd{font-size:15px;font-weight:800;letter-spacing:1px;color:#2e5a8f}
+.dl{font-size:11px;color:#475569;font-weight:bold}
+.due-lbl{font-size:9px;font-weight:800;color:#1a7f4e;letter-spacing:.3px;margin-top:1mm}
+.dim{color:#b6bfca}
+.wd.dim{color:#b6bfca}
+.nom{font-size:10px;color:#94a3b8}
+.sigcell{text-align:left}
+.sigcell.off{text-align:center}
+.sigbox{border-bottom:2px solid #475569;height:16mm}
+.siglbl{font-size:9px;color:#475569;margin-top:1.5mm;font-weight:bold;letter-spacing:.3px}
+.ftr{display:flex;justify-content:space-between;gap:8mm;padding:2mm 1mm 0;font-size:9px;color:#475569}
+@media print{td,th,.banner,tr.due td,tr.off td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>
 <div class="banner">
-  <h1>EQUIPMENT MAINTENANCE CALENDAR</h1>
+  <h1>WEEKLY MAINTENANCE SHEET</h1>
   <div class="range">${sheet.month_label} &nbsp;|&nbsp; ${sheet.frequency_label.toUpperCase()} SCHEDULE</div>
 </div>
 <div class="meta">
@@ -85,14 +106,12 @@ body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;background:#fff}
   <div><b>Frequency:</b> ${sheet.frequency_label}</div>
   <div><b>Department/Location:</b> ${sheet.equipment.location ? sheet.equipment.location : '<span class="loc-line"></span>'}</div>
 </div>
-<div class="wrap">
-<div class="grid">
-  ${WD.map((w) => `<div class="dow">${w}</div>`).join('')}
-  ${cells.join('')}
-</div>
-</div>
+<table>
+  <tr><th class="c1">DATE &amp; QR CODE</th><th class="c2">OPERATOR SIGNATURE</th><th class="c3">INSPECTOR SIGNATURE</th></tr>
+  ${rows}
+</table>
 <div class="ftr">
-  <div><b>Instructions:</b> Scan the QR code only on the printed maintenance date. Mark maintenance complete or incomplete and capture live, date-stamped photos. Sign on the line after completion — inspectors initial the same line during audits.</div>
+  <div><b>Instructions:</b> Scan the QR code only on the printed maintenance date. Mark maintenance complete or incomplete and capture live, date-stamped photos. The operator signs after completion; the inspector signs during audits.</div>
   <div style="white-space:nowrap">${sheet.equipment.name} | ${sheet.month_label}</div>
 </div>
 <script>window.onload=function(){setTimeout(function(){window.print()},400)}</script>
@@ -102,7 +121,7 @@ body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;background:#fff}
 export const MaintenanceProfile = ({ equipment, onClose }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [weekDate, setWeekDate] = useState(new Date().toISOString().slice(0, 10));
   const [printing, setPrinting] = useState(false);
   const [corrFor, setCorrFor] = useState(null);
   const [corrNote, setCorrNote] = useState('');
@@ -122,7 +141,7 @@ export const MaintenanceProfile = ({ equipment, onClose }) => {
   const printSheet = async () => {
     setPrinting(true);
     try {
-      const res = await fetch(`${API_URL}/api/maintenance/equipment/${equipment.id}/sheet?month=${month}&origin=${encodeURIComponent(window.location.origin)}`, { headers: authHeaders() });
+      const res = await fetch(`${API_URL}/api/maintenance/equipment/${equipment.id}/sheet?week=${weekDate}&origin=${encodeURIComponent(window.location.origin)}`, { headers: authHeaders() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed to generate sheet');
       const w = window.open('', '_blank');
@@ -184,13 +203,13 @@ export const MaintenanceProfile = ({ equipment, onClose }) => {
 
             <div className="rounded-lg border p-3 flex flex-wrap items-end gap-2">
               <div>
-                <p className="text-sm font-semibold mb-1">Printable QR maintenance sheet</p>
-                <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="h-9 w-44" data-testid="mp-month-input" />
+                <p className="text-sm font-semibold mb-1">Printable weekly QR sheet <span className="font-normal text-xs text-muted-foreground">(Mon – Sun)</span></p>
+                <Input type="date" value={weekDate} onChange={(e) => setWeekDate(e.target.value)} className="h-9 w-44" data-testid="mp-week-input" title="Pick any date — the sheet covers that date's Monday-to-Sunday week" />
               </div>
               <Button onClick={printSheet} disabled={printing || !profile.frequency_days} data-testid="mp-print-btn">
-                <Printer className="h-4 w-4 mr-2" />{printing ? 'Generating…' : 'Print Sheet'}
+                <Printer className="h-4 w-4 mr-2" />{printing ? 'Generating…' : 'Print Week Sheet'}
               </Button>
-              <p className="text-[11px] text-muted-foreground w-full">Each scheduled date carries a unique QR code valid only on that day. Scanning opens the mobile check-in with camera-only, timestamped photos.</p>
+              <p className="text-[11px] text-muted-foreground w-full">Pick any date — the sheet prints that date's full week (Monday to Sunday), one big row per day with its QR code, operator signature and inspector signature columns on a single A4 page.</p>
             </div>
 
             <div>
