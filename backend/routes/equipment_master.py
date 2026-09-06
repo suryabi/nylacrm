@@ -390,7 +390,7 @@ from services.object_storage import build_path, put_object, get_object, delete_o
 
 EQ_UPLOAD_DIR = "/app/backend/uploads/equipment_docs"
 EQ_MAX_FILE_MB = 15
-EQ_CATEGORIES = {"photo", "certification", "quotation", "document"}
+EQ_CATEGORIES = {"photo", "certification", "quotation", "document", "instruction"}
 EQ_TYPE_PREFIX = {"photo": "PHOT", "certification": "CERT", "quotation": "VEND", "document": "OTHE"}
 
 
@@ -708,11 +708,7 @@ async def equipment_import_template(current_user: dict = Depends(get_current_use
     return _xlsx_response(wb, "equipment_import_template.xlsx")
 
 
-@router.get("/export")
-async def equipment_export(current_user: dict = Depends(get_current_user)):
-    _ = current_user
-    tenant_id = get_current_tenant_id()
-    items = await db.equipment_master.find({"tenant_id": tenant_id}, {"_id": 0}).sort([("equipment_type_name", 1), ("name", 1)]).to_list(3000)
+def _export_workbook(items: list):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Equipment"
@@ -728,7 +724,50 @@ async def equipment_export(current_user: dict = Depends(get_current_user)):
             e.get("procurement_lead_time_days") or "", e.get("expected_life") or "", e.get("min_stock_level") if e.get("min_stock_level") is not None else "",
             e.get("photo_inspections_per_month") or "", e.get("remarks") or "",
         ])
-    return _xlsx_response(wb, f"equipment_export_{datetime.now(timezone.utc).strftime('%Y%m%d')}.xlsx")
+    return wb
+
+
+@router.get("/export")
+async def equipment_export(current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    items = await db.equipment_master.find({"tenant_id": tenant_id}, {"_id": 0}).sort([("equipment_type_name", 1), ("name", 1)]).to_list(3000)
+    return _xlsx_response(_export_workbook(items), f"equipment_export_{datetime.now(timezone.utc).strftime('%Y%m%d')}.xlsx")
+
+
+class ExportFilteredIn(BaseModel):
+    ids: List[str] = []
+
+
+@router.post("/export-filtered")
+async def equipment_export_filtered(data: ExportFilteredIn, current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    q = {"tenant_id": tenant_id}
+    if data.ids:
+        q["id"] = {"$in": data.ids}
+    items = await db.equipment_master.find(q, {"_id": 0}).sort([("equipment_type_name", 1), ("name", 1)]).to_list(3000)
+    return _xlsx_response(_export_workbook(items), f"equipment_export_filtered_{datetime.now(timezone.utc).strftime('%Y%m%d')}.xlsx")
+
+
+class InstructionsIn(BaseModel):
+    maintenance_instructions: Optional[str] = None
+    replacement_instructions: Optional[str] = None
+
+
+@router.put("/{equipment_id}/instructions")
+async def set_instructions(equipment_id: str, data: InstructionsIn, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    res = await db.equipment_master.update_one(
+        {"tenant_id": tenant_id, "id": equipment_id},
+        {"$set": {"maintenance_instructions": data.maintenance_instructions or "",
+                  "replacement_instructions": data.replacement_instructions or "",
+                  "instructions_updated_by": current_user.get("name") or current_user.get("email"),
+                  "instructions_updated_at": datetime.now(timezone.utc).isoformat(),
+                  "updated_at": datetime.now(timezone.utc).isoformat()}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Equipment not found")
+    return {"ok": True}
 
 
 @router.post("/import")

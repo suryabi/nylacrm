@@ -3173,3 +3173,9 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - 7 seeded equipment (daily freq, start 2026-09-01): AWG Unit 1/2 (Terrace›AWG), RO Membrane Skid + Ozone Generator (1F›RO), Prewash Pump (GF›Prewash), Labelling Machine (GF›Labeling), FG Conveyor (GF›Finished Goods). IDs in /tmp lost on restart; find by name.
 - Seeded records for 2026-09-05: 4 completed (Ravi Kumar / Anita Sharma / Mohan Das with times), 1 incomplete (Ozone Generator, remark), 3 missed (5 Micron Filter, Labelling Machine, Prewash Pump).
 - Sample digest email sent to 4 admins (totals 8/4/1/3). This is DEMO SEED DATA in preview only — production unaffected.
+
+## Update — Jun 2026: Equipment list — zebra rows, filtered export, instructions editor
+- Zebra striping on equipment table rows (odd bg-slate-50/80; hover blue tint).
+- Export now exports ONLY currently filtered rows: POST /api/production/equipment/export-filtered {ids} (export logic refactored to _export_workbook; GET /export unchanged). Frontend exportFiltered(filtered) with toast count.
+- Instructions per equipment: PUT /{id}/instructions {maintenance_instructions, replacement_instructions} (HTML; stores updated_by/at). EQ_CATEGORIES += "instruction". New component EquipmentInstructions.js — two RichTextField (react-quill-new) editors + upload/download/delete files (category=instruction, reuses /files endpoints). BookOpen quick-action button (green when instructions exist), dialog testid eq-instructions-dialog.
+- Verified: API save/persist + filtered export (2 rows) + UI (zebra bgs, dialog with 2 editors showing saved HTML). Note: page auth token key is 'session_token'.

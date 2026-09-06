@@ -8,7 +8,8 @@ import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
-import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon, MapPin, AlertTriangle, Layers, Users, MoreVertical, X, Filter } from 'lucide-react';
+import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon, MapPin, AlertTriangle, Layers, Users, MoreVertical, X, Filter, BookOpen } from 'lucide-react';
+import EquipmentInstructions from '../components/EquipmentInstructions';
 import { toast } from 'sonner';
 import { MaintenanceProfile } from '../components/MaintenanceProfile';
 import { FormSection } from '../components/FormSection';
@@ -292,6 +293,7 @@ export default function EquipmentMaster() {
   };
   const [docsTarget, setDocsTarget] = useState(null);
   const [maintTarget, setMaintTarget] = useState(null);
+  const [instrTarget, setInstrTarget] = useState(null);
   const [docCategory, setDocCategory] = useState('photo');
   const [uploading, setUploading] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
@@ -512,6 +514,23 @@ export default function EquipmentMaster() {
     } catch (e) { toast.error(e.message); }
   };
 
+  const exportFiltered = async (rows) => {
+    try {
+      const res = await fetch(`${API_URL}/api/production/equipment/export-filtered`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: rows.map((r) => r.id) }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || 'Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'equipment_export_filtered.xlsx'; a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${rows.length} equipment (current filters applied)`);
+    } catch (e) { toast.error(e.message); }
+  };
+
   const importXlsx = async (file) => {
     if (!file) return;
     setImporting(true);
@@ -568,7 +587,7 @@ export default function EquipmentMaster() {
             <Button variant="outline" className="h-10 rounded-lg" onClick={() => downloadXlsx('import-template', 'equipment_import_template.xlsx')} data-testid="eq-template-btn">
               <FileText className="w-4 h-4 mr-2 text-slate-500" /> Template
             </Button>
-            <Button variant="outline" className="h-10 rounded-lg" onClick={() => downloadXlsx('export', 'equipment_export.xlsx')} data-testid="eq-export-btn">
+            <Button variant="outline" className="h-10 rounded-lg" onClick={() => exportFiltered(filtered)} data-testid="eq-export-btn">
               <Download className="w-4 h-4 mr-2 text-slate-500" /> Export
             </Button>
             <label>
@@ -716,11 +735,11 @@ export default function EquipmentMaster() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filtered.map((e) => {
+                      {filtered.map((e, rowIdx) => {
                         const nRep = daysUntil(e.next_replacement_due);
                         const orderFlag = nRep != null && e.procurement_lead_time_days && nRep <= e.procurement_lead_time_days;
                         return (
-                          <tr key={e.id} className="border-b border-slate-100 dark:border-slate-800/60 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors align-top group" data-testid={`eq-row-${e.name.replace(/\s/g, '-')}`}>
+                          <tr key={e.id} className={`border-b border-slate-100 dark:border-slate-800/60 hover:bg-blue-50/60 dark:hover:bg-slate-800/60 transition-colors align-top group ${rowIdx % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-800/30' : 'bg-white dark:bg-slate-900'}`} data-testid={`eq-row-${e.name.replace(/\s/g, '-')}`}>
                             <td className="px-5 py-4">
                               <div style={{ paddingLeft: (e._depth || 0) * 18 }} className="flex items-start gap-1.5">
                                 {e._depth > 0 && <span className="text-slate-400 select-none">└</span>}
@@ -795,6 +814,12 @@ export default function EquipmentMaster() {
                                   {(e.attachments || []).length > 0 && (
                                     <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] px-1 rounded-full bg-[#002FA7] text-white text-[10px] font-bold flex items-center justify-center shadow-sm">{e.attachments.length}</span>
                                   )}
+                                </Button>
+                                <Button size="sm" variant="outline" className={`h-9 px-3 text-xs font-medium rounded-lg relative ${(e.maintenance_instructions || e.replacement_instructions) ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}`}
+                                  onClick={() => setInstrTarget(e)}
+                                  title="Maintenance & replacement instructions"
+                                  data-testid={`eq-instructions-${e.name.replace(/\s/g, '-')}`}>
+                                  <BookOpen className="h-4 w-4" />
                                 </Button>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
@@ -970,6 +995,7 @@ export default function EquipmentMaster() {
 
       {/* Equipment form */}
       {maintTarget && <MaintenanceProfile equipment={maintTarget} onClose={() => { setMaintTarget(null); loadAll(); }} />}
+      {instrTarget && <EquipmentInstructions equipment={instrTarget} onClose={() => setInstrTarget(null)} onSaved={loadAll} />}
       <Dialog open={showEqForm} onOpenChange={setShowEqForm}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="eq-form-dialog">
           <DialogHeader>
