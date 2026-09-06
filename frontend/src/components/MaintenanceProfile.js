@@ -64,9 +64,9 @@ const weekPage = (sheet) => {
   <h1>WEEKLY MAINTENANCE SHEET</h1>
   <div class="range">${sheet.month_label} &nbsp;|&nbsp; ${sheet.frequency_label.toUpperCase()} SCHEDULE</div>
 </div>
+<div class="eqname">${sheet.equipment.name}</div>
 <div class="meta">
   <div><b>Equipment ID:</b> ${sheet.equipment.id.slice(0, 8).toUpperCase()}</div>
-  <div><b>Equipment Name:</b> ${sheet.equipment.name}</div>
   <div><b>Frequency:</b> ${sheet.frequency_label}</div>
   <div><b>Department/Location:</b> ${sheet.equipment.location ? sheet.equipment.location : '<span class="loc-line"></span>'}</div>
 </div>
@@ -92,6 +92,7 @@ body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;background:#fff}
 .banner{background:#2e5a8f;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:3.5mm 5mm}
 .banner h1{font-size:18px;letter-spacing:.5px;font-weight:800}
 .banner .range{font-size:13px;font-weight:bold;letter-spacing:.5px;white-space:nowrap}
+.eqname{font-size:30px;font-weight:900;line-height:1.1;letter-spacing:.5px;color:#1e2b3c;text-transform:uppercase;padding:2.5mm 1mm 0;border-bottom:1.2mm solid #2e5a8f;padding-bottom:1.5mm}
 .meta{display:flex;gap:8mm;flex-wrap:wrap;font-size:11px;padding:2.5mm 1mm}
 .meta b{color:#111}
 .meta .loc-line{display:inline-block;min-width:36mm;border-bottom:1px solid #64748b;height:3.4mm;vertical-align:bottom}

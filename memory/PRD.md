@@ -3240,3 +3240,6 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Enforcement (maintenance_sheets.py): _geofence_ctx/_enforce_geofence — active only when enabled AND equipment's facility has coords. Scan GET returns geofence {required, radius, facility_name}; submit body takes lat/lng; outside radius → 403 BLOCK + email/in-app alert to ADMIN_ROLES via notify_users ("Geo-fence blocked: …" with distance); missing location → 403; admins bypass. Records store geo {lat,lng,distance_m}.
 - MaintenanceScan.js: blue geofence chip (scan-geofence-chip); browser geolocation captured at submit; friendly error if denied.
 - Verified: settings API, 403 far away (~30.7 km msg + 4 admin notifications), 403 no location, 200 inside radius (distance_m 45.7 stored), Places autocomplete live (Charminar), dialog + chip in browser. Test config reverted (geofence disabled, fake coords cleared).
+
+## Update — Jun 2026: Print sheet — prominent equipment name
+- Weekly/monthly printable maintenance sheets now show the equipment name as a large 30px uppercase headline (.eqname, blue underline) under the banner; removed from the small meta row. Verified visually via popup screenshot.
