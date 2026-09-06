@@ -24,7 +24,7 @@ const AuthPhoto = ({ src, alt }) => {
   return <a href={url} target="_blank" rel="noreferrer"><img src={url} alt={alt} className="h-20 w-28 object-cover rounded border" /></a>;
 };
 
-const buildSheetHtml = (sheet) => {
+const weekPage = (sheet) => {
   const rows = sheet.days.map((d) => {
     if (d.scheduled) {
       return `<tr class="due">
@@ -59,12 +59,36 @@ const buildSheetHtml = (sheet) => {
       <td class="sigcell off"><div class="nom">—</div></td>
     </tr>`;
   }).join('');
-  return `<!DOCTYPE html><html><head><title>${sheet.equipment.name} — Maintenance Week ${sheet.month_label}</title>
+  return `<div class="page">
+<div class="banner">
+  <h1>WEEKLY MAINTENANCE SHEET</h1>
+  <div class="range">${sheet.month_label} &nbsp;|&nbsp; ${sheet.frequency_label.toUpperCase()} SCHEDULE</div>
+</div>
+<div class="meta">
+  <div><b>Equipment ID:</b> ${sheet.equipment.id.slice(0, 8).toUpperCase()}</div>
+  <div><b>Equipment Name:</b> ${sheet.equipment.name}</div>
+  <div><b>Frequency:</b> ${sheet.frequency_label}</div>
+  <div><b>Department/Location:</b> ${sheet.equipment.location ? sheet.equipment.location : '<span class="loc-line"></span>'}</div>
+</div>
+<table>
+  <tr><th class="c1">DATE &amp; QR CODE</th><th class="c2">OPERATOR SIGNATURE</th><th class="c3">INSPECTOR SIGNATURE</th></tr>
+  ${rows}
+</table>
+<div class="ftr">
+  <div><b>Instructions:</b> Scan the QR code only on the printed maintenance date. Mark maintenance complete or incomplete and capture live, date-stamped photos. The operator signs after completion; the inspector signs during audits.</div>
+  <div style="white-space:nowrap">${sheet.equipment.name} | ${sheet.month_label}</div>
+</div>
+</div>`;
+};
+
+const buildSheetDoc = (sheets, title) => `<!DOCTYPE html><html><head><title>${title}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 @page{size:A4 portrait;margin:5mm}
-html,body{width:200mm;height:287mm}
-body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;background:#fff;display:flex;flex-direction:column}
+html,body{width:200mm}
+body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;background:#fff}
+.page{height:286mm;display:flex;flex-direction:column;page-break-after:always;overflow:hidden}
+.page:last-child{page-break-after:auto}
 .banner{background:#2e5a8f;color:#fff;display:flex;justify-content:space-between;align-items:center;padding:3.5mm 5mm}
 .banner h1{font-size:18px;letter-spacing:.5px;font-weight:800}
 .banner .range{font-size:13px;font-weight:bold;letter-spacing:.5px;white-space:nowrap}
@@ -96,33 +120,16 @@ tr.off td{background:#fafafa}
 .ftr{display:flex;justify-content:space-between;gap:8mm;padding:2mm 1mm 0;font-size:9px;color:#475569}
 @media print{td,th,.banner,tr.due td,tr.off td{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>
-<div class="banner">
-  <h1>WEEKLY MAINTENANCE SHEET</h1>
-  <div class="range">${sheet.month_label} &nbsp;|&nbsp; ${sheet.frequency_label.toUpperCase()} SCHEDULE</div>
-</div>
-<div class="meta">
-  <div><b>Equipment ID:</b> ${sheet.equipment.id.slice(0, 8).toUpperCase()}</div>
-  <div><b>Equipment Name:</b> ${sheet.equipment.name}</div>
-  <div><b>Frequency:</b> ${sheet.frequency_label}</div>
-  <div><b>Department/Location:</b> ${sheet.equipment.location ? sheet.equipment.location : '<span class="loc-line"></span>'}</div>
-</div>
-<table>
-  <tr><th class="c1">DATE &amp; QR CODE</th><th class="c2">OPERATOR SIGNATURE</th><th class="c3">INSPECTOR SIGNATURE</th></tr>
-  ${rows}
-</table>
-<div class="ftr">
-  <div><b>Instructions:</b> Scan the QR code only on the printed maintenance date. Mark maintenance complete or incomplete and capture live, date-stamped photos. The operator signs after completion; the inspector signs during audits.</div>
-  <div style="white-space:nowrap">${sheet.equipment.name} | ${sheet.month_label}</div>
-</div>
+${sheets.map(weekPage).join('')}
 <script>window.onload=function(){setTimeout(function(){window.print()},400)}</script>
 </body></html>`;
-};
 
 export const MaintenanceProfile = ({ equipment, onClose }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [weekDate, setWeekDate] = useState(new Date().toISOString().slice(0, 10));
   const [printing, setPrinting] = useState(false);
+  const [printingMonth, setPrintingMonth] = useState(false);
   const [corrFor, setCorrFor] = useState(null);
   const [corrNote, setCorrNote] = useState('');
   const [corrStatus, setCorrStatus] = useState('');
@@ -138,17 +145,46 @@ export const MaintenanceProfile = ({ equipment, onClose }) => {
 
   useEffect(() => { load(); }, [load]);
 
+  const fetchWeekSheet = async (dateStr) => {
+    const res = await fetch(`${API_URL}/api/maintenance/equipment/${equipment.id}/sheet?week=${dateStr}&origin=${encodeURIComponent(window.location.origin)}`, { headers: authHeaders() });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed to generate sheet');
+    return data;
+  };
+
+  const openPrintWindow = (html) => {
+    const w = window.open('', '_blank');
+    if (!w) throw new Error('Popup blocked — allow popups to print');
+    w.document.write(html);
+    w.document.close();
+  };
+
   const printSheet = async () => {
     setPrinting(true);
     try {
-      const res = await fetch(`${API_URL}/api/maintenance/equipment/${equipment.id}/sheet?week=${weekDate}&origin=${encodeURIComponent(window.location.origin)}`, { headers: authHeaders() });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Failed to generate sheet');
-      const w = window.open('', '_blank');
-      if (!w) throw new Error('Popup blocked — allow popups to print');
-      w.document.write(buildSheetHtml(data));
-      w.document.close();
+      const data = await fetchWeekSheet(weekDate);
+      openPrintWindow(buildSheetDoc([data], `${equipment.name} — Maintenance Week ${data.month_label}`));
     } catch (e) { toast.error(e.message); } finally { setPrinting(false); }
+  };
+
+  const printMonth = async () => {
+    setPrintingMonth(true);
+    try {
+      const ref = new Date(weekDate + 'T00:00:00');
+      const first = new Date(ref.getFullYear(), ref.getMonth(), 1);
+      const last = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
+      const fmt = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      const monday = new Date(first);
+      monday.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+      const mondays = [];
+      for (let m = new Date(monday); m <= last; m.setDate(m.getDate() + 7)) {
+        mondays.push(fmt(m));
+      }
+      const sheets = [];
+      for (const d of mondays) sheets.push(await fetchWeekSheet(d));
+      const label = first.toLocaleString('en-GB', { month: 'long', year: 'numeric' });
+      openPrintWindow(buildSheetDoc(sheets, `${equipment.name} — Maintenance ${label} (all ${sheets.length} weeks)`));
+    } catch (e) { toast.error(e.message); } finally { setPrintingMonth(false); }
   };
 
   const submitCorrection = async () => {
@@ -206,10 +242,13 @@ export const MaintenanceProfile = ({ equipment, onClose }) => {
                 <p className="text-sm font-semibold mb-1">Printable weekly QR sheet <span className="font-normal text-xs text-muted-foreground">(Mon – Sun)</span></p>
                 <Input type="date" value={weekDate} onChange={(e) => setWeekDate(e.target.value)} className="h-9 w-44" data-testid="mp-week-input" title="Pick any date — the sheet covers that date's Monday-to-Sunday week" />
               </div>
-              <Button onClick={printSheet} disabled={printing || !profile.frequency_days} data-testid="mp-print-btn">
+              <Button onClick={printSheet} disabled={printing || printingMonth || !profile.frequency_days} data-testid="mp-print-btn">
                 <Printer className="h-4 w-4 mr-2" />{printing ? 'Generating…' : 'Print Week Sheet'}
               </Button>
-              <p className="text-[11px] text-muted-foreground w-full">Pick any date — the sheet prints that date's full week (Monday to Sunday), one big row per day with its QR code, operator signature and inspector signature columns on a single A4 page.</p>
+              <Button variant="outline" onClick={printMonth} disabled={printing || printingMonth || !profile.frequency_days} data-testid="mp-print-month-btn">
+                <Printer className="h-4 w-4 mr-2" />{printingMonth ? 'Generating all weeks…' : 'Print Whole Month'}
+              </Button>
+              <p className="text-[11px] text-muted-foreground w-full">Pick any date — <b>Print Week Sheet</b> prints that date's Monday-to-Sunday week; <b>Print Whole Month</b> prints every week of that month in one go (one A4 page per week), each row with its QR code plus operator and inspector signature columns.</p>
             </div>
 
             <div>
