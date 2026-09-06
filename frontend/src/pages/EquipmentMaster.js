@@ -658,7 +658,6 @@ export default function EquipmentMaster() {
   };
 
   const overdueByParent = overdueChildCounts(equipment);
-  const isOrderNow = (e) => { const n = daysUntil(e.next_replacement_due); return n != null && e.procurement_lead_time_days && n <= e.procurement_lead_time_days; };
 
   const downloadXlsx = async (kind, fallbackName) => {
     try {
@@ -710,7 +709,7 @@ export default function EquipmentMaster() {
     if (!quickFilter) return true;
     if (quickFilter === 'overdue') return e.next_maintenance_due && daysUntil(e.next_maintenance_due) < 0;
     if (quickFilter === 'due_soon') { const n = daysUntil(e.next_maintenance_due); return n != null && n >= 0 && n <= 30; }
-    if (quickFilter === 'order_now') return isOrderNow(e);
+    if (quickFilter === 'repl_due') { const n = daysUntil(e.next_replacement_due); return n != null && n <= 0; }
     return true;
   };
   const baseFiltered = equipment.filter((e) =>
@@ -724,9 +723,9 @@ export default function EquipmentMaster() {
   // KPI cards honor the active search/type/location filters (quick filter excluded — the cards drive it)
   const overdueM = baseFiltered.filter((e) => daysUntil(e.next_maintenance_due) < 0 && e.next_maintenance_due).length;
   const dueSoonM = baseFiltered.filter((e) => { const n = daysUntil(e.next_maintenance_due); return n != null && n >= 0 && n <= 30; }).length;
-  const orderNow = baseFiltered.filter((e) => {
+  const replDue = baseFiltered.filter((e) => {
     const n = daysUntil(e.next_replacement_due);
-    return n != null && e.procurement_lead_time_days && n <= e.procurement_lead_time_days;
+    return n != null && n <= 0;
   }).length;
 
   return (
@@ -784,9 +783,9 @@ export default function EquipmentMaster() {
             { id: 'due_soon', label: 'Due in 30 Days', value: dueSoonM, testid: 'eq-stat-duesoon', icon: CalendarCheck,
               iconBg: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400', border: 'border-amber-200 hover:border-amber-400 dark:border-amber-900/50',
               ring: 'ring-2 ring-amber-500 bg-amber-50/80 dark:bg-amber-950/40 dark:ring-amber-400', text: 'text-slate-900 dark:text-white', sub: 'Upcoming preventive maintenance' },
-            { id: 'order_now', label: 'Order Now (Lead Time)', value: orderNow, testid: 'eq-stat-ordernow', icon: ShoppingCart,
+            { id: 'repl_due', label: 'Replacement Due', value: replDue, testid: 'eq-stat-repldue', icon: Repeat,
               iconBg: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400', border: 'border-orange-200 hover:border-orange-400 dark:border-orange-900/50',
-              ring: 'ring-2 ring-orange-600 bg-orange-50/80 dark:bg-orange-950/40 dark:ring-orange-500', text: orderNow > 0 ? 'text-orange-700 dark:text-orange-400' : 'text-slate-900 dark:text-white', sub: 'Replacement within lead time' },
+              ring: 'ring-2 ring-orange-600 bg-orange-50/80 dark:bg-orange-950/40 dark:ring-orange-500', text: replDue > 0 ? 'text-orange-700 dark:text-orange-400' : 'text-slate-900 dark:text-white', sub: 'Replacement date reached' },
           ].map((s) => {
             const active = quickFilter === s.id && s.id !== '';
             const Icon = s.icon;
@@ -862,7 +861,7 @@ export default function EquipmentMaster() {
                   <span className="font-medium">{filtered.length} shown</span>
                   {quickFilter && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium">
-                      {quickFilter === 'overdue' ? 'Maintenance overdue' : quickFilter === 'due_soon' ? 'Due in 30 days' : 'Order now'}
+                      {quickFilter === 'overdue' ? 'Maintenance overdue' : quickFilter === 'due_soon' ? 'Due in 30 days' : 'Replacement due'}
                       <button onClick={() => setQuickFilter('')} className="hover:text-rose-600" data-testid="eq-clear-quickfilter"><X className="h-3 w-3" /></button>
                     </span>
                   )}
@@ -895,8 +894,6 @@ export default function EquipmentMaster() {
                     </thead>
                     <tbody>
                       {filtered.map((e, rowIdx) => {
-                        const nRep = daysUntil(e.next_replacement_due);
-                        const orderFlag = nRep != null && e.procurement_lead_time_days && nRep <= e.procurement_lead_time_days;
                         return (
                           <tr key={e.id} className={`border-b border-slate-100 dark:border-slate-800/60 hover:bg-blue-50/60 dark:hover:bg-slate-800/60 transition-colors align-top group ${rowIdx % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-800/30' : 'bg-white dark:bg-slate-900'}`} data-testid={`eq-row-${e.name.replace(/\s/g, '-')}`}>
                             <td className="px-5 py-4">
@@ -953,11 +950,6 @@ export default function EquipmentMaster() {
                               <p className="text-[11px] text-muted-foreground mt-0.5">
                                 {e.procurement_lead_time_days ? `Lead: ${e.procurement_lead_time_days}d` : ''}{e.procurement_lead_time_days && e.min_stock_level != null ? ' · ' : ''}{e.min_stock_level != null ? `Min stock: ${e.min_stock_level}` : ''}
                               </p>
-                              {orderFlag && (
-                                <Badge className="mt-1 bg-red-600 text-white block w-fit" data-testid={`eq-order-now-${e.name.replace(/\s/g, '-')}`}>
-                                  <ShoppingCart className="h-3 w-3 mr-1" /> Order now
-                                </Badge>
-                              )}
                             </td>
                             <td className="px-4 py-4">
                               <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
