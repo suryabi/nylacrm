@@ -106,6 +106,7 @@ const FilesDocuments = lazy(() => import('./pages/FilesDocuments'));
 const Maintenance = lazy(() => import('./pages/Maintenance'));
 const GlassBreakageRegister = lazy(() => import('./pages/GlassBreakageRegister'));
 const EquipmentMaster = lazy(() => import('./pages/EquipmentMaster'));
+const MaintenanceStatus = lazy(() => import('./pages/MaintenanceStatus'));
 const EventsPage = lazy(() => import('./pages/Events'));
 const WaterIntelligence = lazy(() => import('./pages/WaterIntelligence'));
 const QCTests = lazy(() => import('./pages/QCTests'));
@@ -486,6 +487,7 @@ function AppRouter() {
           <Route path="/maintenance" element={<ProtectedRoute moduleKey="maintenance"><Maintenance /></ProtectedRoute>} />
           <Route path="/glass-breakage-register" element={<ProtectedRoute moduleKey="glass_breakage_register"><GlassBreakageRegister /></ProtectedRoute>} />
           <Route path="/equipment-master" element={<ProtectedRoute moduleKey="equipment_master"><EquipmentMaster /></ProtectedRoute>} />
+          <Route path="/maintenance-status" element={<ProtectedRoute moduleKey="maintenance_status"><MaintenanceStatus /></ProtectedRoute>} />
           <Route path="/events" element={<ProtectedRoute moduleKey="marketing_events"><EventsPage /></ProtectedRoute>} />
           <Route path="/water-intelligence" element={<ProtectedRoute moduleKey="water_intelligence"><WaterIntelligence /></ProtectedRoute>} />
           <Route path="/qc-tests" element={<ProtectedRoute moduleKey="qc_tests"><QCTests /></ProtectedRoute>} />

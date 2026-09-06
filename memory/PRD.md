@@ -3158,3 +3158,12 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — Jun 2026: Print Whole Month (all weekly sheets)
 - MaintenanceProfile.js: buildSheetHtml refactored → weekPage(sheet) + buildSheetDoc(sheets,title) with .page{height:286mm;page-break-after:always}. New "Print Whole Month" button (mp-print-month-btn) fetches every Monday-anchored week overlapping the picked date's month (local-date fmt helper, NOT toISOString — TZ bug avoided) and opens one print window (one A4 page per week).
 - Verified: Sept 2026 → 5 pages (31 Aug–06 Sep … 28 Sep–04 Oct), 32 QRs, correct title.
+
+## Update — Jun 2026: Daily Maintenance Status view + 9 PM consolidated email
+- Backend (maintenance_sheets.py): _daily_status(tenant,date) — all equipment scheduled that day grouped Facility›Floor›Area (worst-missed first), status per equipment: completed/incomplete (with performed_by + IST time + remarks, corrections applied), missed (past, no record), pending (today), upcoming (future).
+  - GET /api/maintenance/daily-status?date= (ADMIN_ROLES only)
+  - send_daily_digest(): consolidated HTML email (grouped table, ⚠ areas, summary chips) to admin users + in-app notification; dedup via db.maintenance_daily_digest.
+  - POST /api/maintenance/daily-digest/send?date= (manual/admin, force)
+  - daily_digest_scheduler(): sleeps till 21:00 IST daily, sends per tenant with scheduled equipment. Wired in server.py startup next to missed-maintenance scheduler.
+- Frontend: /maintenance-status page (MaintenanceStatus.js) — date picker + prev/next day, 5 summary cards, facility cards with floor›area sections, red-highlighted missed rows, "N need attention" badges, "Email This Report" button. Menu item "Maintenance Status" (Production section; roles CEO/Director/Admin/System Admin; moduleKey maintenance_status added to registry + App.js route).
+- Verified: today's status (pending), past day (missed flag), manual digest sent to 4 admins, UI screenshot.

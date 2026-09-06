@@ -119,6 +119,7 @@ export const MODULE_REGISTRY = [
       { key: 'maintenance', label: 'Maintenance', description: 'Equipment maintenance tracking' },
       { key: 'glass_breakage_register', label: 'Glass Breakage Register', description: 'Glass breakage incidents, quarantine & QA release' },
       { key: 'equipment_master', label: 'Equipment Master', description: 'Equipment hierarchy, maintenance & replacement schedules, vendor links' },
+      { key: 'maintenance_status', label: 'Maintenance Status', description: 'Daily equipment maintenance status by facility/floor/area + 9 PM digest email' },
       { key: 'inventory', label: 'Inventory', description: 'Inventory management' },
       { key: 'quality_control', label: 'Quality Control', description: 'QC processes & checks' },
       { key: 'assets', label: 'Assets', description: 'Asset tracking & management' },

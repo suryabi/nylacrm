@@ -2,10 +2,11 @@
 camera-captured timestamped photos, immutable records with correction audit trail."""
 import base64
 import io
+import logging
 import os
 import random
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from zoneinfo import ZoneInfo
 
 import qrcode
@@ -527,3 +528,208 @@ async def maintenance_compliance(month: str = Query(...), current_user: dict = D
     overall = {"due": total_due, "completed": total_done,
                "score": round(total_done / total_due * 100) if total_due else None}
     return {"month": month, "as_of": cutoff, "overall": overall, "equipment": equipment_rows, "areas": area_rows}
+
+
+# ── Daily maintenance status (view + 9 PM digest email) ──────────────────────
+async def _daily_status(tenant_id: str, date_str: str) -> dict:
+    """All equipment scheduled on date_str, grouped Facility › Floor › Area."""
+    d = date.fromisoformat(date_str)
+    today = datetime.now(IST).date().isoformat()
+    eqs = await db.equipment_master.find(
+        {"tenant_id": tenant_id, "maintenance_frequency_days": {"$gt": 0}},
+        {"_id": 0, "id": 1, "name": 1, "equipment_type_name": 1,
+         "maintenance_frequency_days": 1, "maintenance_start_date": 1, "last_maintenance_date": 1,
+         "facility_name": 1, "floor_name": 1, "area_name": 1}).to_list(3000)
+    recs = {}
+    async for r in db.maintenance_records.find(
+            {"tenant_id": tenant_id, "scheduled_date": date_str},
+            {"_id": 0, "equipment_id": 1, "status": 1, "performed_by": 1,
+             "completed_at": 1, "corrections": 1, "remarks": 1}):
+        st = r["status"]
+        for c in r.get("corrections") or []:
+            if c.get("corrected_status"):
+                st = c["corrected_status"]
+        recs[r["equipment_id"]] = {**r, "status": st}
+
+    facilities, totals = {}, {"scheduled": 0, "completed": 0, "incomplete": 0, "missed": 0, "pending": 0}
+    for eq in eqs:
+        anchor = eq.get("maintenance_start_date") or eq.get("last_maintenance_date")
+        if date_str not in _scheduled_dates_range(eq["maintenance_frequency_days"], anchor, d, d):
+            continue
+        r = recs.get(eq["id"])
+        if r:
+            status = r["status"]
+            done_time = (r.get("completed_at") or "")[11:16]
+        elif date_str < today:
+            status, done_time = "missed", None
+        elif date_str == today:
+            status, done_time = "pending", None
+        else:
+            status, done_time = "upcoming", None
+        totals["scheduled"] += 1
+        totals[status if status in totals else "pending"] = totals.get(status, 0) + 1
+        fac = eq.get("facility_name") or "No facility assigned"
+        flo = eq.get("floor_name") or "No floor"
+        area = eq.get("area_name") or "No area"
+        node = (facilities.setdefault(fac, {"name": fac, "floors": {}})["floors"]
+                .setdefault(flo, {"name": flo, "areas": {}})["areas"]
+                .setdefault(area, {"name": area, "equipment": [], "completed": 0, "missed": 0}))
+        node["equipment"].append({
+            "equipment_id": eq["id"], "name": eq["name"], "type": eq.get("equipment_type_name"),
+            "status": status, "performed_by": (r or {}).get("performed_by"),
+            "time": done_time, "remarks": (r or {}).get("remarks")})
+        if status == "completed":
+            node["completed"] += 1
+        elif status in ("missed", "incomplete"):
+            node["missed"] += 1
+
+    out_facilities = []
+    for fac in facilities.values():
+        floors = []
+        for fl in fac["floors"].values():
+            areas = list(fl["areas"].values())
+            for a in areas:
+                a["equipment"].sort(key=lambda x: x["name"])
+            areas.sort(key=lambda a: (-a["missed"], a["name"]))
+            floors.append({"name": fl["name"], "areas": areas,
+                           "missed": sum(a["missed"] for a in areas)})
+        floors.sort(key=lambda f: (-f["missed"], f["name"]))
+        out_facilities.append({"name": fac["name"], "floors": floors,
+                               "missed": sum(f["missed"] for f in floors)})
+    out_facilities.sort(key=lambda f: (-f["missed"], f["name"]))
+    return {"date": date_str, "totals": totals, "facilities": out_facilities}
+
+
+@router.get("/daily-status")
+async def daily_status(date_q: str = Query(..., alias="date"), current_user: dict = Depends(get_current_user)):
+    if (current_user.get("role") or "").lower() not in ADMIN_ROLES:
+        raise HTTPException(403, "Not authorized to view maintenance status")
+    try:
+        date.fromisoformat(date_q)
+    except ValueError:
+        raise HTTPException(400, "date must be YYYY-MM-DD")
+    return await _daily_status(get_current_tenant_id(), date_q)
+
+
+def _digest_html(status: dict) -> str:
+    t = status["totals"]
+    chip = ("<span style='display:inline-block;padding:2px 10px;border-radius:10px;font-size:12px;"
+            "font-weight:bold;margin-right:6px;{s}'>{v}</span>")
+    rows = []
+    for fac in status["facilities"]:
+        rows.append(f"<tr><td colspan='4' style='background:#1e2b3c;color:#fff;padding:7px 10px;"
+                    f"font-size:13px;font-weight:bold'>{fac['name']}</td></tr>")
+        for fl in fac["floors"]:
+            for ar in fl["areas"]:
+                warn = " ⚠" if ar["missed"] else ""
+                rows.append(f"<tr><td colspan='4' style='background:#eef2f7;padding:6px 10px;font-size:12px;"
+                            f"font-weight:bold;color:#334155'>{fl['name']} › {ar['name']}"
+                            f" — {ar['completed']}/{len(ar['equipment'])} done{warn}</td></tr>")
+                for e in ar["equipment"]:
+                    if e["status"] == "completed":
+                        st = "<span style='color:#047857;font-weight:bold'>✔ Completed</span>"
+                        who = f"{e['performed_by'] or ''} · {e['time'] or ''}"
+                    elif e["status"] == "incomplete":
+                        st = "<span style='color:#b45309;font-weight:bold'>◐ Incomplete</span>"
+                        who = f"{e['performed_by'] or ''} · {e['time'] or ''}"
+                    elif e["status"] == "missed":
+                        st = "<span style='color:#b91c1c;font-weight:bold'>✘ MISSED</span>"
+                        who = "—"
+                    else:
+                        st = "<span style='color:#64748b'>Pending</span>"
+                        who = "—"
+                    rows.append(f"<tr><td style='padding:5px 10px;font-size:12px;border-bottom:1px solid #e2e8f0'>{e['name']}</td>"
+                                f"<td style='padding:5px 10px;font-size:12px;border-bottom:1px solid #e2e8f0'>{e['type'] or ''}</td>"
+                                f"<td style='padding:5px 10px;font-size:12px;border-bottom:1px solid #e2e8f0'>{st}</td>"
+                                f"<td style='padding:5px 10px;font-size:12px;border-bottom:1px solid #e2e8f0'>{who}</td></tr>")
+    return f"""
+<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0f172a;max-width:720px">
+  <h2 style="margin:0 0 4px;font-size:18px">Daily Maintenance Report — {status['date']}</h2>
+  <p style="margin:0 0 12px">
+    {chip.format(s='background:#dcfce7;color:#047857', v=str(t.get('completed', 0)) + ' completed')}
+    {chip.format(s='background:#fef3c7;color:#b45309', v=str(t.get('incomplete', 0)) + ' incomplete')}
+    {chip.format(s='background:#fee2e2;color:#b91c1c', v=str(t.get('missed', 0)) + ' missed')}
+    {chip.format(s='background:#e2e8f0;color:#334155', v=str(t.get('pending', 0)) + ' pending')}
+  </p>
+  <table style="border-collapse:collapse;width:100%;border:1px solid #e2e8f0">
+    <tr>
+      <th style='text-align:left;padding:6px 10px;font-size:11px;color:#64748b'>EQUIPMENT</th>
+      <th style='text-align:left;padding:6px 10px;font-size:11px;color:#64748b'>TYPE</th>
+      <th style='text-align:left;padding:6px 10px;font-size:11px;color:#64748b'>STATUS</th>
+      <th style='text-align:left;padding:6px 10px;font-size:11px;color:#64748b'>DONE BY · TIME</th>
+    </tr>
+    {''.join(rows)}
+  </table>
+  <p style="margin:16px 0 0;color:#94a3b8;font-size:12px">Areas with ⚠ have missed or incomplete maintenance and need attention. Automated daily report — sent at 9 PM IST.</p>
+</div>"""
+
+
+async def send_daily_digest(tenant_id: str, date_str: str, force: bool = False) -> dict:
+    from utils.email_sender import send_email
+    from utils.notify import notify_users
+    if not force:
+        already = await db.maintenance_daily_digest.find_one({"tenant_id": tenant_id, "date": date_str})
+        if already:
+            return {"sent": False, "reason": "already sent"}
+    status = await _daily_status(tenant_id, date_str)
+    if not status["totals"]["scheduled"]:
+        return {"sent": False, "reason": "nothing scheduled"}
+    admins = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "role": 1, "email": 1}).to_list(500)
+    admin_users = [u for u in admins if (u.get("role") or "").lower() in ADMIN_ROLES]
+    t = status["totals"]
+    subject = (f"Daily Maintenance Report {date_str} — {t.get('completed', 0)} done, "
+               f"{t.get('missed', 0)} missed, {t.get('incomplete', 0)} incomplete")
+    html = _digest_html(status)
+    emails_sent = 0
+    for u in admin_users:
+        if u.get("email"):
+            try:
+                await send_email(to=u["email"], subject=subject, html=html, text=subject)
+                emails_sent += 1
+            except Exception:
+                logging.getLogger("maintenance_digest").exception("digest email failed for %s", u.get("email"))
+    try:
+        await notify_users(tenant_id, [u["id"] for u in admin_users],
+                           title=subject,
+                           body="Open the Daily Maintenance Status view for the full area-wise breakdown.",
+                           link="/maintenance-status", kind="alert", category="approval",
+                           send_email_too=False)
+    except Exception:
+        pass
+    await db.maintenance_daily_digest.update_one(
+        {"tenant_id": tenant_id, "date": date_str},
+        {"$set": {"sent_at": datetime.now(timezone.utc).isoformat(), "emails": emails_sent}}, upsert=True)
+    return {"sent": True, "emails": emails_sent, "totals": t}
+
+
+@router.post("/daily-digest/send")
+async def trigger_daily_digest(date_q: Optional[str] = Query(None, alias="date"),
+                               current_user: dict = Depends(get_current_user)):
+    if (current_user.get("role") or "").lower() not in ADMIN_ROLES:
+        raise HTTPException(403, "Admin access required")
+    d = date_q or datetime.now(IST).date().isoformat()
+    return await send_daily_digest(get_current_tenant_id(), d, force=True)
+
+
+async def daily_digest_scheduler():
+    """Sends one consolidated maintenance email per tenant per day at 9 PM IST."""
+    import asyncio
+    log = logging.getLogger("maintenance_digest")
+    while True:
+        now = datetime.now(IST)
+        target = now.replace(hour=21, minute=0, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        await asyncio.sleep((target - now).total_seconds())
+        try:
+            today = datetime.now(IST).date().isoformat()
+            tenant_ids = await db.equipment_master.distinct(
+                "tenant_id", {"maintenance_frequency_days": {"$gt": 0}})
+            for tid in tenant_ids:
+                try:
+                    res = await send_daily_digest(tid, today)
+                    log.info("daily digest %s %s: %s", tid, today, res)
+                except Exception:
+                    log.exception("daily digest failed for tenant %s", tid)
+        except Exception:
+            log.exception("daily digest scheduler iteration failed")

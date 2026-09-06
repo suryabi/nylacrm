@@ -11129,6 +11129,11 @@ async def startup_event():
         asyncio.create_task(_missed_maint())
     except Exception as e:
         logger.error(f"Failed to start missed-maintenance scheduler: {e}")
+    try:
+        from routes.maintenance_sheets import daily_digest_scheduler as _maint_digest
+        asyncio.create_task(_maint_digest())
+    except Exception as e:
+        logger.error(f"Failed to start maintenance daily-digest scheduler: {e}")
 
 
 async def _ensure_txn_indexes_bg():
