@@ -3190,3 +3190,11 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Timestamp burned into captured photo pixels bottom-right (canvas text: en-GB dd MMM yyyy hh:mm:ss on dark bar) before upload; thumbnail preview quality raised to 0.7.
 - Tap thumbnail → full-screen lightbox (scan-photo-lightbox, tap anywhere/X to close) — no download needed.
 - Verified with injected fake getUserMedia stream: overlay, capture w/ visible timestamp, lightbox. Test pending photo cleaned.
+
+## Update — Jun 2026: Multiple maintenance records per day + permanent equipment QR stickers
+- Multi-record: scan submit no longer blocks after first submission. Each submit creates a new immutable record with `attempt` number (prior count + 1). Photo-required rule enforced only on attempt 1. GET /scan/{token} now returns `records` (all for the slot) + `can_log_another`.
+- MaintenanceScan.js: submitted view shows "All records for today (N)" list (attempt #, status, by, time, photo count) + "Log Another Maintenance Record" button (scan-log-another-btn) → reopens the form with a blue relog banner (scan-relog-banner).
+- Permanent equipment QR: GET /api/maintenance/equipment/{id}/sticker?origin= → QR (encodes {origin}/equipment-scan/{id}) + name/type/make/model/facility/floor/area/frequency/code. GET /api/maintenance/equipment-scan/{id} resolves today's slot (creates if scheduled) → token, else scheduled_today=false + next_due.
+- Frontend: new page /equipment-scan/:equipmentId (EquipmentScan.js) — auto-redirects to /maintenance-scan/{token} when scheduled today; otherwise shows "no maintenance today" + next due; login redirect supported. Equipment Master row dropdown: "Print Equipment QR Sticker" (eq-print-qr-*) → printable A4 sticker card (blue header w/ name+type, 62mm QR, facility/floor/area/make/model/frequency/ID table, auto window.print).
+- Verified: sticker API, resolve API (redirect to today's form in browser), two submissions (attempts 1 & 2) via API + full browser flow, records list UI, dropdown item. All test records cleaned + slot reset.
+

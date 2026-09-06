@@ -8,7 +8,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
-import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon, MapPin, AlertTriangle, Layers, Users, MoreVertical, X, Filter, BookOpen } from 'lucide-react';
+import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon, MapPin, AlertTriangle, Layers, Users, MoreVertical, X, Filter, BookOpen, QrCode } from 'lucide-react';
 import EquipmentInstructions from '../components/EquipmentInstructions';
 import { toast } from 'sonner';
 import { MaintenanceProfile } from '../components/MaintenanceProfile';
@@ -27,6 +27,48 @@ const FREQ_OPTIONS = [
   { label: 'Quarterly', value: 90 },
 ];
 const freqLabel = (days) => (FREQ_OPTIONS.find((o) => o.value === Number(days)) || {}).label || (days ? `Every ${days} days` : null);
+
+const printEquipmentQr = async (e) => {
+  try {
+    const res = await fetch(`${API_URL}/api/maintenance/equipment/${e.id}/sticker?origin=${encodeURIComponent(window.location.origin)}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Could not generate QR sticker');
+    const s = await res.json();
+    const row = (label, value) => (value ? `<tr><td class="lbl">${label}</td><td class="val">${value}</td></tr>` : '');
+    const w = window.open('', '_blank');
+    if (!w) { toast.error('Pop-up blocked — allow pop-ups to print'); return; }
+    w.document.write(`<!DOCTYPE html><html><head><title>Equipment QR — ${s.name}</title><style>
+      @page { size: A4 portrait; margin: 12mm; }
+      * { box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; }
+      body { margin: 0; display: flex; justify-content: center; padding-top: 10mm; }
+      .sticker { width: 110mm; border: 2.5px solid #002FA7; border-radius: 5mm; overflow: hidden; }
+      .head { background: #002FA7; color: #fff; text-align: center; padding: 4mm 5mm; }
+      .head .nm { font-size: 17pt; font-weight: 800; letter-spacing: 0.3px; }
+      .head .tp { font-size: 10pt; opacity: 0.9; margin-top: 1mm; }
+      .qrwrap { text-align: center; padding: 5mm 0 2mm; }
+      .qrwrap img { width: 62mm; height: 62mm; }
+      .scanline { text-align: center; font-size: 9.5pt; font-weight: 700; color: #002FA7; padding-bottom: 3mm; }
+      table { width: 100%; border-collapse: collapse; }
+      td { padding: 2.2mm 5mm; font-size: 10.5pt; border-top: 1px solid #dbe2f0; }
+      .lbl { color: #64748b; font-weight: 700; width: 34%; text-transform: uppercase; font-size: 8.5pt; letter-spacing: 0.5px; }
+      .val { font-weight: 700; color: #0f172a; }
+      .foot { background: #eef2fb; text-align: center; font-size: 8.5pt; color: #475569; padding: 2.5mm; }
+    </style></head><body>
+      <div class="sticker">
+        <div class="head"><div class="nm">${s.name}</div><div class="tp">${s.type || ''}</div></div>
+        <div class="qrwrap"><img src="${s.qr}" alt="QR" /></div>
+        <div class="scanline">SCAN FOR TODAY'S MAINTENANCE CHECK-IN</div>
+        <table>
+          ${row('Facility', s.facility)}${row('Floor', s.floor)}${row('Area', s.area)}
+          ${row('Make', s.make)}${row('Model', s.model)}
+          ${row('Frequency', s.frequency_label)}${row('Equip. ID', s.code)}
+        </table>
+        <div class="foot">Nyla Air Water · Equipment Maintenance QR · Keep this sticker on the equipment</div>
+      </div>
+      <script>window.onload = function(){ window.print(); };</script>
+    </body></html>`);
+    w.document.close();
+  } catch (err) { toast.error(err.message); }
+};
 
 const FreqSelect = ({ value, onChange, testid }) => {
   const known = FREQ_OPTIONS.some((o) => String(o.value) === String(value));
@@ -832,6 +874,9 @@ export default function EquipmentMaster() {
                                   <DropdownMenuContent align="end" className="w-56">
                                     <DropdownMenuItem onClick={() => setMaintTarget(e)} data-testid={`eq-maint-profile-${e.name.replace(/\s/g, '-')}`}>
                                       <Wrench className="h-4 w-4 mr-2 text-blue-600" /> Maintenance Profile & QR Sheet
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => printEquipmentQr(e)} data-testid={`eq-print-qr-${e.name.replace(/\s/g, '-')}`}>
+                                      <QrCode className="h-4 w-4 mr-2 text-emerald-600" /> Print Equipment QR Sticker
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => { setLogTarget({ equipment: e, kind: 'replacement' }); setLogDate(new Date().toISOString().slice(0, 10)); setLogPhotos([]); }} data-testid={`eq-log-repl-${e.name.replace(/\s/g, '-')}`}>
                                       <Repeat className="h-4 w-4 mr-2 text-indigo-600" /> Log Replacement Done

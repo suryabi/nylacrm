@@ -103,7 +103,7 @@ export default function MaintenanceScan() {
 
   const submit = async () => {
     if (!status) { toast.error('Select Maintenance Complete or Incomplete'); return; }
-    if (state.photo_required && photos.length === 0) { toast.error('Photo inspection required today — capture at least one live photo first'); return; }
+    if (state.photo_required && photos.length === 0 && !state.relog) { toast.error('Photo inspection required today — capture at least one live photo first'); return; }
     setSubmitting(true);
     try {
       const res = await fetch(`${API_URL}/api/maintenance/scan/${token}/submit`, {
@@ -113,7 +113,8 @@ export default function MaintenanceScan() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Submit failed');
       stopCamera();
-      setState((s) => ({ ...s, already_submitted: true, record: data }));
+      setState((s) => ({ ...s, already_submitted: true, record: data, records: [...(s.records || []), data], can_log_another: true, relog: false }));
+      setStatus(null); setRemarks(''); setPhotos([]);
       toast.success('Maintenance record saved');
     } catch (e) { toast.error(e.message); } finally { setSubmitting(false); }
   };
@@ -206,17 +207,38 @@ export default function MaintenanceScan() {
   }
 
   if (state.already_submitted) {
-    const r = state.record || {};
+    const recs = state.records && state.records.length ? state.records : (state.record ? [state.record] : []);
+    const r = recs[recs.length - 1] || {};
+    const logAnother = () => { setStatus(null); setRemarks(''); setPhotos([]); setState((s) => ({ ...s, already_submitted: false, relog: true })); };
     return (
       <Shell>
         {info}
         <Card className="border-emerald-300"><CardContent className="py-6 text-center space-y-2" data-testid="scan-submitted">
           <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-600" />
-          <p className="font-bold text-lg">Maintenance record saved</p>
+          <p className="font-bold text-lg">Maintenance record{recs.length > 1 ? 's' : ''} saved</p>
           <Badge className={r.status === 'completed' ? 'bg-emerald-600' : 'bg-amber-500'}>{r.status === 'completed' ? 'Maintenance Complete' : 'Maintenance Incomplete'}</Badge>
           <p className="text-sm text-muted-foreground">By {r.performed_by} · {(r.completed_at || '').slice(0, 16).replace('T', ' ')}</p>
           {(r.photos || []).length > 0 && <p className="text-xs text-muted-foreground">{r.photos.length} timestamped photo{r.photos.length === 1 ? '' : 's'} attached</p>}
-          <p className="text-xs text-muted-foreground pt-2">This record is locked and cannot be edited. Corrections can be added from the equipment profile with a full audit trail.</p>
+          <p className="text-xs text-muted-foreground pt-2">Saved records are locked and cannot be edited. Corrections can be added from the equipment profile with a full audit trail.</p>
+        </CardContent></Card>
+        {recs.length > 1 && (
+          <Card><CardContent className="p-4 space-y-2" data-testid="scan-records-list">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">All records for today ({recs.length})</p>
+            {recs.map((rec, i) => (
+              <div key={rec.id || i} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+                <span className="text-xs font-bold text-slate-400 w-6">#{rec.attempt || i + 1}</span>
+                <Badge className={`${rec.status === 'completed' ? 'bg-emerald-600' : 'bg-amber-500'} text-[10px]`}>{rec.status === 'completed' ? 'Complete' : 'Incomplete'}</Badge>
+                <span className="flex-1 truncate text-xs text-muted-foreground">{rec.performed_by} · {(rec.completed_at || '').slice(11, 16)}</span>
+                {(rec.photos || []).length > 0 && <span className="text-[10px] text-muted-foreground">{rec.photos.length} photo{rec.photos.length === 1 ? '' : 's'}</span>}
+              </div>
+            ))}
+          </CardContent></Card>
+        )}
+        <Card className="border-blue-200"><CardContent className="p-4 space-y-2 text-center" data-testid="scan-log-another-card">
+          <p className="text-sm text-muted-foreground">Was the earlier maintenance not satisfactory, or is another round needed today?</p>
+          <Button variant="outline" className="w-full border-[#002FA7] text-[#002FA7] hover:bg-blue-50" onClick={logAnother} data-testid="scan-log-another-btn">
+            <RefreshCw className="h-4 w-4 mr-2" /> Log Another Maintenance Record
+          </Button>
         </CardContent></Card>
       </Shell>
     );
@@ -225,6 +247,15 @@ export default function MaintenanceScan() {
   return (
     <Shell>
       {info}
+      {state.relog && (
+        <div className="rounded-lg border-2 border-blue-300 bg-blue-50 px-4 py-3 flex items-start gap-2" data-testid="scan-relog-banner">
+          <RefreshCw className="h-4 w-4 text-[#002FA7] mt-0.5 shrink-0" />
+          <div className="text-sm">
+            <p className="font-bold text-[#002FA7]">Logging an additional maintenance record</p>
+            <p className="text-xs text-blue-700">{(state.records || []).length || 1} record{((state.records || []).length || 1) === 1 ? ' has' : 's have'} already been saved for today. They stay locked — this creates a new record.</p>
+          </div>
+        </div>
+      )}
       {instructions}
       {state.photo_required && (
         <div className="rounded-lg border-2 border-red-300 bg-red-50 px-4 py-3 flex items-start gap-2" data-testid="scan-photo-required-banner">

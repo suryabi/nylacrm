@@ -202,6 +202,54 @@ async def maintenance_sheet(equipment_id: str, origin: str = Query(...),
             "frequency_label": _freq_label(freq), "lead_blanks": 0 if week else start.weekday(), "days": days}
 
 
+# ── Permanent equipment QR sticker ───────────────────────────────────────────
+@router.get("/equipment/{equipment_id}/sticker")
+async def equipment_sticker(equipment_id: str, origin: str = Query(...),
+                            current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    eq = await _get_equipment(tenant_id, equipment_id)
+    qr = _qr_data_uri(f"{origin.rstrip('/')}/equipment-scan/{eq['id']}")
+    return {"qr": qr, "id": eq["id"], "code": eq.get("equipment_code") or eq["id"][:8].upper(),
+            "name": eq["name"], "type": eq.get("equipment_type_name"),
+            "make": eq.get("make_brand"), "model": eq.get("model_spec"),
+            "facility": eq.get("facility_name"), "floor": eq.get("floor_name"),
+            "area": eq.get("area_name"),
+            "frequency_label": _freq_label(eq.get("maintenance_frequency_days"))}
+
+
+@router.get("/equipment-scan/{equipment_id}")
+async def equipment_scan_resolve(equipment_id: str, current_user: dict = Depends(get_current_user)):
+    """Permanent sticker QR → resolve today's maintenance slot token (if scheduled)."""
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    eq = await _get_equipment(tenant_id, equipment_id)
+    location = " › ".join(x for x in [eq.get("facility_name"), eq.get("floor_name"), eq.get("area_name")] if x)
+    base = {"equipment_id": eq["id"], "equipment_name": eq["name"],
+            "equipment_type": eq.get("equipment_type_name"), "location": location}
+    freq = eq.get("maintenance_frequency_days")
+    if not freq:
+        return {**base, "scheduled_today": False, "message": "No maintenance frequency set for this equipment."}
+    anchor = eq.get("maintenance_start_date") or eq.get("last_maintenance_date")
+    today = datetime.now(IST).date()
+    sched_today = today.isoformat() in _scheduled_dates_range(freq, anchor, today, today)
+    nxt = _scheduled_dates_range(freq, anchor, today, today + timedelta(days=120))
+    next_due = next((d for d in nxt if d > today.isoformat()), None)
+    if not sched_today:
+        return {**base, "scheduled_today": False, "next_due": next_due,
+                "message": "No maintenance is scheduled for this equipment today."}
+    slot = await db.maintenance_slots.find_one(
+        {"tenant_id": tenant_id, "equipment_id": eq["id"], "date": today.isoformat()}, {"_id": 0})
+    if not slot:
+        slot = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "equipment_id": eq["id"],
+                "date": today.isoformat(), "token": uuid.uuid4().hex, "submitted": False,
+                "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.maintenance_slots.insert_one({**slot})
+        await _ensure_photo_assignments(tenant_id, eq["id"], today.strftime("%Y-%m"),
+                                        eq.get("photo_inspections_per_month"))
+    return {**base, "scheduled_today": True, "token": slot["token"], "next_due": next_due}
+
+
 # ── Profile: schedule, upcoming, records ─────────────────────────────────────
 @router.get("/equipment/{equipment_id}/profile")
 async def maintenance_profile(equipment_id: str, current_user: dict = Depends(get_current_user)):
@@ -262,8 +310,10 @@ async def scan_status(token: str, current_user: dict = Depends(get_current_user)
     if slot["date"] != today:
         return {**base, "valid": False, "message": INVALID_QR_MSG}
     if slot.get("submitted"):
-        rec = await db.maintenance_records.find_one({"tenant_id": tenant_id, "slot_id": slot["id"]}, {"_id": 0})
-        return {**base, "valid": True, "already_submitted": True, "record": rec}
+        recs = await db.maintenance_records.find(
+            {"tenant_id": tenant_id, "slot_id": slot["id"]}, {"_id": 0}).sort("created_at", 1).to_list(50)
+        return {**base, "valid": True, "already_submitted": True,
+                "record": recs[-1] if recs else None, "records": recs, "can_log_another": True}
     return {**base, "valid": True, "already_submitted": False, "photo_required": bool(slot.get("photo_required"))}
 
 
@@ -274,8 +324,6 @@ async def scan_photo(token: str, file: UploadFile = File(...), current_user: dic
     today = datetime.now(IST)
     if slot["date"] != today.date().isoformat():
         raise HTTPException(400, INVALID_QR_MSG)
-    if slot.get("submitted"):
-        raise HTTPException(409, "Maintenance for this date is already submitted")
     content = await file.read()
     if len(content) > 15 * 1024 * 1024:
         raise HTTPException(400, "Photo too large (max 15 MB)")
@@ -309,15 +357,14 @@ async def scan_submit(token: str, body: SubmitBody, current_user: dict = Depends
     now = datetime.now(IST)
     if slot["date"] != now.date().isoformat():
         raise HTTPException(400, INVALID_QR_MSG)
-    if slot.get("submitted"):
-        raise HTTPException(409, "Maintenance for this date is already submitted and cannot be edited")
     eq = await _get_equipment(tenant_id, slot["equipment_id"])
+    prior = await db.maintenance_records.count_documents({"tenant_id": tenant_id, "slot_id": slot["id"]})
     photos = [p for p in slot.get("pending_photos") or [] if p["id"] in set(body.photo_ids)]
-    if slot.get("photo_required") and not photos:
+    if slot.get("photo_required") and not photos and prior == 0:
         raise HTTPException(400, "Photo inspection required today — capture at least one live photo before submitting.")
     rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": slot["id"],
            "equipment_id": eq["id"], "equipment_name": eq["name"],
-           "scheduled_date": slot["date"], "status": body.status,
+           "scheduled_date": slot["date"], "status": body.status, "attempt": prior + 1,
            "performed_by": current_user.get("name") or current_user.get("email"),
            "performed_by_id": current_user.get("id"),
            "completed_at": now.isoformat(), "photos": photos,
