@@ -61,10 +61,41 @@ class FacilityIn(BaseModel):
     facility_name: str
     facility_type: str
     google_address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     contact_person: Optional[str] = None
     contact_phone: Optional[str] = None
     contact_email: Optional[str] = None
     notes: Optional[str] = None
+
+
+class GeofenceSettingsIn(BaseModel):
+    geofence_enabled: bool
+    geofence_radius_m: int
+
+
+@router.get("/geofence-settings")
+async def get_geofence_settings(current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    s = await db.maintenance_settings.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    return {"geofence_enabled": bool((s or {}).get("geofence_enabled")),
+            "geofence_radius_m": int((s or {}).get("geofence_radius_m") or 200)}
+
+
+@router.put("/geofence-settings")
+async def set_geofence_settings(payload: GeofenceSettingsIn, current_user: dict = Depends(get_current_user)):
+    _require_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    if payload.geofence_radius_m < 10 or payload.geofence_radius_m > 100000:
+        raise HTTPException(400, "Radius must be between 10 and 100000 meters")
+    await db.maintenance_settings.update_one(
+        {"tenant_id": tenant_id},
+        {"$set": {"geofence_enabled": payload.geofence_enabled,
+                  "geofence_radius_m": payload.geofence_radius_m,
+                  "updated_by": current_user.get("name"), "updated_at": _now()}},
+        upsert=True)
+    return {"ok": True}
 
 
 class NameIn(BaseModel):

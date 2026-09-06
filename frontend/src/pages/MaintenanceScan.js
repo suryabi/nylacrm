@@ -4,13 +4,21 @@ import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
-import { Wrench, CheckCircle2, XCircle, Camera, RefreshCw, Trash2, LogIn, Eye, UserCheck } from 'lucide-react';
+import { Wrench, CheckCircle2, XCircle, Camera, RefreshCw, Trash2, LogIn, Eye, UserCheck, MapPin } from 'lucide-react';
 import { ScanInstructions } from '../components/ScanInstructions';
 import QCKioskLogin from '../components/qc/QCKioskLogin';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' });
+
+const getPosition = () => new Promise((resolve) => {
+  if (!navigator.geolocation) return resolve(null);
+  navigator.geolocation.getCurrentPosition(
+    (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+    () => resolve(null),
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+});
 
 const STAFF_KEY = 'factory_staff_session';
 const STAFF_SESSION_HOURS = 12;
@@ -116,9 +124,14 @@ export default function MaintenanceScan() {
     if (state.photo_required && photos.length === 0 && !state.relog) { toast.error('Photo inspection required today — capture at least one live photo first'); return; }
     setSubmitting(true);
     try {
+      let pos = null;
+      if (state.geofence?.required) {
+        pos = await getPosition();
+        if (!pos) { toast.error('Location access is required — allow GPS/location in your browser to record maintenance here.'); setSubmitting(false); return; }
+      }
       const res = await fetch(`${API_URL}/api/maintenance/scan/${token}/submit`, {
         method: 'POST', headers: authHeaders(),
-        body: JSON.stringify({ status, remarks: remarks || null, photo_ids: photos.map((p) => p.id), staff_member_id: staff?.id || null }),
+        body: JSON.stringify({ status, remarks: remarks || null, photo_ids: photos.map((p) => p.id), staff_member_id: staff?.id || null, lat: pos?.lat ?? null, lng: pos?.lng ?? null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Submit failed');
@@ -270,6 +283,12 @@ export default function MaintenanceScan() {
           <UserCheck className="h-4 w-4 text-emerald-600 shrink-0" />
           <p className="text-sm flex-1 truncate">Recording as <span className="font-bold">{staff.name}</span>{staff.role ? <span className="text-xs text-muted-foreground"> · {staff.role}</span> : null}</p>
           <button onClick={staffLogout} className="text-xs font-semibold text-emerald-700 hover:underline shrink-0" data-testid="scan-staff-switch">Switch</button>
+        </div>
+      )}
+      {state.geofence?.required && (
+        <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2" data-testid="scan-geofence-chip">
+          <MapPin className="h-4 w-4 text-[#002FA7] shrink-0" />
+          <p className="text-xs text-blue-800">Geo-fenced check-in — you must be within <span className="font-bold">{state.geofence.radius} m</span> of <span className="font-bold">{state.geofence.facility_name}</span>. Your location is verified when you submit.</p>
         </div>
       )}
       {state.relog && (

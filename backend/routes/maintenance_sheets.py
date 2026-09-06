@@ -107,6 +107,64 @@ INVALID_QR_MSG = "This QR code is not valid for today's maintenance."
 NOT_ASSIGNED_MSG = "Only assigned maintenance staff can record maintenance for this equipment."
 
 
+def _haversine_m(lat1, lon1, lat2, lon2) -> float:
+    import math
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+async def _geofence_ctx(tenant_id: str, eq: dict):
+    """Return {'required': bool, 'radius': int, 'facility': {...}} for this equipment."""
+    s = await db.maintenance_settings.find_one({"tenant_id": tenant_id}, {"_id": 0})
+    if not (s or {}).get("geofence_enabled"):
+        return {"required": False}
+    fac = None
+    if eq.get("facility_id"):
+        fac = await db.facilities.find_one({"tenant_id": tenant_id, "id": eq["facility_id"]},
+                                           {"_id": 0, "facility_name": 1, "latitude": 1, "longitude": 1})
+    if not fac or fac.get("latitude") is None or fac.get("longitude") is None:
+        return {"required": False}
+    return {"required": True, "radius": int(s.get("geofence_radius_m") or 200), "facility": fac}
+
+
+async def _geofence_alert(tenant_id: str, eq: dict, current_user: dict, staff_name, dist, radius, facility_name):
+    """Best-effort email/in-app alert to admins when a geofence block happens."""
+    try:
+        from utils.notify import notify_users
+        admins = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "role": 1}).to_list(500)
+        admin_ids = [u["id"] for u in admins if (u.get("role") or "").lower() in ADMIN_ROLES]
+        who = staff_name or current_user.get("name") or current_user.get("email")
+        await notify_users(
+            tenant_id, admin_ids,
+            title=f"Geo-fence blocked: {eq['name']}",
+            body=(f"{who} tried to record maintenance for '{eq['name']}' from ~{int(dist)} m away "
+                  f"(allowed: {radius} m of {facility_name}) at {datetime.now(IST).strftime('%d %b %Y %H:%M IST')}. "
+                  f"The submission was blocked."),
+            kind="alert", entity_type="equipment", entity_id=eq["id"], send_email_too=True)
+    except Exception:
+        logging.getLogger(__name__).warning("Geofence alert notification failed", exc_info=True)
+
+
+async def _enforce_geofence(tenant_id: str, eq: dict, current_user: dict, lat, lng, staff_name=None):
+    """Admins bypass. Returns geo audit dict (or None). Blocks + emails team when outside radius."""
+    ctx = await _geofence_ctx(tenant_id, eq)
+    if not ctx["required"]:
+        return None
+    is_admin = (current_user.get("role") or "").lower() in ADMIN_ROLES
+    if lat is None or lng is None:
+        if is_admin:
+            return None
+        raise HTTPException(403, "Location access is required — enable GPS/location to record maintenance at this facility.")
+    dist = _haversine_m(lat, lng, ctx["facility"]["latitude"], ctx["facility"]["longitude"])
+    if dist > ctx["radius"] and not is_admin:
+        await _geofence_alert(tenant_id, eq, current_user, staff_name, dist, ctx["radius"], ctx["facility"]["facility_name"])
+        raise HTTPException(403, f"You must be within {ctx['radius']} m of {ctx['facility']['facility_name']} to record maintenance (you are ~{int(dist)} m away). The team has been notified.")
+    return {"lat": lat, "lng": lng, "distance_m": round(dist, 1)}
+
+
 async def _resolve_staff(tenant_id: str, eq: dict, current_user: dict, staff_member_id):
     """Identify the factory staff member performing maintenance (Face/PIN verified client-side).
     Admin app users may act without a staff identity."""
@@ -335,10 +393,14 @@ async def scan_status(token: str, current_user: dict = Depends(get_current_user)
     if slot["date"] != today:
         return {**base, "valid": False, "message": INVALID_QR_MSG}
     is_admin = (current_user.get("role") or "").lower() in ADMIN_ROLES
+    geo_ctx = await _geofence_ctx(tenant_id, eq)
     extra = {"assigned_staff_ids": eq.get("maintenance_staff_ids") or [],
              "assigned_staff": [{"id": s.get("id"), "name": s.get("name"), "role": s.get("role")}
                                 for s in eq.get("maintenance_staff") or []],
-             "staff_verification_required": not is_admin, "admin_bypass": is_admin}
+             "staff_verification_required": not is_admin, "admin_bypass": is_admin,
+             "geofence": ({"required": True, "radius": geo_ctx["radius"],
+                           "facility_name": geo_ctx["facility"]["facility_name"]}
+                          if geo_ctx["required"] else {"required": False})}
     if slot.get("submitted"):
         recs = await db.maintenance_records.find(
             {"tenant_id": tenant_id, "slot_id": slot["id"]}, {"_id": 0}).sort("created_at", 1).to_list(50)
@@ -381,6 +443,8 @@ class SubmitBody(BaseModel):
     remarks: Optional[str] = None
     photo_ids: List[str] = []
     staff_member_id: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
 
 
 @router.post("/scan/{token}/submit")
@@ -394,6 +458,8 @@ async def scan_submit(token: str, body: SubmitBody, current_user: dict = Depends
         raise HTTPException(400, INVALID_QR_MSG)
     eq = await _get_equipment(tenant_id, slot["equipment_id"])
     staff = await _resolve_staff(tenant_id, eq, current_user, body.staff_member_id)
+    geo = await _enforce_geofence(tenant_id, eq, current_user, body.lat, body.lng,
+                                  staff_name=(staff or {}).get("name"))
     prior = await db.maintenance_records.count_documents({"tenant_id": tenant_id, "slot_id": slot["id"]})
     photos = [p for p in slot.get("pending_photos") or [] if p["id"] in set(body.photo_ids)]
     if slot.get("photo_required") and not photos and prior == 0:
@@ -406,6 +472,7 @@ async def scan_submit(token: str, body: SubmitBody, current_user: dict = Depends
            "performed_by_role": (staff or {}).get("role"),
            "performed_via": "factory_staff" if staff else "admin",
            "verified_by_user": current_user.get("name") or current_user.get("email"),
+           "geo": geo,
            "completed_at": now.isoformat(), "photos": photos,
            "remarks": (body.remarks or "").strip() or None, "corrections": [],
            "created_at": datetime.now(timezone.utc).isoformat()}

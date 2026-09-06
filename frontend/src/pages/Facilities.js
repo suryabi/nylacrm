@@ -8,14 +8,65 @@ import { Badge } from '../components/ui/badge';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '../components/ui/accordion';
-import { Building2, Plus, Pencil, Trash2, MapPin, Phone, Mail, User, Layers, Paperclip, Download, Upload, FileText, Image as ImageIcon, X, ExternalLink, Info, StickyNote } from 'lucide-react';
+import { Building2, Plus, Pencil, Trash2, MapPin, Phone, Mail, User, Layers, Paperclip, Download, Upload, FileText, Image as ImageIcon, X, ExternalLink, Info, StickyNote, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { FormSection } from '../components/FormSection';
+import GooglePlacesAddressSearch from '../components/GooglePlacesAddressSearch';
+import { Switch } from '../components/ui/switch';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' });
 
-const EMPTY_FAC = { facility_name: '', facility_type: '', google_address: '', contact_person: '', contact_phone: '', contact_email: '', notes: '' };
+const EMPTY_FAC = { facility_name: '', facility_type: '', google_address: '', latitude: null, longitude: null, contact_person: '', contact_phone: '', contact_email: '', notes: '' };
+
+const GeofenceDialog = ({ onClose }) => {
+  const [enabled, setEnabled] = useState(false);
+  const [radius, setRadius] = useState(200);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    fetch(`${API_URL}/api/facilities/geofence-settings`, { headers: authHeaders() })
+      .then((r) => r.json())
+      .then((d) => { setEnabled(!!d.geofence_enabled); setRadius(d.geofence_radius_m || 200); })
+      .catch(() => toast.error('Could not load geofence settings'));
+  }, []);
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/facilities/geofence-settings`, {
+        method: 'PUT', headers: authHeaders(),
+        body: JSON.stringify({ geofence_enabled: enabled, geofence_radius_m: Number(radius) || 200 }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || 'Save failed');
+      toast.success(enabled ? `Geo-fencing ON — QR scans limited to ${radius} m of each facility` : 'Geo-fencing disabled');
+      onClose();
+    } catch (e) { toast.error(e.message); } finally { setSaving(false); }
+  };
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md" data-testid="geofence-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-emerald-600" /> Maintenance Geo-fencing</DialogTitle>
+          <DialogDescription>When enabled, maintenance QR check-ins only work within the set radius of the equipment's facility (facility must have a Google address with coordinates). Blocked attempts email the team.</DialogDescription>
+        </DialogHeader>
+        <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold">Enable geo-fencing check</p>
+            <p className="text-xs text-muted-foreground">Applies to all facilities</p>
+          </div>
+          <Switch checked={enabled} onCheckedChange={setEnabled} data-testid="geofence-toggle" />
+        </div>
+        <div className="flex items-center gap-3">
+          <Label className="text-sm font-semibold whitespace-nowrap">Allowed radius (meters)</Label>
+          <Input type="number" min={10} max={100000} value={radius} onChange={(e) => setRadius(e.target.value)} className="h-9 w-28" disabled={!enabled} data-testid="geofence-radius-input" />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} data-testid="geofence-cancel">Cancel</Button>
+          <Button onClick={save} disabled={saving} data-testid="geofence-save">{saving ? 'Saving…' : 'Save Settings'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 const fmtSize = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
 const AuthImg = ({ src, alt, className, onClick, testid }) => {
@@ -88,6 +139,7 @@ export default function Facilities() {
   const [openSecs, setOpenSecs] = useState(DEFAULT_SECS);
   const toggleSec = (k) => setOpenSecs((s) => ({ ...s, [k]: !s[k] }));
   const [detail, setDetail] = useState(null); // facility for detail dialog
+  const [showGeofence, setShowGeofence] = useState(false);
   const [newFloor, setNewFloor] = useState('');
   const [areaInputs, setAreaInputs] = useState({}); // floorId -> text
   const [uploading, setUploading] = useState(false);
@@ -124,7 +176,7 @@ export default function Facilities() {
 
   const openCreate = () => { setForm(EMPTY_FAC); setEditId(null); setOpenSecs(DEFAULT_SECS); setFormOpen(true); };
   const openEdit = (f) => {
-    setForm({ facility_name: f.facility_name || '', facility_type: f.facility_type || '', google_address: f.google_address || '', contact_person: f.contact_person || '', contact_phone: f.contact_phone || '', contact_email: f.contact_email || '', notes: f.notes || '' });
+    setForm({ facility_name: f.facility_name || '', facility_type: f.facility_type || '', google_address: f.google_address || '', latitude: f.latitude ?? null, longitude: f.longitude ?? null, contact_person: f.contact_person || '', contact_phone: f.contact_phone || '', contact_email: f.contact_email || '', notes: f.notes || '' });
     setOpenSecs({ basic: true, address: !!f.google_address, contact: !!(f.contact_person || f.contact_phone || f.contact_email), notes: !!f.notes });
     setEditId(f.id); setFormOpen(true);
   };
@@ -241,12 +293,16 @@ export default function Facilities() {
 
   return (
     <div className="p-6 space-y-6" data-testid="facilities-page">
+      {showGeofence && <GeofenceDialog onClose={() => setShowGeofence(false)} />}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2"><Building2 className="h-6 w-6" /> Facilities</h1>
           <p className="text-sm text-muted-foreground">Organization-owned facilities — locations, contacts, floors, areas and documents</p>
         </div>
-        <Button onClick={openCreate} data-testid="add-facility-btn"><Plus className="h-4 w-4 mr-1.5" /> Add Facility</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setShowGeofence(true)} data-testid="geofence-settings-btn"><ShieldCheck className="h-4 w-4 mr-1.5 text-emerald-600" /> Geo-fencing</Button>
+          <Button onClick={openCreate} data-testid="add-facility-btn"><Plus className="h-4 w-4 mr-1.5" /> Add Facility</Button>
+        </div>
       </div>
 
       {loading ? (
@@ -314,6 +370,17 @@ export default function Facilities() {
 
             <FormSection icon={MapPin} title="Address" color="emerald" columns={1} open={openSecs.address} onToggle={() => toggleSec('address')}
               hint={form.google_address ? form.google_address.slice(0, 50) : 'google address / maps link'} testid="fac-sec-address">
+              <div className="space-y-2">
+                <GooglePlacesAddressSearch placeholder="Search address on Google…" testId="facility-places-search"
+                  onPick={(p) => setForm((s) => ({ ...s, google_address: p.formatted_address || s.google_address, latitude: p.lat ?? null, longitude: p.lng ?? null }))} />
+                {form.latitude != null && form.longitude != null && (
+                  <div className="flex items-center gap-2 text-xs" data-testid="facility-coords-chip">
+                    <Badge variant="outline" className="text-[11px] font-mono"><MapPin className="h-3 w-3 mr-1 text-emerald-600" />{Number(form.latitude).toFixed(6)}, {Number(form.longitude).toFixed(6)}</Badge>
+                    <button type="button" className="text-muted-foreground hover:text-rose-600" onClick={() => setForm((s) => ({ ...s, latitude: null, longitude: null }))} data-testid="facility-coords-clear"><X className="h-3.5 w-3.5" /></button>
+                    <span className="text-muted-foreground">used for maintenance geo-fencing</span>
+                  </div>
+                )}
+              </div>
               <div>
                 <Label>Google Address / Maps Link</Label>
                 <Textarea rows={2} value={form.google_address} onChange={(e) => setForm({ ...form, google_address: e.target.value })} placeholder="Full address or Google Maps link" className="mt-1" data-testid="facility-address-input" />

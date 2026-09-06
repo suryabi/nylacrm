@@ -3233,3 +3233,10 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — Jun 2026: Collapsible menu groups remember preference
 - DashboardLayout.js: collapsedGroups now persisted to localStorage key `navCollapsed_{userId}_{context}` (per user, per module context). Loads on mount/context switch, saves on toggle.
 - Verified in browser: collapse Quality Control → hidden, survives page reload, expand persists too.
+
+## Update — Jun 2026: Facility Google address (lat/lng) + maintenance QR geo-fencing
+- Facilities: FacilityIn adds latitude/longitude. Edit/Add facility Address section now has GooglePlacesAddressSearch (reuses /lead-discovery/autocomplete + /accounts/places/details w/ existing GOOGLE_MAPS_API_KEY); picking fills google_address + lat/lng; coords chip (facility-coords-chip) with clear button.
+- Geofence settings (global, admin): GET/PUT /api/facilities/geofence-settings → {geofence_enabled, geofence_radius_m (10–100000, default 200)} in db.maintenance_settings. Facilities header "Geo-fencing" button (geofence-settings-btn) → dialog with Switch + radius (geofence-dialog/-toggle/-radius-input/-save).
+- Enforcement (maintenance_sheets.py): _geofence_ctx/_enforce_geofence — active only when enabled AND equipment's facility has coords. Scan GET returns geofence {required, radius, facility_name}; submit body takes lat/lng; outside radius → 403 BLOCK + email/in-app alert to ADMIN_ROLES via notify_users ("Geo-fence blocked: …" with distance); missing location → 403; admins bypass. Records store geo {lat,lng,distance_m}.
+- MaintenanceScan.js: blue geofence chip (scan-geofence-chip); browser geolocation captured at submit; friendly error if denied.
+- Verified: settings API, 403 far away (~30.7 km msg + 4 admin notifications), 403 no location, 200 inside radius (distance_m 45.7 stored), Places autocomplete live (Charminar), dialog + chip in browser. Test config reverted (geofence disabled, fake coords cleared).
