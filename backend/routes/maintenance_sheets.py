@@ -254,7 +254,11 @@ async def scan_status(token: str, current_user: dict = Depends(get_current_user)
     eq = await _get_equipment(tenant_id, slot["equipment_id"])
     today = datetime.now(IST).date().isoformat()
     base = {"equipment_name": eq["name"], "equipment_id": eq["id"],
-            "equipment_type": eq.get("equipment_type_name"), "scheduled_date": slot["date"], "today": today}
+            "equipment_type": eq.get("equipment_type_name"), "scheduled_date": slot["date"], "today": today,
+            "maintenance_instructions": eq.get("maintenance_instructions") or "",
+            "instruction_files": [
+                {"id": f.get("id"), "filename": f.get("filename"), "content_type": f.get("content_type")}
+                for f in (eq.get("attachments") or []) if f.get("category") == "instruction"]}
     if slot["date"] != today:
         return {**base, "valid": False, "message": INVALID_QR_MSG}
     if slot.get("submitted"):

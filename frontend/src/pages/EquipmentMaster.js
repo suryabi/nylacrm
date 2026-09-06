@@ -555,17 +555,18 @@ export default function EquipmentMaster() {
     if (quickFilter === 'order_now') return isOrderNow(e);
     return true;
   };
-  const filtered = buildTree(equipment.filter((e) =>
-    quickMatch(e) &&
+  const baseFiltered = equipment.filter((e) =>
     (!typeFilter || e.equipment_type_id === typeFilter) &&
     (!facFilter || e.facility_id === facFilter) &&
     (!floorFilter || e.floor_id === floorFilter) &&
     (!areaFilter || e.area_id === areaFilter) &&
-    (!search || `${e.name} ${e.make_brand} ${e.model_spec}`.toLowerCase().includes(search.toLowerCase()))));
+    (!search || `${e.name} ${e.make_brand} ${e.model_spec}`.toLowerCase().includes(search.toLowerCase())));
+  const filtered = buildTree(baseFiltered.filter(quickMatch));
 
-  const overdueM = equipment.filter((e) => daysUntil(e.next_maintenance_due) < 0 && e.next_maintenance_due).length;
-  const dueSoonM = equipment.filter((e) => { const n = daysUntil(e.next_maintenance_due); return n != null && n >= 0 && n <= 30; }).length;
-  const orderNow = equipment.filter((e) => {
+  // KPI cards honor the active search/type/location filters (quick filter excluded — the cards drive it)
+  const overdueM = baseFiltered.filter((e) => daysUntil(e.next_maintenance_due) < 0 && e.next_maintenance_due).length;
+  const dueSoonM = baseFiltered.filter((e) => { const n = daysUntil(e.next_maintenance_due); return n != null && n >= 0 && n <= 30; }).length;
+  const orderNow = baseFiltered.filter((e) => {
     const n = daysUntil(e.next_replacement_due);
     return n != null && e.procurement_lead_time_days && n <= e.procurement_lead_time_days;
   }).length;
@@ -616,7 +617,7 @@ export default function EquipmentMaster() {
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {[
-            { id: '', label: 'Total Equipment', value: equipment.length, testid: 'eq-stat-total', icon: Cog,
+            { id: '', label: 'Total Equipment', value: baseFiltered.length, testid: 'eq-stat-total', icon: Cog,
               iconBg: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300', border: 'border-slate-200 hover:border-slate-400 dark:border-slate-800',
               ring: 'ring-2 ring-slate-900 bg-slate-50/80 dark:bg-slate-800/60 dark:ring-slate-300', text: 'text-slate-900 dark:text-white', sub: 'All active equipment & assemblies' },
             { id: 'overdue', label: 'Maintenance Overdue', value: overdueM, testid: 'eq-stat-overdue', icon: AlertTriangle,

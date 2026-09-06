@@ -3179,3 +3179,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Export now exports ONLY currently filtered rows: POST /api/production/equipment/export-filtered {ids} (export logic refactored to _export_workbook; GET /export unchanged). Frontend exportFiltered(filtered) with toast count.
 - Instructions per equipment: PUT /{id}/instructions {maintenance_instructions, replacement_instructions} (HTML; stores updated_by/at). EQ_CATEGORIES += "instruction". New component EquipmentInstructions.js — two RichTextField (react-quill-new) editors + upload/download/delete files (category=instruction, reuses /files endpoints). BookOpen quick-action button (green when instructions exist), dialog testid eq-instructions-dialog.
 - Verified: API save/persist + filtered export (2 rows) + UI (zebra bgs, dialog with 2 editors showing saved HTML). Note: page auth token key is 'session_token'.
+
+## Update — Jun 2026: Instructions on QR scan page + filtered KPI metrics
+- Scan GET /scan/{token} now returns maintenance_instructions HTML + instruction_files (category=instruction). MaintenanceScan.js: collapsible green "Maintenance instructions" card (open by default; scan-instructions testids) rendering HTML + tappable reference files (blob open in new tab).
+- Equipment Master KPI cards (Total/Overdue/Due 30/Order Now) now computed from baseFiltered (search/type/facility/floor/area) — quickFilter excluded since cards drive it.
+- Verified: scan page shows instructions card with saved HTML; search "AWG" → metrics 2/2/0/0.
