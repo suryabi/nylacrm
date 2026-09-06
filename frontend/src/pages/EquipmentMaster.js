@@ -28,6 +28,15 @@ const FREQ_OPTIONS = [
 ];
 const freqLabel = (days) => (FREQ_OPTIONS.find((o) => o.value === Number(days)) || {}).label || (days ? `Every ${days} days` : null);
 
+const currentWeekValue = () => {
+  const n = new Date();
+  const d = new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()));
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  const e = new Date(d); e.setUTCDate(e.getUTCDate() + 6);
+  const f = (x) => x.toISOString().slice(0, 10);
+  return `${f(d)}_${f(e)}`;
+};
+
 const AssignStaffDialog = ({ equipment, onClose }) => {
   const [users, setUsers] = useState([]);
   const [sel, setSel] = useState(() => new Set(equipment.maintenance_staff_ids || []));
@@ -390,7 +399,7 @@ export default function EquipmentMaster() {
   const [importResult, setImportResult] = useState(null);
   const [compYear, setCompYear] = useState(new Date().getFullYear());
   const [compMon, setCompMon] = useState(new Date().getMonth() + 1);
-  const [compWeek, setCompWeek] = useState('entire');
+  const [compWeek, setCompWeek] = useState(currentWeekValue);
   const [compliance, setCompliance] = useState(null);
   const [compLoading, setCompLoading] = useState(false);
 
@@ -1072,11 +1081,11 @@ export default function EquipmentMaster() {
                 <>
                   <div className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-wrap items-center gap-3">
                     <Label className="text-sm font-semibold">Year</Label>
-                    <select value={compYear} onChange={(e) => { setCompYear(Number(e.target.value)); setCompWeek('entire'); }} className={selCls} data-testid="comp-year-select">
+                    <select value={compYear} onChange={(e) => { const y = Number(e.target.value); setCompYear(y); setCompWeek(y === new Date().getFullYear() && compMon === new Date().getMonth() + 1 ? currentWeekValue() : 'entire'); }} className={selCls} data-testid="comp-year-select">
                       {years.map((y) => <option key={y} value={y}>{y}</option>)}
                     </select>
                     <Label className="text-sm font-semibold">Month</Label>
-                    <select value={compMon} onChange={(e) => { setCompMon(Number(e.target.value)); setCompWeek('entire'); }} className={selCls} data-testid="comp-month-select">
+                    <select value={compMon} onChange={(e) => { const m = Number(e.target.value); setCompMon(m); setCompWeek(compYear === new Date().getFullYear() && m === new Date().getMonth() + 1 ? currentWeekValue() : 'entire'); }} className={selCls} data-testid="comp-month-select">
                       {monthNames.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
                     </select>
                     <Label className="text-sm font-semibold">Week</Label>
