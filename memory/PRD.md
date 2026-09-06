@@ -3198,3 +3198,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Frontend: new page /equipment-scan/:equipmentId (EquipmentScan.js) — auto-redirects to /maintenance-scan/{token} when scheduled today; otherwise shows "no maintenance today" + next due; login redirect supported. Equipment Master row dropdown: "Print Equipment QR Sticker" (eq-print-qr-*) → printable A4 sticker card (blue header w/ name+type, 62mm QR, facility/floor/area/make/model/frequency/ID table, auto window.print).
 - Verified: sticker API, resolve API (redirect to today's form in browser), two submissions (attempts 1 & 2) via API + full browser flow, records list UI, dropdown item. All test records cleaned + slot reset.
 
+
+## Update — Jun 2026: Maintenance + Replacement instructions on both QR scan pages
+- New shared component ScanInstructions.js ("How to do it — instructions", collapsible) with Maintenance / Replacement tab buttons (scan-instr-tab-maintenance / scan-instr-tab-replacement) + reference document list.
+- Backend: /scan/{token} now also returns replacement_instructions; /equipment-scan/{id} (permanent sticker QR) returns maintenance_instructions, replacement_instructions and instruction_files even when nothing is scheduled today.
+- Used on MaintenanceScan.js (form view + already-submitted view) and EquipmentScan.js (not-scheduled view). Verified in browser: both tabs render and switch correctly.

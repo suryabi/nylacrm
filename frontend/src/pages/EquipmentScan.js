@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Wrench, RefreshCw, LogIn, CalendarX2, XCircle } from 'lucide-react';
+import { ScanInstructions } from '../components/ScanInstructions';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -65,6 +66,8 @@ export default function EquipmentScan() {
               <p className="font-bold text-lg">{state.message || 'No maintenance is scheduled for today.'}</p>
               {state.next_due && <p className="text-sm text-muted-foreground">Next scheduled maintenance: <span className="font-semibold">{state.next_due}</span></p>}
             </CardContent></Card>
+            <ScanInstructions equipmentId={state.equipment_id} maintenance={state.maintenance_instructions}
+              replacement={state.replacement_instructions} files={state.instruction_files || []} />
           </>
         )}
       </div>

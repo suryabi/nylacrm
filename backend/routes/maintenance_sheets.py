@@ -226,7 +226,12 @@ async def equipment_scan_resolve(equipment_id: str, current_user: dict = Depends
     eq = await _get_equipment(tenant_id, equipment_id)
     location = " › ".join(x for x in [eq.get("facility_name"), eq.get("floor_name"), eq.get("area_name")] if x)
     base = {"equipment_id": eq["id"], "equipment_name": eq["name"],
-            "equipment_type": eq.get("equipment_type_name"), "location": location}
+            "equipment_type": eq.get("equipment_type_name"), "location": location,
+            "maintenance_instructions": eq.get("maintenance_instructions") or "",
+            "replacement_instructions": eq.get("replacement_instructions") or "",
+            "instruction_files": [
+                {"id": f.get("id"), "filename": f.get("filename"), "content_type": f.get("content_type")}
+                for f in (eq.get("attachments") or []) if f.get("category") == "instruction"]}
     freq = eq.get("maintenance_frequency_days")
     if not freq:
         return {**base, "scheduled_today": False, "message": "No maintenance frequency set for this equipment."}
@@ -304,6 +309,7 @@ async def scan_status(token: str, current_user: dict = Depends(get_current_user)
     base = {"equipment_name": eq["name"], "equipment_id": eq["id"],
             "equipment_type": eq.get("equipment_type_name"), "scheduled_date": slot["date"], "today": today,
             "maintenance_instructions": eq.get("maintenance_instructions") or "",
+            "replacement_instructions": eq.get("replacement_instructions") or "",
             "instruction_files": [
                 {"id": f.get("id"), "filename": f.get("filename"), "content_type": f.get("content_type")}
                 for f in (eq.get("attachments") or []) if f.get("category") == "instruction"]}

@@ -4,7 +4,8 @@ import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
-import { Wrench, CheckCircle2, XCircle, Camera, RefreshCw, Trash2, LogIn, BookOpen, FileText, Image as ImageIcon, Eye } from 'lucide-react';
+import { Wrench, CheckCircle2, XCircle, Camera, RefreshCw, Trash2, LogIn, Eye } from 'lucide-react';
+import { ScanInstructions } from '../components/ScanInstructions';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -20,20 +21,9 @@ export default function MaintenanceScan() {
   const [camOn, setCamOn] = useState(false);
   const [camError, setCamError] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [showInstr, setShowInstr] = useState(true);
   const [photoView, setPhotoView] = useState(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
-
-  const openInstrFile = async (f) => {
-    try {
-      const res = await fetch(`${API_URL}/api/production/equipment/${state.equipment_id}/files/${f.id}`, { headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } });
-      if (!res.ok) throw new Error('Could not open file');
-      const url = URL.createObjectURL(await res.blob());
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch (e) { toast.error(e.message); }
-  };
 
   const load = useCallback(async () => {
     try {
@@ -160,38 +150,10 @@ export default function MaintenanceScan() {
     </CardContent></Card>
   );
 
-  const instructions = (state.maintenance_instructions || (state.instruction_files || []).length > 0) ? (
-    <Card className="border-emerald-200" data-testid="scan-instructions">
-      <CardContent className="p-4">
-        <button type="button" className="w-full flex items-center gap-2 text-left" onClick={() => setShowInstr((v) => !v)} data-testid="scan-instructions-toggle">
-          <BookOpen className="h-4 w-4 text-emerald-600 shrink-0" />
-          <span className="font-semibold text-sm flex-1">Maintenance instructions</span>
-          <span className="text-xs text-emerald-700 font-semibold">{showInstr ? 'Hide' : 'Show'}</span>
-        </button>
-        {showInstr && (
-          <div className="mt-3 space-y-3">
-            {state.maintenance_instructions && (
-              <div className="prose prose-sm max-w-none text-sm [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
-                dangerouslySetInnerHTML={{ __html: state.maintenance_instructions }} data-testid="scan-instructions-html" />
-            )}
-            {(state.instruction_files || []).length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Reference documents</p>
-                {state.instruction_files.map((f) => (
-                  <button key={f.id} type="button" onClick={() => openInstrFile(f)}
-                    className="w-full flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-left hover:bg-emerald-50"
-                    data-testid={`scan-instr-file-${f.id}`}>
-                    {(f.content_type || '').startsWith('image/') ? <ImageIcon className="h-4 w-4 text-blue-500 shrink-0" /> : <FileText className="h-4 w-4 text-slate-400 shrink-0" />}
-                    <span className="truncate">{f.filename}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  ) : null;
+  const instructions = (
+    <ScanInstructions equipmentId={state.equipment_id} maintenance={state.maintenance_instructions}
+      replacement={state.replacement_instructions} files={state.instruction_files || []} />
+  );
 
   if (!state.valid) {
     return (
@@ -213,6 +175,7 @@ export default function MaintenanceScan() {
     return (
       <Shell>
         {info}
+        {instructions}
         <Card className="border-emerald-300"><CardContent className="py-6 text-center space-y-2" data-testid="scan-submitted">
           <CheckCircle2 className="h-10 w-10 mx-auto text-emerald-600" />
           <p className="font-bold text-lg">Maintenance record{recs.length > 1 ? 's' : ''} saved</p>
