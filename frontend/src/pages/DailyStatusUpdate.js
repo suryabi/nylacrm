@@ -554,7 +554,6 @@ export default function DailyStatusUpdate() {
                     setSelectedResource(val === 'self' ? '' : val);
                     setYesterdayUpdates('');
                     setTodayActions('');
-                    setHelpNeeded('');
                   }}
                 >
                   <SelectTrigger className="h-9 text-sm flex-1" data-testid="resource-selector">

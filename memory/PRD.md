@@ -3229,3 +3229,7 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — Jun 2026: Production menu reorganized
 - DashboardLayout.js productionNavigationGroups regrouped (items/hrefs/roles unchanged): Production (Dashboard, Batches, Inventory) · Quality Control (QC Station, Live Board, Tests, Routes, Quality Control, Glass Breakage, Customer Returns) · Rejections (Report, Reasons, Cost Config) · Maintenance & Equipment (Equipment Master, Maintenance, Maintenance Status) · Requests (Design/Design-OLD/Print/Delivery/Tasks-Internal) · Factory Setup (Factory Staff, Packaging Types) + existing Assets & Vendors / Documents / Organization.
 - Verified in browser: all group headers render, module permission filtering intact.
+
+## Update — Jun 2026: Collapsible menu groups remember preference
+- DashboardLayout.js: collapsedGroups now persisted to localStorage key `navCollapsed_{userId}_{context}` (per user, per module context). Loads on mount/context switch, saves on toggle.
+- Verified in browser: collapse Quality Control → hidden, survives page reload, expand persists too.

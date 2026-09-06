@@ -417,6 +417,10 @@ export default function DashboardLayout({ children }) {
     location.pathname === '/account-performance'
   );
   const [collapsedGroups, setCollapsedGroups] = useState({});
+  const collapseKey = `navCollapsed_${user?.id || 'anon'}_${currentContext}`;
+  useEffect(() => {
+    try { setCollapsedGroups(JSON.parse(localStorage.getItem(collapseKey) || '{}')); } catch { setCollapsedGroups({}); }
+  }, [collapseKey]);
 
   // Platform admin check for the console entry (server-side verified)
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
@@ -454,7 +458,11 @@ export default function DashboardLayout({ children }) {
   };
 
   const toggleGroup = (title) => {
-    setCollapsedGroups(prev => ({ ...prev, [title]: !prev[title] }));
+    setCollapsedGroups(prev => {
+      const next = { ...prev, [title]: !prev[title] };
+      try { localStorage.setItem(collapseKey, JSON.stringify(next)); } catch { /* noop */ }
+      return next;
+    });
   };
 
   // Handle sidebar navigation - resets the breadcrumb trail
