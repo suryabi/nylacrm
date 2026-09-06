@@ -3220,3 +3220,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## Update — Jun 2026: PIN enrollment nudge in Assign Maintenance Staff dialog
 - Selecting staff with neither Face nor PIN shows amber warning (assign-staff-enroll-warning) listing names + "Enroll now" button (assign-staff-enroll-btn) opening /qc-team (Factory Staff) in a new tab. Row marker "No Face/PIN" now amber/bold.
 - Verified in browser with a temporary unenrolled member (created + deleted after test).
+
+## Update — Jun 2026: Compliance Year/Month/Week selection
+- Compliance tab now has Year, Month and Week selects (comp-year-select / comp-month-select / comp-week-select). Week options are always Monday→Sunday, including weeks overlapping adjacent months ("31 Aug – 06 Sep"); "Entire month" default.
+- Backend /api/maintenance/compliance accepts month=YYYY-MM OR start&end=YYYY-MM-DD; response adds period {start,end,label}, month field now the human label. Bad range → 400.
+- Verified via API (month, cross-month week, 400) and browser (selectors, week load, period label, scores).

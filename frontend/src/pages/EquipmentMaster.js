@@ -388,14 +388,19 @@ export default function EquipmentMaster() {
   const [quickFilter, setQuickFilter] = useState('');
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
-  const [compMonth, setCompMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [compYear, setCompYear] = useState(new Date().getFullYear());
+  const [compMon, setCompMon] = useState(new Date().getMonth() + 1);
+  const [compWeek, setCompWeek] = useState('entire');
   const [compliance, setCompliance] = useState(null);
   const [compLoading, setCompLoading] = useState(false);
 
-  const loadCompliance = useCallback(async (m) => {
+  const loadCompliance = useCallback(async (year, mon, week) => {
     setCompLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/maintenance/compliance?month=${m}`, { headers: authHeaders() });
+      const q = week && week !== 'entire'
+        ? `start=${week.split('_')[0]}&end=${week.split('_')[1]}`
+        : `month=${year}-${String(mon).padStart(2, '0')}`;
+      const res = await fetch(`${API_URL}/api/maintenance/compliance?${q}`, { headers: authHeaders() });
       if (!res.ok) throw new Error();
       setCompliance(await res.json());
     } catch { toast.error('Failed to load compliance'); } finally { setCompLoading(false); }
@@ -1046,22 +1051,50 @@ export default function EquipmentMaster() {
             {(() => {
               const scoreColor = (s) => (s == null ? 'text-slate-400' : s >= 85 ? 'text-emerald-600' : s >= 60 ? 'text-amber-600' : 'text-rose-600');
               const barColor = (s) => (s == null ? 'bg-slate-300' : s >= 85 ? 'bg-emerald-500' : s >= 60 ? 'bg-amber-500' : 'bg-rose-500');
+              const nowY = new Date().getFullYear();
+              const years = []; for (let y = nowY + 1; y >= nowY - 3; y--) years.push(y);
+              const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+              const fmtD = (d) => d.toISOString().slice(0, 10);
+              const weekLbl = (d) => `${String(d.getUTCDate()).padStart(2, '0')} ${d.toLocaleString('en', { month: 'short', timeZone: 'UTC' })}`;
+              const weeks = [];
+              {
+                const last = new Date(Date.UTC(compYear, compMon, 0));
+                const d = new Date(Date.UTC(compYear, compMon - 1, 1));
+                d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); // back to Monday
+                while (d <= last) {
+                  const e2 = new Date(d); e2.setUTCDate(e2.getUTCDate() + 6);
+                  weeks.push({ value: `${fmtD(d)}_${fmtD(e2)}`, label: `${weekLbl(d)} – ${weekLbl(e2)}` });
+                  d.setUTCDate(d.getUTCDate() + 7);
+                }
+              }
+              const selCls = 'h-10 rounded-lg border border-input bg-background px-2.5 text-sm';
               return (
                 <>
                   <div className="bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-wrap items-center gap-3">
+                    <Label className="text-sm font-semibold">Year</Label>
+                    <select value={compYear} onChange={(e) => { setCompYear(Number(e.target.value)); setCompWeek('entire'); }} className={selCls} data-testid="comp-year-select">
+                      {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                    </select>
                     <Label className="text-sm font-semibold">Month</Label>
-                    <Input type="month" value={compMonth} onChange={(e) => setCompMonth(e.target.value)} className="h-10 w-44 rounded-lg" data-testid="comp-month-input" />
-                    <Button className="h-10 rounded-lg" onClick={() => loadCompliance(compMonth)} disabled={compLoading} data-testid="comp-load-btn">
+                    <select value={compMon} onChange={(e) => { setCompMon(Number(e.target.value)); setCompWeek('entire'); }} className={selCls} data-testid="comp-month-select">
+                      {monthNames.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                    </select>
+                    <Label className="text-sm font-semibold">Week</Label>
+                    <select value={compWeek} onChange={(e) => setCompWeek(e.target.value)} className={selCls} data-testid="comp-week-select">
+                      <option value="entire">Entire month</option>
+                      {weeks.map((w) => <option key={w.value} value={w.value}>{w.label} (Mon–Sun)</option>)}
+                    </select>
+                    <Button className="h-10 rounded-lg" onClick={() => loadCompliance(compYear, compMon, compWeek)} disabled={compLoading} data-testid="comp-load-btn">
                       {compLoading ? 'Loading…' : 'Show Compliance'}
                     </Button>
-                    {compliance?.as_of && <span className="text-xs text-muted-foreground">Scored on scheduled dates up to {compliance.as_of} (QR check-ins marked Complete)</span>}
+                    {compliance?.as_of && <span className="text-xs text-muted-foreground">{compliance?.period?.label ? `${compliance.period.label} · ` : ''}Scored on scheduled dates up to {compliance.as_of} (QR check-ins marked Complete)</span>}
                   </div>
 
                   {!compliance ? (
-                    <p className="text-sm text-muted-foreground px-1">Pick a month and click Show Compliance.</p>
+                    <p className="text-sm text-muted-foreground px-1">Pick a year, month and week (or the entire month) and click Show Compliance.</p>
                   ) : !compliance.overall ? (
                     <div className="bg-white dark:bg-slate-900 rounded-xl border p-8 text-center text-muted-foreground" data-testid="comp-empty">
-                      No scheduled maintenance found for {compliance.month}. Sheets must be generated (Maintenance profile → Print Sheet) for dates to be scored.
+                      No scheduled maintenance found for {compliance?.period?.label || compliance.month}. Sheets must be generated (Maintenance profile → Print Sheet) for dates to be scored.
                     </div>
                   ) : (
                     <>

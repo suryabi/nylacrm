@@ -546,24 +546,39 @@ async def missed_maintenance_scheduler():
         await asyncio.sleep(6 * 3600)
 
 
-# ── Monthly compliance scores ────────────────────────────────────────────────
+# ── Compliance scores (month or Mon–Sun week) ────────────────────────────────
 @router.get("/compliance")
-async def maintenance_compliance(month: str = Query(...), current_user: dict = Depends(get_current_user)):
+async def maintenance_compliance(month: Optional[str] = Query(None), start: Optional[str] = Query(None),
+                                 end: Optional[str] = Query(None), current_user: dict = Depends(get_current_user)):
     _ = current_user
     tenant_id = get_current_tenant_id()
-    start, end = _month_bounds(month)
+    if start and end:
+        try:
+            s = datetime.strptime(start, "%Y-%m-%d").date()
+            e = datetime.strptime(end, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(400, "start/end must be YYYY-MM-DD")
+        if e < s:
+            raise HTTPException(400, "end must be on or after start")
+        label = f"{s.strftime('%d %b')} – {e.strftime('%d %b %Y')}"
+    elif month:
+        s, e = _month_bounds(month)
+        label = s.strftime("%B %Y")
+    else:
+        raise HTTPException(400, "Provide month (YYYY-MM) or start & end (YYYY-MM-DD)")
+    period = {"start": s.isoformat(), "end": e.isoformat(), "label": label}
     today = datetime.now(IST).date().isoformat()
-    cutoff = min(end.isoformat(), today)
+    cutoff = min(e.isoformat(), today)
 
     slots = await db.maintenance_slots.find(
-        {"tenant_id": tenant_id, "date": {"$gte": start.isoformat(), "$lte": cutoff}},
+        {"tenant_id": tenant_id, "date": {"$gte": s.isoformat(), "$lte": cutoff}},
         {"_id": 0, "id": 1, "equipment_id": 1, "date": 1, "submitted": 1, "photo_required": 1}).to_list(5000)
     if not slots:
-        return {"month": month, "overall": None, "equipment": [], "areas": []}
+        return {"month": label, "period": period, "overall": None, "equipment": [], "areas": []}
 
     rec_by_slot = {}
     async for r in db.maintenance_records.find(
-            {"tenant_id": tenant_id, "scheduled_date": {"$gte": start.isoformat(), "$lte": cutoff}},
+            {"tenant_id": tenant_id, "scheduled_date": {"$gte": s.isoformat(), "$lte": cutoff}},
             {"_id": 0, "slot_id": 1, "status": 1, "corrections": 1}):
         status = r["status"]
         for c in r.get("corrections") or []:
@@ -617,7 +632,7 @@ async def maintenance_compliance(month: str = Query(...), current_user: dict = D
     total_done = sum(b["completed"] for b in per_eq.values())
     overall = {"due": total_due, "completed": total_done,
                "score": round(total_done / total_due * 100) if total_due else None}
-    return {"month": month, "as_of": cutoff, "overall": overall, "equipment": equipment_rows, "areas": area_rows}
+    return {"month": label, "period": period, "as_of": cutoff, "overall": overall, "equipment": equipment_rows, "areas": area_rows}
 
 
 # ── Daily maintenance status (view + 9 PM digest email) ──────────────────────
