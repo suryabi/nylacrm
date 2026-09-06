@@ -3225,3 +3225,7 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Compliance tab now has Year, Month and Week selects (comp-year-select / comp-month-select / comp-week-select). Week options are always Monday→Sunday, including weeks overlapping adjacent months ("31 Aug – 06 Sep"); "Entire month" default.
 - Backend /api/maintenance/compliance accepts month=YYYY-MM OR start&end=YYYY-MM-DD; response adds period {start,end,label}, month field now the human label. Bad range → 400.
 - Verified via API (month, cross-month week, 400) and browser (selectors, week load, period label, scores).
+
+## Update — Jun 2026: Production menu reorganized
+- DashboardLayout.js productionNavigationGroups regrouped (items/hrefs/roles unchanged): Production (Dashboard, Batches, Inventory) · Quality Control (QC Station, Live Board, Tests, Routes, Quality Control, Glass Breakage, Customer Returns) · Rejections (Report, Reasons, Cost Config) · Maintenance & Equipment (Equipment Master, Maintenance, Maintenance Status) · Requests (Design/Design-OLD/Print/Delivery/Tasks-Internal) · Factory Setup (Factory Staff, Packaging Types) + existing Assets & Vendors / Documents / Organization.
+- Verified in browser: all group headers render, module permission filtering intact.

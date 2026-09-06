@@ -122,27 +122,52 @@ const productionNavigationGroups = [
     items: [
       { name: 'Dashboard', href: '/production-dashboard', icon: BarChart3, moduleKey: 'production_dashboard', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Production Batches', href: '/production-batches', icon: Factory, moduleKey: 'production_batches', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Inventory', href: '/inventory', icon: Boxes, moduleKey: 'inventory', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+    ]
+  },
+  {
+    title: 'Quality Control',
+    items: [
       { name: 'QC Station', href: '/qc-station', icon: TabletSmartphone, moduleKey: 'qc_station', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'QC Live Board', href: '/qc-live-board', icon: Radio, moduleKey: 'qc_live_board', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Admin', 'System Admin'] },
       { name: 'QC Tests', href: '/qc-tests', icon: FlaskConical, moduleKey: 'qc_tests', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'QC Routes', href: '/qc-routes', icon: ArrowRight, moduleKey: 'qc_routes', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
-      { name: 'Factory Staff', href: '/qc-team', icon: Users, moduleKey: 'qc_team', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
-      { name: 'Rejection Reasons', href: '/rejection-reasons', icon: AlertTriangle, moduleKey: 'rejection_reasons', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
-      { name: 'Rejection Report', href: '/rejection-report', icon: BarChart3, moduleKey: 'rejection_report', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
-      { name: 'Rejection Cost Config', href: '/production/rejection-cost-config', icon: IndianRupee, moduleKey: 'rejection_cost_config', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
-      { name: 'Packaging Types', href: '/packaging-types', icon: Boxes, moduleKey: 'packaging_types', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
-      { name: 'Maintenance', href: '/maintenance', icon: Wrench, moduleKey: 'maintenance', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Quality Control', href: '/quality-control', icon: ShieldCheck, moduleKey: 'quality_control', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Glass Breakage Register', href: '/glass-breakage-register', icon: GlassWater, moduleKey: 'glass_breakage_register', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
-      { name: 'Equipment Master', href: '/equipment-master', icon: Cog, moduleKey: 'equipment_master', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
-      { name: 'Maintenance Status', href: '/maintenance-status', icon: Wrench, moduleKey: 'maintenance_status', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
-      { name: 'Inventory', href: '/inventory', icon: Boxes, moduleKey: 'inventory', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Customer Returns', href: '/customer-returns', icon: PackageOpen, moduleKey: 'customer_returns', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
-      { name: 'Design Requests - OLD', href: '/marketing-requests', icon: Sparkles, moduleKey: 'marketing_requests', roles: ['CEO', 'Admin', 'System Admin'] },
+    ]
+  },
+  {
+    title: 'Rejections',
+    items: [
+      { name: 'Rejection Report', href: '/rejection-report', icon: BarChart3, moduleKey: 'rejection_report', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Rejection Reasons', href: '/rejection-reasons', icon: AlertTriangle, moduleKey: 'rejection_reasons', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
+      { name: 'Rejection Cost Config', href: '/production/rejection-cost-config', icon: IndianRupee, moduleKey: 'rejection_cost_config', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
+    ]
+  },
+  {
+    title: 'Maintenance & Equipment',
+    items: [
+      { name: 'Equipment Master', href: '/equipment-master', icon: Cog, moduleKey: 'equipment_master', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Maintenance', href: '/maintenance', icon: Wrench, moduleKey: 'maintenance', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Maintenance Status', href: '/maintenance-status', icon: Wrench, moduleKey: 'maintenance_status', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
+    ]
+  },
+  {
+    title: 'Requests',
+    items: [
       { name: 'Design Requests', href: '/design-requests-new', icon: Sparkles, moduleKey: 'design_requests_new', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Design Requests - OLD', href: '/marketing-requests', icon: Sparkles, moduleKey: 'marketing_requests', roles: ['CEO', 'Admin', 'System Admin'] },
       { name: 'Print Requests', href: '/print-requests', icon: Printer, moduleKey: 'print_requests', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Delivery Requests', href: '/delivery-orders', icon: Package, moduleKey: 'delivery_orders', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
-      { name: 'Quality Control', href: '/quality-control', icon: ShieldCheck, moduleKey: 'quality_control', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Tasks - Internal', href: '/complaints', icon: MessageSquareWarning, moduleKey: 'customer_complaints', roles: ['CEO', 'Admin', 'System Admin'] },
+    ]
+  },
+  {
+    title: 'Factory Setup',
+    items: [
+      { name: 'Factory Staff', href: '/qc-team', icon: Users, moduleKey: 'qc_team', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
+      { name: 'Packaging Types', href: '/packaging-types', icon: Boxes, moduleKey: 'packaging_types', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
     ]
   },
   {
