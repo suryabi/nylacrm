@@ -496,6 +496,107 @@ class TransferItemCategorize(BaseModel):
     quantity: Optional[int] = None  # base units; None = full line
 
 
+class TransferItemUncategorize(BaseModel):
+    transfer_id: str
+    item_index: int
+    quantity: Optional[int] = None  # base units to move back to Generic; None = full line
+
+
+@router.post("/transfer-item/uncategorize")
+async def uncategorize_transfer_item(payload: TransferItemUncategorize,
+                                     current_user: dict = Depends(get_current_user)):
+    """Reduce (or fully remove) a categorized transfer line's child-SKU quantity.
+    The removed quantity returns to Generic (parent SKU) — both on the transfer
+    document and, batch-aware, in the destination warehouse stock — so it can be
+    categorized under another child SKU. Audited via a Branding Entry."""
+    _require_role(current_user)
+    tenant_id = get_current_tenant_id()
+
+    transfer = await db.distributor_stock_transfers.find_one(
+        {"id": payload.transfer_id, "tenant_id": tenant_id})
+    if not transfer:
+        raise HTTPException(404, "Stock transfer not found")
+    if (transfer.get("status") or "") != "completed":
+        raise HTTPException(400, "Only completed transfers can be edited.")
+
+    items = list(transfer.get("items") or [])
+    if payload.item_index < 0 or payload.item_index >= len(items):
+        raise HTTPException(404, "Transfer item not found")
+    item = items[payload.item_index]
+    if not item.get("child_sku_id"):
+        raise HTTPException(400, "This line is not categorized under a child SKU.")
+
+    upp = int(item.get("units_per_package") or 1)
+    line_units = int(item.get("quantity_units") or (int(item.get("quantity") or 0) * upp))
+    qty = _validate_qty(payload.quantity, line_units, upp)
+    full = qty >= line_units
+
+    from_child = {"id": item["child_sku_id"], "child_sku_name": item.get("child_sku_name"),
+                  "child_sku_code": item.get("child_sku_code")}
+    child_name = item.get("child_sku_name") or "child SKU"
+
+    now = _now_iso()
+    rate = float(item.get("rate") or 0)
+    audit = {
+        "retro_uncategorized_at": now,
+        "retro_uncategorized_by": current_user.get("id"),
+        "retro_uncategorized_by_name": current_user.get("name") or current_user.get("email"),
+        "retro_uncategorized_from": child_name,
+    }
+
+    if full:
+        item.update({"child_sku_id": None, "child_sku_name": None, "child_sku_code": None, **audit})
+    else:
+        rest = line_units - qty
+        item.update({
+            "quantity": rest // upp,
+            "quantity_units": rest,
+            "line_total": round((rest // upp) * rate, 2),
+        })
+        generic_item = {k: v for k, v in item.items()
+                        if k not in ("retro_categorized", "retro_categorized_at",
+                                     "retro_categorized_by", "retro_categorized_by_name")}
+        generic_item.update({
+            "child_sku_id": None, "child_sku_name": None, "child_sku_code": None,
+            "quantity": qty // upp,
+            "quantity_units": qty,
+            "line_total": round((qty // upp) * rate, 2),
+            "retro_split_from_item_index": payload.item_index,
+            **audit,
+        })
+        items.insert(payload.item_index + 1, generic_item)
+
+    await db.distributor_stock_transfers.update_one(
+        {"id": payload.transfer_id, "tenant_id": tenant_id},
+        {"$set": {"items": items, "updated_at": now}})
+
+    # Stock effect — move the child-bucket quantity back to Generic at the destination.
+    moved, entry_number = await _move_stock_between_buckets(
+        tenant_id, current_user, transfer["dest_location_id"], item["sku_id"],
+        from_child, None, qty, item.get("batch_id"),
+        note=(f"Edit categorization of Stock Transfer {transfer.get('transfer_number')} — "
+              f"{qty} units moved back from '{child_name}' to Generic"),
+    )
+    warning = None
+    if moved < qty:
+        warning = (
+            f"Only {moved} of {qty} '{child_name}' units were still on hand at the destination"
+            f"{' for this batch' if item.get('batch_id') else ''} — the remaining "
+            f"{qty - moved} units were relabeled only (no stock moved for them).")
+
+    updated = await db.distributor_stock_transfers.find_one(
+        {"id": payload.transfer_id, "tenant_id": tenant_id}, {"_id": 0})
+    return {
+        "message": "Quantity moved back to Generic.",
+        "restored_units": qty,
+        "stock_moved_units": moved,
+        "warning": warning,
+        "branding_entry_number": entry_number,
+        "child_sku_name": child_name,
+        "transfer": updated,
+    }
+
+
 @router.post("/transfer-item")
 async def categorize_transfer_item(payload: TransferItemCategorize,
                                    current_user: dict = Depends(get_current_user)):

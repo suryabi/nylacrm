@@ -3243,3 +3243,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 
 ## Update — Jun 2026: Print sheet — prominent equipment name
 - Weekly/monthly printable maintenance sheets now show the equipment name as a large 30px uppercase headline (.eqname, blue underline) under the banner; removed from the small meta row. Verified visually via popup screenshot.
+
+## Update — Jun 2026: Editable child-SKU categorization on stock transfers
+- New endpoint POST /api/retro-categorize/transfer-item/uncategorize {transfer_id, item_index, quantity} (CEO/Admin/System Admin; completed transfers): reduces a categorized line by N base units → line splits (child keeps rest, new Generic line inserted) or fully clears child fields; destination stock moved child→Generic batch-aware via _move_stock_between_buckets with BRD- Branding Entry audit; warning if child bucket short. Returns updated transfer doc.
+- StockTransfers.js TransferDetailDialog: categorized lines show "Edit" (transfer-item-edit-child-{idx}) → inline panel (transfer-uncat-panel/-qty/-submit) "Move bottles back to Generic"; dialog refreshes in place via onChanged(updated transfer). Route: /distributor/stock-transfers.
+- Verified full cycle via API: 10→Child A, 4 back to Generic (split 6/4), 4→Child B; stock buckets 46/6/4 consistent; UI panel verified in browser. All test data (child SKUs, entries, stock, transfer items) restored.

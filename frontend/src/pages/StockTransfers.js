@@ -686,7 +686,10 @@ function NewTransferDialog({ open, onClose, onCreated, prefill }) {
   );
 }
 
-function TransferDetailDialog({ transfer, onClose }) {
+function TransferDetailDialog({ transfer, onClose, canRetro, onChanged }) {
+  const [editIdx, setEditIdx] = useState(null);
+  const [editQty, setEditQty] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
   if (!transfer) return null;
   const t = transfer;
   const items = t.items || [];
@@ -697,6 +700,28 @@ function TransferDetailDialog({ transfer, onClose }) {
   const sumValue = (arr) => arr.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.rate) || 0), 0);
   const totalUnits = sumUnits(items);
   const totalValue = Number(t.total_value) || sumValue(items);
+  const canEditChild = canRetro && t.status === 'completed';
+
+  const lineUnits = (it) => Number(it.quantity_units) || (Number(it.quantity) || 0) * (Number(it.units_per_package) || 1);
+
+  const submitUncat = async () => {
+    const it = items[editIdx];
+    const units = lineUnits(it);
+    const q = parseInt(editQty, 10) || 0;
+    if (q < 1 || q > units) { toast.error(`Enter 1 – ${units} bottles`); return; }
+    setEditSaving(true);
+    try {
+      const { data } = await axios.post(`${API}/retro-categorize/transfer-item/uncategorize`, {
+        transfer_id: t.id, item_index: editIdx, quantity: q,
+      }, { headers: HEAD() });
+      toast.success(`${data.restored_units} bottles moved back to Generic from ${data.child_sku_name}${data.branding_entry_number ? ` (${data.branding_entry_number})` : ''}`);
+      if (data.warning) toast.warning(data.warning, { duration: 10000 });
+      setEditIdx(null); setEditQty('');
+      onChanged?.(data.transfer);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to move quantity back');
+    } finally { setEditSaving(false); }
+  };
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -760,11 +785,36 @@ function TransferDetailDialog({ transfer, onClose }) {
                   </td>
                   <td className="p-2.5">
                     {it.child_sku_id ? (
-                      <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[11px]">
-                        <Tag className="h-3 w-3 mr-1" />{it.child_sku_name}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[11px]">
+                          <Tag className="h-3 w-3 mr-1" />{it.child_sku_name}
+                        </Badge>
+                        {canEditChild && (
+                          <button type="button" title="Edit — move quantity back to Generic"
+                            className="text-[10px] font-semibold text-indigo-600 hover:underline shrink-0"
+                            onClick={() => { setEditIdx(idx); setEditQty(String(lineUnits(it))); }}
+                            data-testid={`transfer-item-edit-child-${idx}`}>
+                            Edit
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-xs text-slate-400">Generic (unbranded)</span>
+                    )}
+                    {editIdx === idx && (
+                      <div className="mt-2 rounded-lg border border-indigo-200 bg-indigo-50/60 p-2 space-y-1.5" data-testid="transfer-uncat-panel">
+                        <p className="text-[11px] text-indigo-800 font-medium">Move bottles back to Generic (max {lineUnits(it).toLocaleString('en-IN')})</p>
+                        <div className="flex items-center gap-1.5">
+                          <Input type="number" min="1" max={lineUnits(it)} value={editQty}
+                            onChange={(e) => setEditQty(e.target.value)} className="h-7 w-24 text-xs bg-white"
+                            data-testid="transfer-uncat-qty" />
+                          <Button size="sm" className="h-7 text-[11px] bg-indigo-600 hover:bg-indigo-700" onClick={submitUncat} disabled={editSaving} data-testid="transfer-uncat-submit">
+                            {editSaving ? 'Moving…' : 'Move to Generic'}
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={() => { setEditIdx(null); setEditQty(''); }}>Cancel</Button>
+                        </div>
+                        <p className="text-[10px] text-indigo-600">Destination stock is reclassified too — you can then categorize it under another child SKU.</p>
+                      </div>
                     )}
                   </td>
                   <td className="p-2.5 text-right whitespace-nowrap">
@@ -1805,7 +1855,8 @@ export default function StockTransfers() {
       <NewRequestDialog open={showRequestDialog} onClose={() => setShowRequestDialog(false)} onCreated={loadRequests} />
       <RequestActionDialog action={reqAction} onClose={() => setReqAction(null)} onDone={loadRequests} />
       <EditQtyDialog transfer={editTransfer} onClose={() => setEditTransfer(null)} onSaved={load} />
-      <TransferDetailDialog transfer={detailTransfer} onClose={() => setDetailTransfer(null)} />
+      <TransferDetailDialog transfer={detailTransfer} onClose={() => setDetailTransfer(null)} canRetro={canRetro}
+        onChanged={(updated) => { if (updated) setDetailTransfer(updated); load(); }} />
       {shareTransfer && (
         <ShareDialog
           documentType="stock_transfer_doc"
