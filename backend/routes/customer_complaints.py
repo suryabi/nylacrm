@@ -551,6 +551,12 @@ async def import_complaints(
         raise HTTPException(status_code=400, detail="Spreadsheet is empty")
 
     col = {name: i for i, name in enumerate(header) if name}
+    title_cols = ("title", "issue", "issue title", "summary")
+    if not any(c in col for c in title_cols):
+        raise HTTPException(status_code=400, detail=(
+            "The 'Title' column was not found in the header row (row 1). "
+            f"Found headers: {', '.join(h for h in header if h) or 'none'}. "
+            "Keep the template's first row unchanged and enter your data on the 'Issues' sheet from row 2."))
 
     def cell(row, *names):
         for n in names:
@@ -571,7 +577,7 @@ async def import_complaints(
         title = cell(row, "title", "issue", "issue title", "summary")
         if not title:
             skipped += 1
-            errors.append(f"Row {idx}: missing title")
+            errors.append(f"Row {idx}: the Title cell is empty — Title is the only required field, so this row was skipped")
             continue
 
         priority = _match_ci(cell(row, "priority"), PRIORITIES) or "medium"

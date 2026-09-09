@@ -306,7 +306,13 @@ export default function CustomerComplaints() {
       const { created, skipped, errors } = res.data;
       if (created > 0) toast.success(`Imported ${created} issue${created === 1 ? '' : 's'}${skipped ? ` (${skipped} skipped)` : ''}`);
       else toast.error(`No issues imported${skipped ? ` — ${skipped} skipped` : ''}`);
-      if (errors && errors.length) console.warn('Import warnings:', errors);
+      if (errors && errors.length) {
+        toast.warning(`Import issues (${errors.length})`, {
+          description: errors.slice(0, 5).join('\n') + (errors.length > 5 ? `\n…and ${errors.length - 5} more` : ''),
+          duration: 15000,
+        });
+        console.warn('Import warnings:', errors);
+      }
       await fetchList();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Import failed');
