@@ -1,0 +1,17 @@
+{
+  "summary": "Tested Factory Staff Sign-in for maintenance QR scan (backend + frontend). Backend script /app/backend/tests/manual_staff_scan_auth.py exercises all endpoints (roster public / face+PIN login / wrong-PIN 401 / unassigned 400 / staff-token scan / submit as staff / logout invalidates / admin bypass) — 12/12 assertions pass. Frontend E2E on /equipment-scan/<id>: unauthenticated visitor sees the 'Factory Staff Sign-in' screen (data-testid=staff-scan-login), camera path unavailable headless (gracefully shows 'Position your face in the frame' with 'Use PIN instead' fallback), PIN 4321 login → roster grid → member pick → PIN entry → toast 'Welcome, ZZ FE Test Staff' → auto-navigation to /maintenance-scan/<token> → scan form shows 'Recording as ZZ FE Test Staff · Factory Operator' chip with Switch button (data-testid scan-staff-chip/scan-staff-switch), Complete + Submit → 'Maintenance record saved' (data-testid scan-submitted) with performed_via=factory_staff, performed_by='ZZ FE Test Staff' (verified in submit response). Admin (surya.yadavalli@nylaairwater.earth) logging in and opening /maintenance-scan/<token> bypasses the staff sign-in and lands on the equipment scan UI directly (admin_bypass=true). Temp equipment (ZZ FE Scan Pump), staff (ZZ FE Test Staff) and all slots/records/sessions cleaned up.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/manual_staff_scan_auth.py", "/app/backend/tests/setup_frontend_scan.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: GET /api/maintenance/scan/{token} returns already_submitted=true when a maintenance slot exists but records array is empty (e.g. after admin manually deletes a record). Consider deriving already_submitted purely from records count so state stays consistent after audit corrections. Non-blocking."
+  ],
+  "updated_files": ["/app/backend/tests/setup_frontend_scan.py (new setup helper)"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@nylaairwater.earth / test123 (tenant nyla-air-water); temp staff PIN 4321 (created + deleted during test)",
+  "seed_data_creation": "Temp qc-team member + equipment created and fully cleaned up after test (equipment_master, qc_team, maintenance_slots, maintenance_records, factory_staff_sessions all purged).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend script manual_staff_scan_auth.py is self-contained (creates temp data, tests all 12 cases, cleans up). setup_frontend_scan.py prints JSON with eid/mid/token so a Playwright agent can drive the UI, but remember to delete equipment/member/slots/records/sessions afterwards."
+}

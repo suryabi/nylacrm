@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent } from './ui/card';
 import { BookOpen, Wrench, Repeat, FileText, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { scanAuthHeaders } from '../lib/staffSession';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -12,9 +13,7 @@ export const ScanInstructions = ({ equipmentId, maintenance, replacement, files 
 
   const openFile = async (f) => {
     try {
-      const res = await fetch(`${API_URL}/api/production/equipment/${equipmentId}/files/${f.id}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` },
-      });
+      const res = await fetch(`${API_URL}/api/production/equipment/${equipmentId}/files/${f.id}`, { headers: scanAuthHeaders() });
       if (!res.ok) throw new Error('Could not open file');
       const url = URL.createObjectURL(await res.blob());
       window.open(url, '_blank');

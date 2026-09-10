@@ -3266,3 +3266,8 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 ## 2026-06 — Missed-maintenance alerts consolidated
 - `check_missed_maintenance` (routes/maintenance_sheets.py) now groups all missed slots per tenant and sends ONE summary email (HTML table: equipment, location, missed dates, days) + ONE in-app alert to admins, instead of one notification/email per equipment. Photo-inspection duty transfer and `missed_notified` flagging unchanged.
 - Verified: 2 equipment × 2 missed days → `{"missed_slots":4,"equipment":2,"alerts_sent":1}`, single title "⚠ Missed maintenance: 2 equipment, 4 missed day(s)". Needs redeploy for Production.
+
+## 2026-06 — Factory Staff Face/PIN sign-in on personal phones (no app login)
+- Scanning a maintenance QR (daily `/maintenance-scan/:token` or sticker `/equipment-scan/:equipmentId`) without an app session now shows **Factory Staff Sign-in** (`StaffScanLogin.jsx`): server-side face match or PIN fallback (roster limited to assigned staff). Issues a 12h `X-Staff-Token` (`factory_staff_sessions`) stored in localStorage `factory_staff_session`.
+- Backend: public `GET /api/maintenance/staff-auth/roster`, `POST /api/maintenance/staff-auth/login` (face descriptor or member_id+pin, lockout per member/equipment), `POST /api/maintenance/staff-auth/logout`. `deps.get_user_or_factory_staff` accepts app session OR staff token; used by equipment-scan, scan status/photo/submit, record photo and equipment instruction file download. Staff actors are never admins (`_is_admin`), assignment + geofence enforced; records carry `performed_via=factory_staff`.
+- Supervisor tablets with an app session keep working (admin bypass unchanged). Verified by testing agent (iteration_351). Needs redeploy for Production.

@@ -11,14 +11,14 @@ from zoneinfo import ZoneInfo
 
 import qrcode
 from PIL import Image, ImageDraw
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, List
 
 from database import db
 from core.tenant import get_current_tenant_id
-from deps import get_current_user
+from deps import get_current_user, get_user_or_factory_staff
 from services.object_storage import build_path, put_object, get_object
 
 router = APIRouter()
@@ -148,12 +148,16 @@ async def _geofence_alert(tenant_id: str, eq: dict, current_user: dict, staff_na
         logging.getLogger(__name__).warning("Geofence alert notification failed", exc_info=True)
 
 
+def _is_admin(user: dict) -> bool:
+    return not user.get("is_factory_staff") and (user.get("role") or "").lower() in ADMIN_ROLES
+
+
 async def _enforce_geofence(tenant_id: str, eq: dict, current_user: dict, lat, lng, staff_name=None):
     """Admins bypass. Returns geo audit dict (or None). Blocks + emails team when outside radius."""
     ctx = await _geofence_ctx(tenant_id, eq)
     if not ctx["required"]:
         return None
-    is_admin = (current_user.get("role") or "").lower() in ADMIN_ROLES
+    is_admin = _is_admin(current_user)
     if lat is None or lng is None:
         if is_admin:
             return None
@@ -168,7 +172,9 @@ async def _enforce_geofence(tenant_id: str, eq: dict, current_user: dict, lat, l
 async def _resolve_staff(tenant_id: str, eq: dict, current_user: dict, staff_member_id):
     """Identify the factory staff member performing maintenance (Face/PIN verified client-side).
     Admin app users may act without a staff identity."""
-    is_admin = (current_user.get("role") or "").lower() in ADMIN_ROLES
+    if current_user.get("is_factory_staff"):
+        staff_member_id = current_user["id"]
+    is_admin = _is_admin(current_user)
     if not staff_member_id:
         if is_admin:
             return None
@@ -296,7 +302,7 @@ async def equipment_sticker(equipment_id: str, origin: str = Query(...),
 
 
 @router.get("/equipment-scan/{equipment_id}")
-async def equipment_scan_resolve(equipment_id: str, current_user: dict = Depends(get_current_user)):
+async def equipment_scan_resolve(equipment_id: str, current_user: dict = Depends(get_user_or_factory_staff)):
     """Permanent sticker QR → resolve today's maintenance slot token (if scheduled)."""
     _ = current_user
     tenant_id = get_current_tenant_id()
@@ -377,7 +383,7 @@ async def _slot_by_token(tenant_id: str, token: str) -> dict:
 
 
 @router.get("/scan/{token}")
-async def scan_status(token: str, current_user: dict = Depends(get_current_user)):
+async def scan_status(token: str, current_user: dict = Depends(get_user_or_factory_staff)):
     _ = current_user
     tenant_id = get_current_tenant_id()
     slot = await _slot_by_token(tenant_id, token)
@@ -392,7 +398,7 @@ async def scan_status(token: str, current_user: dict = Depends(get_current_user)
                 for f in (eq.get("attachments") or []) if f.get("category") == "instruction"]}
     if slot["date"] != today:
         return {**base, "valid": False, "message": INVALID_QR_MSG}
-    is_admin = (current_user.get("role") or "").lower() in ADMIN_ROLES
+    is_admin = _is_admin(current_user)
     geo_ctx = await _geofence_ctx(tenant_id, eq)
     extra = {"assigned_staff_ids": eq.get("maintenance_staff_ids") or [],
              "assigned_staff": [{"id": s.get("id"), "name": s.get("name"), "role": s.get("role")}
@@ -411,7 +417,7 @@ async def scan_status(token: str, current_user: dict = Depends(get_current_user)
 
 @router.post("/scan/{token}/photo")
 async def scan_photo(token: str, file: UploadFile = File(...), staff_member_id: Optional[str] = Form(None),
-                     current_user: dict = Depends(get_current_user)):
+                     current_user: dict = Depends(get_user_or_factory_staff)):
     tenant_id = get_current_tenant_id()
     slot = await _slot_by_token(tenant_id, token)
     today = datetime.now(IST)
@@ -448,7 +454,7 @@ class SubmitBody(BaseModel):
 
 
 @router.post("/scan/{token}/submit")
-async def scan_submit(token: str, body: SubmitBody, current_user: dict = Depends(get_current_user)):
+async def scan_submit(token: str, body: SubmitBody, current_user: dict = Depends(get_user_or_factory_staff)):
     tenant_id = get_current_tenant_id()
     if body.status not in ("completed", "incomplete"):
         raise HTTPException(400, "status must be completed or incomplete")
@@ -490,6 +496,109 @@ async def scan_submit(token: str, body: SubmitBody, current_user: dict = Depends
     return rec
 
 
+# ── Factory Staff scan sign-in (public: no app login needed on personal phones) ─
+STAFF_SESSION_HOURS = 12
+
+
+class StaffLoginBody(BaseModel):
+    token: Optional[str] = None
+    equipment_id: Optional[str] = None
+    descriptor: Optional[List[float]] = None
+    member_id: Optional[str] = None
+    pin: Optional[str] = None
+
+
+async def _scan_ref(token: Optional[str], equipment_id: Optional[str]) -> dict:
+    """Resolve a QR reference (daily slot token or permanent sticker equipment id) to its equipment."""
+    if token:
+        slot = await db.maintenance_slots.find_one({"token": token}, {"_id": 0, "tenant_id": 1, "equipment_id": 1})
+        if slot:
+            equipment_id = slot["equipment_id"]
+            eq = await db.equipment_master.find_one({"tenant_id": slot["tenant_id"], "id": equipment_id}, {"_id": 0})
+            if eq:
+                return eq
+    elif equipment_id:
+        eq = await db.equipment_master.find_one({"id": equipment_id}, {"_id": 0})
+        if eq:
+            return eq
+    raise HTTPException(404, "Unknown QR code")
+
+
+def _staff_pool_query(eq: dict) -> dict:
+    q = {"tenant_id": eq["tenant_id"]}
+    if eq.get("maintenance_staff_ids"):
+        q["id"] = {"$in": eq["maintenance_staff_ids"]}
+    return q
+
+
+@router.get("/staff-auth/roster")
+async def staff_auth_roster(token: Optional[str] = Query(None), equipment_id: Optional[str] = Query(None)):
+    """Names of staff who may sign in for this QR (assigned staff only, when assignments exist)."""
+    eq = await _scan_ref(token, equipment_id)
+    members = await db.qc_team.find(_staff_pool_query(eq), {"_id": 0, "id": 1, "name": 1, "role": 1,
+                                                            "pin_hash": 1, "face_descriptors": 1}).sort("name", 1).to_list(500)
+    return {"equipment_name": eq["name"],
+            "face_available": any(m.get("face_descriptors") for m in members),
+            "members": [{"id": m["id"], "name": m["name"], "role": m.get("role") or "",
+                         "has_pin": bool(m.get("pin_hash")), "has_face": bool(m.get("face_descriptors"))} for m in members]}
+
+
+@router.post("/staff-auth/login")
+async def staff_auth_login(body: StaffLoginBody, request: Request):
+    """Face (server-side match) or PIN sign-in for Factory Staff → short-lived X-Staff-Token."""
+    import bcrypt
+    from deps import check_login_lockout, record_login_failure, clear_login_failures, get_client_ip
+    from routes.face_auth import _distance, FACE_MATCH_THRESHOLD, SECOND_BEST_MARGIN
+    eq = await _scan_ref(body.token, body.equipment_id)
+    ip = get_client_ip(request)
+    ident = f"staff:{body.member_id or eq['id']}"
+    await check_login_lockout(ident, ip)
+    members = await db.qc_team.find(_staff_pool_query(eq), {"_id": 0, "id": 1, "name": 1, "role": 1,
+                                                            "pin_hash": 1, "face_descriptors": 1}).to_list(500)
+    member = None
+    if body.descriptor is not None:
+        if len(body.descriptor) != 128:
+            raise HTTPException(400, "Invalid face signature")
+        best, best_d, second_d = None, float("inf"), float("inf")
+        for m in members:
+            d = min((_distance(body.descriptor, ref) for ref in m.get("face_descriptors") or [] if len(ref) == 128),
+                    default=float("inf"))
+            if d < best_d:
+                second_d, best_d, best = best_d, d, m
+            elif d < second_d:
+                second_d = d
+        if not best or best_d > FACE_MATCH_THRESHOLD or (second_d - best_d) < SECOND_BEST_MARGIN:
+            await record_login_failure(ident, ip)
+            raise HTTPException(401, "Face not recognized — try again or use your PIN")
+        member = best
+    elif body.member_id and body.pin:
+        m = next((x for x in members if x["id"] == body.member_id), None)
+        if not m or not m.get("pin_hash"):
+            raise HTTPException(400, "No PIN set for this member")
+        if not bcrypt.checkpw(body.pin.encode(), m["pin_hash"].encode()):
+            await record_login_failure(ident, ip)
+            raise HTTPException(401, "Incorrect PIN")
+        member = m
+    else:
+        raise HTTPException(400, "Provide a face signature or member_id + pin")
+    await clear_login_failures(ident, ip)
+    now = datetime.now(timezone.utc)
+    sess = {"token": uuid.uuid4().hex + uuid.uuid4().hex, "tenant_id": eq["tenant_id"], "member_id": member["id"],
+            "created_at": now.isoformat(), "expires_at": (now + timedelta(hours=STAFF_SESSION_HOURS)).isoformat(),
+            "via": "face" if body.descriptor is not None else "pin", "ip": ip}
+    await db.factory_staff_sessions.insert_one({**sess})
+    return {"staff_token": sess["token"], "expires_at": sess["expires_at"],
+            "member": {"id": member["id"], "name": member["name"], "role": member.get("role") or ""}}
+
+
+@router.post("/staff-auth/logout")
+async def staff_auth_logout(request: Request):
+    token = (request.headers.get("X-Staff-Token") or "").strip()
+    if token:
+        await db.factory_staff_sessions.delete_one({"token": token})
+    return {"ok": True}
+
+
 # ── Corrections (audit trail, original stays immutable) ──────────────────────
 class CorrectionBody(BaseModel):
     note: str
@@ -515,7 +624,7 @@ async def add_correction(record_id: str, body: CorrectionBody, current_user: dic
 
 
 @router.get("/records/{record_id}/photos/{photo_id}")
-async def record_photo(record_id: str, photo_id: str, current_user: dict = Depends(get_current_user)):
+async def record_photo(record_id: str, photo_id: str, current_user: dict = Depends(get_user_or_factory_staff)):
     _ = current_user
     tenant_id = get_current_tenant_id()
     rec = await db.maintenance_records.find_one({"tenant_id": tenant_id, "id": record_id}, {"_id": 0, "photos": 1})

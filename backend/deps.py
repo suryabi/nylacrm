@@ -158,6 +158,26 @@ async def get_current_user(request: Request):
     return await get_current_user_from_cookie_or_header(request)
 
 
+async def get_user_or_factory_staff(request: Request):
+    """App user session OR a Factory Staff scan session (`X-Staff-Token`, issued by
+    /maintenance/staff-auth/login after Face/PIN). Staff actors carry `is_factory_staff=True`."""
+    try:
+        return await get_current_user_from_cookie_or_header(request)
+    except HTTPException:
+        pass
+    token = (request.headers.get('X-Staff-Token') or '').strip()
+    if token:
+        sess = await db.factory_staff_sessions.find_one({'token': token}, {'_id': 0})
+        if sess and datetime.fromisoformat(sess['expires_at']) > datetime.now(timezone.utc):
+            member = await db.qc_team.find_one({'tenant_id': sess['tenant_id'], 'id': sess['member_id']},
+                                               {'_id': 0, 'id': 1, 'name': 1, 'role': 1})
+            if member:
+                set_current_tenant(sess['tenant_id'])
+                request.state.tenant_id = sess['tenant_id']
+                return {**member, 'tenant_id': sess['tenant_id'], 'is_factory_staff': True}
+    raise HTTPException(status_code=401, detail='Invalid session')
+
+
 async def get_user_or_api_key(request: Request):
     """Authenticate via API key (X-API-Key or 'Authorization: Bearer ak_...') OR fall back to JWT/session.
 

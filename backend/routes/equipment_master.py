@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Depends, Query
-from deps import get_current_user
+from deps import get_current_user, get_user_or_factory_staff
 from core.tenant import get_current_tenant_id
 from database import db
 
@@ -462,7 +462,7 @@ async def upload_equipment_file(equipment_id: str, file: UploadFile = File(...),
 
 @router.get("/{equipment_id}/files/{file_id}")
 async def download_equipment_file(equipment_id: str, file_id: str,
-                                  current_user: dict = Depends(get_current_user)):
+                                  current_user: dict = Depends(get_user_or_factory_staff)):
     _ = current_user
     tenant_id = get_current_tenant_id()
     eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id}, {"_id": 0, "attachments": 1})

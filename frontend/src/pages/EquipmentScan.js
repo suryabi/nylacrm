@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
-import { Wrench, RefreshCw, LogIn, CalendarX2, XCircle } from 'lucide-react';
+import { Wrench, RefreshCw, CalendarX2, XCircle } from 'lucide-react';
 import { ScanInstructions } from '../components/ScanInstructions';
+import StaffScanLogin from '../components/StaffScanLogin';
+import { saveStaffSession, clearStaffSession, scanAuthHeaders } from '../lib/staffSession';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -11,21 +12,26 @@ export default function EquipmentScan() {
   const { equipmentId } = useParams();
   const navigate = useNavigate();
   const [state, setState] = useState({ loading: true });
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/api/maintenance/equipment-scan/${equipmentId}`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` },
-        });
-        if (res.status === 401 || res.status === 403) { setState({ needLogin: true }); return; }
+        const res = await fetch(`${API_URL}/api/maintenance/equipment-scan/${equipmentId}`, { headers: scanAuthHeaders() });
+        if (res.status === 401) { clearStaffSession(); setState({ needLogin: true }); return; }
+        if (res.status === 403) { setState({ error: (await res.json()).detail || 'Access denied' }); return; }
         const data = await res.json();
         if (!res.ok) { setState({ error: data.detail || 'Unknown equipment QR' }); return; }
         if (data.scheduled_today && data.token) { navigate(`/maintenance-scan/${data.token}`, { replace: true }); return; }
         setState(data);
       } catch { setState({ error: 'Could not reach the server' }); }
     })();
-  }, [equipmentId, navigate]);
+  }, [equipmentId, navigate, reloadKey]);
+
+  if (state.needLogin) {
+    return <StaffScanLogin scanRef={{ equipment_id: equipmentId }}
+      onLogin={(m, tok) => { saveStaffSession(m, tok); setState({ loading: true }); setReloadKey((k) => k + 1); }} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 flex items-start justify-center p-4 pt-8" data-testid="equipment-scan-page">
@@ -40,13 +46,6 @@ export default function EquipmentScan() {
         {state.loading && (
           <Card><CardContent className="py-10 text-center text-muted-foreground">
             <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2" />Checking equipment QR…
-          </CardContent></Card>
-        )}
-        {state.needLogin && (
-          <Card><CardContent className="py-8 text-center space-y-3" data-testid="eqscan-need-login">
-            <LogIn className="h-8 w-8 mx-auto text-slate-400" />
-            <p className="font-medium">Please log in to record maintenance</p>
-            <Button onClick={() => { window.location.href = `/login?redirect=/equipment-scan/${equipmentId}`; }} data-testid="eqscan-login-btn">Go to Login</Button>
           </CardContent></Card>
         )}
         {state.error && (

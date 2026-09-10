@@ -4,13 +4,14 @@ import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
-import { Wrench, CheckCircle2, XCircle, Camera, RefreshCw, Trash2, LogIn, Eye, UserCheck, MapPin } from 'lucide-react';
+import { Wrench, CheckCircle2, XCircle, Camera, RefreshCw, Trash2, Eye, UserCheck, MapPin } from 'lucide-react';
 import { ScanInstructions } from '../components/ScanInstructions';
-import QCKioskLogin from '../components/qc/QCKioskLogin';
+import StaffScanLogin from '../components/StaffScanLogin';
+import { getStaffSession, saveStaffSession, clearStaffSession, scanAuthHeaders } from '../lib/staffSession';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' });
+const authHeaders = () => scanAuthHeaders({ 'Content-Type': 'application/json' });
 
 const getPosition = () => new Promise((resolve) => {
   if (!navigator.geolocation) return resolve(null);
@@ -19,16 +20,6 @@ const getPosition = () => new Promise((resolve) => {
     () => resolve(null),
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
 });
-
-const STAFF_KEY = 'factory_staff_session';
-const STAFF_SESSION_HOURS = 12;
-const getStaffSession = () => {
-  try {
-    const s = JSON.parse(localStorage.getItem(STAFF_KEY) || 'null');
-    if (s && s.id && Date.now() - (s.at || 0) < STAFF_SESSION_HOURS * 3600 * 1000) return s;
-  } catch { /* ignore */ }
-  return null;
-};
 
 export default function MaintenanceScan() {
   const { token } = useParams();
@@ -42,27 +33,35 @@ export default function MaintenanceScan() {
   const [uploading, setUploading] = useState(false);
   const [photoView, setPhotoView] = useState(null);
   const [staff, setStaff] = useState(getStaffSession);
+  const [reloadKey, setReloadKey] = useState(0);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
-  const staffLogin = (m) => {
-    const s = { id: m.id, name: m.name, role: m.role || '', at: Date.now() };
-    localStorage.setItem(STAFF_KEY, JSON.stringify(s));
-    setStaff(s);
+  const staffLogin = (m, staffToken) => {
+    setStaff(saveStaffSession(m, staffToken));
+    setState({ loading: true });
+    setReloadKey((k) => k + 1);
   };
-  const staffLogout = () => { localStorage.removeItem(STAFF_KEY); setStaff(null); };
+  const staffLogout = () => {
+    const s = getStaffSession();
+    if (s?.token) fetch(`${API_URL}/api/maintenance/staff-auth/logout`, { method: 'POST', headers: { 'X-Staff-Token': s.token } }).catch(() => {});
+    clearStaffSession();
+    setStaff(null);
+    if (!localStorage.getItem('session_token')) { setState({ loading: true }); setReloadKey((k) => k + 1); }
+  };
 
   const load = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/api/maintenance/scan/${token}`, { headers: authHeaders() });
-      if (res.status === 401 || res.status === 403) { setState({ needLogin: true }); return; }
+      if (res.status === 401) { clearStaffSession(); setStaff(null); setState({ needLogin: true }); return; }
+      if (res.status === 403) { setState({ error: (await res.json()).detail || 'Access denied' }); return; }
       const data = await res.json();
       if (!res.ok) { setState({ error: data.detail || 'Unknown QR code' }); return; }
       setState(data);
     } catch { setState({ error: 'Could not reach the server' }); }
   }, [token]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, reloadKey]);
 
   useEffect(() => () => { if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop()); }, []);
 
@@ -109,7 +108,7 @@ export default function MaintenanceScan() {
         fd.append('file', blob, 'capture.jpg');
         if (staff?.id) fd.append('staff_member_id', staff.id);
         const res = await fetch(`${API_URL}/api/maintenance/scan/${token}/photo`, {
-          method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` }, body: fd,
+          method: 'POST', headers: scanAuthHeaders(), body: fd,
         });
         if (!res.ok) throw new Error((await res.json()).detail || 'Upload failed');
         const meta = await res.json();
@@ -160,15 +159,7 @@ export default function MaintenanceScan() {
   if (state.loading) return <Shell><Card><CardContent className="py-10 text-center text-muted-foreground"><RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2" />Checking QR code…</CardContent></Card></Shell>;
 
   if (state.needLogin) {
-    return (
-      <Shell>
-        <Card><CardContent className="py-8 text-center space-y-3" data-testid="scan-need-login">
-          <LogIn className="h-8 w-8 mx-auto text-slate-400" />
-          <p className="font-medium">Please log in to record maintenance</p>
-          <Button onClick={() => { window.location.href = `/login?redirect=/maintenance-scan/${token}`; }} data-testid="scan-login-btn">Go to Login</Button>
-        </CardContent></Card>
-      </Shell>
-    );
+    return <StaffScanLogin scanRef={{ token }} onLogin={staffLogin} />;
   }
 
   if (state.error) {
@@ -244,15 +235,7 @@ export default function MaintenanceScan() {
   const assignedIds = state.assigned_staff_ids || [];
 
   if (needsStaff && !staff) {
-    return (
-      <div className="min-h-screen bg-slate-100" data-testid="scan-staff-login">
-        <div className="pt-6 px-4 max-w-md mx-auto text-center space-y-1">
-          <p className="font-bold text-slate-800">{state.equipment_name}</p>
-          <p className="text-xs text-muted-foreground">Sign in with Face ID or PIN to record maintenance</p>
-        </div>
-        <QCKioskLogin onLogin={staffLogin} />
-      </div>
-    );
+    return <StaffScanLogin scanRef={{ token }} equipmentName={state.equipment_name} onLogin={staffLogin} />;
   }
 
   if (needsStaff && staff && assignedIds.length > 0 && !assignedIds.includes(staff.id)) {
