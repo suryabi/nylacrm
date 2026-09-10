@@ -534,8 +534,9 @@ ADMIN_ROLES = {"ceo", "admin", "system admin", "system_admin", "director", "tena
 
 
 async def check_missed_maintenance() -> dict:
-    """Notify admins once per slot whose scheduled date passed with no QR check-in."""
+    """One summary alert + email per tenant covering every slot that passed with no QR check-in."""
     from utils.notify import notify_users
+    from utils.email_sender import send_email
     today = datetime.now(IST).date().isoformat()
     missed = await db.maintenance_slots.find(
         {"date": {"$lt": today}, "submitted": {"$ne": True}, "missed_notified": {"$ne": True}},
@@ -543,51 +544,90 @@ async def check_missed_maintenance() -> dict:
     if not missed:
         return {"missed_slots": 0, "alerts_sent": 0}
 
-    by_tenant_eq = {}
+    by_tenant = {}
     for s in missed:
-        by_tenant_eq.setdefault((s["tenant_id"], s["equipment_id"]), []).append(s)
+        by_tenant.setdefault(s["tenant_id"], {}).setdefault(s["equipment_id"], []).append(s)
 
     alerts = 0
-    for (tenant_id, equipment_id), slots in by_tenant_eq.items():
-        # transfer photo-inspection duty from missed days to a random future slot in the same month
-        for s in slots:
-            if not s.get("photo_required"):
-                continue
-            m_end = _month_bounds(s["date"][:7])[1]
-            cand = await db.maintenance_slots.find(
-                {"tenant_id": tenant_id, "equipment_id": equipment_id, "submitted": {"$ne": True},
-                 "photo_required": {"$ne": True}, "date": {"$gte": today, "$lte": m_end.isoformat()}},
-                {"_id": 0, "id": 1}).to_list(200)
-            if cand:
-                promoted = random.choice(cand)
-                await db.maintenance_slots.update_one({"tenant_id": tenant_id, "id": promoted["id"]},
-                                                      {"$set": {"photo_required": True}})
-        eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id},
-                                                {"_id": 0, "name": 1, "facility_name": 1, "area_name": 1})
-        name = (eq or {}).get("name") or "Deleted equipment"
-        dates = sorted(s["date"] for s in slots)
-        shown = ", ".join(dates[:6]) + (f" (+{len(dates) - 6} more)" if len(dates) > 6 else "")
-        loc = " · ".join(x for x in [(eq or {}).get("facility_name"), (eq or {}).get("area_name")] if x)
-        admins = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "role": 1}).to_list(500)
-        admin_ids = [u["id"] for u in admins if (u.get("role") or "").lower() in ADMIN_ROLES]
+    for tenant_id, by_eq in by_tenant.items():
+        items = []
+        for equipment_id, slots in by_eq.items():
+            # transfer photo-inspection duty from missed days to a random future slot in the same month
+            for s in slots:
+                if not s.get("photo_required"):
+                    continue
+                m_end = _month_bounds(s["date"][:7])[1]
+                cand = await db.maintenance_slots.find(
+                    {"tenant_id": tenant_id, "equipment_id": equipment_id, "submitted": {"$ne": True},
+                     "photo_required": {"$ne": True}, "date": {"$gte": today, "$lte": m_end.isoformat()}},
+                    {"_id": 0, "id": 1}).to_list(200)
+                if cand:
+                    promoted = random.choice(cand)
+                    await db.maintenance_slots.update_one({"tenant_id": tenant_id, "id": promoted["id"]},
+                                                          {"$set": {"photo_required": True}})
+            eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id},
+                                                    {"_id": 0, "name": 1, "facility_name": 1, "floor_name": 1, "area_name": 1})
+            dates = sorted(s["date"] for s in slots)
+            items.append({
+                "name": (eq or {}).get("name") or "Deleted equipment",
+                "loc": " › ".join(x for x in [(eq or {}).get("facility_name"), (eq or {}).get("floor_name"),
+                                              (eq or {}).get("area_name")] if x),
+                "dates": dates,
+                "shown": ", ".join(dates[:6]) + (f" (+{len(dates) - 6} more)" if len(dates) > 6 else ""),
+            })
+        items.sort(key=lambda i: (i["loc"], i["name"]))
+
+        admins = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "role": 1, "email": 1}).to_list(500)
+        admin_users = [u for u in admins if (u.get("role") or "").lower() in ADMIN_ROLES]
+        n_slots = sum(len(i["dates"]) for i in items)
+        subject = f"⚠ Missed maintenance: {len(items)} equipment, {n_slots} missed day(s)"
         try:
             await notify_users(
-                tenant_id, admin_ids,
-                title=f"⚠ Missed maintenance: {name}",
-                body=f"No QR check-in was recorded for scheduled date(s): {shown}."
-                     + (f" Location: {loc}." if loc else "")
-                     + " Open the equipment's Maintenance profile to review.",
-                link="/equipment-master",
-                kind="alert", category="approval",
-                entity_type="equipment", entity_id=equipment_id)
-            alerts += 1
+                tenant_id, [u["id"] for u in admin_users],
+                title=subject,
+                body="; ".join(f"{i['name']} ({i['shown']})" for i in items[:8])
+                     + (f"; +{len(items) - 8} more" if len(items) > 8 else "")
+                     + ". Open Equipment Master to review.",
+                link="/equipment-master", kind="alert", category="approval",
+                entity_type="equipment", send_email_too=False)
         except Exception:
             pass
+        html = _missed_summary_html(items, today)
+        for u in admin_users:
+            if u.get("email"):
+                try:
+                    await send_email(to=u["email"], subject=subject, html=html, text=subject)
+                except Exception:
+                    logging.getLogger("maintenance_missed").exception("missed summary email failed for %s", u.get("email"))
+        alerts += 1
         await db.maintenance_slots.update_many(
-            {"tenant_id": tenant_id, "equipment_id": equipment_id,
-             "id": {"$in": [s["id"] for s in slots]}},
+            {"tenant_id": tenant_id, "id": {"$in": [s["id"] for slots in by_eq.values() for s in slots]}},
             {"$set": {"missed_notified": True, "missed_notified_at": datetime.now(timezone.utc).isoformat()}})
-    return {"missed_slots": len(missed), "alerts_sent": alerts}
+    return {"missed_slots": len(missed), "equipment": sum(len(v) for v in by_tenant.values()), "alerts_sent": alerts}
+
+
+def _missed_summary_html(items: list, today: str) -> str:
+    cell = "padding:6px 10px;font-size:12px;border-bottom:1px solid #e2e8f0;vertical-align:top"
+    rows = "".join(
+        f"<tr><td style='{cell};font-weight:bold'>{i['name']}</td>"
+        f"<td style='{cell};color:#475569'>{i['loc'] or '—'}</td>"
+        f"<td style='{cell};color:#b91c1c'>{i['shown']}</td>"
+        f"<td style='{cell};text-align:center'>{len(i['dates'])}</td></tr>" for i in items)
+    return f"""
+<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0f172a;max-width:720px">
+  <h2 style="margin:0 0 4px;font-size:18px">Missed Maintenance Summary — {today}</h2>
+  <p style="margin:0 0 12px;color:#334155;font-size:14px">{len(items)} equipment had scheduled maintenance with no QR check-in.</p>
+  <table style="border-collapse:collapse;width:100%;border:1px solid #e2e8f0">
+    <tr>
+      <th style='text-align:left;padding:6px 10px;font-size:11px;color:#64748b'>EQUIPMENT</th>
+      <th style='text-align:left;padding:6px 10px;font-size:11px;color:#64748b'>LOCATION</th>
+      <th style='text-align:left;padding:6px 10px;font-size:11px;color:#64748b'>MISSED DATE(S)</th>
+      <th style='text-align:center;padding:6px 10px;font-size:11px;color:#64748b'>DAYS</th>
+    </tr>
+    {rows}
+  </table>
+  <p style="margin:16px 0 0;color:#94a3b8;font-size:12px">Open each equipment's Maintenance profile in Equipment Master to review or log a catch-up record. One summary is sent per check — not one email per equipment.</p>
+</div>"""
 
 
 @router.post("/missed-check")

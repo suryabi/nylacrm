@@ -3262,3 +3262,7 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - Backend `/api/auth/face/*`: `trust-device` endpoint removed; `device_token` is now optional/ignored; `face/status` no longer returns `device_trusted`. Match security still relies on distance threshold 0.45 + second-best margin + lockout + "Sign in as X / Not me" confirmation with blink/turn liveness.
 - Frontend: `FaceIdSetupPrompt` no longer shows the "Enable Face ID on this device?" prompt; `face_enrolled_device` / `face_device_token` local-storage flags removed.
 - Production needs a redeploy to receive this change.
+
+## 2026-06 — Missed-maintenance alerts consolidated
+- `check_missed_maintenance` (routes/maintenance_sheets.py) now groups all missed slots per tenant and sends ONE summary email (HTML table: equipment, location, missed dates, days) + ONE in-app alert to admins, instead of one notification/email per equipment. Photo-inspection duty transfer and `missed_notified` flagging unchanged.
+- Verified: 2 equipment × 2 missed days → `{"missed_slots":4,"equipment":2,"alerts_sent":1}`, single title "⚠ Missed maintenance: 2 equipment, 4 missed day(s)". Needs redeploy for Production.
