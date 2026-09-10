@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Loader2, X, ScanFace, Check } from 'lucide-react';
 import {
-  loadModels, getFullDetection, isGoodFace, captureFrontal, getDeviceToken,
+  loadModels, getFullDetection, isGoodFace, captureFrontal,
   eyeOpenness, headPose, createLivenessDetector, faceDebugEnabled,
 } from '../../lib/faceRecognition';
 import FaceDebugPanel from './FaceDebugPanel';
@@ -37,7 +37,7 @@ export default function FaceLoginModal({ tenantId, onSuccess, onClose }) {
       if (!full) { setPhaseBoth('align'); alignRef.current = 0; return; }
       try {
         const { data } = await axios.post(`${API_URL}/auth/face/login`,
-          { descriptor: Array.from(full.descriptor), device_token: getDeviceToken() },
+          { descriptor: Array.from(full.descriptor) },
           { withCredentials: true, headers: { 'X-Tenant-ID': tenantId } });
         setPending(data);
         livenessRef.current = createLivenessDetector();

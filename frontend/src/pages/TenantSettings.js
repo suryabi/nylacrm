@@ -1755,7 +1755,7 @@ export default function TenantSettings() {
               <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                 <div>
                   <p className="font-medium">Face ID Login</p>
-                  <p className="text-sm text-muted-foreground">Users can set up and sign in with Face ID on trusted devices (QC Station kiosk is unaffected)</p>
+                  <p className="text-sm text-muted-foreground">Users can set up Face ID once and sign in with it from any device or the mobile app (QC Station kiosk is unaffected)</p>
                 </div>
                 <Switch 
                   checked={authConfig.face_id_enabled !== false} 

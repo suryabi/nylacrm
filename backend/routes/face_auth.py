@@ -1,16 +1,16 @@
 """
-Face ID authentication — server-side descriptor matching + trusted-device binding.
+Face ID authentication — server-side descriptor matching (works on any device/PWA once enrolled).
 Browser computes 128-float descriptors (face-api.js); only numbers reach the server.
 """
 from fastapi import APIRouter, HTTPException, Depends, Request, Response
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 import math
 import uuid
 
 from database import get_tenant_db, db
-from deps import hash_password, verify_password, get_current_user
+from deps import get_current_user
 from core.tenant import get_current_tenant_id
 
 router = APIRouter()
@@ -18,21 +18,16 @@ router = APIRouter()
 FACE_MATCH_THRESHOLD = 0.45
 SECOND_BEST_MARGIN = 0.05
 MAX_DESCRIPTORS = 10
-MAX_DEVICES = 10
 
 
 class FaceEnrollIn(BaseModel):
     descriptors: List[List[float]]
-    device_token: str
-
-
-class FaceTrustIn(BaseModel):
-    device_token: str
+    device_token: Optional[str] = None
 
 
 class FaceLoginIn(BaseModel):
     descriptor: List[float]
-    device_token: str
+    device_token: Optional[str] = None
 
 
 def _distance(a, b):
@@ -46,61 +41,30 @@ async def _face_id_enabled():
 
 
 @router.get("/face/status")
-async def face_status(device_token: str = None, current_user: dict = Depends(get_current_user)):
+async def face_status(current_user: dict = Depends(get_current_user)):
     doc = await db.user_face_auth.find_one({'user_id': current_user['id']}, {'_id': 0})
-    device_trusted = bool(
-        device_token and doc and any(verify_password(device_token, h) for h in doc.get('devices', []))
-    )
     return {
         'enrolled': bool(doc and doc.get('descriptors')),
         'prompt_seen': bool(doc and doc.get('prompt_seen')),
-        'device_trusted': device_trusted,
         'face_id_enabled': await _face_id_enabled(),
     }
 
 
-@router.post("/face/trust-device")
-async def face_trust_device(data: FaceTrustIn, current_user: dict = Depends(get_current_user)):
-    """Bind an additional device (e.g. shared factory tablet) without re-enrolling the face."""
-    if not await _face_id_enabled():
-        raise HTTPException(status_code=403, detail='Face ID is disabled by your workspace admin')
-    if not data.device_token or len(data.device_token) < 16:
-        raise HTTPException(status_code=400, detail='Invalid device token')
-    doc = await db.user_face_auth.find_one({'user_id': current_user['id']}, {'_id': 0})
-    if not doc or not doc.get('descriptors'):
-        raise HTTPException(status_code=400, detail='Set up Face ID first')
-    devices = doc.get('devices', [])
-    if not any(verify_password(data.device_token, h) for h in devices):
-        devices = (devices + [hash_password(data.device_token)])[-MAX_DEVICES:]
-        await db.user_face_auth.update_one(
-            {'user_id': current_user['id']},
-            {'$set': {'devices': devices, 'updated_at': datetime.now(timezone.utc).isoformat()}},
-        )
-    return {'message': 'Device trusted for Face ID'}
-
-
 @router.post("/face/enroll")
 async def face_enroll(data: FaceEnrollIn, current_user: dict = Depends(get_current_user)):
-    """Replace the user's Face ID enrollment and trust this device."""
+    """Replace the user's Face ID enrollment (usable from any device/PWA)."""
     if not await _face_id_enabled():
         raise HTTPException(status_code=403, detail='Face ID is disabled by your workspace admin')
     clean = [d for d in data.descriptors if isinstance(d, list) and len(d) == 128][:MAX_DESCRIPTORS]
     if not clean:
         raise HTTPException(status_code=400, detail='No valid face signatures provided')
-    if not data.device_token or len(data.device_token) < 16:
-        raise HTTPException(status_code=400, detail='Invalid device token')
     now = datetime.now(timezone.utc).isoformat()
-    existing = await db.user_face_auth.find_one({'user_id': current_user['id']}, {'_id': 0})
-    devices = (existing or {}).get('devices', [])
-    if not any(verify_password(data.device_token, h) for h in devices):
-        devices = (devices + [hash_password(data.device_token)])[-MAX_DEVICES:]
     await db.user_face_auth.update_one(
         {'user_id': current_user['id']},
         {'$set': {
             'user_id': current_user['id'],
             'tenant_id': get_current_tenant_id(),
             'descriptors': clean,
-            'devices': devices,
             'prompt_seen': True,
             'updated_at': now,
         }, '$setOnInsert': {'created_at': now}},
@@ -116,7 +80,7 @@ async def face_dismiss_prompt(current_user: dict = Depends(get_current_user)):
         {'user_id': current_user['id']},
         {'$set': {'user_id': current_user['id'], 'tenant_id': get_current_tenant_id(),
                   'prompt_seen': True, 'updated_at': now},
-         '$setOnInsert': {'descriptors': [], 'devices': [], 'created_at': now}},
+         '$setOnInsert': {'descriptors': [], 'created_at': now}},
         upsert=True,
     )
     return {'message': 'ok'}
@@ -126,14 +90,14 @@ async def face_dismiss_prompt(current_user: dict = Depends(get_current_user)):
 async def face_remove(current_user: dict = Depends(get_current_user)):
     await db.user_face_auth.update_one(
         {'user_id': current_user['id']},
-        {'$set': {'descriptors': [], 'devices': [], 'updated_at': datetime.now(timezone.utc).isoformat()}},
+        {'$set': {'descriptors': [], 'updated_at': datetime.now(timezone.utc).isoformat()}},
     )
     return {'message': 'Face ID removed'}
 
 
 @router.post("/face/login")
 async def face_login(data: FaceLoginIn, request: Request, response: Response):
-    """Public: authenticate by face descriptor + trusted device token."""
+    """Public: authenticate by face descriptor (any device, incl. mobile PWA)."""
     if not await _face_id_enabled():
         raise HTTPException(status_code=403, detail='Face ID login is disabled by your workspace admin')
     from deps import check_login_lockout, record_login_failure, clear_login_failures, get_client_ip
@@ -160,10 +124,6 @@ async def face_login(data: FaceLoginIn, request: Request, response: Response):
     if not best or best_dist > FACE_MATCH_THRESHOLD or (second_dist - best_dist) < SECOND_BEST_MARGIN:
         await record_login_failure('__faceid__', login_ip)
         raise HTTPException(status_code=401, detail='Face not recognized')
-
-    if not any(verify_password(data.device_token, h) for h in best.get('devices', [])):
-        await record_login_failure('__faceid__', login_ip)
-        raise HTTPException(status_code=401, detail="This device isn't enabled for your Face ID yet — sign in with your password once and tap 'Enable here' when prompted")
 
     tdb = get_tenant_db()
     user_doc = await tdb.users.find_one({'id': best['user_id']}, {'_id': 0})

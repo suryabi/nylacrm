@@ -157,17 +157,6 @@ export function distance(a, b) {
   return Math.sqrt(sum);
 }
 
-// Stable per-browser device token for trusted-device Face ID binding.
-export function getDeviceToken() {
-  let t = localStorage.getItem('face_device_token');
-  if (!t) {
-    t = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`) +
-        '-' + Math.random().toString(36).slice(2);
-    localStorage.setItem('face_device_token', t);
-  }
-  return t;
-}
-
 // Match a live descriptor against the enrolled face index.
 // index: [{id, name, role, descriptors: [[...128], ...]}]
 export function matchDescriptor(descriptor, index, threshold = MATCH_THRESHOLD) {

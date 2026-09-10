@@ -3254,3 +3254,11 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 - BrandingEntryDialog now has 3 tabs: Reclassify (with optional "From batch" select — Any FIFO / specific batch / (legacy no batch)), Fix Legacy Batch (assign real production batch to legacy stock via POST /api/branding-entries/assign-batch, CEO/Admin/System Admin, audited in db.stock_batch_assignments), History (GET /branding-entries list, filterable by warehouse/SKU pickers).
 - Backend branding_entries.py: BrandingEntryCreate + batch_id/legacy_only source scoping; stock-breakdown returns by_batch; entries store batch_scope. Verified: assign-batch 10, legacy-scoped entry (moves batch None), batch-scoped entry (moves carry batch_code), scoped insufficiency error, buckets consistent. All test data restored/cleaned.
 - NOTE (preview data quirk): nyla 'Bangalore Warehouse' (5fff767e) is flagged is_factory=True but its stock sits in distributor_stock → branding endpoints see no stock there. Not fixed — data issue, flag if user hits it.
+
+
+## 2026-06 — Face ID login on any device / mobile PWA
+- Removed the per-device "trusted device" requirement for Face ID login. Once a user enrolls Face ID (sidebar → Face ID), they can sign in with their face from ANY browser/device, including the installed mobile PWA.
+- Login page shows "Sign in with Face ID" whenever the tenant switch (Admin → Authentication → Face ID Login) is on AND at least one user in the tenant has enrolled (`auth_config.face_id_available` from `GET /api/tenants/info/{tenant_id}`).
+- Backend `/api/auth/face/*`: `trust-device` endpoint removed; `device_token` is now optional/ignored; `face/status` no longer returns `device_trusted`. Match security still relies on distance threshold 0.45 + second-best margin + lockout + "Sign in as X / Not me" confirmation with blink/turn liveness.
+- Frontend: `FaceIdSetupPrompt` no longer shows the "Enable Face ID on this device?" prompt; `face_enrolled_device` / `face_device_token` local-storage flags removed.
+- Production needs a redeploy to receive this change.
