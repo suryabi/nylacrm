@@ -9,6 +9,7 @@ import { Badge } from '../components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon, MapPin, AlertTriangle, Layers, Users, MoreVertical, X, Filter, BookOpen, QrCode } from 'lucide-react';
+import { AreaQrDialog } from '../components/AreaQrDialog';
 import EquipmentInstructions from '../components/EquipmentInstructions';
 import { toast } from 'sonner';
 import { MaintenanceProfile } from '../components/MaintenanceProfile';
@@ -396,6 +397,7 @@ export default function EquipmentMaster() {
   const [areaFilter, setAreaFilter] = useState('');
   const [quickFilter, setQuickFilter] = useState('');
   const [importing, setImporting] = useState(false);
+  const [areaQrOpen, setAreaQrOpen] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [compYear, setCompYear] = useState(new Date().getFullYear());
   const [compMon, setCompMon] = useState(new Date().getMonth() + 1);
@@ -748,6 +750,9 @@ export default function EquipmentMaster() {
             <Button variant="outline" className="h-10 rounded-lg" onClick={() => exportFiltered(filtered)} data-testid="eq-export-btn">
               <Download className="w-4 h-4 mr-2 text-slate-500" /> Export
             </Button>
+            <Button variant="outline" className="h-10 rounded-lg border-teal-300 text-teal-800 hover:bg-teal-50" onClick={() => setAreaQrOpen(true)} data-testid="eq-area-qr-btn">
+              <QrCode className="w-4 h-4 mr-2 text-teal-700" /> Area QR
+            </Button>
             <label>
               <input type="file" accept=".xlsx" className="hidden" onChange={(e) => { importXlsx(e.target.files?.[0]); e.target.value = ''; }} data-testid="eq-import-input" />
               <Button variant="outline" className="h-10 rounded-lg" disabled={importing} asChild>
@@ -757,6 +762,7 @@ export default function EquipmentMaster() {
             <Button className="h-10 rounded-lg" onClick={openNewEq} data-testid="eq-new-btn"><Plus className="w-4 h-4 mr-2" /> Add Equipment</Button>
           </div>
         </div>
+        <AreaQrDialog open={areaQrOpen} onOpenChange={setAreaQrOpen} authHeaders={authHeaders} />
 
         {importResult && (
           <div className={`rounded-xl border px-4 py-3 text-sm flex items-start gap-2.5 ${importResult.errors?.length ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-emerald-50 border-emerald-300 text-emerald-800'}`} data-testid="eq-import-result">

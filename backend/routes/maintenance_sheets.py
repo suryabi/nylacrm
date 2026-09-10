@@ -503,13 +503,38 @@ STAFF_SESSION_HOURS = 12
 class StaffLoginBody(BaseModel):
     token: Optional[str] = None
     equipment_id: Optional[str] = None
+    area_id: Optional[str] = None
     descriptor: Optional[List[float]] = None
     member_id: Optional[str] = None
     pin: Optional[str] = None
 
 
-async def _scan_ref(token: Optional[str], equipment_id: Optional[str]) -> dict:
-    """Resolve a QR reference (daily slot token or permanent sticker equipment id) to its equipment."""
+async def _area_ctx(tenant_id: Optional[str], area_id: str):
+    """Facility/floor/area names for an area id (tenant optional for public lookups)."""
+    q = {"floors.areas.id": area_id}
+    if tenant_id:
+        q["tenant_id"] = tenant_id
+    fac = await db.facilities.find_one(q, {"_id": 0, "id": 1, "tenant_id": 1, "facility_name": 1, "floors": 1,
+                                          "latitude": 1, "longitude": 1})
+    if not fac:
+        raise HTTPException(404, "Unknown area QR")
+    for fl in fac.get("floors") or []:
+        for a in fl.get("areas") or []:
+            if a.get("id") == area_id:
+                return {"tenant_id": fac["tenant_id"], "facility_id": fac["id"], "facility_name": fac["facility_name"],
+                        "floor_id": fl.get("id"), "floor_name": fl.get("name"), "area_id": area_id, "area_name": a.get("name")}
+    raise HTTPException(404, "Unknown area QR")
+
+
+async def _scan_ref(token: Optional[str], equipment_id: Optional[str], area_id: Optional[str] = None) -> dict:
+    """Resolve a QR reference (daily slot token, sticker equipment id or area id) to an equipment-like dict."""
+    if area_id:
+        ctx = await _area_ctx(None, area_id)
+        eqs = await db.equipment_master.find({"tenant_id": ctx["tenant_id"], "area_id": area_id},
+                                             {"_id": 0, "maintenance_staff_ids": 1}).to_list(1000)
+        ids = sorted({sid for e in eqs for sid in (e.get("maintenance_staff_ids") or [])})
+        return {"id": area_id, "tenant_id": ctx["tenant_id"], "name": f"{ctx['area_name']} (area)",
+                "maintenance_staff_ids": ids}
     if token:
         slot = await db.maintenance_slots.find_one({"token": token}, {"_id": 0, "tenant_id": 1, "equipment_id": 1})
         if slot:
@@ -532,9 +557,10 @@ def _staff_pool_query(eq: dict) -> dict:
 
 
 @router.get("/staff-auth/roster")
-async def staff_auth_roster(token: Optional[str] = Query(None), equipment_id: Optional[str] = Query(None)):
+async def staff_auth_roster(token: Optional[str] = Query(None), equipment_id: Optional[str] = Query(None),
+                            area_id: Optional[str] = Query(None)):
     """Names of staff who may sign in for this QR (assigned staff only, when assignments exist)."""
-    eq = await _scan_ref(token, equipment_id)
+    eq = await _scan_ref(token, equipment_id, area_id)
     members = await db.qc_team.find(_staff_pool_query(eq), {"_id": 0, "id": 1, "name": 1, "role": 1,
                                                             "pin_hash": 1, "face_descriptors": 1}).sort("name", 1).to_list(500)
     return {"equipment_name": eq["name"],
@@ -549,7 +575,7 @@ async def staff_auth_login(body: StaffLoginBody, request: Request):
     import bcrypt
     from deps import check_login_lockout, record_login_failure, clear_login_failures, get_client_ip
     from routes.face_auth import _distance, FACE_MATCH_THRESHOLD, SECOND_BEST_MARGIN
-    eq = await _scan_ref(body.token, body.equipment_id)
+    eq = await _scan_ref(body.token, body.equipment_id, body.area_id)
     ip = get_client_ip(request)
     ident = f"staff:{body.member_id or eq['id']}"
     await check_login_lockout(ident, ip)
@@ -597,6 +623,159 @@ async def staff_auth_logout(request: Request):
     if token:
         await db.factory_staff_sessions.delete_one({"token": token})
     return {"ok": True}
+
+
+# ── Area QR: stickers, scan listing, bulk completion ─────────────────────────
+@router.get("/areas/stickers")
+async def area_stickers(origin: str = Query(...), area_id: Optional[str] = Query(None),
+                        current_user: dict = Depends(get_current_user)):
+    """Printable QR per area (facility › floor › area) with equipment counts."""
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    counts = {}
+    async for row in db.equipment_master.aggregate([
+            {"$match": {"tenant_id": tenant_id, "area_id": {"$nin": [None, ""]}}},
+            {"$group": {"_id": "$area_id", "n": {"$sum": 1},
+                        "sched": {"$sum": {"$cond": [{"$gt": ["$maintenance_frequency_days", 0]}, 1, 0]}}}}]):
+        counts[row["_id"]] = row
+    out = []
+    facs = await db.facilities.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "facility_name": 1, "floors": 1}).to_list(200)
+    for fac in facs:
+        for fl in fac.get("floors") or []:
+            for a in fl.get("areas") or []:
+                if area_id and a.get("id") != area_id:
+                    continue
+                c = counts.get(a.get("id"), {})
+                out.append({"area_id": a["id"], "area_name": a.get("name"), "floor_name": fl.get("name"),
+                            "facility_name": fac["facility_name"], "equipment_count": c.get("n", 0),
+                            "scheduled_count": c.get("sched", 0),
+                            "qr": _qr_data_uri(f"{origin.rstrip('/')}/area-scan/{a['id']}")})
+    return {"areas": out}
+
+
+async def _today_slot(tenant_id: str, eq: dict, today_iso: str) -> dict:
+    slot = await db.maintenance_slots.find_one({"tenant_id": tenant_id, "equipment_id": eq["id"], "date": today_iso}, {"_id": 0})
+    if not slot:
+        slot = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "equipment_id": eq["id"], "date": today_iso,
+                "token": uuid.uuid4().hex, "submitted": False, "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.maintenance_slots.insert_one({**slot})
+        await _ensure_photo_assignments(tenant_id, eq["id"], today_iso[:7], eq.get("photo_inspections_per_month"))
+        slot = await db.maintenance_slots.find_one({"tenant_id": tenant_id, "id": slot["id"]}, {"_id": 0}) or slot
+    return slot
+
+
+def _is_due_today(eq: dict, today) -> bool:
+    freq = eq.get("maintenance_frequency_days")
+    if not freq:
+        return False
+    anchor = eq.get("maintenance_start_date") or eq.get("last_maintenance_date")
+    return today.isoformat() in _scheduled_dates_range(freq, anchor, today, today)
+
+
+def _staff_can_act(eq: dict, actor: dict) -> bool:
+    if _is_admin(actor):
+        return True
+    ids = eq.get("maintenance_staff_ids") or []
+    return not ids or (actor.get("is_factory_staff") and actor["id"] in ids)
+
+
+@router.get("/area-scan/{area_id}")
+async def area_scan(area_id: str, current_user: dict = Depends(get_user_or_factory_staff)):
+    """Area QR → every equipment in the area with today's maintenance state and tick-ability for this actor."""
+    tenant_id = get_current_tenant_id()
+    ctx = await _area_ctx(tenant_id, area_id)
+    today = datetime.now(IST).date()
+    eqs = await db.equipment_master.find({"tenant_id": tenant_id, "area_id": area_id}, {"_id": 0}).sort("name", 1).to_list(1000)
+    items = []
+    for eq in eqs:
+        it = {"id": eq["id"], "name": eq["name"], "type": eq.get("equipment_type_name"),
+              "assigned_staff": [{"id": x.get("id"), "name": x.get("name")} for x in eq.get("maintenance_staff") or []],
+              "frequency_label": _freq_label(eq.get("maintenance_frequency_days")) if eq.get("maintenance_frequency_days") else None,
+              "can_tick": False}
+        if not _is_due_today(eq, today):
+            nxt = _scheduled_dates_range(eq["maintenance_frequency_days"], eq.get("maintenance_start_date") or eq.get("last_maintenance_date"),
+                                         today, today + timedelta(days=120)) if eq.get("maintenance_frequency_days") else []
+            it.update({"state": "not_scheduled", "next_due": next((d for d in nxt if d > today.isoformat()), None)})
+        else:
+            slot = await _today_slot(tenant_id, eq, today.isoformat())
+            it["token"] = slot["token"]
+            if slot.get("submitted"):
+                rec = await db.maintenance_records.find_one({"tenant_id": tenant_id, "slot_id": slot["id"]}, {"_id": 0},
+                                                            sort=[("created_at", -1)])
+                it.update({"state": "done", "record": {"status": (rec or {}).get("status"), "performed_by": (rec or {}).get("performed_by"),
+                                                       "completed_at": (rec or {}).get("completed_at")}})
+            elif slot.get("photo_required"):
+                it["state"] = "photo_required"
+            elif not _staff_can_act(eq, current_user):
+                it["state"] = "not_assigned"
+            else:
+                it.update({"state": "due", "can_tick": True})
+        items.append(it)
+    geo = await _geofence_ctx(tenant_id, {"facility_id": ctx["facility_id"]})
+    return {**ctx, "today": today.isoformat(), "equipment": items,
+            "actor": {"name": current_user.get("name"), "is_admin": _is_admin(current_user), "is_factory_staff": bool(current_user.get("is_factory_staff"))},
+            "geofence": ({"required": True, "radius": geo["radius"], "facility_name": geo["facility"]["facility_name"]}
+                         if geo["required"] else {"required": False}),
+            "summary": {"total": len(items), "due": sum(1 for i in items if i["state"] == "due"),
+                        "done": sum(1 for i in items if i["state"] == "done"),
+                        "photo_required": sum(1 for i in items if i["state"] == "photo_required")}}
+
+
+class AreaCompleteBody(BaseModel):
+    equipment_ids: List[str]
+    remarks: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
+@router.post("/area-scan/{area_id}/complete")
+async def area_complete(area_id: str, body: AreaCompleteBody, current_user: dict = Depends(get_user_or_factory_staff)):
+    """Bulk 'Maintenance Complete' for ticked equipment in the area — one immutable record per equipment."""
+    tenant_id = get_current_tenant_id()
+    ctx = await _area_ctx(tenant_id, area_id)
+    if not body.equipment_ids:
+        raise HTTPException(400, "Select at least one equipment")
+    now = datetime.now(IST)
+    today = now.date()
+    eqs = await db.equipment_master.find({"tenant_id": tenant_id, "area_id": area_id, "id": {"$in": body.equipment_ids}},
+                                         {"_id": 0}).to_list(1000)
+    if not eqs:
+        raise HTTPException(400, "None of the selected equipment belongs to this area")
+    staff_name = current_user.get("name") if current_user.get("is_factory_staff") else None
+    geo = await _enforce_geofence(tenant_id, {**eqs[0], "facility_id": ctx["facility_id"]}, current_user, body.lat, body.lng,
+                                  staff_name=staff_name)
+    completed, skipped = [], []
+    for eq in eqs:
+        if not _is_due_today(eq, today):
+            skipped.append({"id": eq["id"], "name": eq["name"], "reason": "Not scheduled today"}); continue
+        slot = await _today_slot(tenant_id, eq, today.isoformat())
+        if slot.get("submitted"):
+            skipped.append({"id": eq["id"], "name": eq["name"], "reason": "Already recorded today"}); continue
+        if slot.get("photo_required"):
+            skipped.append({"id": eq["id"], "name": eq["name"], "reason": "Photo inspection required — use the equipment QR", "token": slot["token"]}); continue
+        try:
+            staff = await _resolve_staff(tenant_id, eq, current_user, None)
+        except HTTPException as ex:
+            skipped.append({"id": eq["id"], "name": eq["name"], "reason": ex.detail}); continue
+        rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": slot["id"],
+               "equipment_id": eq["id"], "equipment_name": eq["name"], "scheduled_date": slot["date"],
+               "status": "completed", "attempt": 1,
+               "performed_by": (staff or {}).get("name") or current_user.get("name") or current_user.get("email"),
+               "performed_by_id": (staff or {}).get("id") or current_user.get("id"),
+               "performed_by_role": (staff or {}).get("role"),
+               "performed_via": "area_qr", "area_id": area_id, "area_name": ctx["area_name"],
+               "verified_by_user": current_user.get("name") or current_user.get("email"),
+               "geo": geo, "completed_at": now.isoformat(), "photos": [],
+               "remarks": (body.remarks or "").strip() or None, "corrections": [],
+               "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.maintenance_records.insert_one({**rec})
+        await db.maintenance_slots.update_one({"tenant_id": tenant_id, "id": slot["id"]}, {"$set": {"submitted": True}})
+        upd = {"last_maintenance_date": slot["date"]}
+        if eq.get("maintenance_frequency_days"):
+            upd["next_maintenance_due"] = (today + timedelta(days=eq["maintenance_frequency_days"])).isoformat()
+        await db.equipment_master.update_one({"tenant_id": tenant_id, "id": eq["id"]}, {"$set": upd})
+        completed.append({"id": eq["id"], "name": eq["name"], "performed_by": rec["performed_by"]})
+    return {"completed": completed, "skipped": skipped}
 
 
 # ── Corrections (audit trail, original stays immutable) ──────────────────────

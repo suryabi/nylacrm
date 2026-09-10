@@ -75,6 +75,7 @@ const AdminSkuMigrate = lazy(() => import('./pages/AdminSkuMigrate'));
 const Facilities = lazy(() => import('./pages/Facilities'));
 const MaintenanceScan = lazy(() => import('./pages/MaintenanceScan'));
 const EquipmentScan = lazy(() => import('./pages/EquipmentScan'));
+const AreaScan = lazy(() => import('./pages/AreaScan'));
 const VehiclesList = lazy(() => import('./pages/admin/VehiclesList'));
 const DriversList = lazy(() => import('./pages/admin/DriversList'));
 const ReversalsAudit = lazy(() => import('./pages/admin/ReversalsAudit'));
@@ -387,6 +388,7 @@ function AppRouter() {
           <Route path="/login" element={<Login />} />
           <Route path="/maintenance-scan/:token" element={<MaintenanceScan />} />
           <Route path="/equipment-scan/:equipmentId" element={<EquipmentScan />} />
+          <Route path="/area-scan/:areaId" element={<AreaScan />} />
           <Route path="/register" element={<Navigate to="/login" replace />} />
           <Route path="/onboarding" element={<OnboardingWizard />} />
           <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
