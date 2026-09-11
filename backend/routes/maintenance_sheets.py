@@ -702,8 +702,10 @@ async def area_scan(area_id: str, current_user: dict = Depends(get_user_or_facto
             if slot.get("submitted"):
                 rec = await db.maintenance_records.find_one({"tenant_id": tenant_id, "slot_id": slot["id"]}, {"_id": 0},
                                                             sort=[("created_at", -1)])
-                it.update({"state": "done", "record": {"status": (rec or {}).get("status"), "performed_by": (rec or {}).get("performed_by"),
-                                                       "completed_at": (rec or {}).get("completed_at")}})
+                it.update({"state": "done",
+                           "can_undo": bool(rec and rec.get("performed_via") == "area_qr" and rec.get("performed_by_id") == current_user.get("id")),
+                           "record": {"status": (rec or {}).get("status"), "performed_by": (rec or {}).get("performed_by"),
+                                      "completed_at": (rec or {}).get("completed_at"), "via": (rec or {}).get("performed_via")}})
             elif slot.get("photo_required"):
                 it["state"] = "photo_required"
             elif not _staff_can_act(eq, current_user):
@@ -728,54 +730,116 @@ class AreaCompleteBody(BaseModel):
     lng: Optional[float] = None
 
 
+class AreaTickBody(BaseModel):
+    equipment_id: str
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
+async def _area_tick_one(tenant_id: str, ctx: dict, eq: dict, current_user: dict, geo, remarks=None) -> dict:
+    """Save one 'completed' record for `eq` (today) from the area page. Returns {ok} or {skipped reason}."""
+    now = datetime.now(IST)
+    today = now.date()
+    if not _is_due_today(eq, today):
+        return {"id": eq["id"], "name": eq["name"], "reason": "Not scheduled today"}
+    slot = await _today_slot(tenant_id, eq, today.isoformat())
+    if slot.get("submitted"):
+        return {"id": eq["id"], "name": eq["name"], "reason": "Already recorded today"}
+    if slot.get("photo_required"):
+        return {"id": eq["id"], "name": eq["name"], "reason": "Photo inspection required — use the equipment QR", "token": slot["token"]}
+    try:
+        staff = await _resolve_staff(tenant_id, eq, current_user, None)
+    except HTTPException as ex:
+        return {"id": eq["id"], "name": eq["name"], "reason": ex.detail}
+    rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": slot["id"],
+           "equipment_id": eq["id"], "equipment_name": eq["name"], "scheduled_date": slot["date"],
+           "status": "completed", "attempt": 1,
+           "performed_by": (staff or {}).get("name") or current_user.get("name") or current_user.get("email"),
+           "performed_by_id": (staff or {}).get("id") or current_user.get("id"),
+           "performed_by_role": (staff or {}).get("role"),
+           "performed_via": "area_qr", "area_id": ctx["area_id"], "area_name": ctx["area_name"],
+           "verified_by_user": current_user.get("name") or current_user.get("email"),
+           "geo": geo, "completed_at": now.isoformat(), "photos": [],
+           "remarks": (remarks or "").strip() or None, "corrections": [],
+           "prev_dates": {"last_maintenance_date": eq.get("last_maintenance_date"),
+                          "next_maintenance_due": eq.get("next_maintenance_due")},
+           "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.maintenance_records.insert_one({**rec})
+    await db.maintenance_slots.update_one({"tenant_id": tenant_id, "id": slot["id"]}, {"$set": {"submitted": True}})
+    upd = {"last_maintenance_date": slot["date"]}
+    if eq.get("maintenance_frequency_days"):
+        upd["next_maintenance_due"] = (today + timedelta(days=eq["maintenance_frequency_days"])).isoformat()
+    await db.equipment_master.update_one({"tenant_id": tenant_id, "id": eq["id"]}, {"$set": upd})
+    rec.pop("_id", None)
+    return {"id": eq["id"], "name": eq["name"], "performed_by": rec["performed_by"], "record": rec}
+
+
+async def _area_geo(tenant_id, ctx, eq, current_user, lat, lng):
+    staff_name = current_user.get("name") if current_user.get("is_factory_staff") else None
+    return await _enforce_geofence(tenant_id, {**eq, "facility_id": ctx["facility_id"]}, current_user, lat, lng, staff_name=staff_name)
+
+
+@router.post("/area-scan/{area_id}/tick")
+async def area_tick(area_id: str, body: AreaTickBody, current_user: dict = Depends(get_user_or_factory_staff)):
+    """Checkbox ticked → save the completed record immediately."""
+    tenant_id = get_current_tenant_id()
+    ctx = await _area_ctx(tenant_id, area_id)
+    eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "area_id": area_id, "id": body.equipment_id}, {"_id": 0})
+    if not eq:
+        raise HTTPException(404, "Equipment not found in this area")
+    geo = await _area_geo(tenant_id, ctx, eq, current_user, body.lat, body.lng)
+    res = await _area_tick_one(tenant_id, ctx, eq, current_user, geo)
+    if res.get("reason"):
+        raise HTTPException(409, res["reason"])
+    return res
+
+
+@router.post("/area-scan/{area_id}/untick")
+async def area_untick(area_id: str, body: AreaTickBody, current_user: dict = Depends(get_user_or_factory_staff)):
+    """Undo: delete a record you created today from this area page; slot reopens; audit entry kept."""
+    tenant_id = get_current_tenant_id()
+    ctx = await _area_ctx(tenant_id, area_id)
+    today = datetime.now(IST).date().isoformat()
+    actor_id = current_user.get("id")
+    rec = await db.maintenance_records.find_one(
+        {"tenant_id": tenant_id, "equipment_id": body.equipment_id, "scheduled_date": today,
+         "performed_via": "area_qr", "performed_by_id": actor_id}, {"_id": 0}, sort=[("created_at", -1)])
+    if not rec:
+        raise HTTPException(409, "Only records you saved today from this area page can be undone")
+    await db.maintenance_records.delete_one({"tenant_id": tenant_id, "id": rec["id"]})
+    remaining = await db.maintenance_records.count_documents({"tenant_id": tenant_id, "slot_id": rec["slot_id"]})
+    if remaining == 0:
+        await db.maintenance_slots.update_one({"tenant_id": tenant_id, "id": rec["slot_id"]}, {"$set": {"submitted": False}})
+    prev = rec.get("prev_dates") or {}
+    await db.equipment_master.update_one({"tenant_id": tenant_id, "id": body.equipment_id},
+                                         {"$set": {"last_maintenance_date": prev.get("last_maintenance_date"),
+                                                   "next_maintenance_due": prev.get("next_maintenance_due")}})
+    await db.maintenance_audit.insert_one({
+        "id": str(uuid.uuid4()), "tenant_id": tenant_id, "action": "area_qr_undo",
+        "equipment_id": body.equipment_id, "equipment_name": rec.get("equipment_name"),
+        "area_id": area_id, "area_name": ctx["area_name"], "scheduled_date": today,
+        "record_id": rec["id"], "record_completed_at": rec.get("completed_at"),
+        "by_id": actor_id, "by_name": current_user.get("name") or current_user.get("email"),
+        "via": "factory_staff" if current_user.get("is_factory_staff") else "admin",
+        "at": datetime.now(timezone.utc).isoformat()})
+    return {"ok": True, "equipment_id": body.equipment_id}
+
+
 @router.post("/area-scan/{area_id}/complete")
 async def area_complete(area_id: str, body: AreaCompleteBody, current_user: dict = Depends(get_user_or_factory_staff)):
-    """Bulk 'Maintenance Complete' for ticked equipment in the area — one immutable record per equipment."""
+    """Bulk 'Maintenance Complete' for several equipment — one immutable record per equipment."""
     tenant_id = get_current_tenant_id()
     ctx = await _area_ctx(tenant_id, area_id)
     if not body.equipment_ids:
         raise HTTPException(400, "Select at least one equipment")
-    now = datetime.now(IST)
-    today = now.date()
     eqs = await db.equipment_master.find({"tenant_id": tenant_id, "area_id": area_id, "id": {"$in": body.equipment_ids}},
                                          {"_id": 0}).to_list(1000)
     if not eqs:
         raise HTTPException(400, "None of the selected equipment belongs to this area")
-    staff_name = current_user.get("name") if current_user.get("is_factory_staff") else None
-    geo = await _enforce_geofence(tenant_id, {**eqs[0], "facility_id": ctx["facility_id"]}, current_user, body.lat, body.lng,
-                                  staff_name=staff_name)
-    completed, skipped = [], []
-    for eq in eqs:
-        if not _is_due_today(eq, today):
-            skipped.append({"id": eq["id"], "name": eq["name"], "reason": "Not scheduled today"}); continue
-        slot = await _today_slot(tenant_id, eq, today.isoformat())
-        if slot.get("submitted"):
-            skipped.append({"id": eq["id"], "name": eq["name"], "reason": "Already recorded today"}); continue
-        if slot.get("photo_required"):
-            skipped.append({"id": eq["id"], "name": eq["name"], "reason": "Photo inspection required — use the equipment QR", "token": slot["token"]}); continue
-        try:
-            staff = await _resolve_staff(tenant_id, eq, current_user, None)
-        except HTTPException as ex:
-            skipped.append({"id": eq["id"], "name": eq["name"], "reason": ex.detail}); continue
-        rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": slot["id"],
-               "equipment_id": eq["id"], "equipment_name": eq["name"], "scheduled_date": slot["date"],
-               "status": "completed", "attempt": 1,
-               "performed_by": (staff or {}).get("name") or current_user.get("name") or current_user.get("email"),
-               "performed_by_id": (staff or {}).get("id") or current_user.get("id"),
-               "performed_by_role": (staff or {}).get("role"),
-               "performed_via": "area_qr", "area_id": area_id, "area_name": ctx["area_name"],
-               "verified_by_user": current_user.get("name") or current_user.get("email"),
-               "geo": geo, "completed_at": now.isoformat(), "photos": [],
-               "remarks": (body.remarks or "").strip() or None, "corrections": [],
-               "created_at": datetime.now(timezone.utc).isoformat()}
-        await db.maintenance_records.insert_one({**rec})
-        await db.maintenance_slots.update_one({"tenant_id": tenant_id, "id": slot["id"]}, {"$set": {"submitted": True}})
-        upd = {"last_maintenance_date": slot["date"]}
-        if eq.get("maintenance_frequency_days"):
-            upd["next_maintenance_due"] = (today + timedelta(days=eq["maintenance_frequency_days"])).isoformat()
-        await db.equipment_master.update_one({"tenant_id": tenant_id, "id": eq["id"]}, {"$set": upd})
-        completed.append({"id": eq["id"], "name": eq["name"], "performed_by": rec["performed_by"]})
-    return {"completed": completed, "skipped": skipped}
+    geo = await _area_geo(tenant_id, ctx, eqs[0], current_user, body.lat, body.lng)
+    results = [await _area_tick_one(tenant_id, ctx, eq, current_user, geo, body.remarks) for eq in eqs]
+    return {"completed": [{k: r[k] for k in ("id", "name", "performed_by")} for r in results if not r.get("reason")],
+            "skipped": [r for r in results if r.get("reason")]}
 
 
 # ── Corrections (audit trail, original stays immutable) ──────────────────────

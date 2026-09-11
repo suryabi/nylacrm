@@ -1,0 +1,19 @@
+{
+  "summary": "Frontend E2E test of new AreaScan tick-instant / untick-undo behaviour on /area-scan/<areaId>. Seeded 4 temp ZZ equipment (all assigned to a temp ZZ staff m1 with PIN 2468) in facility Factorty › Ground Floor › Finished Goods, and pre-ticked e4 as admin via POST /api/maintenance/area-scan/{areaId}/tick to simulate 'ticked by another actor'. Fresh browser context → /area-scan/<id> shows StaffScanLogin, picked staff m1, PIN 2468, signed in. area-scan-page loaded with header hint 'Tick = saved instantly.' visible, no 'Mark N as Maintenance Complete' button, no remarks textarea. Summary chips read '4 due / 1 done' (admin's pre-tick counted). e4 (admin-ticked) row correctly shows Done badge with green CheckCircle icon and NO checkbox (data-testid area-eq-check-<id> absent) — cannot be undone by this staff. Clicking area-eq-check-<e1> → briefly busy → row flips to state=done, text 'Saved ✓ by ZZ Tick Staff · HH:MM · untick to undo', checkbox checked; summary updates to '3 due / 2 done'; Mongo maintenance_records doc created with performed_via='area_qr', performed_by='ZZ Tick Staff'. Clicking same checkbox again → untick → row back to 'Due today', unchecked; summary reverts to '4 due / 1 done'; Mongo record deleted and maintenance_audit doc with action='area_qr_undo' written. area-tick-all button visible with label 'Tick all due (4)' (>=2 tickable); clicking it saved all 4, all rows show Done, summary '0 due / 5 done', tick-all button no longer visible. All temp ZZ equipment/staff/records/slots/audits/sessions cleaned up post-test.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/setup_area_tick.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Same observation as iteration_352: unassigned equipment (empty maintenance_staff) remains tickable by any signed-in staff on the area page. During Tick all due, the shared area's existing 'FG Conveyor' (unassigned) also got ticked by our temp staff; had to be rolled back manually. If policy is 'only assigned staff can tick', tighten _tickable to require the actor be in assigned_staff (admin still bypass).",
+    "Optimistic tick updates state to state='done' + record.completed_at=r.record.completed_at — code assumes tick response returns { performed_by, record: { completed_at } }. Backend contract works, but frontend also fires load() on catch which is good defensive UX."
+  ],
+  "updated_files": ["/app/backend/tests/setup_area_tick.py (new setup/cleanup helper for tick+untick+tickAll FE test)"],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "admin@nylaairwater.earth / test123 (nyla-air-water); ephemeral ZZ staff PIN 2468 (created and deleted).",
+  "seed_data_creation": "Ephemeral 4 equipment (ZZ Tick Pump A/B/C, ZZ Tick By Admin) + 1 qc_team member (ZZ Tick Staff, PIN 2468) in Factorty › Ground Floor › Finished Goods; admin pre-ticked ZZ Tick By Admin via API. All removed with associated slots/records/audits/sessions post-test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "setup_area_tick.py setup|cleanup|verify. Setup pre-ticks e4 as admin so staff view shows Done+green-check+no-checkbox. During tickAll, be aware unassigned pre-existing 'FG Conveyor' in Finished Goods also gets ticked — clean it up by deleting maintenance_records where performed_by='ZZ Tick Staff' and resetting the slot/equipment dates.",
+  "rca of the issue": "No issues found — the new tick-instant / untick-undo flow works end-to-end and matches spec."
+}

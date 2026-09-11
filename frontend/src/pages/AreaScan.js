@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
 import { Checkbox } from '../components/ui/checkbox';
-import { LayoutGrid, RefreshCw, XCircle, CheckCircle2, Camera, UserCheck, MapPin, CalendarX2, Lock, ExternalLink } from 'lucide-react';
+import { LayoutGrid, RefreshCw, XCircle, CheckCircle2, Camera, UserCheck, MapPin, CalendarX2, Lock, ExternalLink, Undo2 } from 'lucide-react';
 import StaffScanLogin from '../components/StaffScanLogin';
 import { getStaffSession, saveStaffSession, clearStaffSession, scanAuthHeaders } from '../lib/staffSession';
 import { toast } from 'sonner';
@@ -31,10 +30,8 @@ export default function AreaScan() {
   const { areaId } = useParams();
   const [state, setState] = useState({ loading: true });
   const [staff, setStaff] = useState(getStaffSession);
-  const [selected, setSelected] = useState([]);
-  const [remarks, setRemarks] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState({}); // equipment_id -> true while saving/undoing
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -43,7 +40,6 @@ export default function AreaScan() {
       const data = await res.json();
       if (!res.ok) { setState({ error: data.detail || 'Unknown area QR' }); return; }
       setState(data);
-      setSelected(data.equipment.filter((e) => e.can_tick).map((e) => e.id));
     } catch { setState({ error: 'Could not reach the server' }); }
   }, [areaId]);
 
@@ -56,26 +52,51 @@ export default function AreaScan() {
     clearStaffSession(); setStaff(null); setState({ loading: true }); load();
   };
 
-  const complete = async () => {
-    if (selected.length === 0) { toast.error('Tick at least one equipment'); return; }
-    setSubmitting(true);
+  const locate = async () => {
+    if (!state.geofence?.required) return {};
+    const pos = await getPosition();
+    if (!pos) throw new Error('Location access is required — allow GPS/location to record maintenance here.');
+    return { lat: pos.lat, lng: pos.lng };
+  };
+
+  const post = async (path, body) => {
+    const res = await fetch(`${API_URL}/api/maintenance/area-scan/${areaId}/${path}`, {
+      method: 'POST', headers: scanAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Could not save');
+    return data;
+  };
+
+  const tick = async (it) => {
+    setBusy((b) => ({ ...b, [it.id]: true }));
     try {
-      let pos = null;
-      if (state.geofence?.required) {
-        pos = await getPosition();
-        if (!pos) { toast.error('Location access is required — allow GPS/location to record maintenance here.'); setSubmitting(false); return; }
-      }
-      const res = await fetch(`${API_URL}/api/maintenance/area-scan/${areaId}/complete`, {
-        method: 'POST', headers: scanAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ equipment_ids: selected, remarks: remarks || null, lat: pos?.lat ?? null, lng: pos?.lng ?? null }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Could not save');
-      setResult(data);
-      toast.success(`${data.completed.length} maintenance record${data.completed.length === 1 ? '' : 's'} saved`);
-      setRemarks('');
+      const r = await post('tick', { equipment_id: it.id, ...(await locate()) });
+      setState((s) => ({ ...s, equipment: s.equipment.map((e) => (e.id === it.id
+        ? { ...e, state: 'done', can_tick: false, can_undo: true, record: { status: 'completed', performed_by: r.performed_by, completed_at: r.record.completed_at, via: 'area_qr' } }
+        : e)), summary: { ...s.summary, due: s.summary.due - 1, done: s.summary.done + 1 } }));
+      toast.success(`${it.name} — maintenance saved`, { description: 'Untick to undo' });
+    } catch (e) { toast.error(e.message); load(); } finally { setBusy((b) => ({ ...b, [it.id]: false })); }
+  };
+
+  const untick = async (it) => {
+    setBusy((b) => ({ ...b, [it.id]: true }));
+    try {
+      await post('untick', { equipment_id: it.id });
+      setState((s) => ({ ...s, equipment: s.equipment.map((e) => (e.id === it.id ? { ...e, state: 'due', can_tick: true, can_undo: false, record: null } : e)),
+        summary: { ...s.summary, due: s.summary.due + 1, done: s.summary.done - 1 } }));
+      toast(`${it.name} — record removed`, { icon: <Undo2 className="h-4 w-4" /> });
+    } catch (e) { toast.error(e.message); load(); } finally { setBusy((b) => ({ ...b, [it.id]: false })); }
+  };
+
+  const tickAll = async () => {
+    const due = state.equipment.filter((e) => e.can_tick);
+    setBulkBusy(true);
+    try {
+      const r = await post('complete', { equipment_ids: due.map((e) => e.id), ...(await locate()) });
+      toast.success(`${r.completed.length} saved${r.skipped.length ? `, ${r.skipped.length} skipped` : ''}`);
       await load();
-    } catch (e) { toast.error(e.message); } finally { setSubmitting(false); }
+    } catch (e) { toast.error(e.message); } finally { setBulkBusy(false); }
   };
 
   if (state.needLogin) return <StaffScanLogin scanRef={{ area_id: areaId }} onLogin={staffLogin} />;
@@ -99,8 +120,6 @@ export default function AreaScan() {
   if (state.error) return <Shell><Card><CardContent className="py-8 text-center" data-testid="area-scan-error"><XCircle className="h-8 w-8 mx-auto text-red-500 mb-2" /><p className="font-medium">{state.error}</p></CardContent></Card></Shell>;
 
   const tickable = state.equipment.filter((e) => e.can_tick);
-  const allOn = tickable.length > 0 && tickable.every((e) => selected.includes(e.id));
-  const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
   return (
     <Shell>
@@ -129,30 +148,26 @@ export default function AreaScan() {
         </div>
       )}
 
-      {result && (
-        <Card className="border-emerald-300"><CardContent className="p-4 space-y-1" data-testid="area-complete-result">
-          <p className="font-bold text-emerald-700 flex items-center gap-1"><CheckCircle2 className="h-4 w-4" /> {result.completed.length} completed</p>
-          {result.completed.map((c) => <p key={c.id} className="text-xs text-muted-foreground">✔ {c.name}</p>)}
-          {result.skipped.length > 0 && <p className="font-semibold text-amber-700 text-sm pt-1">{result.skipped.length} skipped</p>}
-          {result.skipped.map((c) => <p key={c.id} className="text-xs text-amber-700">• {c.name} — {c.reason}</p>)}
-        </CardContent></Card>
-      )}
-
       <Card><CardContent className="p-0" data-testid="area-equipment-list">
-        {tickable.length > 0 && (
-          <label className="flex items-center gap-3 px-4 py-3 border-b bg-slate-50 cursor-pointer">
-            <Checkbox checked={allOn} onCheckedChange={(v) => setSelected(v ? tickable.map((e) => e.id) : [])} data-testid="area-select-all" />
-            <span className="text-sm font-semibold">Select all due ({tickable.length})</span>
-          </label>
-        )}
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b bg-slate-50">
+          <p className="text-xs text-slate-600"><span className="font-semibold">Tick = saved instantly.</span> Untick your own tick today to undo.</p>
+          {tickable.length > 1 && (
+            <Button size="sm" variant="outline" className="h-8 border-emerald-300 text-emerald-700 hover:bg-emerald-50 shrink-0" onClick={tickAll} disabled={bulkBusy} data-testid="area-tick-all">
+              {bulkBusy ? <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1" />} Tick all due ({tickable.length})
+            </Button>
+          )}
+        </div>
         {state.equipment.length === 0 && <p className="text-center py-8 text-sm text-muted-foreground"><CalendarX2 className="h-8 w-8 mx-auto mb-2 opacity-40" />No equipment mapped to this area.</p>}
         {state.equipment.map((it) => (
-          <div key={it.id} className={`flex items-start gap-3 px-4 py-3 border-b last:border-0 ${it.can_tick ? '' : 'opacity-80'}`} data-testid={`area-eq-${it.id}`}>
-            {it.can_tick ? (
-              <Checkbox className="mt-0.5" checked={selected.includes(it.id)} onCheckedChange={() => toggle(it.id)} data-testid={`area-eq-check-${it.id}`} />
+          <div key={it.id} className={`flex items-start gap-3 px-4 py-3 border-b last:border-0 ${it.can_tick || it.can_undo ? '' : 'opacity-80'}`} data-testid={`area-eq-${it.id}`}>
+            {busy[it.id] ? (
+              <RefreshCw className="mt-0.5 h-4 w-4 animate-spin text-emerald-600 shrink-0" data-testid={`area-eq-busy-${it.id}`} />
+            ) : it.can_tick || it.can_undo ? (
+              <Checkbox className="mt-0.5 h-5 w-5 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600" checked={it.state === 'done'}
+                onCheckedChange={() => (it.state === 'done' ? untick(it) : tick(it))} data-testid={`area-eq-check-${it.id}`} />
             ) : (
-              <span className="mt-0.5 h-4 w-4 shrink-0 flex items-center justify-center">
-                {it.state === 'done' ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <span className="h-4 w-4 rounded border border-slate-200 bg-slate-100 block" />}
+              <span className="mt-0.5 h-5 w-5 shrink-0 flex items-center justify-center">
+                {it.state === 'done' ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <span className="h-4 w-4 rounded border border-slate-200 bg-slate-100 block" />}
               </span>
             )}
             <div className="flex-1 min-w-0">
@@ -161,7 +176,9 @@ export default function AreaScan() {
                 <StateBadge it={it} />
               </div>
               <p className="text-xs text-muted-foreground">{[it.type, it.frequency_label].filter(Boolean).join(' · ')}</p>
-              {it.state === 'done' && it.record && <p className="text-xs text-emerald-700">By {it.record.performed_by} · {(it.record.completed_at || '').slice(11, 16)}</p>}
+              {it.state === 'done' && it.record && (
+                <p className="text-xs text-emerald-700">Saved ✓ by {it.record.performed_by} · {(it.record.completed_at || '').slice(11, 16)}{it.can_undo ? ' · untick to undo' : ''}</p>
+              )}
               {it.state === 'not_scheduled' && it.next_due && <p className="text-xs text-muted-foreground">Next due {it.next_due}</p>}
               {it.state === 'not_assigned' && it.assigned_staff?.length > 0 && <p className="text-xs text-slate-500">Assigned to {it.assigned_staff.map((s) => s.name).join(', ')}</p>}
               {it.state === 'photo_required' && it.token && (
@@ -174,16 +191,6 @@ export default function AreaScan() {
         ))}
       </CardContent></Card>
 
-      {tickable.length > 0 && (
-        <Card><CardContent className="p-4 space-y-3">
-          <Textarea placeholder="Remarks for all ticked equipment (optional)" value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} data-testid="area-remarks" />
-          <Button className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={complete} disabled={submitting || selected.length === 0} data-testid="area-complete-btn">
-            {submitting ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-            Mark {selected.length} as Maintenance Complete
-          </Button>
-          <p className="text-[11px] text-muted-foreground text-center">One locked record is saved per equipment. For an incomplete or photo-inspection check-in, use that equipment's own QR.</p>
-        </CardContent></Card>
-      )}
     </Shell>
   );
 }
