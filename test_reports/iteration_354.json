@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend supervisor-assignment flows tested end-to-end on preview URL. All 5 requested scenarios pass. Temp ZZ equipment and area supervisor changes cleaned up / restored.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_results": {
+    "T1_equipment_master_assign_supervisors": "PASS - 'Assign Staff & Supervisors' dialog opens via eq-assign-staff-ZZ-Dialog-Test; SupervisorPicker (assign-supervisors) renders team users; search 'Cathy' filters; ticking assign-supervisors-user-<cathyId> + Save shows toast '... 1 supervisor'; reopen -> header 'SUPERVISORS (TEAM MEMBERS) · 1 SELECTED' and Cathy checkbox aria-checked=true.",
+    "T2_facilities_area_supervisors": "PASS - /admin/facilities -> facility-card-<id> opens detail dialog -> floor-row-<floorId> expands areas -> area-supervisors-<areaId> initially empty text ''. Dialog area-supervisors-dialog opens; ticking area-supervisor-picker-user-<cathyId> + area-supervisors-save -> chip button shows '1'. Then untick+save restored to '' (toast: '0 supervisors set for Finished Goods').",
+    "T3_maintenance_scan_supervisor_bypass": "PASS - As Cathy at /maintenance-scan/<tok of eq where she is supervisor>: scan-actor-chip='Recording as Cathy Director · supervisor', staff-scan-login NOT rendered. Selecting 'Maintenance Complete' + Submit -> scan-submitted rendered.",
+    "T4_area_scan_supervisor": "PASS - As Cathy at /area-scan/<areaId>: area-staff-chip='Recording as Cathy Director · supervisor'. Her supervised equipment (ZZ Sup Cathy UI) and an unrelated one (ZZ Unrel Cathy UI) both listed; 'Assigned to others' text present on the unrelated row; checkboxes rendered.",
+    "T5_regression_non_supervisor_scan": "PASS - As Cathy at /maintenance-scan/<tok of eq where she is NOT supervisor and area has no supervisors>: staff-scan-login rendered, scan-actor-chip NOT rendered (falls back to Factory Staff Face/PIN sign-in as expected)."
+  },
+  "test_report_links": [
+    "/app/backend/tests/setup_supervisor_frontend.py",
+    "/app/backend/tests/cleanup_supervisor_frontend.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "EquipmentMaster.js is 1544 lines - could be split into subcomponents; AssignStaffDialog is co-located and long.",
+    "Facilities.js area-supervisors-<id> button relies on inner text for count; consider a dedicated data-testid attribute for the count for stricter tests."
+  ],
+  "updated_files": [
+    "/app/backend/tests/setup_supervisor_frontend.py (new)",
+    "/app/backend/tests/cleanup_supervisor_frontend.py (new)"
+  ],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (5/5)"},
+  "test_credentials": "Admin surya.yadavalli@nylaairwater.earth / test123; Supervisor creative.director@nylaairwater.earth / test123; tenant nyla-air-water",
+  "seed_data_creation": "Created 3 temp equipment (ZZ Sup Cathy UI, ZZ Unrel Cathy UI, ZZ Dialog Test) in facility 'Factorty' -> Ground Floor -> 'Finished Goods' with daily maintenance frequency starting today. All three deleted post-test. Area 'Finished Goods' supervisor_ids restored to [] (its previous value).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Frontend supervisor assignment feature is verified working end-to-end. Route for Facilities is /admin/facilities (not /facilities). To interact with area supervisor button, first click facility-card, then expand floor-row-<floorId> accordion trigger before clicking area-supervisors-<areaId>."
+}

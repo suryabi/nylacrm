@@ -134,10 +134,10 @@ export default function AreaScan() {
         </div>
       </CardContent></Card>
 
-      {(staff || state.actor?.is_admin) && (
+      {(staff || state.actor?.is_admin || state.actor?.is_supervisor) && (
         <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2" data-testid="area-staff-chip">
           <UserCheck className="h-4 w-4 text-emerald-600 shrink-0" />
-          <p className="text-sm flex-1 truncate">Recording as <span className="font-bold">{staff?.name || state.actor?.name}</span>{state.actor?.is_admin ? <span className="text-xs text-muted-foreground"> · admin</span> : null}</p>
+          <p className="text-sm flex-1 truncate">Recording as <span className="font-bold">{staff?.name || state.actor?.name}</span>{!staff && (state.actor?.is_admin || state.actor?.is_supervisor) ? <span className="text-xs text-muted-foreground"> · {state.actor.is_admin ? 'admin' : 'supervisor'}</span> : null}</p>
           {staff && <button onClick={staffLogout} className="text-xs font-semibold text-emerald-700 hover:underline shrink-0" data-testid="area-staff-switch">Switch</button>}
         </div>
       )}

@@ -791,6 +791,33 @@ async def set_maintenance_staff(equipment_id: str, data: MaintStaffIn, current_u
     return {"ok": True, "maintenance_staff": staff}
 
 
+class SupervisorsIn(BaseModel):
+    user_ids: List[str] = []
+
+
+async def _team_users(tenant_id: str, ids: List[str]) -> list:
+    users = await db.users.find({"tenant_id": tenant_id, "id": {"$in": ids}, "is_active": {"$ne": False}},
+                                {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1}).to_list(500)
+    by_id = {u["id"]: u for u in users}
+    return [{"id": i, "name": by_id[i].get("name") or by_id[i].get("email"), "email": by_id[i].get("email"), "role": by_id[i].get("role")}
+            for i in ids if i in by_id]
+
+
+@router.put("/{equipment_id}/supervisors")
+async def set_supervisors(equipment_id: str, data: SupervisorsIn, current_user: dict = Depends(get_current_user)):
+    """Team members (app users) supervising this equipment — get alerts and may record maintenance."""
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    sups = await _team_users(tenant_id, data.user_ids)
+    res = await db.equipment_master.update_one(
+        {"tenant_id": tenant_id, "id": equipment_id},
+        {"$set": {"supervisor_ids": [x["id"] for x in sups], "supervisors": sups,
+                  "updated_at": datetime.now(timezone.utc).isoformat()}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Equipment not found")
+    return {"ok": True, "supervisors": sups}
+
+
 @router.post("/import")
 async def equipment_import(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()

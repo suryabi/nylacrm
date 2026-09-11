@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Cog, Plus, Pencil, Trash2, Search, Wrench, RefreshCw, Star, ShoppingCart, CalendarCheck, Repeat, Paperclip, Download, Upload, FileText, Image as ImageIcon, BadgeCheck, ReceiptText, Camera as CameraIcon, MapPin, AlertTriangle, Layers, Users, MoreVertical, X, Filter, BookOpen, QrCode } from 'lucide-react';
 import { AreaQrDialog } from '../components/AreaQrDialog';
+import { SupervisorPicker } from '../components/SupervisorPicker';
 import EquipmentInstructions from '../components/EquipmentInstructions';
 import { toast } from 'sonner';
 import { MaintenanceProfile } from '../components/MaintenanceProfile';
@@ -41,6 +42,7 @@ const currentWeekValue = () => {
 const AssignStaffDialog = ({ equipment, onClose }) => {
   const [users, setUsers] = useState([]);
   const [sel, setSel] = useState(() => new Set(equipment.maintenance_staff_ids || []));
+  const [sups, setSups] = useState(equipment.supervisor_ids || []);
   const [roleFilter, setRoleFilter] = useState('');
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
@@ -69,7 +71,11 @@ const AssignStaffDialog = ({ equipment, onClose }) => {
       });
       if (!res.ok) throw new Error((await res.json()).detail || 'Save failed');
       const d = await res.json();
-      toast.success(d.maintenance_staff.length ? `${d.maintenance_staff.length} factory staff assigned` : 'Assignment cleared — any factory staff can record maintenance');
+      const r2 = await fetch(`${API_URL}/api/production/equipment/${equipment.id}/supervisors`, {
+        method: 'PUT', headers: authHeaders(), body: JSON.stringify({ user_ids: sups }),
+      });
+      if (!r2.ok) throw new Error((await r2.json()).detail || 'Could not save supervisors');
+      toast.success(`${d.maintenance_staff.length ? `${d.maintenance_staff.length} factory staff` : 'Any factory staff'} · ${sups.length} supervisor${sups.length === 1 ? '' : 's'}`);
       onClose(true);
     } catch (e) { toast.error(e.message); } finally { setSaving(false); }
   };
@@ -78,8 +84,8 @@ const AssignStaffDialog = ({ equipment, onClose }) => {
     <Dialog open onOpenChange={() => onClose(false)}>
       <DialogContent className="max-w-lg" data-testid="assign-staff-dialog">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-blue-600" /> Assign Maintenance Staff</DialogTitle>
-          <DialogDescription>{equipment.name} — only assigned factory staff (verified via Face ID / PIN) can record maintenance via QR scan. Leave empty to allow any factory staff.</DialogDescription>
+          <DialogTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-blue-600" /> Assign Staff & Supervisors</DialogTitle>
+          <DialogDescription>{equipment.name} — only assigned factory staff (verified via Face ID / PIN) can record maintenance via QR scan. Leave empty to allow any factory staff. Supervisors are team members who receive alerts and may also record maintenance; with none set, the area's supervisors apply.</DialogDescription>
         </DialogHeader>
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -129,6 +135,7 @@ const AssignStaffDialog = ({ equipment, onClose }) => {
             </div>
           );
         })()}
+        <div className="pt-3 mt-3 border-t"><SupervisorPicker selected={sups} onChange={setSups} testid="assign-supervisors" /></div>
         <DialogFooter className="items-center gap-2">
           <span className="text-xs text-muted-foreground mr-auto">{sel.size} selected</span>
           <Button variant="outline" onClick={() => onClose(false)} data-testid="assign-staff-cancel">Cancel</Button>

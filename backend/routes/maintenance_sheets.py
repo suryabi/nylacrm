@@ -136,6 +136,7 @@ async def _geofence_alert(tenant_id: str, eq: dict, current_user: dict, staff_na
         from utils.notify import notify_users
         admins = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "role": 1}).to_list(500)
         admin_ids = [u["id"] for u in admins if (u.get("role") or "").lower() in ADMIN_ROLES]
+        admin_ids += [x["id"] for x in await _supervisors_for(tenant_id, eq)]
         who = staff_name or current_user.get("name") or current_user.get("email")
         await notify_users(
             tenant_id, admin_ids,
@@ -169,14 +170,40 @@ async def _enforce_geofence(tenant_id: str, eq: dict, current_user: dict, lat, l
     return {"lat": lat, "lng": lng, "distance_m": round(dist, 1)}
 
 
+async def _supervisors_for(tenant_id: str, eq: dict) -> list:
+    """Equipment supervisors, falling back to the supervisors of its area."""
+    if eq.get("supervisor_ids"):
+        return eq.get("supervisors") or []
+    if not eq.get("area_id"):
+        return []
+    fac = await db.facilities.find_one({"tenant_id": tenant_id, "floors.areas.id": eq["area_id"]}, {"_id": 0, "floors": 1})
+    for fl in (fac or {}).get("floors") or []:
+        for a in fl.get("areas") or []:
+            if a.get("id") == eq["area_id"]:
+                return a.get("supervisors") or []
+    return []
+
+
+async def _is_supervisor(tenant_id: str, eq: dict, user: dict) -> bool:
+    if user.get("is_factory_staff"):
+        return False
+    return any(x.get("id") == user.get("id") for x in await _supervisors_for(tenant_id, eq))
+
+
+def _actor_kind(user: dict, staff) -> str:
+    if staff:
+        return "factory_staff"
+    return "admin" if _is_admin(user) else "supervisor"
+
+
 async def _resolve_staff(tenant_id: str, eq: dict, current_user: dict, staff_member_id):
     """Identify the factory staff member performing maintenance (Face/PIN verified client-side).
-    Admin app users may act without a staff identity."""
+    Admin app users and the equipment's supervisors may act without a staff identity."""
     if current_user.get("is_factory_staff"):
         staff_member_id = current_user["id"]
     is_admin = _is_admin(current_user)
     if not staff_member_id:
-        if is_admin:
+        if is_admin or await _is_supervisor(tenant_id, eq, current_user):
             return None
         raise HTTPException(403, "Verify your identity with Face ID or PIN first")
     m = await db.qc_team.find_one({"tenant_id": tenant_id, "id": staff_member_id},
@@ -399,11 +426,14 @@ async def scan_status(token: str, current_user: dict = Depends(get_user_or_facto
     if slot["date"] != today:
         return {**base, "valid": False, "message": INVALID_QR_MSG}
     is_admin = _is_admin(current_user)
+    is_sup = not is_admin and await _is_supervisor(tenant_id, eq, current_user)
     geo_ctx = await _geofence_ctx(tenant_id, eq)
     extra = {"assigned_staff_ids": eq.get("maintenance_staff_ids") or [],
              "assigned_staff": [{"id": s.get("id"), "name": s.get("name"), "role": s.get("role")}
                                 for s in eq.get("maintenance_staff") or []],
-             "staff_verification_required": not is_admin, "admin_bypass": is_admin,
+             "supervisors": await _supervisors_for(tenant_id, eq),
+             "staff_verification_required": not (is_admin or is_sup), "admin_bypass": is_admin,
+             "supervisor_bypass": is_sup, "actor_name": current_user.get("name") or current_user.get("email"),
              "geofence": ({"required": True, "radius": geo_ctx["radius"],
                            "facility_name": geo_ctx["facility"]["facility_name"]}
                           if geo_ctx["required"] else {"required": False})}
@@ -476,7 +506,7 @@ async def scan_submit(token: str, body: SubmitBody, current_user: dict = Depends
            "performed_by": (staff or {}).get("name") or current_user.get("name") or current_user.get("email"),
            "performed_by_id": (staff or {}).get("id") or current_user.get("id"),
            "performed_by_role": (staff or {}).get("role"),
-           "performed_via": "factory_staff" if staff else "admin",
+           "performed_via": _actor_kind(current_user, staff),
            "verified_by_user": current_user.get("name") or current_user.get("email"),
            "geo": geo,
            "completed_at": now.isoformat(), "photos": photos,
@@ -672,11 +702,13 @@ def _is_due_today(eq: dict, today) -> bool:
     return today.isoformat() in _scheduled_dates_range(freq, anchor, today, today)
 
 
-def _staff_can_act(eq: dict, actor: dict) -> bool:
+async def _can_act(tenant_id: str, eq: dict, actor: dict) -> bool:
     if _is_admin(actor):
         return True
-    ids = eq.get("maintenance_staff_ids") or []
-    return not ids or (actor.get("is_factory_staff") and actor["id"] in ids)
+    if actor.get("is_factory_staff"):
+        ids = eq.get("maintenance_staff_ids") or []
+        return not ids or actor["id"] in ids
+    return await _is_supervisor(tenant_id, eq, actor)
 
 
 @router.get("/area-scan/{area_id}")
@@ -708,14 +740,16 @@ async def area_scan(area_id: str, current_user: dict = Depends(get_user_or_facto
                                       "completed_at": (rec or {}).get("completed_at"), "via": (rec or {}).get("performed_via")}})
             elif slot.get("photo_required"):
                 it["state"] = "photo_required"
-            elif not _staff_can_act(eq, current_user):
+            elif not await _can_act(tenant_id, eq, current_user):
                 it["state"] = "not_assigned"
             else:
                 it.update({"state": "due", "can_tick": True})
         items.append(it)
     geo = await _geofence_ctx(tenant_id, {"facility_id": ctx["facility_id"]})
     return {**ctx, "today": today.isoformat(), "equipment": items,
-            "actor": {"name": current_user.get("name"), "is_admin": _is_admin(current_user), "is_factory_staff": bool(current_user.get("is_factory_staff"))},
+            "actor": {"name": current_user.get("name") or current_user.get("email"), "is_admin": _is_admin(current_user),
+                      "is_factory_staff": bool(current_user.get("is_factory_staff")),
+                      "is_supervisor": not _is_admin(current_user) and not current_user.get("is_factory_staff")},
             "geofence": ({"required": True, "radius": geo["radius"], "facility_name": geo["facility"]["facility_name"]}
                          if geo["required"] else {"required": False}),
             "summary": {"total": len(items), "due": sum(1 for i in items if i["state"] == "due"),
@@ -757,7 +791,8 @@ async def _area_tick_one(tenant_id: str, ctx: dict, eq: dict, current_user: dict
            "performed_by": (staff or {}).get("name") or current_user.get("name") or current_user.get("email"),
            "performed_by_id": (staff or {}).get("id") or current_user.get("id"),
            "performed_by_role": (staff or {}).get("role"),
-           "performed_via": "area_qr", "area_id": ctx["area_id"], "area_name": ctx["area_name"],
+           "performed_via": "area_qr", "actor_kind": _actor_kind(current_user, staff),
+           "area_id": ctx["area_id"], "area_name": ctx["area_name"],
            "verified_by_user": current_user.get("name") or current_user.get("email"),
            "geo": geo, "completed_at": now.isoformat(), "photos": [],
            "remarks": (remarks or "").strip() or None, "corrections": [],
@@ -917,10 +952,11 @@ async def check_missed_maintenance() -> dict:
                     promoted = random.choice(cand)
                     await db.maintenance_slots.update_one({"tenant_id": tenant_id, "id": promoted["id"]},
                                                           {"$set": {"photo_required": True}})
-            eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id},
-                                                    {"_id": 0, "name": 1, "facility_name": 1, "floor_name": 1, "area_name": 1})
+            eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": equipment_id}, {"_id": 0})
             dates = sorted(s["date"] for s in slots)
             items.append({
+                "supervisor_ids": [x["id"] for x in await _supervisors_for(tenant_id, eq)] if eq else [],
+                "photo_missed": any(s.get("photo_required") for s in slots),
                 "name": (eq or {}).get("name") or "Deleted equipment",
                 "loc": " › ".join(x for x in [(eq or {}).get("facility_name"), (eq or {}).get("floor_name"),
                                               (eq or {}).get("area_name")] if x),
@@ -952,6 +988,23 @@ async def check_missed_maintenance() -> dict:
                 except Exception:
                     logging.getLogger("maintenance_missed").exception("missed summary email failed for %s", u.get("email"))
         alerts += 1
+        # Supervisors get a summary limited to their own equipment/areas (admins already got everything).
+        admin_id_set = {u["id"] for u in admin_users}
+        sup_ids = sorted({sid for i in items for sid in i["supervisor_ids"]} - admin_id_set)
+        for sid in sup_ids:
+            mine = [i for i in items if sid in i["supervisor_ids"]]
+            sup = await db.users.find_one({"tenant_id": tenant_id, "id": sid}, {"_id": 0, "id": 1, "email": 1})
+            if not sup:
+                continue
+            sub = f"⚠ Missed maintenance (your equipment): {len(mine)} equipment, {sum(len(i['dates']) for i in mine)} missed day(s)"
+            try:
+                await notify_users(tenant_id, [sid], title=sub,
+                                   body="; ".join(f"{i['name']} ({i['shown']})" for i in mine[:8]) + ". Open Equipment Master to review.",
+                                   link="/equipment-master", kind="alert", category="approval", entity_type="equipment", send_email_too=False)
+                if sup.get("email"):
+                    await send_email(to=sup["email"], subject=sub, html=_missed_summary_html(mine, today), text=sub)
+            except Exception:
+                logging.getLogger("maintenance_missed").exception("supervisor summary failed for %s", sid)
         await db.maintenance_slots.update_many(
             {"tenant_id": tenant_id, "id": {"$in": [s["id"] for slots in by_eq.values() for s in slots]}},
             {"$set": {"missed_notified": True, "missed_notified_at": datetime.now(timezone.utc).isoformat()}})
@@ -960,8 +1013,9 @@ async def check_missed_maintenance() -> dict:
 
 def _missed_summary_html(items: list, today: str) -> str:
     cell = "padding:6px 10px;font-size:12px;border-bottom:1px solid #e2e8f0;vertical-align:top"
+    photo_tag = " <span style='color:#b91c1c;font-weight:normal'>📷 photo inspection missed</span>"
     rows = "".join(
-        f"<tr><td style='{cell};font-weight:bold'>{i['name']}</td>"
+        f"<tr><td style='{cell};font-weight:bold'>{i['name']}{photo_tag if i.get('photo_missed') else ''}</td>"
         f"<td style='{cell};color:#475569'>{i['loc'] or '—'}</td>"
         f"<td style='{cell};color:#b91c1c'>{i['shown']}</td>"
         f"<td style='{cell};text-align:center'>{len(i['dates'])}</td></tr>" for i in items)

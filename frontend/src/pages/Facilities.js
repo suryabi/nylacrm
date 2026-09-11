@@ -8,7 +8,8 @@ import { Badge } from '../components/ui/badge';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '../components/ui/accordion';
-import { Building2, Plus, Pencil, Trash2, MapPin, Phone, Mail, User, Layers, Paperclip, Download, Upload, FileText, Image as ImageIcon, X, ExternalLink, Info, StickyNote, ShieldCheck } from 'lucide-react';
+import { Building2, Plus, Pencil, Trash2, MapPin, Phone, Mail, User, Layers, Paperclip, Download, Upload, FileText, Image as ImageIcon, X, ExternalLink, Info, StickyNote, ShieldCheck , UserCog } from 'lucide-react';
+import { SupervisorPicker } from '../components/SupervisorPicker';
 import { toast } from 'sonner';
 import { FormSection } from '../components/FormSection';
 import GooglePlacesAddressSearch from '../components/GooglePlacesAddressSearch';
@@ -142,6 +143,8 @@ export default function Facilities() {
   const [showGeofence, setShowGeofence] = useState(false);
   const [newFloor, setNewFloor] = useState('');
   const [areaInputs, setAreaInputs] = useState({}); // floorId -> text
+  const [supArea, setSupArea] = useState(null); // { floorId, area }
+  const [supSel, setSupSel] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(null); // {url, filename}
   const [photoTarget, setPhotoTarget] = useState('general'); // 'general' | floorId | `${floorId}|${areaId}`
@@ -220,6 +223,14 @@ export default function Facilities() {
     if (!name) return;
     const res = await fetch(`${API_URL}/api/facilities/${detail.id}/floors/${floorId}/areas`, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name }) });
     if (res.ok) { setAreaInputs((s) => ({ ...s, [floorId]: '' })); load(); } else toast.error('Failed to add area');
+  };
+
+  const saveAreaSupervisors = async () => {
+    const res = await fetch(`${API_URL}/api/facilities/${detail.id}/floors/${supArea.floorId}/areas/${supArea.area.id}/supervisors`,
+      { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ user_ids: supSel }) });
+    if (!res.ok) { toast.error((await res.json()).detail || 'Could not save supervisors'); return; }
+    toast.success(`${supSel.length} supervisor${supSel.length === 1 ? '' : 's'} set for ${supArea.area.name}`);
+    setSupArea(null); load();
   };
 
   const deleteArea = async (floorId, areaId) => {
@@ -419,6 +430,19 @@ export default function Facilities() {
       </Dialog>
 
       {/* Detail dialog: floors/areas + files */}
+      <Dialog open={!!supArea} onOpenChange={(o) => { if (!o) setSupArea(null); }}>
+        <DialogContent className="max-w-md" data-testid="area-supervisors-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><UserCog className="h-5 w-5 text-[#002FA7]" /> Area Supervisors — {supArea?.area?.name}</DialogTitle>
+            <DialogDescription>Team members who supervise every equipment in this area: they receive missed-maintenance, geofence and photo-inspection alerts and can record maintenance from the QR pages. Equipment with its own supervisors overrides this.</DialogDescription>
+          </DialogHeader>
+          {supArea && <SupervisorPicker selected={supSel} onChange={setSupSel} testid="area-supervisor-picker" />}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSupArea(null)} data-testid="area-supervisors-cancel">Cancel</Button>
+            <Button onClick={saveAreaSupervisors} style={{ backgroundColor: '#002FA7' }} data-testid="area-supervisors-save">Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) setDetail(null); }}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" data-testid="facility-detail-dialog">
           {detail && (
@@ -468,6 +492,10 @@ export default function Facilities() {
                               <Badge key={ar.id} variant="outline" className="gap-2 pr-1.5 py-1.5 pl-1.5 text-sm font-normal" data-testid={`area-chip-${ar.id}`}>
                                 <CodeBadge small code={ar.code} onSave={(v) => saveCode(`${detail.id}/floors/${fl.id}/areas/${ar.id}/code`, v)} testid={`area-code-${ar.id}`} />
                                 {ar.name}
+                                <button onClick={() => { setSupArea({ floorId: fl.id, area: ar }); setSupSel(ar.supervisor_ids || []); }} title="Supervisors"
+                                  className={`p-1 rounded hover:bg-blue-50 ${(ar.supervisor_ids || []).length ? 'text-[#002FA7]' : 'text-slate-400'}`} data-testid={`area-supervisors-${ar.id}`}>
+                                  <UserCog className="h-4 w-4" />{(ar.supervisor_ids || []).length > 0 && <span className="text-[10px] font-bold ml-0.5">{ar.supervisor_ids.length}</span>}
+                                </button>
                                 <button onClick={() => deleteArea(fl.id, ar.id)} className="p-1 rounded hover:bg-red-50 hover:text-red-600 text-slate-400" data-testid={`delete-area-${ar.id}`}><X className="h-4 w-4" /></button>
                               </Badge>
                             ))}

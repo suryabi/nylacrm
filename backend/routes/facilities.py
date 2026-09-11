@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import Response
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 from database import db
 from core.tenant import get_current_tenant_id
@@ -166,6 +166,28 @@ async def set_area_code(facility_id: str, floor_id: str, area_id: str, payload: 
     if r.matched_count == 0:
         raise HTTPException(404, "Area not found")
     return {"ok": True, "code": code}
+
+
+class AreaSupervisorsIn(BaseModel):
+    user_ids: List[str] = []
+
+
+@router.put("/{facility_id}/floors/{floor_id}/areas/{area_id}/supervisors")
+async def set_area_supervisors(facility_id: str, floor_id: str, area_id: str, payload: AreaSupervisorsIn,
+                               current_user: dict = Depends(get_current_user)):
+    """Team members supervising every equipment in this area (equipment without its own supervisor inherits these)."""
+    _require_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    from routes.equipment_master import _team_users
+    sups = await _team_users(tenant_id, payload.user_ids)
+    r = await db.facilities.update_one(
+        {"tenant_id": tenant_id, "id": facility_id},
+        {"$set": {"floors.$[f].areas.$[a].supervisor_ids": [x["id"] for x in sups],
+                  "floors.$[f].areas.$[a].supervisors": sups, "updated_at": _now()}},
+        array_filters=[{"f.id": floor_id}, {"a.id": area_id}])
+    if r.matched_count == 0:
+        raise HTTPException(404, "Area not found")
+    return {"ok": True, "supervisors": sups}
 
 
 @router.get("")

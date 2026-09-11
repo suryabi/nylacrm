@@ -268,6 +268,12 @@ export default function MaintenanceScan() {
           <button onClick={staffLogout} className="text-xs font-semibold text-emerald-700 hover:underline shrink-0" data-testid="scan-staff-switch">Switch</button>
         </div>
       )}
+      {!staff && (state.admin_bypass || state.supervisor_bypass) && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2" data-testid="scan-actor-chip">
+          <UserCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+          <p className="text-sm flex-1 truncate">Recording as <span className="font-bold">{state.actor_name}</span><span className="text-xs text-muted-foreground"> · {state.admin_bypass ? 'admin' : 'supervisor'}</span></p>
+        </div>
+      )}
       {state.geofence?.required && (
         <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2" data-testid="scan-geofence-chip">
           <MapPin className="h-4 w-4 text-[#002FA7] shrink-0" />
