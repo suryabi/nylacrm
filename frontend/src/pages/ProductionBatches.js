@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
+import { PreProductionGate } from '../components/PreProductionGate';
 import axios from 'axios';
 import {
   Package, Plus, Search, Filter, ChevronDown, Loader2,
@@ -378,6 +379,8 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
     skip_qc_reason: '',
   });
   const isElevated = ['ceo', 'system admin'].includes((user?.role || '').trim().toLowerCase());
+  const [preStatus, setPreStatus] = useState(null);
+  const [preOverride, setPreOverride] = useState({ enabled: false, reason: '' });
   const [saving, setSaving] = useState(false);
   const [hasQCRoute, setHasQCRoute] = useState(null);
   const [packagingTypes, setPackagingTypes] = useState([]);
@@ -425,6 +428,10 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
     if (!form.batch_code.trim()) { toast.error('Batch code is required'); return; }
     if (!form.total_crates || parseInt(form.total_crates) <= 0) { toast.error('Total crates must be > 0'); return; }
     if (!form.bottles_per_crate || parseInt(form.bottles_per_crate) <= 0) { toast.error('Select a packaging type'); return; }
+    if (preStatus && !preStatus.all_clear) {
+      if (!isElevated || !preOverride.enabled) { toast.error(`Pre-production checklist pending: ${preStatus.pending.map(p => p.name).join(', ')}`); return; }
+      if (!preOverride.reason.trim()) { toast.error('Enter a reason to override the pre-production checklist'); return; }
+    }
 
     setSaving(true);
     try {
@@ -436,6 +443,8 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
         skip_qc: !!form.skip_qc,
         skip_qc_reason: form.skip_qc ? (form.skip_qc_reason || '').trim() || null : null,
         target_child_sku_id: targetChild || null,
+        override_pre_production: !!(preStatus && !preStatus.all_clear && preOverride.enabled),
+        override_pre_production_reason: preOverride.enabled ? preOverride.reason.trim() : null,
       }, { headers: getAuthHeaders() });
       toast.success(form.skip_qc ? 'Batch created and marked warehouse-ready (QC bypassed)' : 'Batch created successfully');
       onSuccess();
@@ -536,6 +545,8 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
               </span>
             </div>
           )}
+
+          <PreProductionGate skuId={form.sku_id} isElevated={isElevated} override={preOverride} onOverrideChange={setPreOverride} onStatus={setPreStatus} />
 
           {isElevated && (
             <div className={`rounded-lg border px-3 py-2.5 ${form.skip_qc ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'}`}>

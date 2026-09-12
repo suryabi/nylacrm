@@ -83,6 +83,8 @@ class BatchCreate(BaseModel):
     # are populated for later reporting.
     skip_qc: bool = False
     skip_qc_reason: Optional[str] = None
+    override_pre_production: bool = False      # CEO / System Admin only, reason mandatory
+    override_pre_production_reason: Optional[str] = None
     # Optional Model-C branding target: production runs can pre-declare which
     # child SKU (customer branding) the output is destined for. Used as the
     # DEFAULT classification when transferring to the master warehouse.
@@ -665,6 +667,23 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_user_
     if existing:
         raise HTTPException(status_code=400, detail=f"Batch code '{data.batch_code}' already exists")
 
+    # Pre-production gate: every per-run equipment applicable to this SKU must be cleared.
+    from routes.maintenance_sheets import pre_production_status, consume_pre_production
+    pre = await pre_production_status(tenant_id, sku_id, current_user)
+    pre_override = None
+    if pre["pending"]:
+        names = ", ".join(i["name"] for i in pre["pending"])
+        reason = (data.override_pre_production_reason or "").strip()
+        if not data.override_pre_production:
+            raise HTTPException(status_code=409, detail=f"Pre-production maintenance pending: {names}. Complete the checklist before creating this batch.")
+        if not _is_elevated(current_user):
+            raise HTTPException(status_code=403, detail="Only CEO and System Admin can override the pre-production checklist.")
+        if not reason:
+            raise HTTPException(status_code=400, detail="A reason is required to override the pre-production checklist.")
+        pre_override = {"by": current_user.get("id"), "by_name": current_user.get("name"), "reason": reason,
+                        "pending": [{"equipment_id": i["id"], "equipment_name": i["name"]} for i in pre["pending"]],
+                        "at": datetime.now(timezone.utc).isoformat()}
+
     # Get QC route for this SKU
     qc_route = await tdb.qc_routes.find_one({"sku_id": sku_id, "tenant_id": tenant_id}, {"_id": 0})
 
@@ -738,8 +757,23 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_user_
         batch["qc_bypassed_at"] = now
         batch["qc_bypassed_reason"] = (data.skip_qc_reason or "").strip() or None
 
+    batch["pre_production_clearances"] = await consume_pre_production(tenant_id, sku_id, batch)
+    batch["pre_production_override"] = pre_override
     await tdb.production_batches.insert_one(batch)
     batch.pop("_id", None)
+    if pre_override:
+        try:
+            from utils.notify import notify_users
+            from routes.maintenance_sheets import ADMIN_ROLES
+            admins = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "role": 1}).to_list(500)
+            ids = [u["id"] for u in admins if (u.get("role") or "").lower() in ADMIN_ROLES]
+            await notify_users(tenant_id, ids, title=f"⚠ Pre-production checklist overridden — batch {batch['batch_code']}",
+                               body=f"{current_user.get('name')} created batch {batch['batch_code']} ({sku_name}) with pending: "
+                                    + ", ".join(p["equipment_name"] for p in pre_override["pending"]) + f". Reason: {pre_override['reason']}",
+                               link=f"/production/batches/{batch['id']}", kind="alert", category="approval",
+                               entity_type="production_batch", entity_id=batch["id"])
+        except Exception:
+            pass
     return batch
 
 @router.put("/batches/{batch_id}")

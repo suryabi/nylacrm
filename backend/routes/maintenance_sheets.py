@@ -342,6 +342,8 @@ async def equipment_scan_resolve(equipment_id: str, current_user: dict = Depends
             "instruction_files": [
                 {"id": f.get("id"), "filename": f.get("filename"), "content_type": f.get("content_type")}
                 for f in (eq.get("attachments") or []) if f.get("category") == "instruction"]}
+    if eq.get("per_run_maintenance"):
+        base["per_run"] = await _per_run_item(tenant_id, eq, current_user)
     freq = eq.get("maintenance_frequency_days")
     if not freq:
         return {**base, "scheduled_today": False, "message": "No maintenance frequency set for this equipment."}
@@ -534,6 +536,7 @@ class StaffLoginBody(BaseModel):
     token: Optional[str] = None
     equipment_id: Optional[str] = None
     area_id: Optional[str] = None
+    pre_production: Optional[str] = None   # tenant id (printed in the checklist QR)
     descriptor: Optional[List[float]] = None
     member_id: Optional[str] = None
     pin: Optional[str] = None
@@ -556,8 +559,17 @@ async def _area_ctx(tenant_id: Optional[str], area_id: str):
     raise HTTPException(404, "Unknown area QR")
 
 
-async def _scan_ref(token: Optional[str], equipment_id: Optional[str], area_id: Optional[str] = None) -> dict:
-    """Resolve a QR reference (daily slot token, sticker equipment id or area id) to an equipment-like dict."""
+async def _scan_ref(token: Optional[str], equipment_id: Optional[str], area_id: Optional[str] = None,
+                    pre_production: Optional[str] = None) -> dict:
+    """Resolve a QR reference (daily slot token, sticker equipment id, area id or pre-production checklist) to an equipment-like dict."""
+    if pre_production:
+        eqs = await db.equipment_master.find({"tenant_id": pre_production, "per_run_maintenance": True},
+                                             {"_id": 0, "maintenance_staff_ids": 1}).to_list(1000)
+        if not eqs:
+            raise HTTPException(404, "No pre-production equipment configured")
+        ids = sorted({sid for e in eqs for sid in (e.get("maintenance_staff_ids") or [])})
+        return {"id": f"prerun:{pre_production}", "tenant_id": pre_production, "name": "Pre-Production Checklist",
+                "maintenance_staff_ids": ids}
     if area_id:
         ctx = await _area_ctx(None, area_id)
         eqs = await db.equipment_master.find({"tenant_id": ctx["tenant_id"], "area_id": area_id},
@@ -588,9 +600,9 @@ def _staff_pool_query(eq: dict) -> dict:
 
 @router.get("/staff-auth/roster")
 async def staff_auth_roster(token: Optional[str] = Query(None), equipment_id: Optional[str] = Query(None),
-                            area_id: Optional[str] = Query(None)):
+                            area_id: Optional[str] = Query(None), pre_production: Optional[str] = Query(None)):
     """Names of staff who may sign in for this QR (assigned staff only, when assignments exist)."""
-    eq = await _scan_ref(token, equipment_id, area_id)
+    eq = await _scan_ref(token, equipment_id, area_id, pre_production)
     members = await db.qc_team.find(_staff_pool_query(eq), {"_id": 0, "id": 1, "name": 1, "role": 1,
                                                             "pin_hash": 1, "face_descriptors": 1}).sort("name", 1).to_list(500)
     return {"equipment_name": eq["name"],
@@ -605,7 +617,7 @@ async def staff_auth_login(body: StaffLoginBody, request: Request):
     import bcrypt
     from deps import check_login_lockout, record_login_failure, clear_login_failures, get_client_ip
     from routes.face_auth import _distance, FACE_MATCH_THRESHOLD, SECOND_BEST_MARGIN
-    eq = await _scan_ref(body.token, body.equipment_id, body.area_id)
+    eq = await _scan_ref(body.token, body.equipment_id, body.area_id, body.pre_production)
     ip = get_client_ip(request)
     ident = f"staff:{body.member_id or eq['id']}"
     await check_login_lockout(ident, ip)
@@ -875,6 +887,136 @@ async def area_complete(area_id: str, body: AreaCompleteBody, current_user: dict
     results = [await _area_tick_one(tenant_id, ctx, eq, current_user, geo, body.remarks) for eq in eqs]
     return {"completed": [{k: r[k] for k in ("id", "name", "performed_by")} for r in results if not r.get("reason")],
             "skipped": [r for r in results if r.get("reason")]}
+
+
+# ── Pre-production (per production run) maintenance ─────────────────────────
+async def _sku_names(tenant_id: str, ids: list) -> list:
+    if not ids:
+        return []
+    rows = await db.master_skus.find({"tenant_id": tenant_id, "id": {"$in": ids}}, {"_id": 0, "id": 1, "sku_name": 1, "name": 1}).to_list(500)
+    by = {r["id"]: r.get("sku_name") or r.get("name") for r in rows}
+    return [by.get(i, "?") for i in ids]
+
+
+async def _open_clearance(tenant_id: str, equipment_id: str):
+    return await db.maintenance_records.find_one(
+        {"tenant_id": tenant_id, "equipment_id": equipment_id, "trigger": "per_run", "status": "completed",
+         "consumed_by_batch_id": None}, {"_id": 0}, sort=[("created_at", -1)])
+
+
+async def _per_run_item(tenant_id: str, eq: dict, actor: dict, sku_id: Optional[str] = None) -> dict:
+    rec = await _open_clearance(tenant_id, eq["id"])
+    sku_ids = eq.get("per_run_sku_ids") or []
+    can = await _can_act(tenant_id, eq, actor)
+    return {"id": eq["id"], "name": eq["name"], "type": eq.get("equipment_type_name"),
+            "location": " › ".join(x for x in [eq.get("facility_name"), eq.get("floor_name"), eq.get("area_name")] if x),
+            "sku_names": await _sku_names(tenant_id, sku_ids), "all_skus": not sku_ids,
+            "applies": (not sku_ids) or (sku_id in sku_ids) if sku_id else True,
+            "assigned_staff": [{"id": x.get("id"), "name": x.get("name")} for x in eq.get("maintenance_staff") or []],
+            "cleared": bool(rec),
+            "record": {"id": rec["id"], "performed_by": rec.get("performed_by"), "completed_at": rec.get("completed_at")} if rec else None,
+            "can_tick": can and not rec,
+            "can_undo": bool(rec and rec.get("performed_by_id") == actor.get("id")),
+            "not_assigned": not can}
+
+
+async def pre_production_status(tenant_id: str, sku_id: Optional[str], actor: dict) -> dict:
+    """Checklist for the next production run of `sku_id` (or every per-run equipment when no SKU given)."""
+    eqs = await db.equipment_master.find({"tenant_id": tenant_id, "per_run_maintenance": True}, {"_id": 0}).sort("name", 1).to_list(1000)
+    items = [await _per_run_item(tenant_id, eq, actor, sku_id) for eq in eqs]
+    if sku_id:
+        items = [i for i in items if i["applies"]]
+    pending = [i for i in items if not i["cleared"]]
+    return {"items": items, "pending": pending, "all_clear": not pending, "sku_id": sku_id}
+
+
+@router.get("/pre-production")
+async def pre_production_get(sku_id: Optional[str] = Query(None), current_user: dict = Depends(get_user_or_factory_staff)):
+    tenant_id = get_current_tenant_id()
+    data = await pre_production_status(tenant_id, sku_id, current_user)
+    geo_required = await db.maintenance_settings.find_one({"tenant_id": tenant_id}, {"_id": 0, "geofence_enabled": 1}) or {}
+    return {**data, "actor": {"name": current_user.get("name") or current_user.get("email"), "is_admin": _is_admin(current_user),
+                              "is_factory_staff": bool(current_user.get("is_factory_staff"))},
+            "geofence_enabled": bool(geo_required.get("geofence_enabled"))}
+
+
+@router.get("/pre-production/sticker")
+async def pre_production_sticker(origin: str = Query(...), current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    n = await db.equipment_master.count_documents({"tenant_id": tenant_id, "per_run_maintenance": True})
+    return {"equipment_count": n, "qr": _qr_data_uri(f"{origin.rstrip('/')}/pre-production-scan/{tenant_id}")}
+
+
+class GeoBody(BaseModel):
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
+@router.post("/pre-production/{equipment_id}/clear")
+async def pre_production_clear(equipment_id: str, body: GeoBody = GeoBody(), current_user: dict = Depends(get_user_or_factory_staff)):
+    """Record a per-run clearance (valid until the next production batch of an applicable SKU consumes it)."""
+    tenant_id = get_current_tenant_id()
+    eq = await _get_equipment(tenant_id, equipment_id)
+    if not eq.get("per_run_maintenance"):
+        raise HTTPException(400, "This equipment is not marked 'before every production run'")
+    if await _open_clearance(tenant_id, equipment_id):
+        raise HTTPException(409, "Already cleared for the next production run")
+    staff_name = current_user.get("name") if current_user.get("is_factory_staff") else None
+    geo = await _enforce_geofence(tenant_id, eq, current_user, body.lat, body.lng, staff_name=staff_name)
+    staff = await _resolve_staff(tenant_id, eq, current_user, None)
+    now = datetime.now(IST)
+    rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": None, "trigger": "per_run",
+           "equipment_id": eq["id"], "equipment_name": eq["name"], "scheduled_date": now.date().isoformat(),
+           "status": "completed", "attempt": 1,
+           "performed_by": (staff or {}).get("name") or current_user.get("name") or current_user.get("email"),
+           "performed_by_id": (staff or {}).get("id") or current_user.get("id"),
+           "performed_by_role": (staff or {}).get("role"),
+           "performed_via": "pre_production", "actor_kind": _actor_kind(current_user, staff),
+           "verified_by_user": current_user.get("name") or current_user.get("email"),
+           "geo": geo, "completed_at": now.isoformat(), "photos": [], "remarks": None, "corrections": [],
+           "consumed_by_batch_id": None, "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.maintenance_records.insert_one({**rec})
+    await db.equipment_master.update_one({"tenant_id": tenant_id, "id": eq["id"]}, {"$set": {"last_maintenance_date": now.date().isoformat()}})
+    rec.pop("_id", None)
+    return {"ok": True, "record": rec}
+
+
+@router.post("/pre-production/{equipment_id}/undo")
+async def pre_production_undo(equipment_id: str, current_user: dict = Depends(get_user_or_factory_staff)):
+    """Undo your own clearance while no batch has consumed it."""
+    tenant_id = get_current_tenant_id()
+    rec = await _open_clearance(tenant_id, equipment_id)
+    if not rec or rec.get("performed_by_id") != current_user.get("id"):
+        raise HTTPException(409, "Only your own un-consumed clearance can be undone")
+    await db.maintenance_records.delete_one({"tenant_id": tenant_id, "id": rec["id"]})
+    await db.maintenance_audit.insert_one({
+        "id": str(uuid.uuid4()), "tenant_id": tenant_id, "action": "pre_production_undo",
+        "equipment_id": equipment_id, "equipment_name": rec.get("equipment_name"), "record_id": rec["id"],
+        "record_completed_at": rec.get("completed_at"), "by_id": current_user.get("id"),
+        "by_name": current_user.get("name") or current_user.get("email"),
+        "via": "factory_staff" if current_user.get("is_factory_staff") else "admin",
+        "at": datetime.now(timezone.utc).isoformat()})
+    return {"ok": True}
+
+
+async def consume_pre_production(tenant_id: str, sku_id: str, batch: dict) -> list:
+    """Link every open clearance applicable to this SKU to the new batch; returns the snapshot stored on the batch."""
+    eqs = await db.equipment_master.find({"tenant_id": tenant_id, "per_run_maintenance": True}, {"_id": 0, "id": 1, "name": 1, "per_run_sku_ids": 1}).to_list(1000)
+    snap = []
+    for eq in eqs:
+        ids = eq.get("per_run_sku_ids") or []
+        if ids and sku_id not in ids:
+            continue
+        rec = await _open_clearance(tenant_id, eq["id"])
+        if not rec:
+            continue
+        await db.maintenance_records.update_one({"tenant_id": tenant_id, "id": rec["id"]},
+                                                {"$set": {"consumed_by_batch_id": batch["id"], "consumed_by_batch_code": batch.get("batch_code"),
+                                                          "consumed_at": datetime.now(timezone.utc).isoformat()}})
+        snap.append({"equipment_id": eq["id"], "equipment_name": eq["name"], "record_id": rec["id"],
+                     "performed_by": rec.get("performed_by"), "completed_at": rec.get("completed_at")})
+    return snap
 
 
 # ── Corrections (audit trail, original stays immutable) ──────────────────────

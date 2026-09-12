@@ -63,6 +63,8 @@ class EquipmentIn(BaseModel):
     facility_id: Optional[str] = None
     floor_id: Optional[str] = None
     area_id: Optional[str] = None
+    per_run_maintenance: bool = False          # must be cleared before every production run
+    per_run_sku_ids: List[str] = []            # empty = applies to every SKU
 
 
 class LogDateBody(BaseModel):

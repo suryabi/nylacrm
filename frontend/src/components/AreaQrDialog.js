@@ -48,6 +48,7 @@ export const printAreaStickers = (areas) => {
 
 export const AreaQrDialog = ({ open, onOpenChange, authHeaders }) => {
   const [areas, setAreas] = useState(null);
+  const [pre, setPre] = useState(null);
 
   useEffect(() => {
     if (!open) return;
@@ -56,7 +57,12 @@ export const AreaQrDialog = ({ open, onOpenChange, authHeaders }) => {
       .then(async (r) => { if (!r.ok) throw new Error((await r.json()).detail || 'Could not load areas'); return r.json(); })
       .then((d) => setAreas(d.areas || []))
       .catch((e) => { toast.error(e.message); setAreas([]); });
+    fetch(`${API_URL}/api/maintenance/pre-production/sticker?origin=${encodeURIComponent(window.location.origin)}`, { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : null)).then(setPre).catch(() => setPre(null));
   }, [open, authHeaders]);
+
+  const printPre = () => pre && printAreaStickers([{ area_id: 'pre', area_name: 'Pre-Production Checklist', floor_name: 'Before every production run', facility_name: 'All facilities',
+    equipment_count: pre.equipment_count, scheduled_count: pre.equipment_count, qr: pre.qr }]);
 
   const groups = (areas || []).reduce((acc, a) => {
     const k = `${a.facility_name} › ${a.floor_name}`;
@@ -68,9 +74,19 @@ export const AreaQrDialog = ({ open, onOpenChange, authHeaders }) => {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" data-testid="area-qr-dialog">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><QrCode className="h-5 w-5 text-teal-700" /> Area QR Stickers</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><QrCode className="h-5 w-5 text-teal-700" /> Area & Checklist QR Stickers</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground -mt-1">Scanning an area QR lists every equipment in that area so staff can tick and complete today's maintenance in one go.</p>
+        {pre && (
+          <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2" data-testid="pre-production-qr-row">
+            <img src={pre.qr} alt="" className="h-10 w-10 rounded border bg-white" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm">Pre-Production Checklist</p>
+              <p className="text-xs text-muted-foreground">{pre.equipment_count} equipment marked "before every production run"</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={printPre} disabled={!pre.equipment_count} data-testid="pre-production-qr-print"><Printer className="h-3.5 w-3.5 mr-1" /> Print</Button>
+          </div>
+        )}
         {areas === null && <div className="py-8 text-center text-muted-foreground"><RefreshCw className="h-5 w-5 animate-spin mx-auto" /></div>}
         {areas && areas.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground" data-testid="area-qr-empty">No areas defined yet — add floors and areas under Facilities.</p>}
         {areas && areas.length > 0 && (

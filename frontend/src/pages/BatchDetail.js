@@ -295,6 +295,20 @@ export default function BatchDetail() {
                 Bypassed QC
               </span>
             )}
+            {batch.pre_production_override && (
+              <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+                title={`Pre-production checklist overridden by ${batch.pre_production_override.by_name || ''} — ${batch.pre_production_override.reason || ''}. Pending: ${(batch.pre_production_override.pending || []).map((p) => p.equipment_name).join(', ')}`}
+                data-testid="batch-detail-pre-production-override">
+                Checklist overridden
+              </span>
+            )}
+            {(batch.pre_production_clearances || []).length > 0 && (
+              <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200"
+                title={(batch.pre_production_clearances || []).map((c) => `${c.equipment_name} — ${c.performed_by} · ${(c.completed_at || '').slice(0, 16).replace('T', ' ')}`).join('\n')}
+                data-testid="batch-detail-pre-production-clearances">
+                Pre-production ✓ {batch.pre_production_clearances.length}
+              </span>
+            )}
             {phVal && (
               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm font-bold border ${phBg} ${phColor}`} data-testid="ph-badge">
                 pH {phVal}

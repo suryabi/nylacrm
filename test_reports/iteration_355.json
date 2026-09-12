@@ -1,0 +1,34 @@
+{
+  "summary": "Frontend per-production-run maintenance & pre-production gate feature tested end-to-end. All 6 scenarios pass. Temp ZZ equipment, staff, batches, and clearance/notification records cleaned up.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_results": {
+    "T1_equipment_master_per_run_switch_and_badge": "PASS - /equipment-master edit ZZ Per Run UI (Maintenance Schedule section auto-opens when per_run_maintenance=true, else clicking eq-sec-maintenance expands it). Toggling eq-per-run-switch on (no SKUs) + Save -> row badge eq-per-run-badge-<id> shows 'Before every production run'. Reopen -> switch persists (data-state=checked). Selecting eq-per-run-sku-vgdemo-sku + Save -> badge shows 'Before every production run · 1 SKU(s)'. Clicking eq-per-run-all-skus link + Save reverts to empty (all SKUs).",
+    "T2_create_batch_gate_block_override": "PASS - /production-batches -> create-batch-btn -> select SKU vgdemo-sku -> pre-production-gate & pre-production-gate-title = 'Pre-production checklist: 1 of 1 pending' with ZZ Per Run UI listed. Submit blocked with toast 'Pre-production checklist pending: ZZ Per Run UI'. Ticking pre-production-override-checkbox (CEO) then submitting -> toast 'Enter a reason to override the pre-production checklist'. Filling pre-production-override-reason + submit -> toast 'Batch created successfully'. Batch detail shows badge batch-detail-pre-production-override='Checklist overridden'.",
+    "T3_pre_production_scan_checklist": "PASS - New context /pre-production-scan/nyla-air-water -> StaffScanLogin (staff-use-pin-btn -> staff-pick-<id> -> PIN 7777 -> staff-pin-submit). pre-production-progress='0/1 cleared'; ticking pre-production-check-<eqId> -> '1/1 cleared' (toast success); untick -> '0/1'; re-tick -> '1/1'.",
+    "T4_batch_created_with_clearance_and_consumed": "PASS - After clearance, opening Create Batch -> pre-production-gate-title='Pre-production checklist complete (1)'. Batch ZZ-RUN-UI-OK created; batch detail shows batch-detail-pre-production-clearances='Pre-production ✓ 1'. Reloading /pre-production-scan then shows progress '0/1 cleared' confirming clearance was consumed by the batch.",
+    "T5_area_qr_pre_production_row": "PASS - Equipment Master -> eq-area-qr-btn opens dialog; pre-production-qr-row visible ('Pre-Production Checklist · 1 equipment marked \"before every production run\"'); pre-production-qr-print button present and enabled.",
+    "T6_equipment_scan_per_run_clear": "PASS - /equipment-scan/<eqId> with staff cookie/context -> eqscan-per-run card shows 'Before every production run · Required before every batch'. eqscan-per-run-clear-btn visible. Clicking it -> eqscan-per-run-cleared shows 'Cleared for the next run by ZZ Run Staff UI · <timestamp>'."
+  },
+  "test_report_links": [
+    "/app/backend/tests/setup_per_run_ui.py",
+    "/app/backend/tests/cleanup_per_run_ui.py",
+    "/app/backend/tests/manual_pre_production.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "EquipmentMaster.js still 1548 lines; consider splitting AssignStaffDialog, PerRunMaintenanceFields wrapper, and the equipment form into subcomponents.",
+    "CreateBatchModal in ProductionBatches.js: when SKU has no packaging_config.production the modal falls back to global packaging types (works), but there is no visual hint that a fallback list is being shown; consider a tiny label 'Using global packaging types (SKU has none configured)'.",
+    "PreProductionGate re-fetches on every SKU change but does not re-fetch after a create failure due to staleness; not critical since block is server-side but a small refresh button in the panel would help UX."
+  ],
+  "updated_files": [
+    "/app/backend/tests/setup_per_run_ui.py (new)",
+    "/app/backend/tests/cleanup_per_run_ui.py (new)"
+  ],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (6/6)"},
+  "test_credentials": "CEO admin@nylaairwater.earth / test123 (tenant nyla-air-water); temp staff PIN 7777",
+  "seed_data_creation": "Created 1 temp equipment 'ZZ Per Run UI' and 1 temp staff 'ZZ Run Staff UI' (PIN 7777) via CEO API. During tests: 1 batch with override ('ZZ-RUN-UI-OVR') and 1 batch with clearance consumption ('ZZ-RUN-UI-OK'). All cleaned up post-test (equipment, staff, batches, maintenance_records, maintenance_audit, notifications 'checklist overridden', factory_staff_sessions).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Feature verified end-to-end on preview URL. Note: Maintenance Schedule accordion in EquipmentMaster.js auto-opens when the equipment already has per_run_maintenance=true (openEditEq uses this flag as an initial condition). When it's collapsed, click eq-sec-maintenance to expand before interacting with eq-per-run-switch. Packaging fallback: SKUs may lack packaging_config.production; CreateBatchModal falls back to global packagingTypes list — pick any option to satisfy bottles_per_crate. Staff PIN login on /pre-production-scan uses the standard StaffScanLogin: click staff-use-pin-btn, staff-pick-<id>, staff-pin-input, staff-pin-submit."
+}

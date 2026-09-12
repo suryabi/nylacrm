@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
-import { Wrench, RefreshCw, CalendarX2, XCircle } from 'lucide-react';
+import { Wrench, RefreshCw, CalendarX2, XCircle, Factory, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Button } from '../components/ui/button';
+import { toast } from 'sonner';
 import { ScanInstructions } from '../components/ScanInstructions';
 import StaffScanLogin from '../components/StaffScanLogin';
 import { saveStaffSession, clearStaffSession, scanAuthHeaders } from '../lib/staffSession';
@@ -13,6 +15,7 @@ export default function EquipmentScan() {
   const navigate = useNavigate();
   const [state, setState] = useState({ loading: true });
   const [reloadKey, setReloadKey] = useState(0);
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -22,11 +25,30 @@ export default function EquipmentScan() {
         if (res.status === 403) { setState({ error: (await res.json()).detail || 'Access denied' }); return; }
         const data = await res.json();
         if (!res.ok) { setState({ error: data.detail || 'Unknown equipment QR' }); return; }
-        if (data.scheduled_today && data.token) { navigate(`/maintenance-scan/${data.token}`, { replace: true }); return; }
+        if (data.scheduled_today && data.token && !data.per_run) { navigate(`/maintenance-scan/${data.token}`, { replace: true }); return; }
         setState(data);
       } catch { setState({ error: 'Could not reach the server' }); }
     })();
   }, [equipmentId, navigate, reloadKey]);
+
+  const clearRun = async () => {
+    setClearing(true);
+    try {
+      let pos = {};
+      if (state.geofence?.required) {
+        const p = await new Promise((r) => navigator.geolocation?.getCurrentPosition((x) => r({ lat: x.coords.latitude, lng: x.coords.longitude }), () => r(null), { enableHighAccuracy: true, timeout: 10000 }) || r(null));
+        if (!p) throw new Error('Location access is required — allow GPS to record maintenance here.');
+        pos = p;
+      }
+      const res = await fetch(`${API_URL}/api/maintenance/pre-production/${equipmentId}/clear`, {
+        method: 'POST', headers: scanAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(pos),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.detail || 'Could not save');
+      toast.success('Cleared for the next production run');
+      setState((s) => ({ ...s, per_run: { ...s.per_run, cleared: true, can_tick: false, record: { performed_by: d.record.performed_by, completed_at: d.record.completed_at } } }));
+    } catch (e) { toast.error(e.message); } finally { setClearing(false); }
+  };
 
   if (state.needLogin) {
     return <StaffScanLogin scanRef={{ equipment_id: equipmentId }}
@@ -60,11 +82,36 @@ export default function EquipmentScan() {
               <p className="text-xs text-muted-foreground">{state.equipment_type}</p>
               {state.location && <p className="text-sm text-muted-foreground">{state.location}</p>}
             </CardContent></Card>
-            <Card className="border-amber-300"><CardContent className="py-8 text-center space-y-2" data-testid="eqscan-not-scheduled">
+            {state.per_run && (
+              <Card className={state.per_run.cleared ? 'border-emerald-300' : 'border-amber-400'}><CardContent className="p-4 space-y-3" data-testid="eqscan-per-run">
+                <div className="flex items-center gap-2">
+                  <Factory className={`h-5 w-5 ${state.per_run.cleared ? 'text-emerald-600' : 'text-amber-600'}`} />
+                  <div>
+                    <p className="font-bold">Before every production run</p>
+                    <p className="text-xs text-muted-foreground">{state.per_run.all_skus ? 'Required before every batch' : `Required before batches of: ${state.per_run.sku_names.join(', ')}`}</p>
+                  </div>
+                </div>
+                {state.per_run.cleared ? (
+                  <p className="text-sm text-emerald-700 flex items-center gap-1" data-testid="eqscan-per-run-cleared"><CheckCircle2 className="h-4 w-4" /> Cleared for the next run by {state.per_run.record?.performed_by} · {(state.per_run.record?.completed_at || '').slice(0, 16).replace('T', ' ')}</p>
+                ) : state.per_run.can_tick ? (
+                  <Button className="w-full h-12 bg-amber-600 hover:bg-amber-700 text-white font-bold" onClick={clearRun} disabled={clearing} data-testid="eqscan-per-run-clear-btn">
+                    {clearing ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />} Cleared — ready for next production run
+                  </Button>
+                ) : (
+                  <p className="text-sm text-slate-500">Pending — only assigned staff{state.per_run.assigned_staff?.length ? ` (${state.per_run.assigned_staff.map((x) => x.name).join(', ')})` : ''} can clear this.</p>
+                )}
+                {state.scheduled_today && state.token && (
+                  <Button variant="outline" className="w-full" onClick={() => navigate(`/maintenance-scan/${state.token}`)} data-testid="eqscan-go-scheduled">
+                    Today's scheduled maintenance check-in <ArrowRight className="h-4 w-4 ml-2" />
+                  </Button>
+                )}
+              </CardContent></Card>
+            )}
+            {!state.scheduled_today && <Card className="border-amber-300"><CardContent className="py-8 text-center space-y-2" data-testid="eqscan-not-scheduled">
               <CalendarX2 className="h-10 w-10 mx-auto text-amber-500" />
               <p className="font-bold text-lg">{state.message || 'No maintenance is scheduled for today.'}</p>
               {state.next_due && <p className="text-sm text-muted-foreground">Next scheduled maintenance: <span className="font-semibold">{state.next_due}</span></p>}
-            </CardContent></Card>
+            </CardContent></Card>}
             <ScanInstructions equipmentId={state.equipment_id} maintenance={state.maintenance_instructions}
               replacement={state.replacement_instructions} files={state.instruction_files || []} />
           </>
