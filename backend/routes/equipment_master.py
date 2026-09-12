@@ -65,6 +65,8 @@ class EquipmentIn(BaseModel):
     area_id: Optional[str] = None
     per_run_maintenance: bool = False          # must be cleared before every production run
     per_run_sku_ids: List[str] = []            # empty = applies to every SKU
+    post_run_maintenance: bool = False         # cleanup/maintenance required after every production run
+    post_run_sku_ids: List[str] = []
 
 
 class LogDateBody(BaseModel):

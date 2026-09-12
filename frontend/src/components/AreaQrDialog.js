@@ -61,7 +61,7 @@ export const AreaQrDialog = ({ open, onOpenChange, authHeaders }) => {
       .then((r) => (r.ok ? r.json() : null)).then(setPre).catch(() => setPre(null));
   }, [open, authHeaders]);
 
-  const printPre = () => pre && printAreaStickers([{ area_id: 'pre', area_name: 'Pre-Production Checklist', floor_name: 'Before every production run', facility_name: 'All facilities',
+  const printPre = () => pre && printAreaStickers([{ area_id: 'pre', area_name: 'Production Checklist', floor_name: 'Before & after every production run', facility_name: 'All facilities',
     equipment_count: pre.equipment_count, scheduled_count: pre.equipment_count, qr: pre.qr }]);
 
   const groups = (areas || []).reduce((acc, a) => {
@@ -81,8 +81,8 @@ export const AreaQrDialog = ({ open, onOpenChange, authHeaders }) => {
           <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2" data-testid="pre-production-qr-row">
             <img src={pre.qr} alt="" className="h-10 w-10 rounded border bg-white" />
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm">Pre-Production Checklist</p>
-              <p className="text-xs text-muted-foreground">{pre.equipment_count} equipment marked "before every production run"</p>
+              <p className="font-semibold text-sm">Production Checklist (before / after run)</p>
+              <p className="text-xs text-muted-foreground">{pre.equipment_count} equipment with before-run or after-run maintenance</p>
             </div>
             <Button size="sm" variant="outline" onClick={printPre} disabled={!pre.equipment_count} data-testid="pre-production-qr-print"><Printer className="h-3.5 w-3.5 mr-1" /> Print</Button>
           </div>

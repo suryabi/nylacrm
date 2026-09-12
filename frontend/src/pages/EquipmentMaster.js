@@ -208,7 +208,7 @@ const EMPTY_EQ = {
   last_maintenance_date: '', next_maintenance_due: '', last_replacement_date: '', next_replacement_due: '',
   expected_life: '', min_stock_level: '', remarks: '', vendors: [],
   parent_equipment_id: '', has_children: false,
-  facility_id: '', floor_id: '', area_id: '', photo_inspections_per_month: '', per_run_maintenance: false, per_run_sku_ids: [],
+  facility_id: '', floor_id: '', area_id: '', photo_inspections_per_month: '', per_run_maintenance: false, per_run_sku_ids: [], post_run_maintenance: false, post_run_sku_ids: [],
 };
 
 const EMPTY_VENDOR = { vendor_id: '', vendor_name: '', preferred: false, lead_time_days: '', last_purchase_price: '', vendor_part_code: '', contact_details: '', amc_details: '' };
@@ -585,7 +585,7 @@ export default function EquipmentMaster() {
     setOpenSecs({
       basic: true,
       hierarchy: !!(e.parent_equipment_id || e.has_children || e.facility_id),
-      maintenance: !!(e.maintenance_frequency_days || e.last_maintenance_date || e.maintenance_start_date || e.per_run_maintenance),
+      maintenance: !!(e.maintenance_frequency_days || e.last_maintenance_date || e.maintenance_start_date || e.per_run_maintenance || e.post_run_maintenance),
       replacement: !!(e.replacement_frequency_days || e.last_replacement_date || e.replacement_start_date),
       procurement: !!(e.procurement_lead_time_days || e.min_stock_level || e.expected_life || e.remarks),
       vendors: (e.vendors || []).length > 0,
@@ -593,7 +593,7 @@ export default function EquipmentMaster() {
     setEqForm({
       ...EMPTY_EQ, ...e,
       facility_id: e.facility_id || '', floor_id: e.floor_id || '', area_id: e.area_id || '',
-      photo_inspections_per_month: e.photo_inspections_per_month ?? '', per_run_maintenance: !!e.per_run_maintenance, per_run_sku_ids: e.per_run_sku_ids || [],
+      photo_inspections_per_month: e.photo_inspections_per_month ?? '', per_run_maintenance: !!e.per_run_maintenance, per_run_sku_ids: e.per_run_sku_ids || [], post_run_maintenance: !!e.post_run_maintenance, post_run_sku_ids: e.post_run_sku_ids || [],
       parent_equipment_id: e.parent_equipment_id || '',
       maintenance_frequency_days: e.maintenance_frequency_days ?? '', replacement_frequency_days: e.replacement_frequency_days ?? '',
       procurement_lead_time_days: e.procurement_lead_time_days ?? '', min_stock_level: e.min_stock_level ?? '',
@@ -630,6 +630,7 @@ export default function EquipmentMaster() {
         min_stock_level: eqForm.min_stock_level === '' ? null : parseInt(eqForm.min_stock_level),
         photo_inspections_per_month: eqForm.photo_inspections_per_month === '' || eqForm.photo_inspections_per_month == null ? null : parseInt(eqForm.photo_inspections_per_month),
         per_run_maintenance: !!eqForm.per_run_maintenance, per_run_sku_ids: eqForm.per_run_maintenance ? (eqForm.per_run_sku_ids || []) : [],
+        post_run_maintenance: !!eqForm.post_run_maintenance, post_run_sku_ids: eqForm.post_run_maintenance ? (eqForm.post_run_sku_ids || []) : [],
         last_maintenance_date: eqForm.last_maintenance_date || null, next_maintenance_due: eqForm.next_maintenance_due || null,
         last_replacement_date: eqForm.last_replacement_date || null, next_replacement_due: eqForm.next_replacement_due || null,
         maintenance_start_date: eqForm.maintenance_start_date || null, replacement_start_date: eqForm.replacement_start_date || null,
@@ -958,6 +959,7 @@ export default function EquipmentMaster() {
                               <DueChip date={e.next_maintenance_due} testid={`eq-maint-due-${e.name.replace(/\s/g, '-')}`} />
                               {freqLabel(e.maintenance_frequency_days) && <p className="text-[11px] text-muted-foreground mt-0.5">{freqLabel(e.maintenance_frequency_days)}</p>}
                               {e.per_run_maintenance && <p className="text-[11px] text-amber-700 font-semibold mt-0.5" data-testid={`eq-per-run-badge-${e.id}`}>Before every production run{(e.per_run_sku_ids || []).length ? ` · ${e.per_run_sku_ids.length} SKU(s)` : ''}</p>}
+                              {e.post_run_maintenance && <p className="text-[11px] text-sky-700 font-semibold mt-0.5" data-testid={`eq-post-run-badge-${e.id}`}>After every production run{(e.post_run_sku_ids || []).length ? ` · ${e.post_run_sku_ids.length} SKU(s)` : ''}</p>}
                               {e.last_maintenance_date && <p className="text-[11px] text-muted-foreground mt-0.5">Last: {e.last_maintenance_date}</p>}
                             </td>
                             <td className="px-4 py-4">
@@ -1289,6 +1291,7 @@ export default function EquipmentMaster() {
               <div><Label>Next Maintenance Due <span className="text-xs text-muted-foreground">(blank = auto)</span></Label><Input type="date" value={eqForm.next_maintenance_due} onChange={(e) => setF('next_maintenance_due', e.target.value)} className="mt-1" /></div>
               <div><Label>Photo Inspections / Month <span className="text-xs text-muted-foreground">(random, not disclosed)</span></Label><Input type="number" min="0" value={eqForm.photo_inspections_per_month} onChange={(e) => setF('photo_inspections_per_month', e.target.value)} placeholder="e.g. 5" className="mt-1" data-testid="eq-input-photoinsp" /></div>
               <PerRunMaintenanceFields enabled={eqForm.per_run_maintenance} skuIds={eqForm.per_run_sku_ids} onChange={(patch) => setEqForm((f) => ({ ...f, ...patch }))} />
+              <PerRunMaintenanceFields variant="post" enabled={eqForm.post_run_maintenance} skuIds={eqForm.post_run_sku_ids} onChange={(patch) => setEqForm((f) => ({ ...f, ...patch }))} />
             </FormSection>
 
             {/* 4 — Replacement Schedule */}

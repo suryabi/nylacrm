@@ -1,0 +1,32 @@
+{
+  "summary": "Frontend 'After every production run' feature tested end-to-end. All 5 scenarios pass. Temp ZZ equipment/staff/batches/post_run_tasks/maintenance_records cleaned up.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_results": {
+    "T1_equipment_master_post_run_switch_and_badge": "PASS - /equipment-master row eq-row-ZZ-Post-UI → open dropdown eq-more-actions-ZZ-Post-UI → eq-edit-ZZ-Post-UI. Maintenance Schedule auto-expanded (post block visible). eq-post-run-switch toggled off→on (data-state=checked), Save → row shows eq-post-run-badge-<id> 'After every production run'. Reopen → switch persists data-state=checked.",
+    "T2_create_batch_gate_and_block": "PASS - Create Batch (SKU vgdemo-sku, no pending initially, gate absent) → ZZ-POST-UI1 created (toast 'Batch created successfully'). Reopen Create Batch same SKU → pre-production-gate visible, pre-production-gate-title='Production checklist: 1 of 1 pending', item shows 'AFTER RUN ZZ Post UI · after batch ZZ-POST-UI1 — pending'. Submit → blocked toast 'Pre-production checklist pending: ZZ Post UI'.",
+    "T3_pre_production_scan_post_section_tick_untick": "PASS - Fresh /pre-production-scan/nyla-air-water context; staff PIN login (staff-use-pin-btn → staff-pick-<staffId> → PIN 8888 → staff-pin-submit). pre-production-section-post 'After production run' present with row 'ZZ Post UI · Pending · After batch ZZ-POST-UI1 · Demo 500ml'. Tick pre-production-check-<taskId> → 'Done' + toast 'ZZ Post UI — after-run maintenance recorded (batch ZZ-POST-UI1)'. Untick → 'Pending' + toast 'record removed'. Retick → 'Done'.",
+    "T4_batch_created_with_clearance_and_new_task": "PASS - Reopen Create Batch (same SKU) → pre-production-gate-title='Production checklist complete (1)', item shows 'AFTER RUN ZZ Post UI · after batch ZZ-POST-UI1 — cleared by ZZ Post Staff UI · <ts>'. ZZ-POST-UI2 created; batch detail badge batch-detail-pre-production-clearances='Pre-production ✓ 1'. Revisit /pre-production-scan → NEW pending task listed 'After batch ZZ-POST-UI2 · Demo 500ml · Pending'.",
+    "T5_equipment_scan_post_run_done": "PASS - /equipment-scan/<eqId> as staff shows card eqscan-post-run-<taskId> 'After production run — batch ZZ-POST-UI2 · Demo 500ml · run started …' with button eqscan-post-run-done-<taskId>. Click → 'Done by ZZ Post Staff UI · <ts>' + toast 'After-run maintenance recorded for batch ZZ-POST-UI2'."
+  },
+  "test_report_links": [
+    "/app/backend/tests/setup_post_run_ui.py",
+    "/app/backend/tests/cleanup_post_run_ui.py",
+    "/app/backend/tests/manual_post_run.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PreProductionScan.js progress badge only counts state.items (before-run) — post_items are excluded even though they appear in the same list. Consider updating pre-production-progress to '{cleared}/{items+post_items}' for consistency with the gate title.",
+    "EquipmentMaster.js still exceeds 1500 lines; splitting AssignStaffDialog, LogDialog and the equipment form dialog into subcomponents would help maintainability."
+  ],
+  "updated_files": [
+    "/app/backend/tests/setup_post_run_ui.py (new)",
+    "/app/backend/tests/cleanup_post_run_ui.py (new)"
+  ],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (5/5)"},
+  "test_credentials": "CEO admin@nylaairwater.earth / test123 (tenant nyla-air-water); temp staff 'ZZ Post Staff UI' PIN 8888 (cleaned up)",
+  "seed_data_creation": "Temp equipment 'ZZ Post UI' (Air Water Generators, post_run enabled via UI, no SKU restriction), temp staff 'ZZ Post Staff UI' with PIN 8888. Two temp batches ZZ-POST-UI1 & ZZ-POST-UI2. All cleaned up after tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Equipment Master row edit is inside the '⋮' more-actions dropdown: click [data-testid=eq-more-actions-<name>] first, then [data-testid=eq-edit-<name>]. Post-run block test-ids follow variant='post': eq-post-run-switch, eq-post-run-sku-<skuId>, eq-post-run-all-skus, eq-post-run-badge-<eqId>. On /pre-production-scan the two sections render as sibling <p> headers pre-production-section-pre and pre-production-section-post followed by rows pre-production-item-<id>; check-box test-id is pre-production-check-<id> (id = item id which for post rows equals the task id). Login redirect goes to /home, not /dashboard. Batch selection uses batch-sku-select (vgdemo-sku has no packaging_config.production → global packaging fallback list; pick the first non-empty option in batch-bpc-input)."
+}

@@ -668,14 +668,14 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_user_
         raise HTTPException(status_code=400, detail=f"Batch code '{data.batch_code}' already exists")
 
     # Pre-production gate: every per-run equipment applicable to this SKU must be cleared.
-    from routes.maintenance_sheets import pre_production_status, consume_pre_production
+    from routes.maintenance_sheets import pre_production_status, consume_pre_production, create_post_run_tasks
     pre = await pre_production_status(tenant_id, sku_id, current_user)
     pre_override = None
     if pre["pending"]:
         names = ", ".join(i["name"] for i in pre["pending"])
         reason = (data.override_pre_production_reason or "").strip()
         if not data.override_pre_production:
-            raise HTTPException(status_code=409, detail=f"Pre-production maintenance pending: {names}. Complete the checklist before creating this batch.")
+            raise HTTPException(status_code=409, detail=f"Production checklist pending: {names}. Complete the pre-run / after-run maintenance before creating this batch.")
         if not _is_elevated(current_user):
             raise HTTPException(status_code=403, detail="Only CEO and System Admin can override the pre-production checklist.")
         if not reason:
@@ -759,6 +759,7 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_user_
 
     batch["pre_production_clearances"] = await consume_pre_production(tenant_id, sku_id, batch)
     batch["pre_production_override"] = pre_override
+    batch["post_run_tasks"] = await create_post_run_tasks(tenant_id, sku_id, batch)
     await tdb.production_batches.insert_one(batch)
     batch.pop("_id", None)
     if pre_override:

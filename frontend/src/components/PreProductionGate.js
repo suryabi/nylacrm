@@ -21,7 +21,8 @@ export const PreProductionGate = ({ skuId, isElevated, override, onOverrideChang
 
   if (!skuId) return null;
   if (loading) return <div className="text-xs text-slate-500 flex items-center gap-1"><RefreshCw size={12} className="animate-spin" /> Checking pre-production checklist…</div>;
-  if (!data || data.items.length === 0) return null;
+  const all = [...(data?.items || []), ...(data?.post_items || [])];
+  if (!data || all.length === 0) return null;
 
   const pending = data.pending.length;
   return (
@@ -29,15 +30,17 @@ export const PreProductionGate = ({ skuId, isElevated, override, onOverrideChang
       <div className="flex items-center gap-2 mb-1.5">
         {pending ? <AlertTriangle size={16} className="text-amber-600" /> : <ClipboardCheck size={16} className="text-emerald-600" />}
         <p className={`text-sm font-semibold ${pending ? 'text-amber-800' : 'text-emerald-800'}`} data-testid="pre-production-gate-title">
-          {pending ? `Pre-production checklist: ${pending} of ${data.items.length} pending` : `Pre-production checklist complete (${data.items.length})`}
+          {pending ? `Production checklist: ${pending} of ${all.length} pending` : `Production checklist complete (${all.length})`}
         </p>
       </div>
       <ul className="space-y-1">
-        {data.items.map((it) => (
+        {all.map((it) => (
           <li key={it.id} className="flex items-start gap-2 text-xs" data-testid={`pre-production-item-${it.id}`}>
             {it.cleared ? <CheckCircle2 size={14} className="text-emerald-600 mt-0.5 shrink-0" /> : <span className="mt-0.5 h-3.5 w-3.5 rounded-full border-2 border-amber-500 shrink-0" />}
             <div className="flex-1 min-w-0">
+              <span className={`inline-block mr-1 px-1 rounded text-[10px] font-bold ${it.kind === 'post' ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-800'}`}>{it.kind === 'post' ? 'AFTER RUN' : 'BEFORE RUN'}</span>
               <span className="font-medium text-slate-800">{it.name}</span>
+              {it.kind === 'post' && it.batch_code && <span className="text-slate-500"> · after batch {it.batch_code}</span>}
               {it.location && <span className="text-slate-500"> · {it.location}</span>}
               {it.cleared ? <span className="text-emerald-700"> — cleared by {it.record.performed_by} · {(it.record.completed_at || '').slice(0, 16).replace('T', ' ')}</span>
                 : <span className="text-amber-700"> — pending</span>}
@@ -46,7 +49,7 @@ export const PreProductionGate = ({ skuId, isElevated, override, onOverrideChang
         ))}
       </ul>
       {pending > 0 && (
-        <p className="text-[11px] text-amber-800 mt-2">Batch creation is blocked until staff clear these via the equipment QR or the Pre-Production Checklist QR.</p>
+        <p className="text-[11px] text-amber-800 mt-2">Batch creation is blocked until staff complete these via the equipment QR or the Production Checklist QR.</p>
       )}
       {pending > 0 && isElevated && (
         <div className="mt-2 pt-2 border-t border-amber-200">

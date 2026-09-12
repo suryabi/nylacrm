@@ -344,6 +344,9 @@ async def equipment_scan_resolve(equipment_id: str, current_user: dict = Depends
                 for f in (eq.get("attachments") or []) if f.get("category") == "instruction"]}
     if eq.get("per_run_maintenance"):
         base["per_run"] = await _per_run_item(tenant_id, eq, current_user)
+    if eq.get("post_run_maintenance"):
+        tasks = await db.post_run_tasks.find({"tenant_id": tenant_id, "equipment_id": eq["id"], "consumed_by_batch_id": None}, {"_id": 0}).sort("created_at", 1).to_list(50)
+        base["post_run"] = [await _post_run_item(tenant_id, t, eq, current_user) for t in tasks]
     freq = eq.get("maintenance_frequency_days")
     if not freq:
         return {**base, "scheduled_today": False, "message": "No maintenance frequency set for this equipment."}
@@ -563,7 +566,7 @@ async def _scan_ref(token: Optional[str], equipment_id: Optional[str], area_id: 
                     pre_production: Optional[str] = None) -> dict:
     """Resolve a QR reference (daily slot token, sticker equipment id, area id or pre-production checklist) to an equipment-like dict."""
     if pre_production:
-        eqs = await db.equipment_master.find({"tenant_id": pre_production, "per_run_maintenance": True},
+        eqs = await db.equipment_master.find({"tenant_id": pre_production, "$or": [{"per_run_maintenance": True}, {"post_run_maintenance": True}]},
                                              {"_id": 0, "maintenance_staff_ids": 1}).to_list(1000)
         if not eqs:
             raise HTTPException(404, "No pre-production equipment configured")
@@ -782,6 +785,11 @@ class AreaTickBody(BaseModel):
     lng: Optional[float] = None
 
 
+class GeoBody(BaseModel):
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
 async def _area_tick_one(tenant_id: str, ctx: dict, eq: dict, current_user: dict, geo, remarks=None) -> dict:
     """Save one 'completed' record for `eq` (today) from the area page. Returns {ok} or {skipped reason}."""
     now = datetime.now(IST)
@@ -920,14 +928,115 @@ async def _per_run_item(tenant_id: str, eq: dict, actor: dict, sku_id: Optional[
             "not_assigned": not can}
 
 
+def _applies(sku_ids: list, sku_id: Optional[str]) -> bool:
+    return (not sku_ids) or (not sku_id) or (sku_id in sku_ids)
+
+
+async def _post_run_item(tenant_id: str, task: dict, eq: dict, actor: dict) -> dict:
+    can = await _can_act(tenant_id, eq, actor)
+    done = task.get("status") == "completed"
+    return {"id": task["id"], "kind": "post", "task_id": task["id"], "equipment_id": eq["id"],
+            "name": eq["name"], "type": eq.get("equipment_type_name"),
+            "location": " › ".join(x for x in [eq.get("facility_name"), eq.get("floor_name"), eq.get("area_name")] if x),
+            "batch_code": task.get("batch_code"), "batch_sku_name": task.get("sku_name"), "run_started_at": task.get("created_at"),
+            "assigned_staff": [{"id": x.get("id"), "name": x.get("name")} for x in eq.get("maintenance_staff") or []],
+            "cleared": done,
+            "record": {"id": task.get("record_id"), "performed_by": task.get("performed_by"), "completed_at": task.get("completed_at")} if done else None,
+            "can_tick": can and not done,
+            "can_undo": bool(done and task.get("performed_by_id") == actor.get("id") and not task.get("consumed_by_batch_id")),
+            "not_assigned": not can}
+
+
+async def post_run_open_tasks(tenant_id: str, sku_id: Optional[str] = None) -> list:
+    """Post-run tasks not yet consumed by a later batch; optionally only those whose equipment applies to `sku_id`."""
+    tasks = await db.post_run_tasks.find({"tenant_id": tenant_id, "consumed_by_batch_id": None}, {"_id": 0}).sort("created_at", 1).to_list(2000)
+    if sku_id:
+        eq_ids = list({t["equipment_id"] for t in tasks})
+        eqs = {e["id"]: e for e in await db.equipment_master.find({"tenant_id": tenant_id, "id": {"$in": eq_ids}}, {"_id": 0, "id": 1, "post_run_sku_ids": 1}).to_list(2000)}
+        tasks = [t for t in tasks if t["equipment_id"] in eqs and _applies(eqs[t["equipment_id"]].get("post_run_sku_ids") or [], sku_id)]
+    return tasks
+
+
 async def pre_production_status(tenant_id: str, sku_id: Optional[str], actor: dict) -> dict:
-    """Checklist for the next production run of `sku_id` (or every per-run equipment when no SKU given)."""
+    """Checklist for the next production run of `sku_id`: per-run clearances + open post-run cleanups from earlier batches."""
     eqs = await db.equipment_master.find({"tenant_id": tenant_id, "per_run_maintenance": True}, {"_id": 0}).sort("name", 1).to_list(1000)
-    items = [await _per_run_item(tenant_id, eq, actor, sku_id) for eq in eqs]
+    items = [{**(await _per_run_item(tenant_id, eq, actor, sku_id)), "kind": "pre"} for eq in eqs]
     if sku_id:
         items = [i for i in items if i["applies"]]
-    pending = [i for i in items if not i["cleared"]]
-    return {"items": items, "pending": pending, "all_clear": not pending, "sku_id": sku_id}
+    post_items = []
+    eq_cache = {}
+    for t in await post_run_open_tasks(tenant_id, sku_id):
+        eq = eq_cache.get(t["equipment_id"])
+        if eq is None:
+            eq = eq_cache[t["equipment_id"]] = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": t["equipment_id"]}, {"_id": 0}) or {"id": t["equipment_id"], "name": t.get("equipment_name")}
+        post_items.append(await _post_run_item(tenant_id, t, eq, actor))
+    pending = [i for i in items if not i["cleared"]] + [i for i in post_items if not i["cleared"]]
+    return {"items": items, "post_items": post_items, "pending": pending, "all_clear": not pending, "sku_id": sku_id}
+
+
+async def create_post_run_tasks(tenant_id: str, sku_id: str, batch: dict) -> list:
+    """Called when a batch (run) is created: one 'after run' task per applicable post-run equipment."""
+    eqs = await db.equipment_master.find({"tenant_id": tenant_id, "post_run_maintenance": True}, {"_id": 0, "id": 1, "name": 1, "post_run_sku_ids": 1}).to_list(1000)
+    now = datetime.now(timezone.utc).isoformat()
+    tasks = [{"id": str(uuid.uuid4()), "tenant_id": tenant_id, "batch_id": batch["id"], "batch_code": batch.get("batch_code"),
+              "sku_id": sku_id, "sku_name": batch.get("sku_name"), "equipment_id": eq["id"], "equipment_name": eq["name"],
+              "status": "pending", "record_id": None, "performed_by": None, "performed_by_id": None, "completed_at": None,
+              "consumed_by_batch_id": None, "created_at": now}
+             for eq in eqs if _applies(eq.get("post_run_sku_ids") or [], sku_id)]
+    if tasks:
+        await db.post_run_tasks.insert_many([{**t} for t in tasks])
+    return [{"task_id": t["id"], "equipment_id": t["equipment_id"], "equipment_name": t["equipment_name"]} for t in tasks]
+
+
+@router.post("/pre-production/post/{task_id}/complete")
+async def post_run_complete(task_id: str, body: Optional[GeoBody] = None, current_user: dict = Depends(get_user_or_factory_staff)):
+    """Record the after-run cleanup/maintenance for one task."""
+    tenant_id = get_current_tenant_id()
+    task = await db.post_run_tasks.find_one({"tenant_id": tenant_id, "id": task_id}, {"_id": 0})
+    if not task:
+        raise HTTPException(404, "Task not found")
+    if task.get("status") == "completed":
+        raise HTTPException(409, "Already recorded")
+    eq = await _get_equipment(tenant_id, task["equipment_id"])
+    staff_name = current_user.get("name") if current_user.get("is_factory_staff") else None
+    geo = await _enforce_geofence(tenant_id, eq, current_user, getattr(body, "lat", None), getattr(body, "lng", None), staff_name=staff_name)
+    staff = await _resolve_staff(tenant_id, eq, current_user, None)
+    now = datetime.now(IST)
+    rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": None, "trigger": "post_run", "post_run_task_id": task_id,
+           "batch_id": task["batch_id"], "batch_code": task.get("batch_code"),
+           "equipment_id": eq["id"], "equipment_name": eq["name"], "scheduled_date": now.date().isoformat(),
+           "status": "completed", "attempt": 1,
+           "performed_by": (staff or {}).get("name") or current_user.get("name") or current_user.get("email"),
+           "performed_by_id": (staff or {}).get("id") or current_user.get("id"),
+           "performed_by_role": (staff or {}).get("role"),
+           "performed_via": "post_production", "actor_kind": _actor_kind(current_user, staff),
+           "verified_by_user": current_user.get("name") or current_user.get("email"),
+           "geo": geo, "completed_at": now.isoformat(), "photos": [], "remarks": None, "corrections": [],
+           "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.maintenance_records.insert_one({**rec})
+    await db.post_run_tasks.update_one({"tenant_id": tenant_id, "id": task_id},
+                                       {"$set": {"status": "completed", "record_id": rec["id"], "performed_by": rec["performed_by"],
+                                                 "performed_by_id": rec["performed_by_id"], "completed_at": rec["completed_at"]}})
+    await db.equipment_master.update_one({"tenant_id": tenant_id, "id": eq["id"]}, {"$set": {"last_maintenance_date": now.date().isoformat()}})
+    rec.pop("_id", None)
+    return {"ok": True, "record": rec}
+
+
+@router.post("/pre-production/post/{task_id}/undo")
+async def post_run_undo(task_id: str, current_user: dict = Depends(get_user_or_factory_staff)):
+    tenant_id = get_current_tenant_id()
+    task = await db.post_run_tasks.find_one({"tenant_id": tenant_id, "id": task_id}, {"_id": 0})
+    if not task or task.get("status") != "completed" or task.get("performed_by_id") != current_user.get("id") or task.get("consumed_by_batch_id"):
+        raise HTTPException(409, "Only your own completion can be undone, and only before the next run")
+    await db.maintenance_records.delete_one({"tenant_id": tenant_id, "id": task.get("record_id")})
+    await db.post_run_tasks.update_one({"tenant_id": tenant_id, "id": task_id},
+                                       {"$set": {"status": "pending", "record_id": None, "performed_by": None, "performed_by_id": None, "completed_at": None}})
+    await db.maintenance_audit.insert_one({
+        "id": str(uuid.uuid4()), "tenant_id": tenant_id, "action": "post_production_undo",
+        "equipment_id": task["equipment_id"], "equipment_name": task.get("equipment_name"), "record_id": task.get("record_id"),
+        "batch_code": task.get("batch_code"), "by_id": current_user.get("id"), "by_name": current_user.get("name") or current_user.get("email"),
+        "via": "factory_staff" if current_user.get("is_factory_staff") else "admin", "at": datetime.now(timezone.utc).isoformat()})
+    return {"ok": True}
 
 
 @router.get("/pre-production")
@@ -944,13 +1053,8 @@ async def pre_production_get(sku_id: Optional[str] = Query(None), current_user: 
 async def pre_production_sticker(origin: str = Query(...), current_user: dict = Depends(get_current_user)):
     _ = current_user
     tenant_id = get_current_tenant_id()
-    n = await db.equipment_master.count_documents({"tenant_id": tenant_id, "per_run_maintenance": True})
+    n = await db.equipment_master.count_documents({"tenant_id": tenant_id, "$or": [{"per_run_maintenance": True}, {"post_run_maintenance": True}]})
     return {"equipment_count": n, "qr": _qr_data_uri(f"{origin.rstrip('/')}/pre-production-scan/{tenant_id}")}
-
-
-class GeoBody(BaseModel):
-    lat: Optional[float] = None
-    lng: Optional[float] = None
 
 
 @router.post("/pre-production/{equipment_id}/clear")
@@ -1014,8 +1118,16 @@ async def consume_pre_production(tenant_id: str, sku_id: str, batch: dict) -> li
         await db.maintenance_records.update_one({"tenant_id": tenant_id, "id": rec["id"]},
                                                 {"$set": {"consumed_by_batch_id": batch["id"], "consumed_by_batch_code": batch.get("batch_code"),
                                                           "consumed_at": datetime.now(timezone.utc).isoformat()}})
-        snap.append({"equipment_id": eq["id"], "equipment_name": eq["name"], "record_id": rec["id"],
+        snap.append({"kind": "pre", "equipment_id": eq["id"], "equipment_name": eq["name"], "record_id": rec["id"],
                      "performed_by": rec.get("performed_by"), "completed_at": rec.get("completed_at")})
+    for t in await post_run_open_tasks(tenant_id, sku_id):
+        if t.get("status") != "completed":
+            continue  # overridden-but-still-pending cleanups stay open until actually done
+        await db.post_run_tasks.update_one({"tenant_id": tenant_id, "id": t["id"]},
+                                           {"$set": {"consumed_by_batch_id": batch["id"], "consumed_by_batch_code": batch.get("batch_code")}})
+        snap.append({"kind": "post", "equipment_id": t["equipment_id"], "equipment_name": t["equipment_name"], "record_id": t.get("record_id"),
+                     "after_batch_code": t.get("batch_code"), "performed_by": t.get("performed_by"), "completed_at": t.get("completed_at"),
+                     "status": t.get("status")})
     return snap
 
 

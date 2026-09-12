@@ -50,33 +50,38 @@ export default function PreProductionScan() {
     return data;
   };
 
+  const patchItem = (it, patch) => setState((s) => ({
+    ...s,
+    items: (s.items || []).map((e) => (e.id === it.id ? { ...e, ...patch } : e)),
+    post_items: (s.post_items || []).map((e) => (e.id === it.id ? { ...e, ...patch } : e)),
+  }));
   const tick = async (it) => {
     setBusy((b) => ({ ...b, [it.id]: true }));
     try {
       let pos = {};
       if (state.geofence_enabled) { const p = await getPosition(); if (!p) throw new Error('Location access is required — allow GPS to record maintenance here.'); pos = p; }
-      const r = await post(`${it.id}/clear`, pos);
-      setState((s) => ({ ...s, items: s.items.map((e) => (e.id === it.id ? { ...e, cleared: true, can_tick: false, can_undo: true, record: { performed_by: r.record.performed_by, completed_at: r.record.completed_at } } : e)) }));
-      toast.success(`${it.name} — cleared for the next production run`, { description: 'Untick to undo' });
+      const r = await post(it.kind === 'post' ? `post/${it.task_id}/complete` : `${it.id}/clear`, pos);
+      patchItem(it, { cleared: true, can_tick: false, can_undo: true, record: { performed_by: r.record.performed_by, completed_at: r.record.completed_at } });
+      toast.success(it.kind === 'post' ? `${it.name} — after-run maintenance recorded (batch ${it.batch_code})` : `${it.name} — cleared for the next production run`, { description: 'Untick to undo' });
     } catch (e) { toast.error(e.message); load(); } finally { setBusy((b) => ({ ...b, [it.id]: false })); }
   };
   const untick = async (it) => {
     setBusy((b) => ({ ...b, [it.id]: true }));
     try {
-      await post(`${it.id}/undo`);
-      setState((s) => ({ ...s, items: s.items.map((e) => (e.id === it.id ? { ...e, cleared: false, can_tick: !e.not_assigned, can_undo: false, record: null } : e)) }));
-      toast(`${it.name} — clearance removed`, { icon: <Undo2 className="h-4 w-4" /> });
+      await post(it.kind === 'post' ? `post/${it.task_id}/undo` : `${it.id}/undo`);
+      patchItem(it, { cleared: false, can_tick: !it.not_assigned, can_undo: false, record: null });
+      toast(`${it.name} — record removed`, { icon: <Undo2 className="h-4 w-4" /> });
     } catch (e) { toast.error(e.message); load(); } finally { setBusy((b) => ({ ...b, [it.id]: false })); }
   };
 
-  if (state.needLogin) return <StaffScanLogin scanRef={{ pre_production: tenantId }} equipmentName="Pre-Production Checklist" onLogin={staffLogin} />;
+  if (state.needLogin) return <StaffScanLogin scanRef={{ pre_production: tenantId }} equipmentName="Production Checklist" onLogin={staffLogin} />;
 
   const Shell = ({ children }) => (
     <div className="min-h-screen bg-slate-100 flex items-start justify-center p-4 pt-8" data-testid="pre-production-page">
       <div className="w-full max-w-md space-y-4">
         <div className="flex items-center gap-2 text-slate-700">
           <div className="p-2 rounded-lg bg-amber-600 text-white"><Factory className="h-5 w-5" /></div>
-          <div><p className="font-bold leading-tight">Pre-Production Checklist</p><p className="text-xs text-muted-foreground">Clear each equipment before the next production run</p></div>
+          <div><p className="font-bold leading-tight">Production Checklist</p><p className="text-xs text-muted-foreground">Before-run clearances and after-run cleanups</p></div>
         </div>
         {children}
       </div>
@@ -85,7 +90,35 @@ export default function PreProductionScan() {
   if (state.loading) return <Shell><Card><CardContent className="py-10 text-center text-muted-foreground"><RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2" />Loading…</CardContent></Card></Shell>;
   if (state.error) return <Shell><Card><CardContent className="py-8 text-center" data-testid="pre-production-error"><XCircle className="h-8 w-8 mx-auto text-red-500 mb-2" /><p className="font-medium">{state.error}</p></CardContent></Card></Shell>;
 
-  const cleared = state.items.filter((i) => i.cleared).length;
+  const all = [...(state.items || []), ...(state.post_items || [])];
+  const cleared = all.filter((i) => i.cleared).length;
+  const Row = ({ it }) => (
+    <div className={`flex items-start gap-3 px-4 py-3 border-b last:border-0 ${it.can_tick || it.can_undo ? '' : 'opacity-80'}`} data-testid={`pre-production-item-${it.id}`}>
+      {busy[it.id] ? <RefreshCw className="mt-0.5 h-4 w-4 animate-spin text-emerald-600 shrink-0" />
+        : it.can_tick || it.can_undo ? (
+          <Checkbox className="mt-0.5 h-5 w-5 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600" checked={it.cleared}
+            onCheckedChange={() => (it.cleared ? untick(it) : tick(it))} data-testid={`pre-production-check-${it.id}`} />
+        ) : (
+          <span className="mt-0.5 h-5 w-5 shrink-0 flex items-center justify-center">
+            {it.cleared ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <span className="h-4 w-4 rounded border border-slate-200 bg-slate-100 block" />}
+          </span>
+        )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-semibold text-sm truncate">{it.name}</p>
+          {it.cleared ? <Badge className="bg-emerald-600 text-[10px]">{it.kind === 'post' ? 'Done' : 'Cleared'}</Badge>
+            : it.not_assigned ? <Badge variant="outline" className="text-[10px] text-slate-500"><Lock className="h-3 w-3 mr-1" />Assigned to others</Badge>
+            : <Badge className="bg-amber-500 text-[10px]">Pending</Badge>}
+        </div>
+        <p className="text-xs text-muted-foreground">{[it.type, it.location].filter(Boolean).join(' · ')}</p>
+        {it.kind === 'post'
+          ? <p className="text-[11px] text-sky-700">After batch <b>{it.batch_code}</b>{it.batch_sku_name ? ` · ${it.batch_sku_name}` : ''} · run started {(it.run_started_at || '').slice(0, 16).replace('T', ' ')}</p>
+          : <p className="text-[11px] text-slate-500">{it.all_skus ? 'Every SKU' : `SKUs: ${it.sku_names.join(', ')}`}</p>}
+        {it.cleared && it.record && <p className="text-xs text-emerald-700">By {it.record.performed_by} · {(it.record.completed_at || '').slice(0, 16).replace('T', ' ')}{it.can_undo ? ' · untick to undo' : ''}</p>}
+        {it.not_assigned && !it.cleared && it.assigned_staff?.length > 0 && <p className="text-xs text-slate-500">Assigned to {it.assigned_staff.map((s) => s.name).join(', ')}</p>}
+      </div>
+    </div>
+  );
   return (
     <Shell>
       <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2" data-testid="pre-production-actor-chip">
@@ -98,34 +131,13 @@ export default function PreProductionScan() {
           <p className="text-xs text-slate-600"><span className="font-semibold">Tick = cleared instantly.</span> Untick your own tick to undo.</p>
           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cleared === state.items.length && state.items.length ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`} data-testid="pre-production-progress">{cleared}/{state.items.length} cleared</span>
         </div>
-        {state.items.length === 0 && <p className="text-center py-8 text-sm text-muted-foreground">No equipment is marked "before every production run".</p>}
-        {state.items.map((it) => (
-          <div key={it.id} className={`flex items-start gap-3 px-4 py-3 border-b last:border-0 ${it.can_tick || it.can_undo ? '' : 'opacity-80'}`} data-testid={`pre-production-item-${it.id}`}>
-            {busy[it.id] ? <RefreshCw className="mt-0.5 h-4 w-4 animate-spin text-emerald-600 shrink-0" />
-              : it.can_tick || it.can_undo ? (
-                <Checkbox className="mt-0.5 h-5 w-5 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600" checked={it.cleared}
-                  onCheckedChange={() => (it.cleared ? untick(it) : tick(it))} data-testid={`pre-production-check-${it.id}`} />
-              ) : (
-                <span className="mt-0.5 h-5 w-5 shrink-0 flex items-center justify-center">
-                  {it.cleared ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <span className="h-4 w-4 rounded border border-slate-200 bg-slate-100 block" />}
-                </span>
-              )}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-semibold text-sm truncate">{it.name}</p>
-                {it.cleared ? <Badge className="bg-emerald-600 text-[10px]">Cleared</Badge>
-                  : it.not_assigned ? <Badge variant="outline" className="text-[10px] text-slate-500"><Lock className="h-3 w-3 mr-1" />Assigned to others</Badge>
-                  : <Badge className="bg-amber-500 text-[10px]">Pending</Badge>}
-              </div>
-              <p className="text-xs text-muted-foreground">{[it.type, it.location].filter(Boolean).join(' · ')}</p>
-              <p className="text-[11px] text-slate-500">{it.all_skus ? 'Every SKU' : `SKUs: ${it.sku_names.join(', ')}`}</p>
-              {it.cleared && it.record && <p className="text-xs text-emerald-700">By {it.record.performed_by} · {(it.record.completed_at || '').slice(0, 16).replace('T', ' ')}{it.can_undo ? ' · untick to undo' : ''}</p>}
-              {it.not_assigned && !it.cleared && it.assigned_staff?.length > 0 && <p className="text-xs text-slate-500">Assigned to {it.assigned_staff.map((s) => s.name).join(', ')}</p>}
-            </div>
-          </div>
-        ))}
+        {all.length === 0 && <p className="text-center py-8 text-sm text-muted-foreground">Nothing to do — no per-run equipment configured and no after-run tasks open.</p>}
+        {state.items.length > 0 && <p className="px-4 pt-2 pb-1 text-[11px] font-bold uppercase tracking-wide text-amber-700" data-testid="pre-production-section-pre">Before next production run</p>}
+        {state.items.map((it) => <Row key={it.id} it={it} />)}
+        {(state.post_items || []).length > 0 && <p className="px-4 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wide text-sky-700 border-t" data-testid="pre-production-section-post">After production run</p>}
+        {(state.post_items || []).map((it) => <Row key={it.id} it={it} />)}
       </CardContent></Card>
-      <p className="text-[11px] text-muted-foreground text-center">A clearance stays valid until the next production batch of a matching SKU is created, which links it to that batch.</p>
+      <p className="text-[11px] text-muted-foreground text-center">Before-run clearances stay valid until the next batch of a matching SKU is created. After-run tasks appear when a batch is created and must be done before the next run.</p>
     </Shell>
   );
 }
