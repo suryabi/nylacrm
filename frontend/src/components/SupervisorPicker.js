@@ -4,7 +4,7 @@ import { Checkbox } from './ui/checkbox';
 import { Search, UserCog } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' });
+const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
 // Multi-select of active team members (app users) — used for equipment / area supervisors.
 export const SupervisorPicker = ({ selected, onChange, testid = 'supervisor-picker' }) => {

@@ -18,7 +18,7 @@ const EMPTY_FORM = {
 };
 
 const authHeaders = () => ({
-  Authorization: `Bearer ${localStorage.getItem('session_token')}`,
+  Authorization: `Bearer ${localStorage.getItem('token')}`,
   'Content-Type': 'application/json',
 });
 

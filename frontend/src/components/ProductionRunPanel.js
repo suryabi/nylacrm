@@ -7,7 +7,7 @@ import { ParamCaptureDialog, ParamSummary } from './MaintenanceParams';
 import { CheckCircle2, Circle, Play, Square, FlaskConical, ClipboardCheck, Lock, FileText, ShieldAlert, RefreshCw, Undo2 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const H = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } });
+const H = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
 const STEPS = [
   { key: 'pre_checklist', label: 'Pre-production checklist' },
   { key: 'production', label: 'Production' }, { key: 'output', label: 'Output' },

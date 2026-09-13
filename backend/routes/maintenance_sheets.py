@@ -648,6 +648,7 @@ class StaffLoginBody(BaseModel):
     equipment_id: Optional[str] = None
     area_id: Optional[str] = None
     pre_production: Optional[str] = None   # tenant id (printed in the checklist QR)
+    start_production: Optional[str] = None  # tenant id (printed in the Start Production QR) → production operators only
     descriptor: Optional[List[float]] = None
     member_id: Optional[str] = None
     pin: Optional[str] = None
@@ -671,8 +672,14 @@ async def _area_ctx(tenant_id: Optional[str], area_id: str):
 
 
 async def _scan_ref(token: Optional[str], equipment_id: Optional[str], area_id: Optional[str] = None,
-                    pre_production: Optional[str] = None) -> dict:
-    """Resolve a QR reference (daily slot token, sticker equipment id, area id or pre-production checklist) to an equipment-like dict."""
+                    pre_production: Optional[str] = None, start_production: Optional[str] = None) -> dict:
+    """Resolve a QR reference (daily slot token, sticker equipment id, area id, pre-production checklist or Start Production) to an equipment-like dict."""
+    if start_production:
+        ops = await db.qc_team.find({"tenant_id": start_production, "production_operator": True}, {"_id": 0, "id": 1}).to_list(500)
+        if not ops:
+            raise HTTPException(404, "No Factory Staff is flagged as Production operator — enable it under Factory Staff")
+        return {"id": f"startprod:{start_production}", "tenant_id": start_production, "name": "Start Production",
+                "maintenance_staff_ids": [o["id"] for o in ops]}
     if pre_production:
         eqs = await db.equipment_master.find({"tenant_id": pre_production, "$or": [{"per_run_maintenance": True}, {"post_run_maintenance": True}]},
                                              {"_id": 0, "maintenance_staff_ids": 1}).to_list(1000)
@@ -711,9 +718,10 @@ def _staff_pool_query(eq: dict) -> dict:
 
 @router.get("/staff-auth/roster")
 async def staff_auth_roster(token: Optional[str] = Query(None), equipment_id: Optional[str] = Query(None),
-                            area_id: Optional[str] = Query(None), pre_production: Optional[str] = Query(None)):
+                            area_id: Optional[str] = Query(None), pre_production: Optional[str] = Query(None),
+                            start_production: Optional[str] = Query(None)):
     """Names of staff who may sign in for this QR (assigned staff only, when assignments exist)."""
-    eq = await _scan_ref(token, equipment_id, area_id, pre_production)
+    eq = await _scan_ref(token, equipment_id, area_id, pre_production, start_production)
     members = await db.qc_team.find(_staff_pool_query(eq), {"_id": 0, "id": 1, "name": 1, "role": 1,
                                                             "pin_hash": 1, "face_descriptors": 1}).sort("name", 1).to_list(500)
     return {"equipment_name": eq["name"],
@@ -728,7 +736,7 @@ async def staff_auth_login(body: StaffLoginBody, request: Request):
     import bcrypt
     from deps import check_login_lockout, record_login_failure, clear_login_failures, get_client_ip
     from routes.face_auth import _distance, FACE_MATCH_THRESHOLD, SECOND_BEST_MARGIN
-    eq = await _scan_ref(body.token, body.equipment_id, body.area_id, body.pre_production)
+    eq = await _scan_ref(body.token, body.equipment_id, body.area_id, body.pre_production, body.start_production)
     ip = get_client_ip(request)
     ident = f"staff:{body.member_id or eq['id']}"
     await check_login_lockout(ident, ip)
@@ -1177,6 +1185,16 @@ async def pre_production_sticker(origin: str = Query(...), current_user: dict = 
     tenant_id = get_current_tenant_id()
     n = await db.equipment_master.count_documents({"tenant_id": tenant_id, "$or": [{"per_run_maintenance": True}, {"post_run_maintenance": True}]})
     return {"equipment_count": n, "qr": _qr_data_uri(f"{origin.rstrip('/')}/pre-production-scan/{tenant_id}")}
+
+
+@router.get("/start-production/sticker")
+async def start_production_sticker(origin: str = Query(...), current_user: dict = Depends(get_current_user)):
+    """Tenant-wide 'Start Production' QR: scan → Face/PIN (production operators) or app login → pick SKU → run wizard."""
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    n = await db.qc_team.count_documents({"tenant_id": tenant_id, "production_operator": True})
+    return {"operator_count": n, "qr": _qr_data_uri(f"{origin.rstrip('/')}/start-production/{tenant_id}"),
+            "url": f"{origin.rstrip('/')}/start-production/{tenant_id}"}
 
 
 @router.post("/pre-production/{equipment_id}/clear")

@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const headers = () => ({
-  Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('session_token') || ''}`,
+  Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('token') || ''}`,
 });
 
 const METHOD_COLORS = {

@@ -21,7 +21,7 @@ import CrmDocumentPicker from '../components/gmail/CrmDocumentPicker';
 import { humanSize } from '../components/gmail/gmailUtils';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('session_token')}` });
+const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('token')}` });
 
 // Variables a template author can reference inside subject + body. The
 // resolver lives server-side (`_resolve_variables` in email_templates.py) and

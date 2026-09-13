@@ -20,7 +20,7 @@ import ReactionBar from './ReactionBar';
 import { useAuth } from '../context/AuthContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('session_token')}` });
+const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('token')}` });
 
 const MOD_ROLES = ['CEO', 'Admin', 'System Admin'];
 const getInitials = (name) => (name || '?').split(/\s+/).slice(0, 2).map((s) => s[0]).join('').toUpperCase();

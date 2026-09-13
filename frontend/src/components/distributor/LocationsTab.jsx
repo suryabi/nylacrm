@@ -57,7 +57,7 @@ export default function LocationsTab({
     }
     setSyncingId(location.id);
     try {
-      const token = localStorage.getItem('session_token');
+      const token = localStorage.getItem('token');
       const res = await axios.post(
         `${API_URL}/api/distributors/${distributor?.id}/locations/${location.id}/sync-to-zoho`,
         {},

@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { AlertTriangle, Mail, Camera } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const H = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}` });
+const H = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
 // Daily alert digest (alert options + out-of-range readings) for one day — preview + manual send.
 export const AlertDigestCard = ({ day }) => {

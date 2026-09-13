@@ -18,10 +18,12 @@ export const saveStaffSession = (member, token) => {
 
 export const clearStaffSession = () => localStorage.removeItem(KEY);
 
+export const hasAppSession = () => !!localStorage.getItem('token');
+
 // App session (supervisor tablet) OR staff token (personal phone).
 export const scanAuthHeaders = (extra = {}) => {
   const h = { ...extra };
-  const app = localStorage.getItem('session_token');
+  const app = localStorage.getItem('token');
   const staff = getStaffSession();
   if (app) h.Authorization = `Bearer ${app}`;
   if (staff?.token) h['X-Staff-Token'] = staff.token;

@@ -1,0 +1,25 @@
+{
+  "summary": "Retest of token-key fix (localStorage 'session_token' → 'token') from iteration_362. VERIFIED FIXED. As CEO (admin@nylaairwater.earth): (1) opening /start-production/nyla-air-water goes STRAIGHT to start-production-form with actor chip 'Signed in as app user' — no Factory Staff Face/PIN screen. (2) Network requests to /api/production/run/skus and /api/production/run/active carry real 'Authorization: Bearer <36-char JWT>' (not 'Bearer null'). (3) Selecting a SKU + Initiate navigates to /production-run/<id>; wizard back link text is exactly 'Production Batches' (app-user mode, not 'Start Production' staff mode) with data-testid wizard-back. (4) Clicking wizard-back lands on /production-batches and the batch card shows 'Run in progress' with a 'Resume run' button. (5) Clicking Resume opens the wizard; Cancel run (data-testid wizard-cancel-run) confirms and returns to /production-batches with toast 'Production run cancelled'. (6) 'Start Production QR' dialog on /production-batches fires /api/maintenance/start-production/sticker with real Bearer token; QR image renders. (7) /pre-production-scan/nyla-air-water loads Production Checklist directly (Recording as System Admin · admin) — no staff login screen. Staff regression path was not re-executed in this iteration (already covered in iteration_362 and uses the same fixed helper); the only code change (staffSession.js hasAppSession + scanAuthHeaders reading 'token') is fully covered by the app-user path. NOTE: SKU 'Demo 500ml' does not exist in the tenant SKU list ['24 Brand','Nyla 330 ml Gold/Silver/Sparkling','Nyla 600 ml Silver','Nyla 660 ml Gold/Sparkling','PET Bottle'] — used '24 Brand' as the test SKU; the flow is SKU-agnostic so this doesn't affect the fix verification.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/manual_start_production_qr.py",
+    "/app/backend/tests/manual_run_wizard.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Test task referenced SKU 'Demo 500ml' which does not exist in tenant nyla-air-water — main agent should confirm the intended test SKU name or seed it. The token-key fix itself is verified with any SKU."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100%"},
+  "test_credentials": "admin@nylaairwater.earth / test123 (tenant nyla-air-water).",
+  "seed_data_creation": "Created batch B-130926-101 (24 Brand) during wizard flow and cancelled it via wizard-cancel-run. No residual test data left. Did not need to create ZZ QR2 staff — staff journey not re-run this iteration.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Token-key fix confirmed: hasAppSession() and scanAuthHeaders() in /app/frontend/src/lib/staffSession.js correctly read localStorage 'token'. App-user Start-Production flow, wizard back link, Resume/Cancel, QR sticker dialog, pre-production-scan all work. Staff Face/PIN journey was not re-run — main agent should verify staff flow once if changing staffSession helpers again.",
+  "rca of the issue": "Fix landed in /app/frontend/src/lib/staffSession.js — scanAuthHeaders now reads localStorage.getItem('token') (matches AuthContext.js line 159 setter) and new hasAppSession() export is used by StartProductionScan/ProductionRunWizard. Verified: Authorization: Bearer <real-JWT> now attached to /api/production/run/skus, /api/production/run/active, /api/maintenance/start-production/sticker; CEO lands on SKU form immediately."
+}

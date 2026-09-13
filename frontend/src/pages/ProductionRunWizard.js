@@ -7,9 +7,13 @@ import { Input } from '../components/ui/input';
 import { ParamCaptureDialog } from '../components/MaintenanceParams';
 import { ChecklistRows, OverrideBox, fmt } from '../components/ProductionRunPanel';
 import { ArrowLeft, CheckCircle2, ClipboardCheck, Play, Square, PackageCheck, RefreshCw, XCircle, Timer, Tag } from 'lucide-react';
+import { scanAuthHeaders, getStaffSession, hasAppSession } from '../lib/staffSession';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const H = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } });
+const H = () => ({ headers: scanAuthHeaders() });
+// Staff phone (Start Production QR) has no app session → navigate within the public flow.
+const staffMode = () => !hasAppSession() && !!getStaffSession();
+const homePath = () => (staffMode() ? `/start-production/${localStorage.getItem('start_production_tenant')}` : '/production-batches');
 const err = (e) => e.response?.data?.detail || e.message;
 const STEPS = [
   { key: 'pre', label: 'Pre-Production Checklist', icon: ClipboardCheck },
@@ -62,8 +66,8 @@ export default function ProductionRunWizard() {
 
   const load = useCallback(() => axios.get(`${API_URL}/api/production/run/${batchId}`, H()).then(({ data: d }) => {
     setData(d);
-    if (d.batch.status === 'created' || d.run?.closed_at) navigate(`/production-batches/${batchId}`, { replace: true });
-  }).catch((e) => { toast.error(err(e)); navigate('/production-batches', { replace: true }); }), [batchId, navigate]);
+    if (d.batch.status === 'created' || d.run?.closed_at) navigate(staffMode() ? `${homePath()}?done=${encodeURIComponent(d.batch.batch_code)}` : `/production-batches/${batchId}`, { replace: true });
+  }).catch((e) => { toast.error(err(e)); navigate(homePath(), { replace: true }); }), [batchId, navigate]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     if (data?.batch.status === 'post_checklist' && !finalForm) {
@@ -91,18 +95,18 @@ export default function ProductionRunWizard() {
 
   const cancel = async () => {
     if (!window.confirm(`Cancel this production run (${batch.batch_code})? The draft batch will be removed.`)) return;
-    try { await axios.post(`${API_URL}/api/production/run/${batchId}/cancel`, {}, H()); toast.success('Production run cancelled'); navigate('/production-batches'); } catch (e) { toast.error(err(e)); }
+    try { await axios.post(`${API_URL}/api/production/run/${batchId}/cancel`, {}, H()); toast.success('Production run cancelled'); navigate(homePath()); } catch (e) { toast.error(err(e)); }
   };
   const createBatch = () => act(async () => {
     await axios.post(`${API_URL}/api/production/run/${batchId}/close`, { ...ovBody, batch_code: finalForm.batch_code, production_date: finalForm.production_date, total_crates: parseInt(finalForm.total_crates), bottles_per_crate: parseInt(finalForm.bottles_per_crate), notes: finalForm.notes }, H());
-    navigate(`/production-batches/${batchId}`);
+    navigate(staffMode() ? `${homePath()}?done=${encodeURIComponent(finalForm.batch_code)}` : `/production-batches/${batchId}`);
   }, 'Production batch created — run report generated & team notified');
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-12" data-testid="production-run-wizard">
+    <div className="max-w-4xl mx-auto space-y-6 px-3 sm:px-4 pt-4 pb-12" data-testid="production-run-wizard">
       <ParamCaptureDialog item={capture} onCancel={() => setCapture(null)} onSubmit={(vals) => tick(capture, vals)} />
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <button onClick={() => navigate('/production-batches')} className="text-sm text-slate-600 hover:text-slate-900 flex items-center gap-1" data-testid="wizard-back"><ArrowLeft size={14} /> Production Batches</button>
+        <button onClick={() => navigate(homePath())} className="text-sm text-slate-600 hover:text-slate-900 flex items-center gap-1" data-testid="wizard-back"><ArrowLeft size={14} /> {staffMode() ? 'Start Production' : 'Production Batches'}</button>
         <button onClick={cancel} className="text-xs text-rose-600 hover:text-rose-800 flex items-center gap-1" data-testid="wizard-cancel-run"><XCircle size={14} /> Cancel run</button>
       </div>
       <div className="rounded-2xl bg-[#002FA7] text-white px-5 py-4 shadow-md">

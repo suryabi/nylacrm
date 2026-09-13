@@ -10,13 +10,13 @@ import { ParamSummary } from './MaintenanceParams';
 import { MaintenancePhotoGallery } from './MaintenancePhotoGallery';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' });
+const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
 const AuthPhoto = ({ src, alt }) => {
   const [url, setUrl] = useState(null);
   useEffect(() => {
     let obj;
-    fetch(src, { headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } })
+    fetch(src, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
       .then((r) => (r.ok ? r.blob() : Promise.reject()))
       .then((b) => { obj = URL.createObjectURL(b); setUrl(obj); })
       .catch(() => {});

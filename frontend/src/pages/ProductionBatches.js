@@ -4,11 +4,12 @@ import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import { QualityParamsDialog } from '../components/QualityParamsDialog';
 import { InitiateBatchDialog } from '../components/InitiateBatchDialog';
+import { StartProductionQrDialog } from '../components/StartProductionQrDialog';
 import axios from 'axios';
 import {
   Package, Plus, Search, Filter, ChevronDown, Loader2,
   Factory, Boxes, Calendar, FlaskConical, ArrowRight, X,
-  ShieldCheck, Tag, Truck, AlertTriangle, Play,
+  ShieldCheck, Tag, Truck, AlertTriangle, Play, QrCode,
 } from 'lucide-react';
 
 const RUN_STATUSES = ['planned', 'in_production', 'post_checklist'];
@@ -55,6 +56,7 @@ export default function ProductionBatches() {
   const [skuFilter, setSkuFilter] = useState(searchParams.get('sku_id') || '');
   const [showCreate, setShowCreate] = useState(false);
   const [showInitiate, setShowInitiate] = useState(false);
+  const [showStartQr, setShowStartQr] = useState(false);
   const [showParams, setShowParams] = useState(false);
   const isAdmin = ['ceo', 'admin', 'system admin'].includes((user?.role || '').trim().toLowerCase());
 
@@ -159,6 +161,14 @@ export default function ProductionBatches() {
           data-testid="initiate-batch-btn"
         >
           <Play size={14} /> Initiate Production Batch
+        </button>
+        <button
+          onClick={() => setShowStartQr(true)}
+          className="px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-[#002FA7] bg-white border border-[#002FA7]/30 hover:bg-blue-50 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors"
+          data-testid="start-production-qr-btn"
+          title="Printable QR: scan → Face ID / PIN → pick SKU → run"
+        >
+          <QrCode size={14} /> Start Production QR
         </button>
         {isAdmin && (
           <button
@@ -394,6 +404,7 @@ export default function ProductionBatches() {
 
       <QualityParamsDialog open={showParams} onOpenChange={setShowParams} />
       <InitiateBatchDialog open={showInitiate} onOpenChange={setShowInitiate} skus={skus} onInitiated={(id) => navigate(`/production-batches/${id}/run`)} />
+      <StartProductionQrDialog open={showStartQr} onOpenChange={setShowStartQr} />
       {/* Create Batch Modal */}
       {showCreate && (
         <CreateBatchModal

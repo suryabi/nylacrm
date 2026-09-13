@@ -101,7 +101,7 @@ const LeadCard = ({ lead, onDragStart, onDragEnd, onClick, users, onMoveToStatus
     if (next && !actLoaded) {
       setLoadingAct(true);
       try {
-        const token = localStorage.getItem('token') || localStorage.getItem('session_token');
+        const token = localStorage.getItem('token') || localStorage.getItem('token');
         const res = await axios.get(`${API_URL}/api/activities/${lead.id}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           withCredentials: true,

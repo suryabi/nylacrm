@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const headers = () => ({
-  Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('session_token') || ''}`,
+  Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('token') || ''}`,
 });
 
 export default function ZohoIntegration() {

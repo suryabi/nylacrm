@@ -49,7 +49,7 @@ export default function MaintenanceScan() {
     if (s?.token) fetch(`${API_URL}/api/maintenance/staff-auth/logout`, { method: 'POST', headers: { 'X-Staff-Token': s.token } }).catch(() => {});
     clearStaffSession();
     setStaff(null);
-    if (!localStorage.getItem('session_token')) { setState({ loading: true }); setReloadKey((k) => k + 1); }
+    if (!localStorage.getItem('token')) { setState({ loading: true }); setReloadKey((k) => k + 1); }
   };
 
   const load = useCallback(async () => {

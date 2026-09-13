@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from database import db
-from deps import get_current_user
+from deps import get_current_user, get_user_or_factory_staff
 from core.tenant import get_current_tenant_id
 from routes.production_qc import _is_elevated
 from routes.maintenance_sheets import (pre_production_status, consume_pre_production, create_post_run_tasks,
@@ -152,10 +152,37 @@ async def put_params(data: ParamsIn, current_user: dict = Depends(get_current_us
     return {"ok": True, "params": params}
 
 
+async def _operator(current_user: dict) -> dict:
+    """Factory Staff may drive a run only when flagged 'Production operator'; app users always may."""
+    if current_user.get("is_factory_staff"):
+        m = await db.qc_team.find_one({"tenant_id": get_current_tenant_id(), "id": current_user["id"]}, {"_id": 0, "production_operator": 1})
+        if not (m or {}).get("production_operator"):
+            raise HTTPException(403, "You are not flagged as a Production operator — ask an admin to enable it under Factory Staff")
+    return current_user
+
+
+@router.get("/skus")
+async def run_skus(current_user: dict = Depends(get_user_or_factory_staff)):
+    """Active SKUs selectable when initiating a run (staff-accessible)."""
+    await _operator(current_user)
+    skus = await db.master_skus.find({"is_active": True}, {"_id": 0, "id": 1, "sku_name": 1, "sku_code": 1, "category": 1, "allows_child_skus": 1}).sort("sku_name", 1).to_list(500)
+    return {"skus": skus}
+
+
+@router.get("/active")
+async def active_runs(current_user: dict = Depends(get_user_or_factory_staff)):
+    """Runs still in progress (planned / in_production / post_checklist) for resume."""
+    await _operator(current_user)
+    rows = await db.production_batches.find({"tenant_id": get_current_tenant_id(), "status": {"$in": list(RUN_STATUSES)}},
+                                            {"_id": 0, "id": 1, "batch_code": 1, "sku_name": 1, "status": 1, "created_by_name": 1, "created_at": 1, "run.started_at": 1}).sort("created_at", -1).to_list(50)
+    return {"runs": rows}
+
+
 # ── Run state ────────────────────────────────────────────────────────────────
 @router.post("/initiate")
-async def initiate_run(data: InitiateIn, current_user: dict = Depends(get_current_user)):
+async def initiate_run(data: InitiateIn, current_user: dict = Depends(get_user_or_factory_staff)):
     """Wizard entry: SKU only → draft batch (planned) with auto code, today's date, SKU default packaging."""
+    await _operator(current_user)
     tenant_id = get_current_tenant_id()
     sku = await db.master_skus.find_one({"id": data.sku_id}, {"_id": 0})
     if not sku:
@@ -175,8 +202,9 @@ async def initiate_run(data: InitiateIn, current_user: dict = Depends(get_curren
 
 
 @router.post("/{batch_id}/cancel")
-async def cancel_run(batch_id: str, current_user: dict = Depends(get_current_user)):
+async def cancel_run(batch_id: str, current_user: dict = Depends(get_user_or_factory_staff)):
     """Abandon an in-progress run (before the batch record is finalised)."""
+    await _operator(current_user)
     tenant_id = get_current_tenant_id()
     b = await _batch(tenant_id, batch_id)
     if b["status"] not in RUN_STATUSES:
@@ -189,7 +217,8 @@ async def cancel_run(batch_id: str, current_user: dict = Depends(get_current_use
 
 
 @router.get("/{batch_id}")
-async def get_run(batch_id: str, current_user: dict = Depends(get_current_user)):
+async def get_run(batch_id: str, current_user: dict = Depends(get_user_or_factory_staff)):
+    await _operator(current_user)
     tenant_id = get_current_tenant_id()
     b = await _batch(tenant_id, batch_id)
     run = b["run"]
@@ -232,7 +261,8 @@ async def record_params(batch_id: str, data: ValuesIn, current_user: dict = Depe
 
 
 @router.post("/{batch_id}/start")
-async def start_production(batch_id: str, data: OverrideIn, current_user: dict = Depends(get_current_user)):
+async def start_production(batch_id: str, data: OverrideIn, current_user: dict = Depends(get_user_or_factory_staff)):
+    await _operator(current_user)
     tenant_id = get_current_tenant_id()
     b = await _batch(tenant_id, batch_id)
     if b["status"] != "planned":
@@ -264,8 +294,9 @@ async def start_production(batch_id: str, data: OverrideIn, current_user: dict =
 
 
 @router.post("/{batch_id}/stop")
-async def stop_production(batch_id: str, data: OutputIn, current_user: dict = Depends(get_current_user)):
+async def stop_production(batch_id: str, data: OutputIn, current_user: dict = Depends(get_user_or_factory_staff)):
     """Stop production and capture output (crates) → post-production checklist stage."""
+    await _operator(current_user)
     tenant_id = get_current_tenant_id()
     b = await _batch(tenant_id, batch_id)
     if b["status"] != "in_production":
@@ -283,8 +314,9 @@ async def stop_production(batch_id: str, data: OutputIn, current_user: dict = De
 
 
 @router.post("/{batch_id}/close")
-async def close_run(batch_id: str, data: CloseIn, current_user: dict = Depends(get_current_user)):
+async def close_run(batch_id: str, data: CloseIn, current_user: dict = Depends(get_user_or_factory_staff)):
     """Close the production run: post checklist must be done → batch enters the QC queue; report + notifications."""
+    await _operator(current_user)
     tenant_id = get_current_tenant_id()
     b = await _batch(tenant_id, batch_id)
     if b["status"] != "post_checklist":

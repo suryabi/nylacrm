@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('session_token')}` });
+const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('token')}` });
 
 const EMOJIS = ['👍', '👎', '❤️'];
 

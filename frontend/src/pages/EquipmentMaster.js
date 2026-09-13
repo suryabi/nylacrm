@@ -19,7 +19,7 @@ import { MaintenanceProfile } from '../components/MaintenanceProfile';
 import { FormSection } from '../components/FormSection';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' });
+const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
 const FREQ_OPTIONS = [
   { label: 'Daily', value: 1 },
@@ -365,7 +365,7 @@ const AuthImg = ({ src, alt, className, onClick, testid }) => {
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let obj;
-    fetch(src, { headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } })
+    fetch(src, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
       .then((r) => (r.ok ? r.blob() : Promise.reject()))
       .then((b) => { obj = URL.createObjectURL(b); setUrl(obj); })
       .catch(() => setFailed(true));
@@ -450,7 +450,7 @@ export default function EquipmentMaster() {
         fd.append('file', f);
         fd.append('category', 'photo');
         const res = await fetch(`${API_URL}/api/production/equipment/${logTarget.equipment.id}/files`, {
-          method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` }, body: fd,
+          method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, body: fd,
         });
         if (!res.ok) throw new Error((await res.json()).detail || 'Upload failed');
         const meta = await res.json();
@@ -477,7 +477,7 @@ export default function EquipmentMaster() {
         fd.append('file', f);
         fd.append('category', categoryOverride || docCategory);
         const res = await fetch(`${API_URL}/api/production/equipment/${docsTarget.id}/files`, {
-          method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` }, body: fd,
+          method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, body: fd,
         });
         if (!res.ok) throw new Error((await res.json()).detail || 'Upload failed');
         const meta = await res.json();
@@ -675,7 +675,7 @@ export default function EquipmentMaster() {
 
   const downloadXlsx = async (kind, fallbackName) => {
     try {
-      const res = await fetch(`${API_URL}/api/production/equipment/${kind}`, { headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } });
+      const res = await fetch(`${API_URL}/api/production/equipment/${kind}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       if (!res.ok) throw new Error((await res.json()).detail || 'Download failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -689,7 +689,7 @@ export default function EquipmentMaster() {
     try {
       const res = await fetch(`${API_URL}/api/production/equipment/export-filtered`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: rows.map((r) => r.id) }),
       });
       if (!res.ok) throw new Error((await res.json()).detail || 'Download failed');
@@ -710,7 +710,7 @@ export default function EquipmentMaster() {
       const fd = new FormData();
       fd.append('file', file);
       const res = await fetch(`${API_URL}/api/production/equipment/import`, {
-        method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` }, body: fd,
+        method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, body: fd,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Import failed');

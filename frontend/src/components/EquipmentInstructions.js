@@ -6,7 +6,7 @@ import RichTextField from './RichTextField';
 import { BookOpen, Upload, Download, Trash2, Loader2, FileText, Image as ImageIcon } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}` });
+const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
 export default function EquipmentInstructions({ equipment, onClose, onSaved }) {
   const [maint, setMaint] = useState('');

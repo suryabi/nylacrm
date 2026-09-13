@@ -1657,6 +1657,7 @@ class QCTeamMemberCreate(BaseModel):
     department: Optional[str] = None
     phone: Optional[str] = None
     employee_id: Optional[str] = None
+    production_operator: Optional[bool] = False   # may initiate/run production batches from the Start Production QR
 
 class QCTeamMemberUpdate(BaseModel):
     name: Optional[str] = None
@@ -1665,6 +1666,7 @@ class QCTeamMemberUpdate(BaseModel):
     department: Optional[str] = None
     phone: Optional[str] = None
     employee_id: Optional[str] = None
+    production_operator: Optional[bool] = None
 
 class QCFaceEnroll(BaseModel):
     descriptors: List[List[float]]   # one or more 128-float face signatures
@@ -1727,6 +1729,7 @@ async def create_qc_team_member(data: QCTeamMemberCreate, current_user: dict = D
         "department": data.department or "",
         "phone": data.phone or "",
         "employee_id": data.employee_id or "",
+        "production_operator": bool(data.production_operator),
         "face_descriptors": [],
         "pin_hash": None,
         "created_at": now,
@@ -1810,7 +1813,7 @@ async def update_qc_team_member(member_id: str, data: QCTeamMemberUpdate, curren
         updates["name"] = data.name
     if data.role is not None:
         updates["role"] = data.role
-    for f in ("designation", "department", "phone", "employee_id"):
+    for f in ("designation", "department", "phone", "employee_id", "production_operator"):
         v = getattr(data, f)
         if v is not None:
             updates[f] = v

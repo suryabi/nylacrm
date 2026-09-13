@@ -7,7 +7,7 @@ import { Input } from './ui/input';
 import { FlaskConical, Plus, Trash2 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const H = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } });
+const H = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
 const slug = (n) => n.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
 // Admin: pre-production quality parameters (name, unit, min, max) — tenant default or per SKU.

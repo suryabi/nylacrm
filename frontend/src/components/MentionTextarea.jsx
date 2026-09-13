@@ -9,7 +9,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('session_token')}` });
+const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('token')}` });
 
 const CHIP_RE = /@\[([^\]]+)\]\(([A-Za-z0-9_-]+)\)/g;
 const PILL_CLS = 'mention-pill inline-flex items-center bg-rose-50 text-rose-700 border border-rose-200 rounded-full px-1.5 text-[12px] font-medium mx-0.5 align-baseline';

@@ -11,7 +11,7 @@ export default function NotificationBell() {
   const pollRef = useRef(null);
 
   const authHeaders = useCallback(() => {
-    const token = localStorage.getItem('token') || localStorage.getItem('session_token');
+    const token = localStorage.getItem('token') || localStorage.getItem('token');
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, []);
 

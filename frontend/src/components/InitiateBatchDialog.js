@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Play, Tag } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const H = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } });
+const H = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
 
 // Wizard entry point: pick the SKU → server creates the draft run → caller navigates to the wizard.
 export const InitiateBatchDialog = ({ open, onOpenChange, skus, onInitiated }) => {

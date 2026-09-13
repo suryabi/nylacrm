@@ -6,7 +6,7 @@ import { Input } from './ui/input';
 import { Factory, Search } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}` });
+const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
 // Equipment form block: "must be cleared before every production run" + SKU scope.
 const VARIANTS = {

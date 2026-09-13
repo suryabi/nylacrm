@@ -16,7 +16,7 @@ import GooglePlacesAddressSearch from '../components/GooglePlacesAddressSearch';
 import { Switch } from '../components/ui/switch';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' });
+const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
 
 const EMPTY_FAC = { facility_name: '', facility_type: '', google_address: '', latitude: null, longitude: null, contact_person: '', contact_phone: '', contact_email: '', notes: '' };
 
@@ -75,7 +75,7 @@ const AuthImg = ({ src, alt, className, onClick, testid }) => {
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let obj;
-    fetch(src, { headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } })
+    fetch(src, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } })
       .then((r) => (r.ok ? r.blob() : Promise.reject()))
       .then((b) => { obj = URL.createObjectURL(b); setUrl(obj); })
       .catch(() => setFailed(true));
@@ -251,7 +251,7 @@ export default function Facilities() {
         if (areaId) fd.append('area_id', areaId);
       }
       const res = await fetch(`${API_URL}/api/facilities/${detail.id}/files`, {
-        method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` }, body: fd,
+        method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, body: fd,
       });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || 'Upload failed'); }
       const meta = await res.json();
@@ -262,7 +262,7 @@ export default function Facilities() {
 
   const downloadFile = async (fileMeta) => {
     try {
-      const res = await fetch(`${API_URL}/api/facilities/${detail.id}/files/${fileMeta.id}`, { headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } });
+      const res = await fetch(`${API_URL}/api/facilities/${detail.id}/files/${fileMeta.id}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       if (!res.ok) throw new Error();
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -274,7 +274,7 @@ export default function Facilities() {
 
   const previewFile = async (fileMeta) => {
     try {
-      const res = await fetch(`${API_URL}/api/facilities/${detail.id}/files/${fileMeta.id}`, { headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } });
+      const res = await fetch(`${API_URL}/api/facilities/${detail.id}/files/${fileMeta.id}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       if (!res.ok) throw new Error();
       const blob = await res.blob();
       setPreview({ url: URL.createObjectURL(blob), filename: fileMeta.filename, isImage: (fileMeta.content_type || '').startsWith('image/') });

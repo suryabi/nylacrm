@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { Plus, Pencil, Trash2, Loader2, Users, X, Check, ScanFace, KeyRound, CircleCheck, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Users, X, Check, ScanFace, KeyRound, CircleCheck, AlertTriangle, Factory } from 'lucide-react';
 import { FaceEnrollModal, PinModal } from '../components/qc/FaceEnrollModal';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -17,7 +17,7 @@ export default function QCTeam() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', role: '', designation: '', department: '', phone: '', employee_id: '' });
+  const [form, setForm] = useState({ name: '', role: '', designation: '', department: '', phone: '', employee_id: '', production_operator: false });
   const [saving, setSaving] = useState(false);
   const [faceMember, setFaceMember] = useState(null);
   const [pinMember, setPinMember] = useState(null);
@@ -48,7 +48,7 @@ export default function QCTeam() {
       }
       setShowForm(false);
       setEditing(null);
-      setForm({ name: '', role: '', designation: '', department: '', phone: '', employee_id: '' });
+      setForm({ name: '', role: '', designation: '', department: '', phone: '', employee_id: '', production_operator: false });
       fetchMembers();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to save');
@@ -70,7 +70,7 @@ export default function QCTeam() {
 
   const openEdit = (m) => {
     setEditing(m.id);
-    setForm({ name: m.name, role: m.role || '', designation: m.designation || '', department: m.department || '', phone: m.phone || '', employee_id: m.employee_id || '' });
+    setForm({ name: m.name, role: m.role || '', designation: m.designation || '', department: m.department || '', phone: m.phone || '', employee_id: m.employee_id || '', production_operator: !!m.production_operator });
     setShowForm(true);
   };
 
@@ -85,7 +85,7 @@ export default function QCTeam() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-800">Factory Staff</h1>
           <p className="text-sm text-slate-500 mt-0.5">All factory staff with roles & designations — QC members keep working in the mobile app</p>
         </div>
-        <button onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', role: '', designation: '', department: '', phone: '', employee_id: '' }); }}
+        <button onClick={() => { setShowForm(true); setEditing(null); setForm({ name: '', role: '', designation: '', department: '', phone: '', employee_id: '', production_operator: false }); }}
           className="px-4 py-2 text-sm font-medium text-white bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center gap-1.5"
           data-testid="add-member-btn">
           <Plus size={14} /> Add Staff
@@ -142,6 +142,11 @@ export default function QCTeam() {
               <input value={form.employee_id} onChange={e => setForm(p => ({ ...p, employee_id: e.target.value }))}
                 placeholder="e.g. NAW-042" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" data-testid="member-empid-input" />
             </div>
+            <label className="sm:col-span-2 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 cursor-pointer">
+              <input type="checkbox" checked={!!form.production_operator} onChange={e => setForm(p => ({ ...p, production_operator: e.target.checked }))} className="mt-0.5 h-4 w-4" data-testid="member-production-operator-checkbox" />
+              <span className="text-xs"><span className="font-semibold text-slate-800 flex items-center gap-1"><Factory size={12} /> Production operator</span>
+                <span className="text-slate-500">Can scan the <b>Start Production QR</b>, sign in with Face ID / PIN and initiate &amp; run production batches.</span></span>
+            </label>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={handleSave} disabled={saving}
@@ -185,6 +190,7 @@ export default function QCTeam() {
                   <td className="px-5 py-3 font-medium text-slate-800">
                     {m.name}
                     {m.employee_id && <span className="block text-[10px] font-normal text-slate-400">{m.employee_id}</span>}
+                    {m.production_operator && <span className="inline-flex items-center gap-1 mt-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#002FA7]/10 text-[#002FA7]" data-testid={`operator-badge-${m.id}`}><Factory size={10} /> Production operator</span>}
                   </td>
                   <td className="px-5 py-3 text-slate-500">{m.role || '-'}</td>
                   <td className="px-5 py-3 text-slate-500">{m.designation || '-'}</td>

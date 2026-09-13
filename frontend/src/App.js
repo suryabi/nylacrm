@@ -123,6 +123,7 @@ const ProductionBatches = lazy(() => import('./pages/ProductionBatches'));
 const ProductionDashboard = lazy(() => import('./pages/ProductionDashboard'));
 const BatchDetail = lazy(() => import('./pages/BatchDetail'));
 const ProductionRunWizard = lazy(() => import('./pages/ProductionRunWizard'));
+const StartProductionScan = lazy(() => import('./pages/StartProductionScan'));
 const QCRouteConfig = lazy(() => import('./pages/QCRouteConfig'));
 const QCStation = lazy(() => import('./pages/QCStation'));
 const QCLiveBoard = lazy(() => import('./pages/QCLiveBoard'));
@@ -392,6 +393,8 @@ function AppRouter() {
           <Route path="/equipment-scan/:equipmentId" element={<EquipmentScan />} />
           <Route path="/area-scan/:areaId" element={<AreaScan />} />
           <Route path="/pre-production-scan/:tenantId" element={<PreProductionScan />} />
+          <Route path="/start-production/:tenantId" element={<StartProductionScan />} />
+          <Route path="/production-run/:batchId" element={<ProductionRunWizard />} />
           <Route path="/register" element={<Navigate to="/login" replace />} />
           <Route path="/onboarding" element={<OnboardingWizard />} />
           <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />

@@ -21,7 +21,7 @@ import { Checkbox } from '../components/ui/checkbox';
 import { useAuth } from '../context/AuthContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('session_token')}` });
+const auth = () => ({ Authorization: `Bearer ${localStorage.getItem('token') || localStorage.getItem('token')}` });
 
 // Mirrors `ADMIN_ROLES` in routes/notification_settings.py
 const ADMIN_ROLES = new Set(['CEO', 'Director', 'Admin', 'System Admin']);

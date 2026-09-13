@@ -3,7 +3,7 @@ import axios from 'axios';
 import { ClipboardCheck, CheckCircle2, AlertTriangle, RefreshCw, ShieldAlert } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}` });
+const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
 // Shown inside Create Production Batch: per-run equipment that must be cleared for this SKU.
 export const PreProductionGate = ({ skuId, isElevated, override, onOverrideChange, onStatus }) => {

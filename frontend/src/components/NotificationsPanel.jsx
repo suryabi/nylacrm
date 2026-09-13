@@ -18,7 +18,7 @@ import {
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const authHeaders = () => {
-  const token = localStorage.getItem('token') || localStorage.getItem('session_token');
+  const token = localStorage.getItem('token') || localStorage.getItem('token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 

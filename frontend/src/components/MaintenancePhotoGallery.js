@@ -5,7 +5,7 @@ import { Badge } from './ui/badge';
 import { Images, Download, Camera, Gauge, RefreshCw, X } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const H = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}` });
+const H = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 const fmt = (s) => (s || '').slice(0, 16).replace('T', ' ');
 
 const Thumb = ({ photo, onOpen }) => {
