@@ -7,7 +7,7 @@ import { Factory, RefreshCw, XCircle, CheckCircle2, UserCheck, Lock, Undo2 } fro
 import StaffScanLogin from '../components/StaffScanLogin';
 import { getStaffSession, saveStaffSession, clearStaffSession, scanAuthHeaders } from '../lib/staffSession';
 import { toast } from 'sonner';
-import { ParamCaptureDialog } from '../components/MaintenanceParams';
+import { ParamCaptureDialog, ParamSummary } from '../components/MaintenanceParams';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -65,7 +65,7 @@ export default function PreProductionScan() {
       let pos = {};
       if (state.geofence_enabled) { const p = await getPosition(); if (!p) throw new Error('Location access is required — allow GPS to record maintenance here.'); pos = p; }
       const r = await post(it.kind === 'post' ? `post/${it.task_id}/complete` : `${it.id}/clear`, { ...pos, parameter_values: values || null });
-      patchItem(it, { cleared: true, can_tick: false, can_undo: true, record: { performed_by: r.record.performed_by, completed_at: r.record.completed_at } });
+      patchItem(it, { cleared: true, can_tick: false, can_undo: true, record: r.record });
       toast.success(it.kind === 'post' ? `${it.name} — after-run maintenance recorded (batch ${it.batch_code})` : `${it.name} — cleared for the next production run`, { description: 'Untick to undo' });
     } catch (e) { toast.error(e.message); load(); } finally { setBusy((b) => ({ ...b, [it.id]: false })); }
   };
@@ -119,6 +119,7 @@ export default function PreProductionScan() {
           ? <p className="text-[11px] text-sky-700">After batch <b>{it.batch_code}</b>{it.batch_sku_name ? ` · ${it.batch_sku_name}` : ''} · run started {(it.run_started_at || '').slice(0, 16).replace('T', ' ')}</p>
           : <p className="text-[11px] text-slate-500">{it.all_skus ? 'Every SKU' : `SKUs: ${it.sku_names.join(', ')}`}</p>}
         {it.cleared && it.record && <p className="text-xs text-emerald-700">By {it.record.performed_by} · {(it.record.completed_at || '').slice(0, 16).replace('T', ' ')}{it.can_undo ? ' · untick to undo' : ''}</p>}
+        {it.cleared && it.record && <ParamSummary record={it.record} testid={`ppc-params-${it.id}`} />}
         {it.not_assigned && !it.cleared && it.assigned_staff?.length > 0 && <p className="text-xs text-slate-500">Assigned to {it.assigned_staff.map((s) => s.name).join(', ')}</p>}
       </div>
     </div>

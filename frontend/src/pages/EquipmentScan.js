@@ -4,7 +4,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Wrench, RefreshCw, CalendarX2, XCircle, Factory, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
-import { ParamCaptureDialog } from '../components/MaintenanceParams';
+import { ParamCaptureDialog, ParamSummary } from '../components/MaintenanceParams';
 import { ScanInstructions } from '../components/ScanInstructions';
 import StaffScanLogin from '../components/StaffScanLogin';
 import { saveStaffSession, clearStaffSession, scanAuthHeaders } from '../lib/staffSession';
@@ -51,7 +51,7 @@ export default function EquipmentScan() {
       const d = await res.json();
       if (!res.ok) throw new Error(d.detail || 'Could not save');
       toast.success('Cleared for the next production run');
-      setState((s) => ({ ...s, per_run: { ...s.per_run, cleared: true, can_tick: false, record: { performed_by: d.record.performed_by, completed_at: d.record.completed_at } } }));
+      setState((s) => ({ ...s, per_run: { ...s.per_run, cleared: true, can_tick: false, record: d.record } }));
     } catch (e) { toast.error(e.message); } finally { setClearing(false); }
   };
 
@@ -66,7 +66,7 @@ export default function EquipmentScan() {
       const d = await res.json();
       if (!res.ok) throw new Error(d.detail || 'Could not save');
       toast.success(`After-run maintenance recorded for batch ${t.batch_code}`);
-      setState((s) => ({ ...s, post_run: s.post_run.map((x) => (x.task_id === t.task_id ? { ...x, cleared: true, can_tick: false, record: { performed_by: d.record.performed_by, completed_at: d.record.completed_at } } : x)) }));
+      setState((s) => ({ ...s, post_run: s.post_run.map((x) => (x.task_id === t.task_id ? { ...x, cleared: true, can_tick: false, record: d.record } : x)) }));
     } catch (e) { toast.error(e.message); } finally { setDoneTask((d) => ({ ...d, [t.task_id]: null })); }
   };
 
@@ -112,9 +112,10 @@ export default function EquipmentScan() {
                     <p className="text-xs text-muted-foreground">{state.per_run.all_skus ? 'Required before every batch' : `Required before batches of: ${state.per_run.sku_names.join(', ')}`}</p>
                   </div>
                 </div>
-                {state.per_run.cleared ? (
+                {state.per_run.cleared ? (<>
                   <p className="text-sm text-emerald-700 flex items-center gap-1" data-testid="eqscan-per-run-cleared"><CheckCircle2 className="h-4 w-4" /> Cleared for the next run by {state.per_run.record?.performed_by} · {(state.per_run.record?.completed_at || '').slice(0, 16).replace('T', ' ')}</p>
-                ) : state.per_run.can_tick ? (
+                  <ParamSummary record={state.per_run.record} testid="eqscan-per-run-params" />
+                </>) : state.per_run.can_tick ? (
                   <Button className="w-full h-12 bg-amber-600 hover:bg-amber-700 text-white font-bold" onClick={() => clearRun()} disabled={clearing} data-testid="eqscan-per-run-clear-btn">
                     {clearing ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />} Cleared — ready for next production run
                   </Button>
@@ -137,9 +138,10 @@ export default function EquipmentScan() {
                     <p className="text-xs text-muted-foreground">{t.batch_sku_name ? `${t.batch_sku_name} · ` : ''}run started {(t.run_started_at || '').slice(0, 16).replace('T', ' ')}</p>
                   </div>
                 </div>
-                {t.cleared ? (
+                {t.cleared ? (<>
                   <p className="text-sm text-emerald-700 flex items-center gap-1"><CheckCircle2 className="h-4 w-4" /> Done by {t.record?.performed_by} · {(t.record?.completed_at || '').slice(0, 16).replace('T', ' ')}</p>
-                ) : t.can_tick ? (
+                  <ParamSummary record={t.record} testid={`eqscan-post-params-${t.task_id}`} />
+                </>) : t.can_tick ? (
                   <Button className="w-full h-12 bg-sky-600 hover:bg-sky-700 text-white font-bold" onClick={() => completePost(t)} disabled={doneTask[t.task_id] === 'busy'} data-testid={`eqscan-post-run-done-${t.task_id}`}>
                     {doneTask[t.task_id] === 'busy' ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />} After-run maintenance done
                   </Button>

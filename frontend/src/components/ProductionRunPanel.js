@@ -3,7 +3,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { ParamCaptureDialog } from './MaintenanceParams';
+import { ParamCaptureDialog, ParamSummary } from './MaintenanceParams';
 import { CheckCircle2, Circle, Play, Square, FlaskConical, ClipboardCheck, Lock, FileText, ShieldAlert, RefreshCw, Undo2 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -26,8 +26,6 @@ export const OverrideBox = ({ value, onChange, label }) => (
   </div>
 );
 
-const paramText = (ps) => (ps || []).filter((p) => p.value != null).map((p) => `${p.name}: ${p.value}${p.unit ? ' ' + p.unit : ''}${p.in_range === false ? ' ⚠' : ''}`).join(' · ');
-
 export const ChecklistRows = ({ items, onTick, onUntick, busy }) => (
   <ul className="divide-y rounded-lg border bg-white">
     {items.map((it) => (
@@ -44,7 +42,7 @@ export const ChecklistRows = ({ items, onTick, onUntick, busy }) => (
             {it.cleared ? <span className="text-emerald-700">Done by {it.record?.performed_by} · {fmt(it.record?.completed_at)}{it.can_undo ? ' · click to undo' : ''}</span>
               : it.can_tick ? 'Pending — click the circle to record it now' : `Pending — assigned staff${it.assigned_staff?.length ? ` (${it.assigned_staff.map((s) => s.name).join(', ')})` : ''} must record via QR`}
           </p>
-          {it.cleared && paramText(it.record?.parameters) && <p className="text-xs text-violet-700" data-testid={`run-check-params-${it.id}`}>{paramText(it.record.parameters)}</p>}
+          {it.cleared && <ParamSummary record={it.record} testid={`run-check-params-${it.id}`} />}
         </div>
       </li>
     ))}
@@ -82,7 +80,7 @@ export const ProductionRunPanel = ({ batch, onUpdate }) => {
     return act(() => axios.post(`${API_URL}/api/maintenance/pre-production/${it.kind === 'post' ? `post/${it.task_id}/complete` : `${it.id}/clear`}`, { parameter_values: values || null }, H()), `${it.name} recorded`);
   };
   const untick = (it) => act(() => axios.post(`${API_URL}/api/maintenance/pre-production/${it.kind === 'post' ? `post/${it.task_id}/undo` : `${it.id}/undo`}`, {}, H()), `${it.name} undone`);
-  const postItems = (post_tasks || []).map((t) => ({ id: t.id, task_id: t.id, kind: 'post', name: t.equipment_name, maintenance_parameters: t.maintenance_parameters || [], cleared: t.status === 'completed', can_tick: t.status !== 'completed', can_undo: t.status === 'completed' && !t.consumed_by_batch_id, record: { performed_by: t.performed_by, completed_at: t.completed_at, parameters: t.parameters || [] } }));
+  const postItems = (post_tasks || []).map((t) => ({ id: t.id, task_id: t.id, kind: 'post', name: t.equipment_name, equipment_id: t.equipment_id, maintenance_parameters: t.maintenance_parameters || [], cleared: t.status === 'completed', can_tick: t.status !== 'completed', can_undo: t.status === 'completed' && !t.consumed_by_batch_id, record: { id: t.record_id, performed_by: t.performed_by, completed_at: t.completed_at, parameters: t.parameters || [] } }));
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 space-y-4" data-testid="production-run-panel">

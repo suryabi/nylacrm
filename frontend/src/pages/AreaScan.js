@@ -8,7 +8,7 @@ import { LayoutGrid, RefreshCw, XCircle, CheckCircle2, Camera, UserCheck, MapPin
 import StaffScanLogin from '../components/StaffScanLogin';
 import { getStaffSession, saveStaffSession, clearStaffSession, scanAuthHeaders } from '../lib/staffSession';
 import { toast } from 'sonner';
-import { ParamCaptureDialog } from '../components/MaintenanceParams';
+import { ParamCaptureDialog, ParamSummary } from '../components/MaintenanceParams';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -77,7 +77,7 @@ export default function AreaScan() {
     try {
       const r = await post('tick', { equipment_id: it.id, parameter_values: values || null, ...(await locate()) });
       setState((s) => ({ ...s, equipment: s.equipment.map((e) => (e.id === it.id
-        ? { ...e, state: 'done', can_tick: false, can_undo: true, record: { status: 'completed', performed_by: r.performed_by, completed_at: r.record.completed_at, via: 'area_qr' } }
+        ? { ...e, state: 'done', can_tick: false, can_undo: true, record: { ...r.record, status: 'completed', performed_by: r.performed_by, via: 'area_qr' } }
         : e)), summary: { ...s.summary, due: s.summary.due - 1, done: s.summary.done + 1 } }));
       toast.success(`${it.name} — maintenance saved`, { description: 'Untick to undo' });
     } catch (e) { toast.error(e.message); load(); } finally { setBusy((b) => ({ ...b, [it.id]: false })); }
@@ -182,9 +182,10 @@ export default function AreaScan() {
                 <StateBadge it={it} />
               </div>
               <p className="text-xs text-muted-foreground">{[it.type, it.frequency_label].filter(Boolean).join(' · ')}</p>
-              {it.state === 'done' && it.record && (
+              {it.state === 'done' && it.record && (<>
                 <p className="text-xs text-emerald-700">Saved ✓ by {it.record.performed_by} · {(it.record.completed_at || '').slice(11, 16)}{it.can_undo ? ' · untick to undo' : ''}</p>
-              )}
+                <ParamSummary record={it.record} testid={`area-params-${it.id}`} />
+              </>)}
               {it.state === 'not_scheduled' && it.next_due && <p className="text-xs text-muted-foreground">Next due {it.next_due}</p>}
               {it.state === 'not_assigned' && it.assigned_staff?.length > 0 && <p className="text-xs text-slate-500">Assigned to {it.assigned_staff.map((s) => s.name).join(', ')}</p>}
               {it.state === 'photo_required' && it.token && (

@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { CalendarDays, Printer, RefreshCw, CheckCircle2, XCircle, History, Camera, Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { ParamSummary } from './MaintenanceParams';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' });
@@ -266,6 +267,7 @@ export const MaintenanceProfile = ({ equipment, onClose }) => {
                         {(r.corrections || []).some((c) => c.corrected_status) && <Badge variant="outline" className="text-[10px]">corrected — original: {r.status}</Badge>}
                         <span className="text-xs text-muted-foreground ml-auto">{r.performed_by} · {(r.completed_at || '').slice(0, 16).replace('T', ' ')}</span>
                       </div>
+                      <ParamSummary record={r} testid={`mp-record-params-${r.id}`} />
                       {r.remarks && <p className="text-xs text-muted-foreground">“{r.remarks}”</p>}
                       {(r.photos || []).length > 0 && (
                         <div className="flex flex-wrap gap-2">

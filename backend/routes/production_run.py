@@ -379,7 +379,14 @@ async def run_report(batch_id: str, current_user: dict = Depends(get_current_use
             rows.append([p["name"], "" if v is None else f"{v} {p.get('unit', '')}", rng, "OK" if ok else ("—" if v is None else "OUT OF RANGE")])
         el += [Paragraph(f"Pre-production quality parameters — recorded by {pq.get('recorded_by') or '—'} at {f(pq.get('at'))}" + (f" · OVERRIDE: {pq['override']['reason']}" if pq.get("override") else ""), st["Heading3"]), grid(rows, [150, 100, 150, 120]), Spacer(1, 8)]
     small = st["BodyText"].clone("small", fontSize=7, leading=9)
-    pv = lambda ps: Paragraph(", ".join(f"{p.get('name')}: {p.get('value')}{(' ' + p['unit']) if p.get('unit') else ''}{' ⚠' if p.get('in_range') is False else ''}" for p in (ps or []) if p.get("value") is not None) or "—", small)
+    def _pval(p):
+        v = p.get("value")
+        if v is None:
+            return None
+        v = ", ".join(map(str, v)) if isinstance(v, list) else str(v)
+        n = len(p.get("photos") or [])
+        return f"{p.get('name')}: {v}{(' ' + p['unit']) if p.get('unit') else ''}{' ⚠' if p.get('in_range') is False else ''}{f' ({n} photo)' if n else ''}"
+    pv = lambda ps: Paragraph(", ".join(x for x in (_pval(p) for p in (ps or [])) if x) or "—", small)
     rows = [["Type", "Equipment", "Done by", "At", "Parameters", "Status"]]
     for c in b.get("pre_production_clearances") or []:
         rows.append(["Before run" if c.get("kind", "pre") == "pre" else f"After run ({c.get('after_batch_code')})", Paragraph(c.get("equipment_name") or "", small), c.get("performed_by") or "", f(c.get("completed_at")), pv(c.get("parameters")), c.get("status") or "completed"])

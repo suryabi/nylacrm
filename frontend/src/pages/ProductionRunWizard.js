@@ -86,7 +86,7 @@ export default function ProductionRunWizard() {
   };
   const untick = (it) => act(() => axios.post(`${API_URL}/api/maintenance/pre-production/${it.kind === 'post' ? `post/${it.task_id}/undo` : `${it.id}/undo`}`, {}, H()), `${it.name} undone`);
   const preItems = [...(checklist?.items || []), ...(checklist?.post_items || [])];
-  const postItems = (post_tasks || []).map((t) => ({ id: t.id, task_id: t.id, kind: 'post', name: t.equipment_name, maintenance_parameters: t.maintenance_parameters || [], cleared: t.status === 'completed', can_tick: t.status !== 'completed', can_undo: t.status === 'completed' && !t.consumed_by_batch_id, record: { performed_by: t.performed_by, completed_at: t.completed_at, parameters: t.parameters || [] } }));
+  const postItems = (post_tasks || []).map((t) => ({ id: t.id, task_id: t.id, kind: 'post', name: t.equipment_name, equipment_id: t.equipment_id, maintenance_parameters: t.maintenance_parameters || [], cleared: t.status === 'completed', can_tick: t.status !== 'completed', can_undo: t.status === 'completed' && !t.consumed_by_batch_id, record: { id: t.record_id, performed_by: t.performed_by, completed_at: t.completed_at, parameters: t.parameters || [] } }));
   const postPending = postItems.filter((i) => !i.cleared).length;
 
   const cancel = async () => {

@@ -39,13 +39,21 @@ class VendorAssociation(BaseModel):
     amc_details: Optional[str] = None
 
 
+class MaintenanceParamOption(BaseModel):
+    label: str
+    photo_required: bool = False
+    alert: bool = False
+
+
 class MaintenanceParam(BaseModel):
     key: str
     name: str
+    type: str = "number"          # number | text | radio | checkbox
     unit: str = ""
     min: Optional[float] = None
     max: Optional[float] = None
     required: bool = True
+    options: List[MaintenanceParamOption] = []
 
 
 class EquipmentIn(BaseModel):

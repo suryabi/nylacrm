@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 
 from database import db
 from core.tenant import get_current_tenant_id
@@ -149,31 +149,92 @@ async def _geofence_alert(tenant_id: str, eq: dict, current_user: dict, staff_na
         logging.getLogger(__name__).warning("Geofence alert notification failed", exc_info=True)
 
 
-def _capture_params(eq: dict, values: Optional[dict], status: str = "completed") -> dict:
+PARAM_TYPES = ("number", "text", "radio", "checkbox")
+
+
+async def _capture_params(tenant_id: str, eq: dict, values: Optional[dict], status: str = "completed") -> dict:
     """Validate & shape maintenance parameter values against the equipment's definitions.
-    Returns {"parameters": [...], "out_of_range": [...]}; raises 400 when a required value is missing on completion."""
+    Values: number → float, text/radio → str, checkbox → [str]; or {"value": ..., "photo_ids": [...]} for option photos.
+    Returns {"parameters": [...], "out_of_range": [...]}; raises 400 when a required value/photo is missing on completion."""
     defs = eq.get("maintenance_parameters") or []
     if not defs:
         return {"parameters": [], "out_of_range": []}
     values = values or {}
     rows, out, missing = [], [], []
     for d in defs:
-        v = values.get(d["key"])
-        try:
-            v = None if v in (None, "") else float(v)
-        except (TypeError, ValueError):
-            raise HTTPException(400, f"{d['name']} must be a number")
-        ok = None
-        if v is not None:
-            ok = not ((d.get("min") is not None and v < d["min"]) or (d.get("max") is not None and v > d["max"]))
-            if not ok:
-                out.append(f"{d['name']} = {v}{(' ' + d['unit']) if d.get('unit') else ''} (allowed {d.get('min', '–')}–{d.get('max', '–')})")
-        elif d.get("required", True) and status == "completed":
+        raw = values.get(d["key"])
+        photo_ids = []
+        if isinstance(raw, dict):
+            photo_ids = [p for p in (raw.get("photo_ids") or []) if isinstance(p, str)]
+            raw = raw.get("value")
+        ptype = d.get("type") or "number"
+        opts = {o["label"]: o for o in (d.get("options") or [])}
+        v, ok, alerts, need_photo = None, None, [], []
+        if ptype == "number":
+            try:
+                v = None if raw in (None, "") else float(raw)
+            except (TypeError, ValueError):
+                raise HTTPException(400, f"{d['name']} must be a number")
+            if v is not None:
+                ok = not ((d.get("min") is not None and v < d["min"]) or (d.get("max") is not None and v > d["max"]))
+                if not ok:
+                    out.append(f"{d['name']} = {v}{(' ' + d['unit']) if d.get('unit') else ''} (allowed {d.get('min', '–')}–{d.get('max', '–')})")
+        elif ptype == "text":
+            v = (str(raw).strip() or None) if raw is not None else None
+        else:
+            chosen = raw if isinstance(raw, list) else ([raw] if raw not in (None, "") else [])
+            chosen = [str(c) for c in chosen]
+            bad = [c for c in chosen if c not in opts]
+            if bad:
+                raise HTTPException(400, f"{d['name']}: invalid option {', '.join(bad)}")
+            if ptype == "radio" and len(chosen) > 1:
+                raise HTTPException(400, f"{d['name']}: select one option")
+            v = (chosen[0] if chosen else None) if ptype == "radio" else (chosen or None)
+            alerts = [c for c in chosen if opts[c].get("alert")]
+            need_photo = [c for c in chosen if opts[c].get("photo_required")]
+            if alerts:
+                ok = False
+                out.append(f"{d['name']} = {', '.join(alerts)} (alert)")
+            elif chosen:
+                ok = True
+        if v is None and d.get("required", True) and status == "completed":
             missing.append(d["name"])
-        rows.append({"key": d["key"], "name": d["name"], "unit": d.get("unit") or "", "min": d.get("min"), "max": d.get("max"), "value": v, "in_range": ok})
+        photos = []
+        if photo_ids:
+            photos = await db.maintenance_param_photos.find({"tenant_id": tenant_id, "equipment_id": eq["id"], "id": {"$in": photo_ids}},
+                                                            {"_id": 0}).to_list(50)
+        if need_photo and not photos and status == "completed":
+            raise HTTPException(400, f"Photo required for {d['name']}: {', '.join(need_photo)} — capture a live photo first")
+        rows.append({"key": d["key"], "name": d["name"], "type": ptype, "unit": d.get("unit") or "", "min": d.get("min"), "max": d.get("max"),
+                     "value": v, "in_range": ok, "alert_options": alerts, "photos": photos})
     if missing:
         raise HTTPException(400, "Enter the required parameter(s): " + ", ".join(missing))
+    used = [p["id"] for r in rows for p in r["photos"]]
+    if used:
+        await db.maintenance_param_photos.delete_many({"tenant_id": tenant_id, "id": {"$in": used}})
     return {"parameters": rows, "out_of_range": out}
+
+
+@router.post("/equipment/{equipment_id}/param-photo")
+async def param_photo(equipment_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_user_or_factory_staff)):
+    """Live photo attached to a parameter option that requires one (stamped server-side; linked to the record on submit)."""
+    tenant_id = get_current_tenant_id()
+    eq = await _get_equipment(tenant_id, equipment_id)
+    content = await file.read()
+    if len(content) > 15 * 1024 * 1024:
+        raise HTTPException(400, "Photo too large (max 15 MB)")
+    now = datetime.now(IST)
+    try:
+        stamped = _stamp_photo(content, now.strftime("%d-%b-%Y %H:%M:%S IST"))
+    except Exception:
+        raise HTTPException(400, "Invalid image")
+    pid = str(uuid.uuid4())
+    path = build_path(tenant_id, "maintenance_photos", f"{pid}.jpg")
+    await put_object(path, stamped, "image/jpeg")
+    meta = {"id": pid, "filename": f"PARAM_{now.date().isoformat()}_{pid[:6]}.jpg", "storage_path": path, "captured_at": now.isoformat(),
+            "captured_by": current_user.get("name") or current_user.get("email")}
+    await db.maintenance_param_photos.insert_one({**meta, "tenant_id": tenant_id, "equipment_id": eq["id"]})
+    return meta
 
 
 async def _flag_out_of_range(tenant_id: str, eq: dict, rec: dict, who: str):
@@ -184,7 +245,7 @@ async def _flag_out_of_range(tenant_id: str, eq: dict, rec: dict, who: str):
         from utils.notify import notify_users
         users = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "role": 1}).to_list(500)
         ids = {u["id"] for u in users if (u.get("role") or "").lower() in ADMIN_ROLES} | {x["id"] for x in await _supervisors_for(tenant_id, eq)}
-        await notify_users(tenant_id, list(ids), title=f"⚠ Maintenance parameter out of range — {eq['name']}",
+        await notify_users(tenant_id, list(ids), title=f"⚠ Maintenance parameter alert — {eq['name']}",
                            body=f"{who} recorded: " + "; ".join(rec["parameters_out_of_range"]) + ". Open the equipment's maintenance profile to review.",
                            link="/equipment-master", kind="alert", category="approval", entity_type="equipment", entity_id=eq["id"], send_email_too=False)
     except Exception:
@@ -529,7 +590,7 @@ class SubmitBody(BaseModel):
     staff_member_id: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
-    parameter_values: Optional[Dict[str, Optional[float]]] = None
+    parameter_values: Optional[Dict[str, Any]] = None
 
 
 @router.post("/scan/{token}/submit")
@@ -549,7 +610,7 @@ async def scan_submit(token: str, body: SubmitBody, current_user: dict = Depends
     photos = [p for p in slot.get("pending_photos") or [] if p["id"] in set(body.photo_ids)]
     if slot.get("photo_required") and not photos and prior == 0:
         raise HTTPException(400, "Photo inspection required today — capture at least one live photo before submitting.")
-    cap = _capture_params(eq, body.parameter_values, body.status)
+    cap = await _capture_params(tenant_id, eq, body.parameter_values, body.status)
     rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": slot["id"],
            "equipment_id": eq["id"], "equipment_name": eq["name"],
            "parameters": cap["parameters"], "parameters_out_of_range": cap["out_of_range"],
@@ -799,8 +860,9 @@ async def area_scan(area_id: str, current_user: dict = Depends(get_user_or_facto
                                                             sort=[("created_at", -1)])
                 it.update({"state": "done",
                            "can_undo": bool(rec and rec.get("performed_via") == "area_qr" and rec.get("performed_by_id") == current_user.get("id")),
-                           "record": {"status": (rec or {}).get("status"), "performed_by": (rec or {}).get("performed_by"),
-                                      "completed_at": (rec or {}).get("completed_at"), "via": (rec or {}).get("performed_via")}})
+                           "record": {"id": (rec or {}).get("id"), "status": (rec or {}).get("status"), "performed_by": (rec or {}).get("performed_by"),
+                                      "completed_at": (rec or {}).get("completed_at"), "via": (rec or {}).get("performed_via"),
+                                      "parameters": (rec or {}).get("parameters") or []}})
             elif slot.get("photo_required"):
                 it["state"] = "photo_required"
             elif not await _can_act(tenant_id, eq, current_user):
@@ -831,13 +893,13 @@ class AreaTickBody(BaseModel):
     equipment_id: str
     lat: Optional[float] = None
     lng: Optional[float] = None
-    parameter_values: Optional[Dict[str, Optional[float]]] = None
+    parameter_values: Optional[Dict[str, Any]] = None
 
 
 class GeoBody(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
-    parameter_values: Optional[Dict[str, Optional[float]]] = None
+    parameter_values: Optional[Dict[str, Any]] = None
 
 
 async def _area_tick_one(tenant_id: str, ctx: dict, eq: dict, current_user: dict, geo, remarks=None, values=None) -> dict:
@@ -857,7 +919,7 @@ async def _area_tick_one(tenant_id: str, ctx: dict, eq: dict, current_user: dict
         return {"id": eq["id"], "name": eq["name"], "reason": ex.detail}
     if (eq.get("maintenance_parameters") or []) and values is None:
         return {"id": eq["id"], "name": eq["name"], "reason": "Parameter values required — tick this equipment individually", "needs_parameters": True}
-    cap = _capture_params(eq, values)
+    cap = await _capture_params(tenant_id, eq, values)
     rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": slot["id"],
            "equipment_id": eq["id"], "equipment_name": eq["name"], "scheduled_date": slot["date"],
            "parameters": cap["parameters"], "parameters_out_of_range": cap["out_of_range"],
@@ -1057,7 +1119,7 @@ async def post_run_complete(task_id: str, body: Optional[GeoBody] = None, curren
     staff_name = current_user.get("name") if current_user.get("is_factory_staff") else None
     geo = await _enforce_geofence(tenant_id, eq, current_user, getattr(body, "lat", None), getattr(body, "lng", None), staff_name=staff_name)
     staff = await _resolve_staff(tenant_id, eq, current_user, None)
-    cap = _capture_params(eq, getattr(body, "parameter_values", None))
+    cap = await _capture_params(tenant_id, eq, getattr(body, "parameter_values", None))
     now = datetime.now(IST)
     rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": None, "trigger": "post_run", "post_run_task_id": task_id,
            "parameters": cap["parameters"], "parameters_out_of_range": cap["out_of_range"],
@@ -1129,7 +1191,7 @@ async def pre_production_clear(equipment_id: str, body: GeoBody = GeoBody(), cur
     staff_name = current_user.get("name") if current_user.get("is_factory_staff") else None
     geo = await _enforce_geofence(tenant_id, eq, current_user, body.lat, body.lng, staff_name=staff_name)
     staff = await _resolve_staff(tenant_id, eq, current_user, None)
-    cap = _capture_params(eq, body.parameter_values)
+    cap = await _capture_params(tenant_id, eq, body.parameter_values)
     now = datetime.now(IST)
     rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": None, "trigger": "per_run",
            "parameters": cap["parameters"], "parameters_out_of_range": cap["out_of_range"],
@@ -1222,10 +1284,11 @@ async def add_correction(record_id: str, body: CorrectionBody, current_user: dic
 async def record_photo(record_id: str, photo_id: str, current_user: dict = Depends(get_user_or_factory_staff)):
     _ = current_user
     tenant_id = get_current_tenant_id()
-    rec = await db.maintenance_records.find_one({"tenant_id": tenant_id, "id": record_id}, {"_id": 0, "photos": 1})
+    rec = await db.maintenance_records.find_one({"tenant_id": tenant_id, "id": record_id}, {"_id": 0, "photos": 1, "parameters": 1})
     if not rec:
         raise HTTPException(404, "Record not found")
-    meta = next((p for p in rec.get("photos") or [] if p["id"] == photo_id), None)
+    all_photos = list(rec.get("photos") or []) + [p for r in rec.get("parameters") or [] for p in r.get("photos") or []]
+    meta = next((p for p in all_photos if p["id"] == photo_id), None)
     if not meta:
         raise HTTPException(404, "Photo not found")
     data, _ct = await get_object(meta["storage_path"])
