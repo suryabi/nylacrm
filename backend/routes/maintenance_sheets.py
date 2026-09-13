@@ -1729,5 +1729,180 @@ async def daily_digest_scheduler():
                     log.info("daily digest %s %s: %s", tid, today, res)
                 except Exception:
                     log.exception("daily digest failed for tenant %s", tid)
+            for tid in await db.maintenance_records.distinct("tenant_id", {"parameters_out_of_range.0": {"$exists": True}, "completed_at": {"$regex": f"^{today}"}}):
+                try:
+                    log.info("alert digest %s %s: %s", tid, today, await send_alert_digest(tid, today))
+                except Exception:
+                    log.exception("alert digest failed for tenant %s", tid)
         except Exception:
             log.exception("daily digest scheduler iteration failed")
+
+
+# ── Photo gallery (per equipment) ────────────────────────────────────────────
+def _record_photo_entries(rec: dict) -> list:
+    """Flatten inspection photos + parameter-option photos of one record into gallery entries."""
+    base = {"record_id": rec["id"], "record_status": rec.get("status"), "scheduled_date": rec.get("scheduled_date"),
+            "performed_by": rec.get("performed_by"), "performed_via": rec.get("performed_via"), "batch_code": rec.get("batch_code")}
+    out = [{**base, **p, "kind": "inspection", "parameter": None, "option": None} for p in rec.get("photos") or []]
+    for row in rec.get("parameters") or []:
+        v = row.get("value")
+        out += [{**base, **p, "kind": "parameter", "parameter": row.get("name"), "alert": row.get("in_range") is False,
+                 "option": ", ".join(v) if isinstance(v, list) else (str(v) if v is not None else None)} for p in row.get("photos") or []]
+    return out
+
+
+async def _gallery(tenant_id: str, equipment_id: str, month: Optional[str], kind: Optional[str]) -> dict:
+    eq = await _get_equipment(tenant_id, equipment_id)
+    recs = await db.maintenance_records.find({"tenant_id": tenant_id, "equipment_id": equipment_id},
+                                             {"_id": 0, "id": 1, "status": 1, "scheduled_date": 1, "performed_by": 1, "performed_via": 1,
+                                              "batch_code": 1, "photos": 1, "parameters": 1}).to_list(2000)
+    entries = [e for r in recs for e in _record_photo_entries(r)]
+    months = sorted({(e.get("captured_at") or "")[:7] for e in entries if e.get("captured_at")}, reverse=True)
+    if month:
+        entries = [e for e in entries if (e.get("captured_at") or "").startswith(month)]
+    if kind in ("inspection", "parameter"):
+        entries = [e for e in entries if e["kind"] == kind]
+    entries.sort(key=lambda e: e.get("captured_at") or "", reverse=True)
+    return {"equipment": {"id": eq["id"], "name": eq["name"]}, "months": months, "photos": entries,
+            "counts": {"inspection": sum(1 for e in entries if e["kind"] == "inspection"), "parameter": sum(1 for e in entries if e["kind"] == "parameter")}}
+
+
+@router.get("/equipment/{equipment_id}/photos")
+async def equipment_photos(equipment_id: str, month: Optional[str] = Query(None), kind: Optional[str] = Query(None),
+                           current_user: dict = Depends(get_current_user)):
+    _ = current_user
+    g = await _gallery(get_current_tenant_id(), equipment_id, month, kind)
+    return {**g, "photos": [{k: v for k, v in e.items() if k != "storage_path"} for e in g["photos"]]}
+
+
+@router.get("/equipment/{equipment_id}/photos.zip")
+async def equipment_photos_zip(equipment_id: str, month: Optional[str] = Query(None), kind: Optional[str] = Query(None),
+                               current_user: dict = Depends(get_current_user)):
+    """Audit export: every photo (stamped) + manifest.csv with capture date, who, record status and parameter/option."""
+    import csv
+    import zipfile
+    _ = current_user
+    g = await _gallery(get_current_tenant_id(), equipment_id, month, kind)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        rows = [["file", "captured_at", "captured_by", "kind", "parameter", "option", "record_status", "scheduled_date", "performed_via", "batch_code"]]
+        for e in g["photos"]:
+            try:
+                data, _ct = await get_object(e["storage_path"])
+            except Exception:
+                continue
+            name = f"{(e.get('captured_at') or '')[:19].replace(':', '-')}_{e['kind']}_{e['id'][:6]}.jpg"
+            z.writestr(name, data)
+            rows.append([name, e.get("captured_at"), e.get("captured_by"), e["kind"], e.get("parameter") or "", e.get("option") or "",
+                         e.get("record_status"), e.get("scheduled_date"), e.get("performed_via"), e.get("batch_code") or ""])
+        m = io.StringIO()
+        csv.writer(m).writerows(rows)
+        z.writestr("manifest.csv", m.getvalue())
+    buf.seek(0)
+    fname = f"{g['equipment']['name']}-photos{('-' + month) if month else ''}.zip".replace(" ", "_")
+    return Response(content=buf.getvalue(), media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
+# ── Daily alert digest (alert options + out-of-range readings) ───────────────
+async def _alert_digest_items(tenant_id: str, date_str: str) -> list:
+    recs = await db.maintenance_records.find(
+        {"tenant_id": tenant_id, "parameters_out_of_range.0": {"$exists": True}, "completed_at": {"$regex": f"^{date_str}"}},
+        {"_id": 0}).sort("completed_at", 1).to_list(2000)
+    items, eq_cache = [], {}
+    for r in recs:
+        eq = eq_cache.get(r["equipment_id"])
+        if eq is None:
+            eq = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": r["equipment_id"]}, {"_id": 0}) or {}
+            eq["_sup"] = [s["id"] for s in await _supervisors_for(tenant_id, eq)] if eq else []
+            eq_cache[r["equipment_id"]] = eq
+        flagged = [p for p in r.get("parameters") or [] if p.get("in_range") is False]
+        items.append({"record_id": r["id"], "equipment_id": r["equipment_id"], "equipment_name": eq.get("name") or r.get("equipment_name") or "Deleted equipment",
+                      "loc": " › ".join(x for x in [eq.get("facility_name"), eq.get("floor_name"), eq.get("area_name")] if x),
+                      "supervisor_ids": eq.get("_sup") or [], "performed_by": r.get("performed_by"), "time": (r.get("completed_at") or "")[11:16],
+                      "via": r.get("performed_via"), "batch_code": r.get("batch_code"),
+                      "flags": [{"parameter": p["name"], "value": ", ".join(p["value"]) if isinstance(p.get("value"), list) else p.get("value"),
+                                 "unit": p.get("unit") or "", "kind": "alert" if p.get("alert_options") else "out_of_range",
+                                 "allowed": None if p.get("alert_options") else f"{p.get('min', '–')}–{p.get('max', '–')}",
+                                 "photos": len(p.get("photos") or [])} for p in flagged] or [{"parameter": "", "value": x, "unit": "", "kind": "out_of_range", "allowed": None, "photos": 0} for x in r["parameters_out_of_range"]]})
+    return items
+
+
+def _alert_digest_html(date_str: str, items: list, scope: str) -> str:
+    rows = []
+    for it in items:
+        for i, f in enumerate(it["flags"]):
+            tag = ("<span style='color:#b91c1c;font-weight:bold'>ALERT</span>" if f["kind"] == "alert"
+                   else "<span style='color:#b45309;font-weight:bold'>OUT OF RANGE</span>")
+            first = f"<td rowspan='{len(it['flags'])}' style='padding:6px 10px;font-size:12px;border-bottom:1px solid #e2e8f0;vertical-align:top'><b>{it['equipment_name']}</b><br><span style='color:#64748b'>{it['loc']}</span><br><span style='color:#64748b'>{it['performed_by']} · {it['time']}{(' · batch ' + it['batch_code']) if it.get('batch_code') else ''}</span></td>" if i == 0 else ""
+            rows.append(f"<tr>{first}<td style='padding:6px 10px;font-size:12px;border-bottom:1px solid #e2e8f0'>{f['parameter']}</td>"
+                        f"<td style='padding:6px 10px;font-size:12px;border-bottom:1px solid #e2e8f0'>{f['value']} {f['unit']}{(' <span style=color:#64748b>(allowed ' + f['allowed'] + ')</span>') if f['allowed'] else ''}{(' 📷' + str(f['photos'])) if f['photos'] else ''}</td>"
+                        f"<td style='padding:6px 10px;font-size:12px;border-bottom:1px solid #e2e8f0'>{tag}</td></tr>")
+    return f"""
+<div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0f172a;max-width:720px">
+  <h2 style="margin:0 0 4px;font-size:18px">Maintenance Alert Digest — {date_str}</h2>
+  <p style="margin:0 0 12px;color:#334155;font-size:13px">{len(items)} maintenance record(s) with alert options or out-of-range readings{scope}.</p>
+  <table style="border-collapse:collapse;width:100%;border:1px solid #e2e8f0">
+    <tr><th style='text-align:left;padding:6px 10px;font-size:11px;color:#64748b'>EQUIPMENT · DONE BY</th><th style='text-align:left;padding:6px 10px;font-size:11px;color:#64748b'>PARAMETER</th><th style='text-align:left;padding:6px 10px;font-size:11px;color:#64748b'>VALUE</th><th style='text-align:left;padding:6px 10px;font-size:11px;color:#64748b'>TYPE</th></tr>
+    {''.join(rows)}
+  </table>
+  <p style="margin:16px 0 0;color:#94a3b8;font-size:12px">Open Equipment Master → Maintenance profile to review records and photos. Automated daily digest — sent at 9 PM IST.</p>
+</div>"""
+
+
+async def send_alert_digest(tenant_id: str, date_str: str, force: bool = False) -> dict:
+    from utils.email_sender import send_email
+    from utils.notify import notify_users
+    if not force and await db.maintenance_alert_digest.find_one({"tenant_id": tenant_id, "date": date_str}):
+        return {"sent": False, "reason": "already sent"}
+    items = await _alert_digest_items(tenant_id, date_str)
+    if not items:
+        return {"sent": False, "reason": "no alerts", "items": 0}
+    users = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "role": 1, "email": 1, "name": 1}).to_list(500)
+    admins = {u["id"] for u in users if (u.get("role") or "").lower() in ADMIN_ROLES}
+    by_user = {}
+    for it in items:
+        for sid in it["supervisor_ids"]:
+            if sid not in admins:
+                by_user.setdefault(sid, []).append(it)
+    plans = [(uid, items, "") for uid in admins] + [(uid, its, " for your equipment/areas") for uid, its in by_user.items()]
+    emails_sent = 0
+    umap = {u["id"]: u for u in users}
+    for uid, its, scope in plans:
+        u = umap.get(uid)
+        if not u:
+            continue
+        n_flags = sum(len(i["flags"]) for i in its)
+        subject = f"⚠ Maintenance alert digest {date_str} — {n_flags} flag(s) on {len(its)} record(s)"
+        if u.get("email"):
+            try:
+                await send_email(to=u["email"], subject=subject, html=_alert_digest_html(date_str, its, scope), text=subject)
+                emails_sent += 1
+            except Exception:
+                logging.getLogger("maintenance_digest").exception("alert digest email failed for %s", u.get("email"))
+        try:
+            await notify_users(tenant_id, [uid], title=subject,
+                               body="; ".join(f"{i['equipment_name']}: " + ", ".join(f"{f['parameter']} {f['value']}".strip() for f in i["flags"]) for i in its[:6])
+                                    + (f"; +{len(its) - 6} more" if len(its) > 6 else "") + ". Open Equipment Master to review.",
+                               link="/equipment-master", kind="alert", category="approval", entity_type="equipment", send_email_too=False)
+        except Exception:
+            pass
+    await db.maintenance_alert_digest.update_one({"tenant_id": tenant_id, "date": date_str},
+                                                 {"$set": {"sent_at": datetime.now(timezone.utc).isoformat(), "emails": emails_sent, "recipients": len(plans), "items": len(items)}}, upsert=True)
+    return {"sent": True, "emails": emails_sent, "recipients": len(plans), "items": len(items)}
+
+
+@router.get("/alert-digest")
+async def preview_alert_digest(date_q: str = Query(..., alias="date"), current_user: dict = Depends(get_current_user)):
+    if (current_user.get("role") or "").lower() not in ADMIN_ROLES:
+        raise HTTPException(403, "Admin access required")
+    tenant_id = get_current_tenant_id()
+    items = await _alert_digest_items(tenant_id, date_q)
+    sent = await db.maintenance_alert_digest.find_one({"tenant_id": tenant_id, "date": date_q}, {"_id": 0})
+    return {"date": date_q, "items": [{k: v for k, v in i.items() if k != "supervisor_ids"} for i in items], "sent": sent}
+
+
+@router.post("/alert-digest/send")
+async def trigger_alert_digest(date_q: Optional[str] = Query(None, alias="date"), current_user: dict = Depends(get_current_user)):
+    if (current_user.get("role") or "").lower() not in ADMIN_ROLES:
+        raise HTTPException(403, "Admin access required")
+    return await send_alert_digest(get_current_tenant_id(), date_q or datetime.now(IST).date().isoformat(), force=True)

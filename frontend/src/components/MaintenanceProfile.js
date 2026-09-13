@@ -7,6 +7,7 @@ import { Textarea } from './ui/textarea';
 import { CalendarDays, Printer, RefreshCw, CheckCircle2, XCircle, History, Camera, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { ParamSummary } from './MaintenanceParams';
+import { MaintenancePhotoGallery } from './MaintenancePhotoGallery';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('session_token')}`, 'Content-Type': 'application/json' });
@@ -252,6 +253,8 @@ export const MaintenanceProfile = ({ equipment, onClose }) => {
               </Button>
               <p className="text-[11px] text-muted-foreground w-full">Pick any date — <b>Print Week Sheet</b> prints that date's Monday-to-Sunday week; <b>Print Whole Month</b> prints every week of that month in one go (one A4 page per week), each row with its QR code plus operator and inspector signature columns.</p>
             </div>
+
+            <MaintenancePhotoGallery equipmentId={equipment.id} />
 
             <div>
               <p className="text-sm font-semibold mb-2 flex items-center gap-1.5"><History className="h-4 w-4" /> Maintenance records & audit trail</p>

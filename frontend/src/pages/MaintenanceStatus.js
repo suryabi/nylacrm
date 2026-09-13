@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
+import { AlertDigestCard } from '../components/AlertDigestCard';
 import { toast } from 'sonner';
 import { CalendarCheck2, ChevronLeft, ChevronRight, Mail, Building2, CheckCircle2, XCircle, CircleDashed, CircleAlert } from 'lucide-react';
 
@@ -78,6 +79,8 @@ export default function MaintenanceStatus() {
           </Button>
         </div>
       </div>
+
+      <AlertDigestCard day={day} />
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[['Scheduled', t.scheduled, 'text-slate-800'], ['Completed', t.completed, 'text-emerald-600'],

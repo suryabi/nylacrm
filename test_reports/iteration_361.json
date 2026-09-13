@@ -1,0 +1,21 @@
+{
+  "summary": "Both backend regression scripts (manual_alert_digest_gallery.py and manual_typed_params.py) pass end-to-end. Frontend Alert Digest card on /maintenance-status and Photo Gallery inside the Equipment Master maintenance-profile dialog for a newly-created 'ZZ GAL pump' were fully verified: the digest shows '2 flag(s) on 1 record(s)', renders the amber Pressure pill and rose 'Condition: Leaking' pill with camera+1, Send button flips summary to 'Digest sent …', an empty date disables Send, and the gallery reports (1 photo), filters (Inspection → 0 with empty-state text; back to All → 1), lightbox opens/closes on click, and 'Download all (ZIP)' streams a .zip containing the JPEG plus manifest.csv with the expected columns/values. Test data cleaned up.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/manual_alert_digest_gallery.py",
+    "/app/backend/tests/manual_typed_params.py",
+    "/app/backend/tests/setup_zz_gal.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "MaintenanceProfile dialog raises a React a11y warning: 'Missing Description or aria-describedby={undefined} for DialogContent'. Non-blocking but should be addressed by adding a DialogDescription."
+  ],
+  "updated_files": ["/app/backend/tests/setup_zz_gal.py (new helper for FE seeding)"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@nylaairwater.earth / test123 (tenant nyla-air-water)",
+  "seed_data_creation": "Created ZZ GAL pump + 1 param photo + 1 pre-production maintenance record (2 out-of-range flags) on 2026-09-13. Cleaned up equipment, records, photos, notifications and maintenance_alert_digest docs after testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Alert Digest + Photo Gallery features are stable. Note: gallery-kind is a native <select> whose 'All photos' option uses value=\"\" (not 'all'). MaintenanceProfile dialog is opened via the row kebab menu -> data-testid=eq-maint-profile-<name-with-dashes>, not from the icon buttons directly on the row."
+}
