@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
+import { ParamInputs } from '../components/MaintenanceParams';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
 import { Wrench, CheckCircle2, XCircle, Camera, RefreshCw, Trash2, Eye, UserCheck, MapPin } from 'lucide-react';
@@ -26,6 +27,7 @@ export default function MaintenanceScan() {
   const [state, setState] = useState({ loading: true });
   const [status, setStatus] = useState(null); // 'completed' | 'incomplete'
   const [remarks, setRemarks] = useState('');
+  const [paramValues, setParamValues] = useState({});
   const [photos, setPhotos] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [camOn, setCamOn] = useState(false);
@@ -130,13 +132,13 @@ export default function MaintenanceScan() {
       }
       const res = await fetch(`${API_URL}/api/maintenance/scan/${token}/submit`, {
         method: 'POST', headers: authHeaders(),
-        body: JSON.stringify({ status, remarks: remarks || null, photo_ids: photos.map((p) => p.id), staff_member_id: staff?.id || null, lat: pos?.lat ?? null, lng: pos?.lng ?? null }),
+        body: JSON.stringify({ status, remarks: remarks || null, photo_ids: photos.map((p) => p.id), staff_member_id: staff?.id || null, lat: pos?.lat ?? null, lng: pos?.lng ?? null, parameter_values: paramValues }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Submit failed');
       stopCamera();
       setState((s) => ({ ...s, already_submitted: true, record: data, records: [...(s.records || []), data], can_log_another: true, relog: false }));
-      setStatus(null); setRemarks(''); setPhotos([]);
+      setStatus(null); setRemarks(''); setPhotos([]); setParamValues({});
       toast.success('Maintenance record saved');
     } catch (e) { toast.error(e.message); } finally { setSubmitting(false); }
   };
@@ -360,6 +362,12 @@ export default function MaintenanceScan() {
           )}
         </div>
 
+        {(state.maintenance_parameters || []).length > 0 && (
+          <div data-testid="scan-params">
+            <p className="text-sm font-semibold mb-1">Readings {status === 'completed' ? <span className="text-xs text-muted-foreground">(required to complete)</span> : <span className="text-xs text-muted-foreground">(optional)</span>}</p>
+            <ParamInputs params={state.maintenance_parameters} values={paramValues} onChange={setParamValues} testid="scan-param" />
+          </div>
+        )}
         <div>
           <p className="text-sm font-semibold mb-1">Remarks (optional)</p>
           <Textarea rows={2} value={remarks} onChange={(e) => setRemarks(e.target.value)} data-testid="scan-remarks-input" />

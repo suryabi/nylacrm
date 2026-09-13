@@ -4,6 +4,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Wrench, RefreshCw, CalendarX2, XCircle, Factory, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
+import { ParamCaptureDialog } from '../components/MaintenanceParams';
 import { ScanInstructions } from '../components/ScanInstructions';
 import StaffScanLogin from '../components/StaffScanLogin';
 import { saveStaffSession, clearStaffSession, scanAuthHeaders } from '../lib/staffSession';
@@ -17,6 +18,7 @@ export default function EquipmentScan() {
   const [reloadKey, setReloadKey] = useState(0);
   const [clearing, setClearing] = useState(false);
   const [doneTask, setDoneTask] = useState({});
+  const [capture, setCapture] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -32,7 +34,9 @@ export default function EquipmentScan() {
     })();
   }, [equipmentId, navigate, reloadKey]);
 
-  const clearRun = async () => {
+  const clearRun = async (values) => {
+    if ((state.per_run?.maintenance_parameters || []).length && values === undefined) { setCapture({ ...state.per_run, _kind: 'pre' }); return; }
+    setCapture(null);
     setClearing(true);
     try {
       let pos = {};
@@ -42,7 +46,7 @@ export default function EquipmentScan() {
         pos = p;
       }
       const res = await fetch(`${API_URL}/api/maintenance/pre-production/${equipmentId}/clear`, {
-        method: 'POST', headers: scanAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(pos),
+        method: 'POST', headers: scanAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ ...pos, parameter_values: values || null }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.detail || 'Could not save');
@@ -51,11 +55,13 @@ export default function EquipmentScan() {
     } catch (e) { toast.error(e.message); } finally { setClearing(false); }
   };
 
-  const completePost = async (t) => {
+  const completePost = async (t, values) => {
+    if ((t.maintenance_parameters || []).length && values === undefined) { setCapture({ ...t, _kind: 'post' }); return; }
+    setCapture(null);
     setDoneTask((d) => ({ ...d, [t.task_id]: 'busy' }));
     try {
       const res = await fetch(`${API_URL}/api/maintenance/pre-production/post/${t.task_id}/complete`, {
-        method: 'POST', headers: scanAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({}),
+        method: 'POST', headers: scanAuthHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ parameter_values: values || null }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.detail || 'Could not save');
@@ -71,6 +77,7 @@ export default function EquipmentScan() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex items-start justify-center p-4 pt-8" data-testid="equipment-scan-page">
+      <ParamCaptureDialog item={capture} onCancel={() => setCapture(null)} onSubmit={(vals) => (capture._kind === 'post' ? completePost(capture, vals) : clearRun(vals))} />
       <div className="w-full max-w-md space-y-4">
         <div className="flex items-center gap-2 text-slate-700">
           <div className="p-2 rounded-lg bg-[#002FA7] text-white"><Wrench className="h-5 w-5" /></div>
@@ -108,7 +115,7 @@ export default function EquipmentScan() {
                 {state.per_run.cleared ? (
                   <p className="text-sm text-emerald-700 flex items-center gap-1" data-testid="eqscan-per-run-cleared"><CheckCircle2 className="h-4 w-4" /> Cleared for the next run by {state.per_run.record?.performed_by} · {(state.per_run.record?.completed_at || '').slice(0, 16).replace('T', ' ')}</p>
                 ) : state.per_run.can_tick ? (
-                  <Button className="w-full h-12 bg-amber-600 hover:bg-amber-700 text-white font-bold" onClick={clearRun} disabled={clearing} data-testid="eqscan-per-run-clear-btn">
+                  <Button className="w-full h-12 bg-amber-600 hover:bg-amber-700 text-white font-bold" onClick={() => clearRun()} disabled={clearing} data-testid="eqscan-per-run-clear-btn">
                     {clearing ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />} Cleared — ready for next production run
                   </Button>
                 ) : (

@@ -8,6 +8,7 @@ import { LayoutGrid, RefreshCw, XCircle, CheckCircle2, Camera, UserCheck, MapPin
 import StaffScanLogin from '../components/StaffScanLogin';
 import { getStaffSession, saveStaffSession, clearStaffSession, scanAuthHeaders } from '../lib/staffSession';
 import { toast } from 'sonner';
+import { ParamCaptureDialog } from '../components/MaintenanceParams';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -32,6 +33,7 @@ export default function AreaScan() {
   const [staff, setStaff] = useState(getStaffSession);
   const [busy, setBusy] = useState({}); // equipment_id -> true while saving/undoing
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [capture, setCapture] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -68,10 +70,12 @@ export default function AreaScan() {
     return data;
   };
 
-  const tick = async (it) => {
+  const tick = async (it, values) => {
+    if ((it.maintenance_parameters || []).length && values === undefined) { setCapture(it); return; }
+    setCapture(null);
     setBusy((b) => ({ ...b, [it.id]: true }));
     try {
-      const r = await post('tick', { equipment_id: it.id, ...(await locate()) });
+      const r = await post('tick', { equipment_id: it.id, parameter_values: values || null, ...(await locate()) });
       setState((s) => ({ ...s, equipment: s.equipment.map((e) => (e.id === it.id
         ? { ...e, state: 'done', can_tick: false, can_undo: true, record: { status: 'completed', performed_by: r.performed_by, completed_at: r.record.completed_at, via: 'area_qr' } }
         : e)), summary: { ...s.summary, due: s.summary.due - 1, done: s.summary.done + 1 } }));
@@ -100,6 +104,7 @@ export default function AreaScan() {
   };
 
   if (state.needLogin) return <StaffScanLogin scanRef={{ area_id: areaId }} onLogin={staffLogin} />;
+  const captureDialog = <ParamCaptureDialog item={capture} onCancel={() => setCapture(null)} onSubmit={(vals) => tick(capture, vals)} />;
 
   const Shell = ({ children }) => (
     <div className="min-h-screen bg-slate-100 flex items-start justify-center p-4 pt-8" data-testid="area-scan-page">
@@ -123,6 +128,7 @@ export default function AreaScan() {
 
   return (
     <Shell>
+      {captureDialog}
       <Card><CardContent className="p-4 space-y-1" data-testid="area-scan-info">
         <p className="font-bold text-xl uppercase tracking-wide">{state.area_name}</p>
         <p className="text-sm text-muted-foreground">{[state.facility_name, state.floor_name].filter(Boolean).join(' › ')}</p>

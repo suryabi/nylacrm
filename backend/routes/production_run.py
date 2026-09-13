@@ -135,6 +135,9 @@ async def get_run(batch_id: str, current_user: dict = Depends(get_current_user))
     run = b["run"]
     checklist = await pre_production_status(tenant_id, b["sku_id"], current_user) if b["status"] == "planned" else None
     post_tasks = await db.post_run_tasks.find({"tenant_id": tenant_id, "batch_id": batch_id}, {"_id": 0}).to_list(200)
+    eq_params = {e["id"]: e.get("maintenance_parameters") or [] for e in await db.equipment_master.find(
+        {"tenant_id": tenant_id, "id": {"$in": [t["equipment_id"] for t in post_tasks]}}, {"_id": 0, "id": 1, "maintenance_parameters": 1}).to_list(200)}
+    post_tasks = [{**t, "maintenance_parameters": eq_params.get(t["equipment_id"], [])} for t in post_tasks]
     return {"batch": {k: b.get(k) for k in ("id", "batch_code", "sku_id", "sku_name", "status", "total_crates", "total_bottles", "bottles_per_crate",
                                             "production_date", "created_by_name", "created_at", "pre_production_clearances", "pre_production_override")},
             "run": run, "checklist": checklist, "params": await _param_config(tenant_id, b["sku_id"]),

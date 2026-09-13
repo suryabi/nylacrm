@@ -39,6 +39,15 @@ class VendorAssociation(BaseModel):
     amc_details: Optional[str] = None
 
 
+class MaintenanceParam(BaseModel):
+    key: str
+    name: str
+    unit: str = ""
+    min: Optional[float] = None
+    max: Optional[float] = None
+    required: bool = True
+
+
 class EquipmentIn(BaseModel):
     name: str
     equipment_type_id: str
@@ -67,6 +76,7 @@ class EquipmentIn(BaseModel):
     per_run_sku_ids: List[str] = []            # empty = applies to every SKU
     post_run_maintenance: bool = False         # cleanup/maintenance required after every production run
     post_run_sku_ids: List[str] = []
+    maintenance_parameters: List[MaintenanceParam] = []   # values captured when maintenance is marked complete
 
 
 class LogDateBody(BaseModel):

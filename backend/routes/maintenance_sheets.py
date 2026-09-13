@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from database import db
 from core.tenant import get_current_tenant_id
@@ -147,6 +147,48 @@ async def _geofence_alert(tenant_id: str, eq: dict, current_user: dict, staff_na
             kind="alert", entity_type="equipment", entity_id=eq["id"], send_email_too=True)
     except Exception:
         logging.getLogger(__name__).warning("Geofence alert notification failed", exc_info=True)
+
+
+def _capture_params(eq: dict, values: Optional[dict], status: str = "completed") -> dict:
+    """Validate & shape maintenance parameter values against the equipment's definitions.
+    Returns {"parameters": [...], "out_of_range": [...]}; raises 400 when a required value is missing on completion."""
+    defs = eq.get("maintenance_parameters") or []
+    if not defs:
+        return {"parameters": [], "out_of_range": []}
+    values = values or {}
+    rows, out, missing = [], [], []
+    for d in defs:
+        v = values.get(d["key"])
+        try:
+            v = None if v in (None, "") else float(v)
+        except (TypeError, ValueError):
+            raise HTTPException(400, f"{d['name']} must be a number")
+        ok = None
+        if v is not None:
+            ok = not ((d.get("min") is not None and v < d["min"]) or (d.get("max") is not None and v > d["max"]))
+            if not ok:
+                out.append(f"{d['name']} = {v}{(' ' + d['unit']) if d.get('unit') else ''} (allowed {d.get('min', '–')}–{d.get('max', '–')})")
+        elif d.get("required", True) and status == "completed":
+            missing.append(d["name"])
+        rows.append({"key": d["key"], "name": d["name"], "unit": d.get("unit") or "", "min": d.get("min"), "max": d.get("max"), "value": v, "in_range": ok})
+    if missing:
+        raise HTTPException(400, "Enter the required parameter(s): " + ", ".join(missing))
+    return {"parameters": rows, "out_of_range": out}
+
+
+async def _flag_out_of_range(tenant_id: str, eq: dict, rec: dict, who: str):
+    """Best-effort alert to admins + supervisors when captured values are outside limits."""
+    if not rec.get("parameters_out_of_range"):
+        return
+    try:
+        from utils.notify import notify_users
+        users = await db.users.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "role": 1}).to_list(500)
+        ids = {u["id"] for u in users if (u.get("role") or "").lower() in ADMIN_ROLES} | {x["id"] for x in await _supervisors_for(tenant_id, eq)}
+        await notify_users(tenant_id, list(ids), title=f"⚠ Maintenance parameter out of range — {eq['name']}",
+                           body=f"{who} recorded: " + "; ".join(rec["parameters_out_of_range"]) + ". Open the equipment's maintenance profile to review.",
+                           link="/equipment-master", kind="alert", category="approval", entity_type="equipment", entity_id=eq["id"], send_email_too=False)
+    except Exception:
+        pass
 
 
 def _is_admin(user: dict) -> bool:
@@ -437,6 +479,7 @@ async def scan_status(token: str, current_user: dict = Depends(get_user_or_facto
              "assigned_staff": [{"id": s.get("id"), "name": s.get("name"), "role": s.get("role")}
                                 for s in eq.get("maintenance_staff") or []],
              "supervisors": await _supervisors_for(tenant_id, eq),
+             "maintenance_parameters": eq.get("maintenance_parameters") or [],
              "staff_verification_required": not (is_admin or is_sup), "admin_bypass": is_admin,
              "supervisor_bypass": is_sup, "actor_name": current_user.get("name") or current_user.get("email"),
              "geofence": ({"required": True, "radius": geo_ctx["radius"],
@@ -486,6 +529,7 @@ class SubmitBody(BaseModel):
     staff_member_id: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
+    parameter_values: Optional[Dict[str, Optional[float]]] = None
 
 
 @router.post("/scan/{token}/submit")
@@ -505,8 +549,10 @@ async def scan_submit(token: str, body: SubmitBody, current_user: dict = Depends
     photos = [p for p in slot.get("pending_photos") or [] if p["id"] in set(body.photo_ids)]
     if slot.get("photo_required") and not photos and prior == 0:
         raise HTTPException(400, "Photo inspection required today — capture at least one live photo before submitting.")
+    cap = _capture_params(eq, body.parameter_values, body.status)
     rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": slot["id"],
            "equipment_id": eq["id"], "equipment_name": eq["name"],
+           "parameters": cap["parameters"], "parameters_out_of_range": cap["out_of_range"],
            "scheduled_date": slot["date"], "status": body.status, "attempt": prior + 1,
            "performed_by": (staff or {}).get("name") or current_user.get("name") or current_user.get("email"),
            "performed_by_id": (staff or {}).get("id") or current_user.get("id"),
@@ -518,6 +564,7 @@ async def scan_submit(token: str, body: SubmitBody, current_user: dict = Depends
            "remarks": (body.remarks or "").strip() or None, "corrections": [],
            "created_at": datetime.now(timezone.utc).isoformat()}
     await db.maintenance_records.insert_one({**rec})
+    await _flag_out_of_range(tenant_id, eq, rec, rec["performed_by"])
     rec.pop("_id", None)
     await db.maintenance_slots.update_one({"tenant_id": tenant_id, "id": slot["id"]},
                                           {"$set": {"submitted": True}, "$unset": {"pending_photos": ""}})
@@ -736,6 +783,7 @@ async def area_scan(area_id: str, current_user: dict = Depends(get_user_or_facto
     items = []
     for eq in eqs:
         it = {"id": eq["id"], "name": eq["name"], "type": eq.get("equipment_type_name"),
+              "maintenance_parameters": eq.get("maintenance_parameters") or [],
               "assigned_staff": [{"id": x.get("id"), "name": x.get("name")} for x in eq.get("maintenance_staff") or []],
               "frequency_label": _freq_label(eq.get("maintenance_frequency_days")) if eq.get("maintenance_frequency_days") else None,
               "can_tick": False}
@@ -783,14 +831,16 @@ class AreaTickBody(BaseModel):
     equipment_id: str
     lat: Optional[float] = None
     lng: Optional[float] = None
+    parameter_values: Optional[Dict[str, Optional[float]]] = None
 
 
 class GeoBody(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
+    parameter_values: Optional[Dict[str, Optional[float]]] = None
 
 
-async def _area_tick_one(tenant_id: str, ctx: dict, eq: dict, current_user: dict, geo, remarks=None) -> dict:
+async def _area_tick_one(tenant_id: str, ctx: dict, eq: dict, current_user: dict, geo, remarks=None, values=None) -> dict:
     """Save one 'completed' record for `eq` (today) from the area page. Returns {ok} or {skipped reason}."""
     now = datetime.now(IST)
     today = now.date()
@@ -805,8 +855,12 @@ async def _area_tick_one(tenant_id: str, ctx: dict, eq: dict, current_user: dict
         staff = await _resolve_staff(tenant_id, eq, current_user, None)
     except HTTPException as ex:
         return {"id": eq["id"], "name": eq["name"], "reason": ex.detail}
+    if (eq.get("maintenance_parameters") or []) and values is None:
+        return {"id": eq["id"], "name": eq["name"], "reason": "Parameter values required — tick this equipment individually", "needs_parameters": True}
+    cap = _capture_params(eq, values)
     rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": slot["id"],
            "equipment_id": eq["id"], "equipment_name": eq["name"], "scheduled_date": slot["date"],
+           "parameters": cap["parameters"], "parameters_out_of_range": cap["out_of_range"],
            "status": "completed", "attempt": 1,
            "performed_by": (staff or {}).get("name") or current_user.get("name") or current_user.get("email"),
            "performed_by_id": (staff or {}).get("id") or current_user.get("id"),
@@ -820,6 +874,7 @@ async def _area_tick_one(tenant_id: str, ctx: dict, eq: dict, current_user: dict
                           "next_maintenance_due": eq.get("next_maintenance_due")},
            "created_at": datetime.now(timezone.utc).isoformat()}
     await db.maintenance_records.insert_one({**rec})
+    await _flag_out_of_range(tenant_id, eq, rec, rec["performed_by"])
     await db.maintenance_slots.update_one({"tenant_id": tenant_id, "id": slot["id"]}, {"$set": {"submitted": True}})
     upd = {"last_maintenance_date": slot["date"]}
     if eq.get("maintenance_frequency_days"):
@@ -843,7 +898,7 @@ async def area_tick(area_id: str, body: AreaTickBody, current_user: dict = Depen
     if not eq:
         raise HTTPException(404, "Equipment not found in this area")
     geo = await _area_geo(tenant_id, ctx, eq, current_user, body.lat, body.lng)
-    res = await _area_tick_one(tenant_id, ctx, eq, current_user, geo)
+    res = await _area_tick_one(tenant_id, ctx, eq, current_user, geo, values=body.parameter_values if body.parameter_values is not None else ({} if not eq.get("maintenance_parameters") else None))
     if res.get("reason"):
         raise HTTPException(409, res["reason"])
     return res
@@ -917,6 +972,7 @@ async def _per_run_item(tenant_id: str, eq: dict, actor: dict, sku_id: Optional[
     sku_ids = eq.get("per_run_sku_ids") or []
     can = await _can_act(tenant_id, eq, actor)
     return {"id": eq["id"], "name": eq["name"], "type": eq.get("equipment_type_name"),
+            "maintenance_parameters": eq.get("maintenance_parameters") or [],
             "location": " › ".join(x for x in [eq.get("facility_name"), eq.get("floor_name"), eq.get("area_name")] if x),
             "sku_names": await _sku_names(tenant_id, sku_ids), "all_skus": not sku_ids,
             "applies": (not sku_ids) or (sku_id in sku_ids) if sku_id else True,
@@ -936,7 +992,7 @@ async def _post_run_item(tenant_id: str, task: dict, eq: dict, actor: dict) -> d
     can = await _can_act(tenant_id, eq, actor)
     done = task.get("status") == "completed"
     return {"id": task["id"], "kind": "post", "task_id": task["id"], "equipment_id": eq["id"],
-            "name": eq["name"], "type": eq.get("equipment_type_name"),
+            "name": eq["name"], "type": eq.get("equipment_type_name"), "maintenance_parameters": eq.get("maintenance_parameters") or [],
             "location": " › ".join(x for x in [eq.get("facility_name"), eq.get("floor_name"), eq.get("area_name")] if x),
             "batch_code": task.get("batch_code"), "batch_sku_name": task.get("sku_name"), "run_started_at": task.get("created_at"),
             "assigned_staff": [{"id": x.get("id"), "name": x.get("name")} for x in eq.get("maintenance_staff") or []],
@@ -1001,8 +1057,10 @@ async def post_run_complete(task_id: str, body: Optional[GeoBody] = None, curren
     staff_name = current_user.get("name") if current_user.get("is_factory_staff") else None
     geo = await _enforce_geofence(tenant_id, eq, current_user, getattr(body, "lat", None), getattr(body, "lng", None), staff_name=staff_name)
     staff = await _resolve_staff(tenant_id, eq, current_user, None)
+    cap = _capture_params(eq, getattr(body, "parameter_values", None))
     now = datetime.now(IST)
     rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": None, "trigger": "post_run", "post_run_task_id": task_id,
+           "parameters": cap["parameters"], "parameters_out_of_range": cap["out_of_range"],
            "batch_id": task["batch_id"], "batch_code": task.get("batch_code"),
            "equipment_id": eq["id"], "equipment_name": eq["name"], "scheduled_date": now.date().isoformat(),
            "status": "completed", "attempt": 1,
@@ -1014,6 +1072,7 @@ async def post_run_complete(task_id: str, body: Optional[GeoBody] = None, curren
            "geo": geo, "completed_at": now.isoformat(), "photos": [], "remarks": None, "corrections": [],
            "created_at": datetime.now(timezone.utc).isoformat()}
     await db.maintenance_records.insert_one({**rec})
+    await _flag_out_of_range(tenant_id, eq, rec, rec["performed_by"])
     await db.post_run_tasks.update_one({"tenant_id": tenant_id, "id": task_id},
                                        {"$set": {"status": "completed", "record_id": rec["id"], "performed_by": rec["performed_by"],
                                                  "performed_by_id": rec["performed_by_id"], "completed_at": rec["completed_at"]}})
@@ -1069,8 +1128,10 @@ async def pre_production_clear(equipment_id: str, body: GeoBody = GeoBody(), cur
     staff_name = current_user.get("name") if current_user.get("is_factory_staff") else None
     geo = await _enforce_geofence(tenant_id, eq, current_user, body.lat, body.lng, staff_name=staff_name)
     staff = await _resolve_staff(tenant_id, eq, current_user, None)
+    cap = _capture_params(eq, body.parameter_values)
     now = datetime.now(IST)
     rec = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, "slot_id": None, "trigger": "per_run",
+           "parameters": cap["parameters"], "parameters_out_of_range": cap["out_of_range"],
            "equipment_id": eq["id"], "equipment_name": eq["name"], "scheduled_date": now.date().isoformat(),
            "status": "completed", "attempt": 1,
            "performed_by": (staff or {}).get("name") or current_user.get("name") or current_user.get("email"),
@@ -1081,6 +1142,7 @@ async def pre_production_clear(equipment_id: str, body: GeoBody = GeoBody(), cur
            "geo": geo, "completed_at": now.isoformat(), "photos": [], "remarks": None, "corrections": [],
            "consumed_by_batch_id": None, "created_at": datetime.now(timezone.utc).isoformat()}
     await db.maintenance_records.insert_one({**rec})
+    await _flag_out_of_range(tenant_id, eq, rec, rec["performed_by"])
     await db.equipment_master.update_one({"tenant_id": tenant_id, "id": eq["id"]}, {"$set": {"last_maintenance_date": now.date().isoformat()}})
     rec.pop("_id", None)
     return {"ok": True, "record": rec}

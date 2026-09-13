@@ -3,6 +3,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { ParamCaptureDialog } from './MaintenanceParams';
 import { CheckCircle2, Circle, Play, Square, FlaskConical, ClipboardCheck, Lock, FileText, ShieldAlert, RefreshCw, Undo2 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -55,6 +56,7 @@ export const ProductionRunPanel = ({ batch, onUpdate }) => {
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState({});
   const [saving, setSaving] = useState(false);
+  const [capture, setCapture] = useState(null);
 
   const load = useCallback(() => axios.get(`${API_URL}/api/production/run/${batch.id}`, H()).then(({ data: d }) => {
     setData(d);
@@ -70,12 +72,17 @@ export const ProductionRunPanel = ({ batch, onUpdate }) => {
   const act = async (fn, ok) => { setSaving(true); try { await fn(); toast.success(ok); await refresh(); setOv({ enabled: false, reason: '' }); } catch (e) { toast.error(err(e)); await load(); } finally { setSaving(false); } };
   const ovBody = { override: ov.enabled, override_reason: ov.reason };
 
-  const tick = (it) => act(() => axios.post(`${API_URL}/api/maintenance/pre-production/${it.kind === 'post' ? `post/${it.task_id}/complete` : `${it.id}/clear`}`, {}, H()), `${it.name} recorded`);
+  const tick = (it, values) => {
+    if ((it.maintenance_parameters || []).length && values === undefined) { setCapture(it); return; }
+    setCapture(null);
+    return act(() => axios.post(`${API_URL}/api/maintenance/pre-production/${it.kind === 'post' ? `post/${it.task_id}/complete` : `${it.id}/clear`}`, { parameter_values: values || null }, H()), `${it.name} recorded`);
+  };
   const untick = (it) => act(() => axios.post(`${API_URL}/api/maintenance/pre-production/${it.kind === 'post' ? `post/${it.task_id}/undo` : `${it.id}/undo`}`, {}, H()), `${it.name} undone`);
-  const postItems = (post_tasks || []).map((t) => ({ id: t.id, task_id: t.id, kind: 'post', name: t.equipment_name, cleared: t.status === 'completed', can_tick: t.status !== 'completed', can_undo: t.status === 'completed' && !t.consumed_by_batch_id, record: { performed_by: t.performed_by, completed_at: t.completed_at } }));
+  const postItems = (post_tasks || []).map((t) => ({ id: t.id, task_id: t.id, kind: 'post', name: t.equipment_name, maintenance_parameters: t.maintenance_parameters || [], cleared: t.status === 'completed', can_tick: t.status !== 'completed', can_undo: t.status === 'completed' && !t.consumed_by_batch_id, record: { performed_by: t.performed_by, completed_at: t.completed_at } }));
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 space-y-4" data-testid="production-run-panel">
+      <ParamCaptureDialog item={capture} onCancel={() => setCapture(null)} onSubmit={(vals) => tick(capture, vals)} />
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="font-bold text-slate-800 flex items-center gap-2"><Play size={16} className="text-blue-600" /> Production Run</h2>
         {run.closed_at && <a href={`${API_URL}/api/production/run/${batch.id}/report.pdf`} target="_blank" rel="noreferrer" onClick={async (e) => { e.preventDefault(); const r = await axios.get(`${API_URL}/api/production/run/${batch.id}/report.pdf`, { ...H(), responseType: 'blob' }); window.open(URL.createObjectURL(r.data), '_blank'); }}

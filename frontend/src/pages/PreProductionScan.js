@@ -7,6 +7,7 @@ import { Factory, RefreshCw, XCircle, CheckCircle2, UserCheck, Lock, Undo2 } fro
 import StaffScanLogin from '../components/StaffScanLogin';
 import { getStaffSession, saveStaffSession, clearStaffSession, scanAuthHeaders } from '../lib/staffSession';
 import { toast } from 'sonner';
+import { ParamCaptureDialog } from '../components/MaintenanceParams';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -22,6 +23,7 @@ export default function PreProductionScan() {
   const [state, setState] = useState({ loading: true });
   const [staff, setStaff] = useState(getStaffSession);
   const [busy, setBusy] = useState({});
+  const [capture, setCapture] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -55,12 +57,14 @@ export default function PreProductionScan() {
     items: (s.items || []).map((e) => (e.id === it.id ? { ...e, ...patch } : e)),
     post_items: (s.post_items || []).map((e) => (e.id === it.id ? { ...e, ...patch } : e)),
   }));
-  const tick = async (it) => {
+  const tick = async (it, values) => {
+    if ((it.maintenance_parameters || []).length && values === undefined) { setCapture(it); return; }
+    setCapture(null);
     setBusy((b) => ({ ...b, [it.id]: true }));
     try {
       let pos = {};
       if (state.geofence_enabled) { const p = await getPosition(); if (!p) throw new Error('Location access is required — allow GPS to record maintenance here.'); pos = p; }
-      const r = await post(it.kind === 'post' ? `post/${it.task_id}/complete` : `${it.id}/clear`, pos);
+      const r = await post(it.kind === 'post' ? `post/${it.task_id}/complete` : `${it.id}/clear`, { ...pos, parameter_values: values || null });
       patchItem(it, { cleared: true, can_tick: false, can_undo: true, record: { performed_by: r.record.performed_by, completed_at: r.record.completed_at } });
       toast.success(it.kind === 'post' ? `${it.name} — after-run maintenance recorded (batch ${it.batch_code})` : `${it.name} — cleared for the next production run`, { description: 'Untick to undo' });
     } catch (e) { toast.error(e.message); load(); } finally { setBusy((b) => ({ ...b, [it.id]: false })); }
@@ -121,6 +125,7 @@ export default function PreProductionScan() {
   );
   return (
     <Shell>
+      <ParamCaptureDialog item={capture} onCancel={() => setCapture(null)} onSubmit={(vals) => tick(capture, vals)} />
       <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2" data-testid="pre-production-actor-chip">
         <UserCheck className="h-4 w-4 text-emerald-600 shrink-0" />
         <p className="text-sm flex-1 truncate">Recording as <span className="font-bold">{staff?.name || state.actor?.name}</span>{!staff && state.actor?.is_admin ? <span className="text-xs text-muted-foreground"> · admin</span> : null}</p>
