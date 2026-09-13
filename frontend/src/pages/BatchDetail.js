@@ -8,6 +8,7 @@ import {
   Trash2, ArrowRight, MoveRight, ClipboardCheck,
   Clock, User, AlertTriangle, AlertCircle, ChevronDown, ChevronUp, Plus, Warehouse, Send, Pencil, Check, TabletSmartphone,
 } from 'lucide-react';
+import { ProductionRunPanel } from '../components/ProductionRunPanel';
 import Breadcrumbs from '../components/Breadcrumbs';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
@@ -27,6 +28,9 @@ const STATUS_MAP = {
   created: { label: 'Created', color: 'bg-slate-100 text-slate-700' },
   in_qc: { label: 'In QC', color: 'bg-blue-100 text-blue-700' },
   in_labeling: { label: 'Labeling', color: 'bg-purple-100 text-purple-700' },
+  planned: { label: 'Pre-Production', color: 'bg-amber-100 text-amber-800' },
+  in_production: { label: 'In Production', color: 'bg-sky-100 text-sky-700' },
+  post_checklist: { label: 'Post-Production', color: 'bg-indigo-100 text-indigo-700' },
   in_final_qc: { label: 'Final QC', color: 'bg-amber-100 text-amber-700' },
   completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-700' },
 };
@@ -341,6 +345,8 @@ export default function BatchDetail() {
       </div>
 
       {/* Info Tiles — GOP-style gradient cards */}
+      {batch.run && <ProductionRunPanel batch={batch} onUpdate={fetchBatch} />}
+
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
           { label: 'Production Date', value: batch.production_date, icon: Calendar, accent: 'sky' },

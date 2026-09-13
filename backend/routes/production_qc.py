@@ -72,7 +72,7 @@ class BatchCreate(BaseModel):
     sku_name: Optional[str] = None
     batch_code: str
     production_date: str
-    total_crates: int
+    total_crates: int = 0
     # Optional — auto-filled from the SKU's default production packaging when omitted.
     bottles_per_crate: Optional[int] = None
     ph_value: Optional[float] = None
@@ -85,6 +85,7 @@ class BatchCreate(BaseModel):
     skip_qc_reason: Optional[str] = None
     override_pre_production: bool = False      # CEO / System Admin only, reason mandatory
     override_pre_production_reason: Optional[str] = None
+    use_run_workflow: bool = False             # new flow: crates captured at Stop Production; checklist gate at Start
     # Optional Model-C branding target: production runs can pre-declare which
     # child SKU (customer branding) the output is destined for. Used as the
     # DEFAULT classification when transferring to the master warehouse.
@@ -659,7 +660,7 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_user_
             )
         bottles_per_crate = int(bottles_per_crate)
 
-    if not data.total_crates or int(data.total_crates) <= 0:
+    if not data.use_run_workflow and (not data.total_crates or int(data.total_crates) <= 0):
         raise HTTPException(status_code=400, detail="total_crates must be greater than 0.")
 
     # Check if batch code already exists
@@ -669,7 +670,7 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_user_
 
     # Pre-production gate: every per-run equipment applicable to this SKU must be cleared.
     from routes.maintenance_sheets import pre_production_status, consume_pre_production, create_post_run_tasks
-    pre = await pre_production_status(tenant_id, sku_id, current_user)
+    pre = {"pending": []} if data.use_run_workflow else await pre_production_status(tenant_id, sku_id, current_user)
     pre_override = None
     if pre["pending"]:
         names = ", ".join(i["name"] for i in pre["pending"])
@@ -757,9 +758,13 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_user_
         batch["qc_bypassed_at"] = now
         batch["qc_bypassed_reason"] = (data.skip_qc_reason or "").strip() or None
 
-    batch["pre_production_clearances"] = await consume_pre_production(tenant_id, sku_id, batch)
-    batch["pre_production_override"] = pre_override
-    batch["post_run_tasks"] = await create_post_run_tasks(tenant_id, sku_id, batch)
+    if data.use_run_workflow:
+        batch.update({"status": "planned", "total_crates": 0, "total_bottles": 0, "unallocated_crates": 0,
+                      "run": {"created_at": now, "pre_qc": None}, "pre_production_clearances": [], "pre_production_override": None, "post_run_tasks": []})
+    else:
+        batch["pre_production_clearances"] = await consume_pre_production(tenant_id, sku_id, batch)
+        batch["pre_production_override"] = pre_override
+        batch["post_run_tasks"] = await create_post_run_tasks(tenant_id, sku_id, batch)
     await tdb.production_batches.insert_one(batch)
     batch.pop("_id", None)
     if pre_override:

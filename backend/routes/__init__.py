@@ -52,6 +52,7 @@ from .investor import router as investor_router
 from .marketing import router as marketing_router
 from .meeting_minutes import router as meeting_minutes_router
 from .production_qc import router as production_qc_router
+from .production_run import router as production_run_router
 from .glass_breakage import router as glass_breakage_router
 from .qc_tests import router as qc_tests_router
 from .account_volume_grid import router as account_volume_grid_router
@@ -160,6 +161,7 @@ routes_router.include_router(meeting_minutes_router, tags=["Meeting Minutes"])
 
 # Production QC Module
 routes_router.include_router(production_qc_router, tags=["Production QC"])
+routes_router.include_router(production_run_router, tags=["Production Run"])
 routes_router.include_router(glass_breakage_router, tags=["Glass Breakage Register"])
 routes_router.include_router(qc_tests_router, tags=["QC Tests"])
 routes_router.include_router(account_volume_grid_router, tags=["Account Volume Grid"])

@@ -1,0 +1,37 @@
+{
+  "summary": "Frontend-only testing of the NEW Production Run workflow on production batches (planned → in_production → post_checklist → closed) + admin Quality Parameters dialog. 4/5 scenarios PASS; T4 (non-elevated) could not fully verify override visibility because the specified user (creative.director@nylaairwater.earth) has no production_batches module permission — sees Access Denied. Regression on old (no-run) batches passes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "T1_quality_params_dialog": "PASS — /production-batches → 'Quality Parameters' opens quality-params-dialog. Default (tenant) scope shows rows pH [6.5–8.5] and TDS [50–500]. Switched scope to SKU (Nyla – 600 ml / Silver), clicked 'Add parameter', filled Temperature min 10 max 30, Save → success toast. Reopen with same SKU → 3 rows [pH, TDS, Temperature]. Cleanup done by removing all rows and saving (backend deletes the SKU doc).",
+    "T2_create_batch_and_run_start": "PASS — 'New Batch' modal shows no crates field (batch-crates-later note present); created ZZ-RUN-<rand>A (planned, use_run_workflow=true) with packaging Crate-12 (bpc 12). Batch detail: status badge 'Pre-Production', ProductionRunPanel visible, run-stepper visible, ZZ RunEq UI row in Step 1 with run-check-tick-<id>; tick → run-check-undo-<id> visible ('Done by …'). Entered pH 9.5 & TDS 120 → Save → run-param-out shows 'Out of range: pH = 9.5 (allowed 6.5–8.5)'. Start Production → blocked toast 'Cannot start production — quality parameters out of range'. Entered pH 7.2 → Save → panel shows 'in range'. Start Production → status becomes 'In Production', started-by text present, run-crates-input visible.",
+    "T3_stop_close_pdf": "PASS — Entered 40 crates + notes; Stop Production → status 'Post-Production'; output line shows '40 crates · 480 bottles' (bpc 12). Post-checklist ZZ RunEq UI tick → Done. Close Production Batch → status badge 'Created' (QC queue re-entry), run-summary visible, run-report-link visible. Direct fetch GET /api/production/run/<batch_id>/report.pdf → 200, content-type application/pdf.",
+    "T4_non_elevated_user": "PARTIAL / BLOCKED — creative.director@nylaairwater.earth landed on /marketing-requests; navigating to /production-batches/<planned_batch_id> shows 'Access Denied' (role lacks production_batches module permission), so ProductionRunPanel is not rendered (panel=false, override checkbox count=0, start button count=0). The intended behaviour (panel visible without override checkbox and Start blocked toast) could not be positively validated because no non-elevated user with production_batches access is documented in /app/memory/test_credentials.md. Frontend code review confirms the logic is correct: OverrideBox is only rendered when is_elevated is true (ProductionRunPanel.js lines 111 & 115 & 138); non-elevated users on a planned batch with pending checklist would send /start and receive backend 409 → error toast.",
+    "T5_old_batch_regression": "PASS — Created ZZ-OLD-777 via API without use_run_workflow (total_crates=3, bpc=12, override_pre_production=true). Batch detail: production-run-panel NOT rendered (count=0), normal batch-detail-page with Final QC section and 'Created' status badge visible. 3 crates → 36 bottles."
+  },
+  "test_report_links": [
+    "/app/backend/tests/setup_run_workflow.py"
+  ],
+  "action_items": [
+    "Optional: document (or seed) a non-elevated user with production_batches module permission in /app/memory/test_credentials.md so T4 can positively verify the OverrideBox hidden / Start-blocked-toast behaviour end-to-end. Alternatively, extend Creative Director's role to include production_batches.view for testing purposes."
+  ],
+  "critical_code_review_comments": [
+    "ProductionRunPanel.js line 115 has a subtle guard: the 'Start despite pending checks' OverrideBox is only shown when `!(run.pre_qc && !run.pre_qc.passed)`. So when pre_qc is out of range, only the 'Accept out-of-range values' override renders (correct), but if the checklist is pending AND params are out of range, both cases hide the Start-override until params are fixed. Behaviour is acceptable but not obvious; consider a small helper text explaining the sequence.",
+    "BatchDetail.js is 1691 lines — should be split into smaller components (status card, QC stage cards, transfer dialog, etc.) for maintainability.",
+    "In ProductionRunPanel.js the report link uses window.open(URL.createObjectURL(r.data)) but never revokes the object URL — minor memory leak on repeated clicks.",
+    "ProductionRunPanel.js `busy` state is declared but never populated (setBusy is never called); the RefreshCw spinner branch in ChecklistRows is effectively dead code."
+  ],
+  "updated_files": [
+    "/app/backend/tests/setup_run_workflow.py (new — creates ZZ RunEq UI equipment for tests)"
+  ],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "80% (4/5 fully; 1 blocked by permissions)"},
+  "test_credentials": "CEO admin@nylaairwater.earth / test123 (tenant nyla-air-water); non-elevated user creative.director@nylaairwater.earth / test123 — but this role has no production_batches access so cannot exercise T4 scenario in the UI.",
+  "seed_data_creation": "Created ZZ RunEq UI (per_run + post_run maintenance, all-SKUs), ZZ RunEq UI B (per_run only), test batches ZZ-RUN-<suffix>A/B, ZZ-OLD-777, and a temporary SKU-level quality_parameters doc for Nyla – 600 ml / Silver (Temperature 10–30). All cleaned up after tests (verified 0 leftover ZZ equipment/batches, quality_parameters restored).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Frontend routes: use /production-batches and /production-batches/<id> (NOT /production/batches as the review request mentioned — that's the API path). BatchDetail renders ProductionRunPanel only when batch.run exists. ProductionRunPanel test-ids: production-run-panel, run-stepper, run-step-<key> (pre_checklist|pre_qc|production|output|post_checklist|close), run-check-<id>, run-check-tick-<id>, run-check-undo-<id>, run-param-<key> (defaults ph, tds), run-save-params, run-param-out, run-override-checkbox, run-override-reason, run-start-btn, run-crates-input, run-output-notes, run-stop-btn, run-close-btn, run-summary, run-report-link. Create-batch modal exposes batch-sku-select, batch-code-input, batch-date-input, batch-bpc-input (packaging), batch-crates-later (dashed note), batch-submit-btn. Quality dialog: quality-params-btn opens quality-params-dialog with quality-params-scope, quality-param-name-<i>/-min-<i>/-max-<i>/-remove-<i>, quality-param-add, quality-params-save. Saving an empty row-set for a specific SKU deletes the SKU-level quality_parameters doc (see backend/routes/production_run.py put_params). Cleanup queries: production_batches / post_run_tasks / equipment_master by regex ^ZZ, quality_parameters with sku_id != null, notifications with title regex 'Production run closed|override|checklist overridden'."
+}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
-import { PreProductionGate } from '../components/PreProductionGate';
+import { QualityParamsDialog } from '../components/QualityParamsDialog';
 import axios from 'axios';
 import {
   Package, Plus, Search, Filter, ChevronDown, Loader2,
@@ -23,6 +23,9 @@ const STATUS_MAP = {
   created: { label: 'Created', color: 'bg-slate-100 text-slate-700' },
   in_qc: { label: 'In QC', color: 'bg-blue-100 text-blue-700' },
   in_labeling: { label: 'Labeling', color: 'bg-purple-100 text-purple-700' },
+  planned: { label: 'Pre-Production', color: 'bg-amber-100 text-amber-800' },
+  in_production: { label: 'In Production', color: 'bg-sky-100 text-sky-700' },
+  post_checklist: { label: 'Post-Production', color: 'bg-indigo-100 text-indigo-700' },
   in_final_qc: { label: 'Final QC', color: 'bg-amber-100 text-amber-700' },
   completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-700' },
 };
@@ -48,6 +51,7 @@ export default function ProductionBatches() {
   const [stageFilter, setStageFilter] = useState(searchParams.get('stage') || '');
   const [skuFilter, setSkuFilter] = useState(searchParams.get('sku_id') || '');
   const [showCreate, setShowCreate] = useState(false);
+  const [showParams, setShowParams] = useState(false);
 
   // Sync filters to URL params
   useEffect(() => {
@@ -138,6 +142,12 @@ export default function ProductionBatches() {
             <p className="text-xs sm:text-sm text-slate-500">Create and manage production batches</p>
           </div>
         </div>
+        <div className="flex items-center gap-2">
+        <button onClick={() => setShowParams(true)}
+          className="px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors"
+          data-testid="quality-params-btn">
+          <FlaskConical size={14} /> Quality Parameters
+        </button>
         <button
           onClick={() => setShowCreate(true)}
           className="px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm flex items-center gap-1.5 sm:gap-2 transition-colors"
@@ -145,6 +155,7 @@ export default function ProductionBatches() {
         >
           <Plus size={14} /> New Batch
         </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -358,6 +369,7 @@ export default function ProductionBatches() {
         })}
       </div>
 
+      <QualityParamsDialog open={showParams} onOpenChange={setShowParams} />
       {/* Create Batch Modal */}
       {showCreate && (
         <CreateBatchModal
@@ -379,8 +391,7 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
     skip_qc_reason: '',
   });
   const isElevated = ['ceo', 'system admin'].includes((user?.role || '').trim().toLowerCase());
-  const [preStatus, setPreStatus] = useState(null);
-  const [preOverride, setPreOverride] = useState({ enabled: false, reason: '' });
+
   const [saving, setSaving] = useState(false);
   const [hasQCRoute, setHasQCRoute] = useState(null);
   const [packagingTypes, setPackagingTypes] = useState([]);
@@ -426,25 +437,19 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
   const handleSubmit = async () => {
     if (!form.sku_id) { toast.error('Select an SKU'); return; }
     if (!form.batch_code.trim()) { toast.error('Batch code is required'); return; }
-    if (!form.total_crates || parseInt(form.total_crates) <= 0) { toast.error('Total crates must be > 0'); return; }
     if (!form.bottles_per_crate || parseInt(form.bottles_per_crate) <= 0) { toast.error('Select a packaging type'); return; }
-    if (preStatus && !preStatus.all_clear) {
-      if (!isElevated || !preOverride.enabled) { toast.error(`Pre-production checklist pending: ${preStatus.pending.map(p => p.name).join(', ')}`); return; }
-      if (!preOverride.reason.trim()) { toast.error('Enter a reason to override the pre-production checklist'); return; }
-    }
 
     setSaving(true);
     try {
       await axios.post(`${API_URL}/production/batches`, {
         ...form,
-        total_crates: parseInt(form.total_crates),
+        total_crates: 0,
+        use_run_workflow: true,
         bottles_per_crate: parseInt(form.bottles_per_crate),
         ph_value: form.ph_value ? parseFloat(form.ph_value) : null,
         skip_qc: !!form.skip_qc,
         skip_qc_reason: form.skip_qc ? (form.skip_qc_reason || '').trim() || null : null,
         target_child_sku_id: targetChild || null,
-        override_pre_production: !!(preStatus && !preStatus.all_clear && preOverride.enabled),
-        override_pre_production_reason: preOverride.enabled ? preOverride.reason.trim() : null,
       }, { headers: getAuthHeaders() });
       toast.success(form.skip_qc ? 'Batch created and marked warehouse-ready (QC bypassed)' : 'Batch created successfully');
       onSuccess();
@@ -500,9 +505,8 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-500 font-medium mb-1 block">Total Crates *</label>
-              <input type="number" value={form.total_crates} onChange={e => setForm(p => ({ ...p, total_crates: e.target.value }))}
-                placeholder="500" className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" data-testid="batch-crates-input" />
+              <label className="text-xs text-slate-500 font-medium mb-1 block">Output (crates)</label>
+              <div className="w-full border border-dashed border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-500 bg-slate-50" data-testid="batch-crates-later">Captured at <b>Stop Production</b> on the batch page</div>
             </div>
             <div>
               <label className="text-xs text-slate-500 font-medium mb-1 block">Packaging Type *</label>
@@ -538,7 +542,7 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
               <p className="mt-1 text-[11px] text-slate-400">Pre-declares which customer branding this run is for. Used as the default classification when transferring to the master warehouse.</p>
             </div>
           )}
-          {form.total_crates && form.bottles_per_crate && (
+          {false && (
             <div className="bg-blue-50 rounded-lg p-3 text-center">
               <span className="text-sm text-blue-700 font-medium">
                 Total: {(parseInt(form.total_crates || 0) * parseInt(form.bottles_per_crate || 0)).toLocaleString()} bottles
@@ -546,7 +550,9 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
             </div>
           )}
 
-          <PreProductionGate skuId={form.sku_id} isElevated={isElevated} override={preOverride} onOverrideChange={setPreOverride} onStatus={setPreStatus} />
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600" data-testid="batch-run-flow-hint">
+            After creating, the batch page guides the run: <b>pre-production checklist → quality parameters → start → stop & output → post-production checklist → close</b>.
+          </div>
 
           {isElevated && (
             <div className={`rounded-lg border px-3 py-2.5 ${form.skip_qc ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'}`}>
