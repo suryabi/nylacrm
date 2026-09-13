@@ -978,7 +978,7 @@ async def _per_run_item(tenant_id: str, eq: dict, actor: dict, sku_id: Optional[
             "applies": (not sku_ids) or (sku_id in sku_ids) if sku_id else True,
             "assigned_staff": [{"id": x.get("id"), "name": x.get("name")} for x in eq.get("maintenance_staff") or []],
             "cleared": bool(rec),
-            "record": {"id": rec["id"], "performed_by": rec.get("performed_by"), "completed_at": rec.get("completed_at")} if rec else None,
+            "record": {"id": rec["id"], "performed_by": rec.get("performed_by"), "completed_at": rec.get("completed_at"), "parameters": rec.get("parameters") or []} if rec else None,
             "can_tick": can and not rec,
             "can_undo": bool(rec and rec.get("performed_by_id") == actor.get("id")),
             "not_assigned": not can}
@@ -997,7 +997,7 @@ async def _post_run_item(tenant_id: str, task: dict, eq: dict, actor: dict) -> d
             "batch_code": task.get("batch_code"), "batch_sku_name": task.get("sku_name"), "run_started_at": task.get("created_at"),
             "assigned_staff": [{"id": x.get("id"), "name": x.get("name")} for x in eq.get("maintenance_staff") or []],
             "cleared": done,
-            "record": {"id": task.get("record_id"), "performed_by": task.get("performed_by"), "completed_at": task.get("completed_at")} if done else None,
+            "record": {"id": task.get("record_id"), "performed_by": task.get("performed_by"), "completed_at": task.get("completed_at"), "parameters": task.get("parameters") or []} if done else None,
             "can_tick": can and not done,
             "can_undo": bool(done and task.get("performed_by_id") == actor.get("id") and not task.get("consumed_by_batch_id")),
             "not_assigned": not can}
@@ -1075,7 +1075,8 @@ async def post_run_complete(task_id: str, body: Optional[GeoBody] = None, curren
     await _flag_out_of_range(tenant_id, eq, rec, rec["performed_by"])
     await db.post_run_tasks.update_one({"tenant_id": tenant_id, "id": task_id},
                                        {"$set": {"status": "completed", "record_id": rec["id"], "performed_by": rec["performed_by"],
-                                                 "performed_by_id": rec["performed_by_id"], "completed_at": rec["completed_at"]}})
+                                                 "performed_by_id": rec["performed_by_id"], "completed_at": rec["completed_at"],
+                                                 "parameters": rec.get("parameters") or []}})
     await db.equipment_master.update_one({"tenant_id": tenant_id, "id": eq["id"]}, {"$set": {"last_maintenance_date": now.date().isoformat()}})
     rec.pop("_id", None)
     return {"ok": True, "record": rec}
@@ -1181,7 +1182,7 @@ async def consume_pre_production(tenant_id: str, sku_id: str, batch: dict) -> li
                                                 {"$set": {"consumed_by_batch_id": batch["id"], "consumed_by_batch_code": batch.get("batch_code"),
                                                           "consumed_at": datetime.now(timezone.utc).isoformat()}})
         snap.append({"kind": "pre", "equipment_id": eq["id"], "equipment_name": eq["name"], "record_id": rec["id"],
-                     "performed_by": rec.get("performed_by"), "completed_at": rec.get("completed_at")})
+                     "performed_by": rec.get("performed_by"), "completed_at": rec.get("completed_at"), "parameters": rec.get("parameters") or []})
     for t in await post_run_open_tasks(tenant_id, sku_id):
         if t.get("status") != "completed":
             continue  # overridden-but-still-pending cleanups stay open until actually done
@@ -1189,7 +1190,7 @@ async def consume_pre_production(tenant_id: str, sku_id: str, batch: dict) -> li
                                            {"$set": {"consumed_by_batch_id": batch["id"], "consumed_by_batch_code": batch.get("batch_code")}})
         snap.append({"kind": "post", "equipment_id": t["equipment_id"], "equipment_name": t["equipment_name"], "record_id": t.get("record_id"),
                      "after_batch_code": t.get("batch_code"), "performed_by": t.get("performed_by"), "completed_at": t.get("completed_at"),
-                     "status": t.get("status")})
+                     "status": t.get("status"), "parameters": t.get("parameters") or []})
     return snap
 
 

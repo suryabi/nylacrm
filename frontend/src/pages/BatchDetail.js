@@ -345,7 +345,12 @@ export default function BatchDetail() {
       </div>
 
       {/* Info Tiles — GOP-style gradient cards */}
-      {batch.run && <ProductionRunPanel batch={batch} onUpdate={fetchBatch} />}
+      {batch.run && (['planned', 'in_production', 'post_checklist'].includes(batch.status) ? (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap" data-testid="batch-run-in-progress-banner">
+          <p className="text-sm text-amber-900"><b>Production run in progress</b> — this batch record is finalised when the run's checklists are complete.</p>
+          <Button className="bg-[#002FA7] hover:bg-blue-800 text-white font-bold" onClick={() => navigate(`/production-batches/${batch.id}/run`)} data-testid="batch-resume-run-btn">Resume production run</Button>
+        </div>
+      ) : <ProductionRunPanel batch={batch} onUpdate={fetchBatch} />)}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[

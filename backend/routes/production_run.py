@@ -56,8 +56,33 @@ class OutputIn(BaseModel):
     notes: Optional[str] = None
 
 
+class InitiateIn(BaseModel):
+    sku_id: str
+    target_child_sku_id: Optional[str] = None
+
+
+class CloseIn(OverrideIn):
+    total_crates: Optional[int] = None
+    bottles_per_crate: Optional[int] = None
+    notes: Optional[str] = None
+    batch_code: Optional[str] = None
+    production_date: Optional[str] = None
+
+
 def _now():
     return datetime.now(timezone.utc).isoformat()
+
+
+async def _next_batch_code(tenant_id: str, sku: dict) -> str:
+    prefix = (sku.get("sku_code") or "B").strip().upper().replace(" ", "")
+    day = datetime.now(timezone.utc).strftime("%d%m%y")
+    base = f"{prefix}-{day}-"
+    n = await db.production_batches.count_documents({"tenant_id": tenant_id, "batch_code": {"$regex": f"^{base}"}})
+    while True:
+        code = f"{base}{101 + n}"
+        if not await db.production_batches.find_one({"tenant_id": tenant_id, "batch_code": code}, {"_id": 1}):
+            return code
+        n += 1
 
 
 async def _param_config(tenant_id: str, sku_id: Optional[str]) -> dict:
@@ -128,6 +153,41 @@ async def put_params(data: ParamsIn, current_user: dict = Depends(get_current_us
 
 
 # ── Run state ────────────────────────────────────────────────────────────────
+@router.post("/initiate")
+async def initiate_run(data: InitiateIn, current_user: dict = Depends(get_current_user)):
+    """Wizard entry: SKU only → draft batch (planned) with auto code, today's date, SKU default packaging."""
+    tenant_id = get_current_tenant_id()
+    sku = await db.master_skus.find_one({"id": data.sku_id}, {"_id": 0})
+    if not sku:
+        raise HTTPException(404, "SKU not found")
+    prod_pkg = (sku.get("packaging_config") or {}).get("production") or []
+    bpc = None
+    if not prod_pkg:
+        pt = await db.packaging_types.find_one({"is_default": True}, {"_id": 0}) or await db.packaging_types.find_one({}, {"_id": 0})
+        bpc = (pt or {}).get("units_per_package")
+    from routes.production_qc import create_batch, BatchCreate
+    payload = BatchCreate(sku_id=data.sku_id, batch_code=await _next_batch_code(tenant_id, sku), bottles_per_crate=bpc,
+                          production_date=datetime.now(timezone.utc).strftime("%Y-%m-%d"), use_run_workflow=True,
+                          target_child_sku_id=data.target_child_sku_id)
+    batch = await create_batch(payload, current_user)
+    await db.production_batches.update_one({"tenant_id": tenant_id, "id": batch["id"]}, {"$set": {"run.wizard": True}})
+    return {"ok": True, "batch_id": batch["id"], "batch_code": batch["batch_code"]}
+
+
+@router.post("/{batch_id}/cancel")
+async def cancel_run(batch_id: str, current_user: dict = Depends(get_current_user)):
+    """Abandon an in-progress run (before the batch record is finalised)."""
+    tenant_id = get_current_tenant_id()
+    b = await _batch(tenant_id, batch_id)
+    if b["status"] not in RUN_STATUSES:
+        raise HTTPException(409, "Only in-progress runs can be cancelled")
+    await db.post_run_tasks.delete_many({"tenant_id": tenant_id, "batch_id": batch_id})
+    await db.maintenance_records.update_many({"tenant_id": tenant_id, "consumed_by_batch_id": batch_id},
+                                             {"$set": {"cancelled_batch_id": batch_id, "cancelled_batch_code": b["batch_code"]}})
+    await db.production_batches.delete_one({"tenant_id": tenant_id, "id": batch_id})
+    return {"ok": True, "cancelled": b["batch_code"]}
+
+
 @router.get("/{batch_id}")
 async def get_run(batch_id: str, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
@@ -182,9 +242,7 @@ async def start_production(batch_id: str, data: OverrideIn, current_user: dict =
     problems = []
     if pre["pending"]:
         problems.append("checklist pending: " + ", ".join(i["name"] for i in pre["pending"]))
-    if not pre_qc:
-        problems.append("quality parameters not recorded")
-    elif not pre_qc.get("passed") and not pre_qc.get("override"):
+    if pre_qc and not pre_qc.get("passed") and not pre_qc.get("override"):
         problems.append("quality parameters out of range")
     override = _override(current_user, data, "pre-production checks") if problems else None
     if problems and not override:
@@ -225,7 +283,7 @@ async def stop_production(batch_id: str, data: OutputIn, current_user: dict = De
 
 
 @router.post("/{batch_id}/close")
-async def close_run(batch_id: str, data: OverrideIn, current_user: dict = Depends(get_current_user)):
+async def close_run(batch_id: str, data: CloseIn, current_user: dict = Depends(get_current_user)):
     """Close the production run: post checklist must be done → batch enters the QC queue; report + notifications."""
     tenant_id = get_current_tenant_id()
     b = await _batch(tenant_id, batch_id)
@@ -237,7 +295,30 @@ async def close_run(batch_id: str, data: OverrideIn, current_user: dict = Depend
     if pending and not override:
         raise HTTPException(409, "Post-production checklist pending: " + ", ".join(t["equipment_name"] for t in pending))
     now = _now()
-    await db.production_batches.update_one({"tenant_id": tenant_id, "id": batch_id}, {"$set": {
+    final = {}
+    if data.bottles_per_crate is not None:
+        if data.bottles_per_crate <= 0:
+            raise HTTPException(400, "Bottles per crate must be greater than 0")
+        final["bottles_per_crate"] = data.bottles_per_crate
+    crates = data.total_crates if data.total_crates is not None else (b.get("total_crates") or 0)
+    if crates <= 0:
+        raise HTTPException(400, "Crates produced must be greater than 0")
+    bpc = data.bottles_per_crate or b.get("bottles_per_crate") or 0
+    final.update({"total_crates": crates, "total_bottles": crates * bpc, "unallocated_crates": crates})
+    b.update(final)
+    if data.notes is not None:
+        final["run.output_notes"] = data.notes.strip() or None
+    if data.production_date:
+        final["production_date"] = data.production_date
+    code = (data.batch_code or "").strip()
+    if code and code != b["batch_code"]:
+        if await db.production_batches.find_one({"tenant_id": tenant_id, "batch_code": code, "id": {"$ne": batch_id}}, {"_id": 1}):
+            raise HTTPException(400, f"Batch code '{code}' already exists")
+        final["batch_code"] = code
+        await db.post_run_tasks.update_many({"tenant_id": tenant_id, "batch_id": batch_id}, {"$set": {"batch_code": code}})
+        await db.maintenance_records.update_many({"tenant_id": tenant_id, "consumed_by_batch_id": batch_id}, {"$set": {"consumed_by_batch_code": code}})
+        b["batch_code"] = code
+    await db.production_batches.update_one({"tenant_id": tenant_id, "id": batch_id}, {"$set": {**final,
         "status": "created", "run.closed_at": now, "run.closed_by": current_user.get("name"), "run.closed_by_id": current_user.get("id"),
         "run.close_override": override, "run.post_tasks_snapshot": tasks, "updated_at": now}})
     # notify admins + supervisors of involved equipment
@@ -289,21 +370,24 @@ async def run_report(batch_id: str, current_user: dict = Depends(get_current_use
         ["Batch closed", run.get("closed_by") or "", f(run.get("closed_at")), (run.get("close_override") or {}).get("reason", "")]], [120, 110, 100, 190]), Spacer(1, 8)]
     el += [Paragraph("Output", st["Heading3"]), Paragraph(f"<b>{b.get('total_crates') or 0}</b> crates × {b.get('bottles_per_crate') or 0} bottles = <b>{b.get('total_bottles') or 0}</b> bottles", st["Normal"]), Spacer(1, 8)]
     pq = run.get("pre_qc") or {}
-    rows = [["Parameter", "Value", "Allowed", "Result"]]
-    for p in pq.get("params") or []:
-        v = (pq.get("values") or {}).get(p["key"])
-        rng = f"{p.get('min', '–')} – {p.get('max', '–')} {p.get('unit', '')}"
-        ok = v is not None and not ((p.get("min") is not None and v < p["min"]) or (p.get("max") is not None and v > p["max"]))
-        rows.append([p["name"], "" if v is None else f"{v} {p.get('unit', '')}", rng, "OK" if ok else ("—" if v is None else "OUT OF RANGE")])
-    el += [Paragraph(f"Pre-production quality parameters — recorded by {pq.get('recorded_by') or '—'} at {f(pq.get('at'))}" + (f" · OVERRIDE: {pq['override']['reason']}" if pq.get("override") else ""), st["Heading3"]), grid(rows, [150, 100, 150, 120]), Spacer(1, 8)]
-    rows = [["Type", "Equipment", "Done by", "At", "Status"]]
+    if pq.get("params"):
+        rows = [["Parameter", "Value", "Allowed", "Result"]]
+        for p in pq.get("params") or []:
+            v = (pq.get("values") or {}).get(p["key"])
+            rng = f"{p.get('min', '–')} – {p.get('max', '–')} {p.get('unit', '')}"
+            ok = v is not None and not ((p.get("min") is not None and v < p["min"]) or (p.get("max") is not None and v > p["max"]))
+            rows.append([p["name"], "" if v is None else f"{v} {p.get('unit', '')}", rng, "OK" if ok else ("—" if v is None else "OUT OF RANGE")])
+        el += [Paragraph(f"Pre-production quality parameters — recorded by {pq.get('recorded_by') or '—'} at {f(pq.get('at'))}" + (f" · OVERRIDE: {pq['override']['reason']}" if pq.get("override") else ""), st["Heading3"]), grid(rows, [150, 100, 150, 120]), Spacer(1, 8)]
+    small = st["BodyText"].clone("small", fontSize=7, leading=9)
+    pv = lambda ps: Paragraph(", ".join(f"{p.get('name')}: {p.get('value')}{(' ' + p['unit']) if p.get('unit') else ''}{' ⚠' if p.get('in_range') is False else ''}" for p in (ps or []) if p.get("value") is not None) or "—", small)
+    rows = [["Type", "Equipment", "Done by", "At", "Parameters", "Status"]]
     for c in b.get("pre_production_clearances") or []:
-        rows.append(["Before run" if c.get("kind", "pre") == "pre" else f"After run ({c.get('after_batch_code')})", c.get("equipment_name"), c.get("performed_by") or "", f(c.get("completed_at")), c.get("status") or "completed"])
+        rows.append(["Before run" if c.get("kind", "pre") == "pre" else f"After run ({c.get('after_batch_code')})", Paragraph(c.get("equipment_name") or "", small), c.get("performed_by") or "", f(c.get("completed_at")), pv(c.get("parameters")), c.get("status") or "completed"])
     for p in run.get("pending_at_start") or []:
-        rows.append(["Pending at start", p.get("name"), "", "", "OVERRIDDEN"])
-    el += [Paragraph("Pre-production equipment checklist", st["Heading3"]), grid(rows if len(rows) > 1 else rows + [["—", "No per-run equipment", "", "", ""]], [110, 170, 100, 90, 50]), Spacer(1, 8)]
-    rows = [["Equipment", "Done by", "At", "Status"]] + [[t.get("equipment_name"), t.get("performed_by") or "", f(t.get("completed_at")), (t.get("status") or "").upper()] for t in tasks]
-    el += [Paragraph("Post-production equipment checklist", st["Heading3"]), grid(rows if len(rows) > 1 else rows + [["No after-run equipment", "", "", ""]], [200, 120, 100, 100])]
+        rows.append(["Pending at start", Paragraph(p.get("name") or "", small), "", "", "", "OVERRIDDEN"])
+    el += [Paragraph("Pre-production equipment checklist", st["Heading3"]), grid(rows if len(rows) > 1 else rows + [["—", "No per-run equipment", "", "", "", ""]], [75, 120, 80, 75, 120, 50]), Spacer(1, 8)]
+    rows = [["Equipment", "Done by", "At", "Parameters", "Status"]] + [[Paragraph(t.get("equipment_name") or "", small), t.get("performed_by") or "", f(t.get("completed_at")), pv(t.get("parameters")), (t.get("status") or "").upper()] for t in tasks]
+    el += [Paragraph("Post-production equipment checklist", st["Heading3"]), grid(rows if len(rows) > 1 else rows + [["No after-run equipment", "", "", "", ""]], [140, 90, 80, 150, 60])]
     doc.build(el)
     buf.seek(0)
     return StreamingResponse(buf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{b["batch_code"]}-run-report.pdf"'})

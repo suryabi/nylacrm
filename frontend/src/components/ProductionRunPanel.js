@@ -9,14 +9,14 @@ import { CheckCircle2, Circle, Play, Square, FlaskConical, ClipboardCheck, Lock,
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const H = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } });
 const STEPS = [
-  { key: 'pre_checklist', label: 'Pre-production checklist' }, { key: 'pre_qc', label: 'Quality parameters' },
+  { key: 'pre_checklist', label: 'Pre-production checklist' },
   { key: 'production', label: 'Production' }, { key: 'output', label: 'Output' },
   { key: 'post_checklist', label: 'Post-production checklist' }, { key: 'close', label: 'Close' },
 ];
-const fmt = (s) => (s || '').slice(0, 16).replace('T', ' ');
+export const fmt = (s) => (s || '').slice(0, 16).replace('T', ' ');
 const err = (e) => e.response?.data?.detail || e.message;
 
-const OverrideBox = ({ value, onChange, label }) => (
+export const OverrideBox = ({ value, onChange, label }) => (
   <div className="mt-2 pt-2 border-t border-rose-200">
     <label className="flex items-start gap-2 cursor-pointer">
       <input type="checkbox" checked={!!value.enabled} onChange={(e) => onChange({ ...value, enabled: e.target.checked })} className="mt-0.5 h-4 w-4" data-testid="run-override-checkbox" />
@@ -26,7 +26,9 @@ const OverrideBox = ({ value, onChange, label }) => (
   </div>
 );
 
-const ChecklistRows = ({ items, onTick, onUntick, busy }) => (
+const paramText = (ps) => (ps || []).filter((p) => p.value != null).map((p) => `${p.name}: ${p.value}${p.unit ? ' ' + p.unit : ''}${p.in_range === false ? ' ⚠' : ''}`).join(' · ');
+
+export const ChecklistRows = ({ items, onTick, onUntick, busy }) => (
   <ul className="divide-y rounded-lg border bg-white">
     {items.map((it) => (
       <li key={it.id} className="flex items-start gap-3 px-3 py-2 text-sm" data-testid={`run-check-${it.id}`}>
@@ -37,10 +39,12 @@ const ChecklistRows = ({ items, onTick, onUntick, busy }) => (
         <div className="flex-1 min-w-0">
           <span className={`inline-block mr-1 px-1 rounded text-[10px] font-bold ${it.kind === 'post' ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-800'}`}>{it.kind === 'post' ? 'AFTER RUN' : 'BEFORE RUN'}</span>
           <span className="font-medium">{it.name}</span>{it.kind === 'post' && it.batch_code && <span className="text-slate-500 text-xs"> · after batch {it.batch_code}</span>}
+          {(it.maintenance_parameters || []).length > 0 && !it.cleared && <span className="ml-1 text-[10px] text-violet-700 bg-violet-50 border border-violet-200 rounded px-1">{it.maintenance_parameters.length} parameter{it.maintenance_parameters.length > 1 ? 's' : ''}</span>}
           <p className="text-xs text-slate-500">
             {it.cleared ? <span className="text-emerald-700">Done by {it.record?.performed_by} · {fmt(it.record?.completed_at)}{it.can_undo ? ' · click to undo' : ''}</span>
               : it.can_tick ? 'Pending — click the circle to record it now' : `Pending — assigned staff${it.assigned_staff?.length ? ` (${it.assigned_staff.map((s) => s.name).join(', ')})` : ''} must record via QR`}
           </p>
+          {it.cleared && paramText(it.record?.parameters) && <p className="text-xs text-violet-700" data-testid={`run-check-params-${it.id}`}>{paramText(it.record.parameters)}</p>}
         </div>
       </li>
     ))}
@@ -67,7 +71,7 @@ export const ProductionRunPanel = ({ batch, onUpdate }) => {
 
   const { run, checklist, params, post_tasks, is_elevated } = data;
   const status = data.batch.status;
-  const stepIdx = status === 'planned' ? (run.pre_qc?.passed || run.pre_qc?.override ? 2 : (checklist?.all_clear ? 1 : 0)) : status === 'in_production' ? 3 : status === 'post_checklist' ? 4 : 6;
+  const stepIdx = status === 'planned' ? 0 : status === 'in_production' ? 1 : status === 'post_checklist' ? 2 : 5;
   const refresh = async () => { await load(); onUpdate?.(); };
   const act = async (fn, ok) => { setSaving(true); try { await fn(); toast.success(ok); await refresh(); setOv({ enabled: false, reason: '' }); } catch (e) { toast.error(err(e)); await load(); } finally { setSaving(false); } };
   const ovBody = { override: ov.enabled, override_reason: ov.reason };
@@ -78,7 +82,7 @@ export const ProductionRunPanel = ({ batch, onUpdate }) => {
     return act(() => axios.post(`${API_URL}/api/maintenance/pre-production/${it.kind === 'post' ? `post/${it.task_id}/complete` : `${it.id}/clear`}`, { parameter_values: values || null }, H()), `${it.name} recorded`);
   };
   const untick = (it) => act(() => axios.post(`${API_URL}/api/maintenance/pre-production/${it.kind === 'post' ? `post/${it.task_id}/undo` : `${it.id}/undo`}`, {}, H()), `${it.name} undone`);
-  const postItems = (post_tasks || []).map((t) => ({ id: t.id, task_id: t.id, kind: 'post', name: t.equipment_name, maintenance_parameters: t.maintenance_parameters || [], cleared: t.status === 'completed', can_tick: t.status !== 'completed', can_undo: t.status === 'completed' && !t.consumed_by_batch_id, record: { performed_by: t.performed_by, completed_at: t.completed_at } }));
+  const postItems = (post_tasks || []).map((t) => ({ id: t.id, task_id: t.id, kind: 'post', name: t.equipment_name, maintenance_parameters: t.maintenance_parameters || [], cleared: t.status === 'completed', can_tick: t.status !== 'completed', can_undo: t.status === 'completed' && !t.consumed_by_batch_id, record: { performed_by: t.performed_by, completed_at: t.completed_at, parameters: t.parameters || [] } }));
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 space-y-4" data-testid="production-run-panel">

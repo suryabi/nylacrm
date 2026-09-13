@@ -122,6 +122,7 @@ const QualityControl = lazy(() => import('./pages/QualityControl'));
 const ProductionBatches = lazy(() => import('./pages/ProductionBatches'));
 const ProductionDashboard = lazy(() => import('./pages/ProductionDashboard'));
 const BatchDetail = lazy(() => import('./pages/BatchDetail'));
+const ProductionRunWizard = lazy(() => import('./pages/ProductionRunWizard'));
 const QCRouteConfig = lazy(() => import('./pages/QCRouteConfig'));
 const QCStation = lazy(() => import('./pages/QCStation'));
 const QCLiveBoard = lazy(() => import('./pages/QCLiveBoard'));
@@ -504,6 +505,7 @@ function AppRouter() {
           <Route path="/quality-control" element={<ProtectedRoute moduleKey="quality_control"><QualityControl /></ProtectedRoute>} />
           <Route path="/production-batches" element={<ProtectedRoute moduleKey="production_batches"><ProductionBatches /></ProtectedRoute>} />
           <Route path="/production-batches/:batchId" element={<ProtectedRoute moduleKey="production_batches"><BatchDetail /></ProtectedRoute>} />
+          <Route path="/production-batches/:batchId/run" element={<ProtectedRoute moduleKey="production_batches"><ProductionRunWizard /></ProtectedRoute>} />
           <Route path="/qc-routes" element={<ProtectedRoute moduleKey="qc_routes"><QCRouteConfig /></ProtectedRoute>} />
           <Route path="/qc-station" element={<ProtectedRoute moduleKey="qc_station"><QCStation /></ProtectedRoute>} />
           <Route path="/qc-live-board" element={<ProtectedRoute moduleKey="qc_live_board"><QCLiveBoard /></ProtectedRoute>} />

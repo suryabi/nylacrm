@@ -3,12 +3,15 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import { QualityParamsDialog } from '../components/QualityParamsDialog';
+import { InitiateBatchDialog } from '../components/InitiateBatchDialog';
 import axios from 'axios';
 import {
   Package, Plus, Search, Filter, ChevronDown, Loader2,
   Factory, Boxes, Calendar, FlaskConical, ArrowRight, X,
-  ShieldCheck, Tag, Truck, AlertTriangle,
+  ShieldCheck, Tag, Truck, AlertTriangle, Play,
 } from 'lucide-react';
+
+const RUN_STATUSES = ['planned', 'in_production', 'post_checklist'];
 import Breadcrumbs from '../components/Breadcrumbs';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -51,7 +54,9 @@ export default function ProductionBatches() {
   const [stageFilter, setStageFilter] = useState(searchParams.get('stage') || '');
   const [skuFilter, setSkuFilter] = useState(searchParams.get('sku_id') || '');
   const [showCreate, setShowCreate] = useState(false);
+  const [showInitiate, setShowInitiate] = useState(false);
   const [showParams, setShowParams] = useState(false);
+  const isAdmin = ['ceo', 'admin', 'system admin'].includes((user?.role || '').trim().toLowerCase());
 
   // Sync filters to URL params
   useEffect(() => {
@@ -149,12 +154,22 @@ export default function ProductionBatches() {
           <FlaskConical size={14} /> Quality Parameters
         </button>
         <button
-          onClick={() => setShowCreate(true)}
-          className="px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm flex items-center gap-1.5 sm:gap-2 transition-colors"
-          data-testid="create-batch-btn"
+          onClick={() => setShowInitiate(true)}
+          className="px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white bg-[#002FA7] hover:bg-blue-800 rounded-lg shadow-sm flex items-center gap-1.5 sm:gap-2 transition-colors"
+          data-testid="initiate-batch-btn"
         >
-          <Plus size={14} /> New Batch
+          <Play size={14} /> Initiate Production Batch
         </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors"
+            data-testid="create-batch-btn"
+            title="Direct batch entry without the guided run (admins only)"
+          >
+            <Plus size={14} /> Quick create (legacy)
+          </button>
+        )}
         </div>
       </div>
 
@@ -290,6 +305,7 @@ export default function ProductionBatches() {
           </div>
         ) : filtered.map(batch => {
           const st = STATUS_MAP[batch.status] || STATUS_MAP.created;
+          const inRun = RUN_STATUSES.includes(batch.status);
           const stageCount = batch.qc_stages?.length || 0;
           const transferred = batch.transferred_to_warehouse || 0;
           const transferable = batch.total_passed_final || 0;
@@ -298,8 +314,8 @@ export default function ProductionBatches() {
           return (
             <div
               key={batch.id}
-              onClick={() => navigate(`/production-batches/${batch.id}`)}
-              className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 hover:border-slate-300 hover:shadow-sm transition-all cursor-pointer"
+              onClick={() => navigate(inRun ? `/production-batches/${batch.id}/run` : `/production-batches/${batch.id}`)}
+              className={`bg-white border rounded-xl p-4 sm:p-5 hover:shadow-sm transition-all cursor-pointer ${inRun ? 'border-amber-300 bg-amber-50/40 hover:border-amber-400' : 'border-slate-200 hover:border-slate-300'}`}
               data-testid={`batch-card-${batch.id}`}
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -311,6 +327,11 @@ export default function ProductionBatches() {
                     <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <span className="text-sm font-semibold text-slate-900">{batch.batch_code}</span>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${st.color}`}>{st.label}</span>
+                      {inRun && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200 inline-flex items-center gap-1" data-testid={`batch-run-in-progress-${batch.id}`}>
+                          <Play size={10} /> Run in progress
+                        </span>
+                      )}
                       {batch.qc_bypassed && (
                         <span
                           className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-700 border border-rose-200"
@@ -361,7 +382,9 @@ export default function ProductionBatches() {
                       <p className="text-[10px] text-slate-400 uppercase">QC Stages</p>
                     </div>
                   )}
-                  <ChevronDown className="w-4 h-4 text-slate-300 -rotate-90" />
+                  {inRun ? (
+                    <span className="px-3 py-1.5 rounded-lg bg-[#002FA7] text-white text-xs font-bold inline-flex items-center gap-1" data-testid={`batch-resume-run-${batch.id}`}><Play size={12} /> Resume run</span>
+                  ) : <ChevronDown className="w-4 h-4 text-slate-300 -rotate-90" />}
                 </div>
               </div>
             </div>
@@ -370,6 +393,7 @@ export default function ProductionBatches() {
       </div>
 
       <QualityParamsDialog open={showParams} onOpenChange={setShowParams} />
+      <InitiateBatchDialog open={showInitiate} onOpenChange={setShowInitiate} skus={skus} onInitiated={(id) => navigate(`/production-batches/${id}/run`)} />
       {/* Create Batch Modal */}
       {showCreate && (
         <CreateBatchModal
@@ -438,13 +462,14 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
     if (!form.sku_id) { toast.error('Select an SKU'); return; }
     if (!form.batch_code.trim()) { toast.error('Batch code is required'); return; }
     if (!form.bottles_per_crate || parseInt(form.bottles_per_crate) <= 0) { toast.error('Select a packaging type'); return; }
+    if (!form.total_crates || parseInt(form.total_crates) <= 0) { toast.error('Enter the total crates produced'); return; }
 
     setSaving(true);
     try {
       await axios.post(`${API_URL}/production/batches`, {
         ...form,
-        total_crates: 0,
-        use_run_workflow: true,
+        total_crates: parseInt(form.total_crates),
+        use_run_workflow: false,
         bottles_per_crate: parseInt(form.bottles_per_crate),
         ph_value: form.ph_value ? parseFloat(form.ph_value) : null,
         skip_qc: !!form.skip_qc,
@@ -464,7 +489,7 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h2 className="text-lg font-semibold text-slate-900">Create Production Batch</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Quick Create Batch (legacy)</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
         </div>
         <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
@@ -542,16 +567,17 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
               <p className="mt-1 text-[11px] text-slate-400">Pre-declares which customer branding this run is for. Used as the default classification when transferring to the master warehouse.</p>
             </div>
           )}
-          {false && (
-            <div className="bg-blue-50 rounded-lg p-3 text-center">
-              <span className="text-sm text-blue-700 font-medium">
-                Total: {(parseInt(form.total_crates || 0) * parseInt(form.bottles_per_crate || 0)).toLocaleString()} bottles
-              </span>
-            </div>
-          )}
+          <div>
+            <label className="text-xs text-slate-500 font-medium mb-1 block">Total Crates *</label>
+            <input type="number" min="1" value={form.total_crates} onChange={e => setForm(p => ({ ...p, total_crates: e.target.value }))}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm" data-testid="batch-total-crates-input" />
+            {form.total_crates && form.bottles_per_crate && (
+              <p className="mt-1 text-[11px] text-blue-700 font-medium">= {(parseInt(form.total_crates || 0) * parseInt(form.bottles_per_crate || 0)).toLocaleString()} bottles</p>
+            )}
+          </div>
 
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600" data-testid="batch-run-flow-hint">
-            After creating, the batch page guides the run: <b>pre-production checklist → quality parameters → start → stop & output → post-production checklist → close</b>.
+            Legacy direct entry: the batch is recorded straight away with the crates entered above. Pending pre-production checks for this SKU still block creation (CEO/System Admin can override). Use <b>Initiate Production Batch</b> for the guided run.
           </div>
 
           {isElevated && (
