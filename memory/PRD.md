@@ -76,6 +76,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-09-14 — Carry-forward wording corrected ✅ DONE (API-verified)
+- Rule = up to **50% of the annual entitlement (9 of 18 days)** may be carried forward; excess lapses 31 Dec. `default_policy()` updated; `_fix_carry_forward_wording` migrates existing tenant docs once (matches old texts, versioned, snapshot kept).
+
 ### 2026-09-14 — Leave policy UI: text sections as accent cards ✅ DONE (iteration_367)
 - `PolicySectionCard` (LeavePolicyDoc.js): 2-col grid, per-key icon/accent (`SECTION_META`), sentence check-bullets with bold numbers, "Example" callout; unknown section keys fall back to blue/FileText.
 

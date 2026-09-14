@@ -35,7 +35,7 @@ def default_policy() -> dict:
         "locations": LOCS,
         "structure": [
             {"category": "Sick / Casual Leave", "entitlement": "1.5 days per month = 18 days per year"},
-            {"category": "Leave Carry Forward", "entitlement": "50% of unused Sick / Casual Leave carried forward to the next calendar year"},
+            {"category": "Leave Carry Forward", "entitlement": "Up to 50% of the annual Sick / Casual Leave (9 of 18 days) can be carried forward to the next calendar year"},
             {"category": "Fixed Public Holidays", "entitlement": "10 days per year"},
             {"category": "Variable Holidays", "entitlement": "2 days per year"},
             {"category": "Total Paid Public Holidays", "entitlement": "12 days per year"},
@@ -78,9 +78,9 @@ def default_policy() -> dict:
             {"key": "variable_policy", "title": "Variable Holiday Policy",
              "body": "Employees may select up to 2 paid Variable Holidays per calendar year from the approved list applicable to their assigned work location. Variable Holidays should be applied for in advance and are subject to approval based on staffing and operational requirements. A Variable Holiday falling on the employee's regular Sunday weekly off will not consume one of the employee's two Variable Holiday entitlements."},
             {"key": "carry_forward", "title": "Leave Carry Forward",
-             "body": "Up to 50% of an employee's unused Sick / Casual Leave balance at the end of a calendar year (31 December) is carried forward to the next calendar year. The remaining unused balance lapses. Carried-forward leave is credited on 1 January, is used before the new year's accrual, and is not encashable. Example: 8 unused days on 31 Dec → 4 days carried forward."},
+             "body": "Unused Sick / Casual Leave can be carried forward to the next calendar year up to a maximum of 50% of the annual entitlement, i.e. up to 9 of the 18 days. Any unused balance above 9 days lapses on 31 December. Carried-forward leave is credited on 1 January, is used before the new year's accrual, and is not encashable. Example: 12 unused days on 31 Dec → 9 days carried forward (3 lapse); 6 unused days → all 6 carried forward."},
             {"key": "summary", "title": "Annual Paid Leave Summary",
-             "body": "Each employee is entitled to 18 days of Sick/Casual Leave (with 50% of the unused balance carried forward to the next calendar year), 10 Fixed Public Holidays, 2 Variable Holidays, and every Sunday as a weekly off, in addition to statutory leave entitlements as applicable."},
+             "body": "Each employee is entitled to 18 days of Sick/Casual Leave (up to 9 unused days can be carried forward to the next calendar year), 10 Fixed Public Holidays, 2 Variable Holidays, and every Sunday as a weekly off, in addition to statutory leave entitlements as applicable."},
             {"key": "compliance", "title": "Compliance Note",
              "body": "The final location-specific holiday calendar should be reviewed against applicable National & Festival Holiday, Shops & Establishments, Factories, and other employment-law requirements for the relevant establishment and state. Where applicable law provides a greater or mandatory entitlement, the statutory requirement will prevail."},
         ],
@@ -120,7 +120,37 @@ async def _policy(tenant_id: str) -> dict:
     doc["holidays"] = sorted(doc.get("holidays") or [], key=lambda h: h.get("date") or "")
     if not any(s.get("key") == "carry_forward" for s in doc.get("sections") or []):
         doc = await _apply_carry_forward_rule(tenant_id, doc)
+    doc = await _fix_carry_forward_wording(tenant_id, doc)
     return doc
+
+
+OLD_CF_TEXTS = {
+    "50% of unused Sick / Casual Leave carried forward to the next calendar year",
+    "Up to 50% of an employee's unused Sick / Casual Leave balance at the end of a calendar year (31 December) is carried forward to the next calendar year. The remaining unused balance lapses. Carried-forward leave is credited on 1 January, is used before the new year's accrual, and is not encashable. Example: 8 unused days on 31 Dec → 4 days carried forward.",
+    "Each employee is entitled to 18 days of Sick/Casual Leave (with 50% of the unused balance carried forward to the next calendar year), 10 Fixed Public Holidays, 2 Variable Holidays, and every Sunday as a weekly off, in addition to statutory leave entitlements as applicable.",
+}
+
+
+async def _fix_carry_forward_wording(tenant_id: str, doc: dict) -> dict:
+    """Correction: the cap is 50% of the annual entitlement (9 of 18 days), not 50% of the unused balance."""
+    d = default_policy()
+    new_row = next(r for r in d["structure"] if r["category"] == "Leave Carry Forward")["entitlement"]
+    new_sec = {x["key"]: x["body"] for x in d["sections"]}
+    changed = False
+    structure = [({**r, "entitlement": new_row} if (r.get("entitlement") in OLD_CF_TEXTS and (changed := True)) else r) for r in doc.get("structure") or []]
+    sections = []
+    for sec in doc.get("sections") or []:
+        if sec.get("body") in OLD_CF_TEXTS and sec.get("key") in new_sec:
+            sec = {**sec, "body": new_sec[sec["key"]]}
+            changed = True
+        sections.append(sec)
+    if not changed:
+        return doc
+    upd = {"structure": structure, "sections": sections, "version": (doc.get("version") or 1) + 1, "updated_at": _now(),
+           "updated_by": "Policy correction: carry forward capped at 50% of annual entitlement (9 of 18 days)"}
+    await db.leave_policy_history.insert_one({"id": str(uuid.uuid4()), "tenant_id": tenant_id, "version": doc.get("version"), "snapshot": doc, "replaced_at": _now(), "replaced_by": upd["updated_by"]})
+    await db.leave_policies.update_one({"tenant_id": tenant_id}, {"$set": upd})
+    return {**doc, **upd}
 
 
 async def _apply_carry_forward_rule(tenant_id: str, doc: dict) -> dict:
