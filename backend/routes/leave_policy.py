@@ -35,6 +35,7 @@ def default_policy() -> dict:
         "locations": LOCS,
         "structure": [
             {"category": "Sick / Casual Leave", "entitlement": "1.5 days per month = 18 days per year"},
+            {"category": "Leave Carry Forward", "entitlement": "50% of unused Sick / Casual Leave carried forward to the next calendar year"},
             {"category": "Fixed Public Holidays", "entitlement": "10 days per year"},
             {"category": "Variable Holidays", "entitlement": "2 days per year"},
             {"category": "Total Paid Public Holidays", "entitlement": "12 days per year"},
@@ -76,8 +77,10 @@ def default_policy() -> dict:
         "sections": [
             {"key": "variable_policy", "title": "Variable Holiday Policy",
              "body": "Employees may select up to 2 paid Variable Holidays per calendar year from the approved list applicable to their assigned work location. Variable Holidays should be applied for in advance and are subject to approval based on staffing and operational requirements. A Variable Holiday falling on the employee's regular Sunday weekly off will not consume one of the employee's two Variable Holiday entitlements."},
+            {"key": "carry_forward", "title": "Leave Carry Forward",
+             "body": "Up to 50% of an employee's unused Sick / Casual Leave balance at the end of a calendar year (31 December) is carried forward to the next calendar year. The remaining unused balance lapses. Carried-forward leave is credited on 1 January, is used before the new year's accrual, and is not encashable. Example: 8 unused days on 31 Dec → 4 days carried forward."},
             {"key": "summary", "title": "Annual Paid Leave Summary",
-             "body": "Each employee is entitled to 18 days of Sick/Casual Leave, 10 Fixed Public Holidays, 2 Variable Holidays, and every Sunday as a weekly off, in addition to statutory leave entitlements as applicable."},
+             "body": "Each employee is entitled to 18 days of Sick/Casual Leave (with 50% of the unused balance carried forward to the next calendar year), 10 Fixed Public Holidays, 2 Variable Holidays, and every Sunday as a weekly off, in addition to statutory leave entitlements as applicable."},
             {"key": "compliance", "title": "Compliance Note",
              "body": "The final location-specific holiday calendar should be reviewed against applicable National & Festival Holiday, Shops & Establishments, Factories, and other employment-law requirements for the relevant establishment and state. Where applicable law provides a greater or mandatory entitlement, the statutory requirement will prevail."},
         ],
@@ -115,7 +118,31 @@ async def _policy(tenant_id: str) -> dict:
         doc = {**default_policy(), "id": str(uuid.uuid4()), "tenant_id": tenant_id, "version": 1, "updated_at": _now(), "updated_by": "System (seeded from policy document)"}
         await db.leave_policies.insert_one({**doc})
     doc["holidays"] = sorted(doc.get("holidays") or [], key=lambda h: h.get("date") or "")
+    if not any(s.get("key") == "carry_forward" for s in doc.get("sections") or []):
+        doc = await _apply_carry_forward_rule(tenant_id, doc)
     return doc
+
+
+async def _apply_carry_forward_rule(tenant_id: str, doc: dict) -> dict:
+    """One-time policy amendment: 50% of unused Sick/Casual Leave carries forward to the next calendar year."""
+    d = default_policy()
+    structure = list(doc.get("structure") or [])
+    if not any("carry forward" in (r.get("category") or "").lower() for r in structure):
+        row = next(r for r in d["structure"] if r["category"] == "Leave Carry Forward")
+        idx = next((i for i, r in enumerate(structure) if "sick" in (r.get("category") or "").lower()), -1)
+        structure.insert(idx + 1, row)
+    sections = list(doc.get("sections") or [])
+    cf = next(s for s in d["sections"] if s["key"] == "carry_forward")
+    idx = next((i for i, s in enumerate(sections) if s.get("key") == "summary"), len(sections))
+    sections.insert(idx, cf)
+    for s in sections:
+        if s.get("key") == "summary" and "carried forward" not in (s.get("body") or ""):
+            s["body"] = next(x["body"] for x in d["sections"] if x["key"] == "summary")
+    upd = {"structure": structure, "sections": sections, "version": (doc.get("version") or 1) + 1, "updated_at": _now(),
+           "updated_by": "Policy amendment: 50% leave carry forward"}
+    await db.leave_policy_history.insert_one({"id": str(uuid.uuid4()), "tenant_id": tenant_id, "version": doc.get("version"), "snapshot": doc, "replaced_at": _now(), "replaced_by": upd["updated_by"]})
+    await db.leave_policies.update_one({"tenant_id": tenant_id}, {"$set": upd})
+    return {**doc, **upd}
 
 
 def derived(p: dict) -> dict:
