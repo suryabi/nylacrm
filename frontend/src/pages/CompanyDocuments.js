@@ -27,6 +27,8 @@ import {
 import { cn } from '../lib/utils';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import { useAuth } from '../context/AuthContext';
+import { useSearchParams } from 'react-router-dom';
+import { LeavePolicyDoc } from '../components/LeavePolicyDoc';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -597,7 +599,8 @@ const PayslipsContent = () => (
 // Main Component
 export default function CompanyDocuments() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'overview');
 
   const documentCategories = [
     {
@@ -610,10 +613,11 @@ export default function CompanyDocuments() {
     },
     {
       id: 'leave-policy',
-      title: 'Leave Policy',
-      description: 'Types of leaves, eligibility, and application procedures',
+      title: 'Leave & Holiday Policy',
+      description: '2026 city-wise holiday calendar, fixed & variable holidays, leave entitlements',
       icon: CalendarOff,
-      comingSoon: true
+      status: 'available',
+      tab: 'leave'
     },
     {
       id: 'incentive-policy',
@@ -681,6 +685,10 @@ export default function CompanyDocuments() {
             <Plane className="h-4 w-4 mr-2" />
             Travel Policy
           </TabsTrigger>
+          <TabsTrigger value="leave" className="data-[state=active]:bg-white" data-testid="leave-policy-tab">
+            <CalendarOff className="h-4 w-4 mr-2" />
+            Leave Policy
+          </TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
@@ -703,6 +711,10 @@ export default function CompanyDocuments() {
         {/* Travel Policy Tab */}
         <TabsContent value="travel" className="mt-6">
           <TravelPolicyContent userRole={user?.role} />
+        </TabsContent>
+
+        <TabsContent value="leave" className="mt-6">
+          <LeavePolicyDoc />
         </TabsContent>
       </Tabs>
     </div>

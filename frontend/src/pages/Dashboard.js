@@ -18,6 +18,7 @@ import { useLeadStatuses } from '../hooks/useLeadStatuses';
 import { useNavigation } from '../context/NavigationContext';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import AIInsightsCard from '../components/ai/AIInsightsCard';
+import { LeaveHolidayBanner } from '../components/LeaveHolidayBanner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -262,6 +263,7 @@ export default function Dashboard() {
             </div>
           </div>
         </header>
+        <div className="mb-6"><LeaveHolidayBanner /></div>
 
         {/* Filters */}
         <Card className="mb-6 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">

@@ -26,6 +26,7 @@ import {
   MeetingDetailDialog
 } from '../components/widgets';
 import PendingApprovalsWidget from '../components/widgets/PendingApprovalsWidget';
+import { LeaveHolidayBanner } from '../components/LeaveHolidayBanner';
 import WaterNewsWidget from '../components/widgets/WaterNewsWidget';
 // Quote widgets temporarily disabled - uncomment to re-enable
 // import WaterQuoteWidget from '../components/widgets/WaterQuoteWidget';
@@ -345,6 +346,7 @@ export default function HomeDashboard() {
               />
             </div>
           </header>
+          <div className="mb-6"><LeaveHolidayBanner /></div>
 
           {/* Quote Widgets - Temporarily Disabled
           <section className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">

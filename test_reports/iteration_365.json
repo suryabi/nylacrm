@@ -1,0 +1,33 @@
+{
+  "summary": "Tested Leave & Holiday Policy end-to-end (backend + frontend). Backend: 7/7 pytest tests pass — GET returns seeded 2026 policy with 6 structure rows, 28 holidays, correct city entries (Sankranti/Pongal F for Hyderabad, Makara Sankranti V for Bengaluru on 2026-01-15, Delhi absent), 10 fixed per city, Delhi variable pool contains Ambedkar Jayanti / May Day / Raksha Bandhan / Maha Navami / Guru Nanak Jayanti; can_edit=true for CEO and false for Creative Director; PUT versioned edit+revert works; PUT returns 403 for non-admin; POST /share with empty recipients → 400; single-recipient share returns recipients=1; GET /banner returns today's IST date. Frontend (CEO admin@nylaairwater.earth): /company-documents?tab=leave opens directly, LeavePolicyDoc renders with all expected testids and content (title, structure=6, calendar=28, holiday-row-2026-01-15 shows Sankranti / Pongal (F) for Hyderabad, — for Delhi, Makara Sankranti (V) for Bengaluru; fixed-by-location has 5 cards; variable pool contains all 5 expected Delhi items; sections Variable Holiday Policy / Annual Paid Leave Summary / Compliance Note). Edit flow works: entitlement 0 updated with '(test)', ZZ Test Day added on 2026-12-31 (V) for Hyderabad, Save toast 'Leave policy saved (vN)', row holiday-row-2026-12-31 rendered, ZZ Test Day appears in Hyderabad variable pool. Revert (remove ZZ row + restore entitlement) works — 12-31 row disappears. Cancel discards changes. Share dialog: Send disabled when all-team unchecked + empty emails; enabled after entering qa-test@example.com; send returns success. /home and /dashboard both render leave-holiday-banner. Today block shows 'Ganesh Chaturthi · Fixed holiday' with all 5 locations on 14 Sep 2026. Policy link present.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "LeavePolicyDoc Section 2 (Calendar) legend", "issue": "React hydration warning: <Badge> renders a <div> inside a <p> ('<p> cannot contain a nested <div>') on the F/V legend line. Not blocking but pollutes console and can cause client hydration mismatch.", "selector": "LeavePolicyDoc.js line ~176 (Section n='2' … <p><Badge/> …</p>)", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Non-admin (Creative Director) access to Leave Policy tab", "issue": "Entire /company-documents route is blocked with 'Access Denied' for Creative Director role. Per review request expectation, Leave Policy tab should render for this user (read-only, no Edit, with Share button). Page-level RBAC prevents this. API-level PUT correctly returns 403 (verified in backend test).", "affected_selectors": ["[data-testid=\"leave-policy-doc\"]", "[data-testid=\"leave-policy-share-btn\"]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_leave_policy.py", "/app/test_reports/pytest/leave_policy.xml"],
+  "action_items": [
+    "Decide whether Creative Director (and other non-admin roles) should still be allowed to view Company Documents → Leave Policy. If yes, either whitelist the 'leave' tab in the page's role-guard, or grant company_documents.view to these roles. The LeavePolicyDoc already correctly hides Edit for non-admin (relies on can_edit flag from API).",
+    "Fix hydration warning in LeavePolicyDoc.js Section 2 legend: replace the outer <p> with a <div> (or wrap Badge in a span variant) so no block element is nested inside <p>.",
+    "(Cleanup) Delete db.leave_policy_shares docs where message == 'QA test' (2 docs created by backend + frontend tests, recipient qa-test@example.com)."
+  ],
+  "critical_code_review_comments": [
+    "backend/routes/leave_policy.py POST /share: returns 200 even when all send_email() calls fail (sent==0). The email_configured flag `sent > 0 or False` is inaccurate — it can't distinguish 'server not configured' from 'configured but delivery failed'. Consider using a real config check.",
+    "backend/routes/leave_policy.py _fmt uses strftime('%-d %b (%a)') which is Linux-only (not portable to Windows); acceptable here since the runtime is Linux.",
+    "frontend LeavePolicyDoc.js ShareDialog defaults all_team=true. Given the review-request warning that real emails are configured, defaulting to true is risky — recommend defaulting to false, or requiring an explicit confirmation when all_team=true.",
+    "backend PUT /api/leave-policy: the payload writes the client-supplied version-independent structure but doesn't concurrency-check against current version — a stale client editor could overwrite a newer save. Consider ETag/If-Match or version-in-body check."
+  ],
+  "updated_files": ["/app/backend/tests/test_leave_policy.py"],
+  "success_rate": {"backend": "100%", "frontend": "~95% (RBAC page-level mismatch is the only gap)"},
+  "test_credentials": "CEO admin@nylaairwater.earth / test123; Creative Director creative.director@nylaairwater.earth / test123; tenant nyla-air-water",
+  "seed_data_creation": "None persistent in leave_policies (all edits reverted; ZZ Test Day 2026-12-31 removed; entitlement restored to '1.5 days per month = 18 days per year'). db.leave_policy_shares contains 2 rows with message 'QA test' (recipient qa-test@example.com) — main agent may clean up.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All Leave Policy testids as documented in the review are present and functional. Note: /company-documents is guarded by module-level role permission; Creative Director gets 'Access Denied' on the whole page, so the 'read-only Leave Policy tab for non-admin' scenario in the review can't currently be exercised through the UI. Backend RBAC (PUT 403) is verified. LeavePolicyDoc already correctly gates Edit visibility via can_edit.",
+  "rca of the issue": "Non-admin RBAC on Leave Policy tab: The Company Documents page enforces module-level permission ('company_documents') via a role guard, showing 'Access Denied' for Creative Director. The review request assumes a lighter guard (authenticated tenant member) so any user can read Leave Policy but only Admin/CEO can edit. Recommended fix (Option 1): exempt the 'leave' tab from the module guard and rely on can_edit for edit-visibility (already correctly implemented). Option 2: grant Creative Director company_documents.view. Option 1 aligns with existing LeavePolicyDoc behavior."
+}

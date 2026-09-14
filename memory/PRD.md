@@ -76,6 +76,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-09-14 — 📄 Leave & Holiday Policy (Company Documents) + dashboard leave/holiday banner ✅ DONE (tested, iteration_365)
+- **Backend** NEW `routes/leave_policy.py` (`/api/leave-policy`): per-tenant `leave_policies` doc, auto-seeded from the user's 2026 policy document (`default_policy()`: structure table, 28-row city-wise calendar Hyderabad/Delhi/Mumbai/Goa/Bengaluru with F/V entries, notes, variable-pool extras, 3 text sections). `GET` (adds derived `fixed_by_location`, `variable_pool`, `can_edit`, `my_location`), `PUT` (Admin/CEO only; versioned, previous snapshot → `leave_policy_history`), `POST /share` (email via Resend to all team excl. distributors/drivers and/or explicit emails; logged in `leave_policy_shares`), `GET /shares`, `GET /banner` (today+tomorrow IST: holidays per location + approved `leave_requests` with user names). Note: Delhi Good Friday set to F to match the document's "Ten Fixed Holidays" table.
+- **Frontend** NEW `components/LeavePolicyDoc.js` (viewer w/ user-location highlight, full inline editor for admins, share dialog), NEW `components/LeaveHolidayBanner.js` mounted on `/home` and `/dashboard`; `CompanyDocuments.js` Leave Policy tab (`?tab=leave`), overview card enabled.
+- ⚠️ Real emails are configured (Resend): a share to all team was triggered once during agent smoke testing.
+- Verified: testing_agent 365 (backend pytest 7/7 + full UI flows). ⚠️ Redeploy to production.
+
 ### 2026-09-14 — 🐛 Fresh checklist per batch + proper cancel/discard ✅ DONE (tested, iteration_364)
 - **Root cause**: per-run clearances were "open until consumed" with no batch scope → ticks from a cancelled/parallel run showed as done on the next batch.
 - **Fix** (`maintenance_sheets.py`): `GeoBody.batch_id`; clearances ticked inside a run are tagged `batch_id`; `_open_clearance(tenant, eq, batch_id)` counts only (a) records tagged with this batch or (b) untagged QR-page records from **today (IST)**; clear/undo/consume/status all batch-aware; ticking for a non-planned batch → 409. Wizard sends `batch_id` on tick/untick.
