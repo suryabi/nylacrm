@@ -8,6 +8,7 @@ import { ParamCaptureDialog } from '../components/MaintenanceParams';
 import { ChecklistRows, OverrideBox, fmt } from '../components/ProductionRunPanel';
 import { ArrowLeft, CheckCircle2, ClipboardCheck, Play, Square, PackageCheck, RefreshCw, XCircle, Timer, Tag } from 'lucide-react';
 import { scanAuthHeaders, getStaffSession, hasAppSession } from '../lib/staffSession';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '../components/ui/alert-dialog';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const H = () => ({ headers: scanAuthHeaders() });
@@ -63,6 +64,7 @@ export default function ProductionRunWizard() {
   const [finalForm, setFinalForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [capture, setCapture] = useState(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const load = useCallback(() => axios.get(`${API_URL}/api/production/run/${batchId}`, H()).then(({ data: d }) => {
     setData(d);
@@ -86,17 +88,22 @@ export default function ProductionRunWizard() {
   const tick = (it, values) => {
     if ((it.maintenance_parameters || []).length && values === undefined) { setCapture(it); return; }
     setCapture(null);
-    return act(() => axios.post(`${API_URL}/api/maintenance/pre-production/${it.kind === 'post' ? `post/${it.task_id}/complete` : `${it.id}/clear`}`, { parameter_values: values || null }, H()), `${it.name} recorded`);
+    return act(() => axios.post(`${API_URL}/api/maintenance/pre-production/${it.kind === 'post' ? `post/${it.task_id}/complete` : `${it.id}/clear`}`, { parameter_values: values || null, batch_id: batchId }, H()), `${it.name} recorded`);
   };
-  const untick = (it) => act(() => axios.post(`${API_URL}/api/maintenance/pre-production/${it.kind === 'post' ? `post/${it.task_id}/undo` : `${it.id}/undo`}`, {}, H()), `${it.name} undone`);
+  const untick = (it) => act(() => axios.post(`${API_URL}/api/maintenance/pre-production/${it.kind === 'post' ? `post/${it.task_id}/undo` : `${it.id}/undo`}`, { batch_id: batchId }, H()), `${it.name} undone`);
   const preItems = [...(checklist?.items || []), ...(checklist?.post_items || [])];
   const postItems = (post_tasks || []).map((t) => ({ id: t.id, task_id: t.id, kind: 'post', name: t.equipment_name, equipment_id: t.equipment_id, maintenance_parameters: t.maintenance_parameters || [], cleared: t.status === 'completed', can_tick: t.status !== 'completed', can_undo: t.status === 'completed' && !t.consumed_by_batch_id, record: { id: t.record_id, performed_by: t.performed_by, completed_at: t.completed_at, parameters: t.parameters || [] } }));
   const postPending = postItems.filter((i) => !i.cleared).length;
 
   const cancel = async () => {
-    if (!window.confirm(`Cancel this production run (${batch.batch_code})? The draft batch will be removed.`)) return;
-    try { await axios.post(`${API_URL}/api/production/run/${batchId}/cancel`, {}, H()); toast.success('Production run cancelled'); navigate(homePath()); } catch (e) { toast.error(err(e)); }
+    setSaving(true);
+    try {
+      const { data: r } = await axios.post(`${API_URL}/api/production/run/${batchId}/cancel`, {}, H());
+      toast.success(`Production run ${r.cancelled} discarded${r.discarded_checks ? ` · ${r.discarded_checks} checklist record(s) removed` : ''}`);
+      navigate(homePath());
+    } catch (e) { toast.error(err(e)); setSaving(false); setConfirmCancel(false); }
   };
+  const ticked = preItems.filter((i) => i.cleared && i.kind === 'pre').length;
   const createBatch = () => act(async () => {
     await axios.post(`${API_URL}/api/production/run/${batchId}/close`, { ...ovBody, batch_code: finalForm.batch_code, production_date: finalForm.production_date, total_crates: parseInt(finalForm.total_crates), bottles_per_crate: parseInt(finalForm.bottles_per_crate), notes: finalForm.notes }, H());
     navigate(staffMode() ? `${homePath()}?done=${encodeURIComponent(finalForm.batch_code)}` : `/production-batches/${batchId}`);
@@ -107,7 +114,29 @@ export default function ProductionRunWizard() {
       <ParamCaptureDialog item={capture} onCancel={() => setCapture(null)} onSubmit={(vals) => tick(capture, vals)} />
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <button onClick={() => navigate(homePath())} className="text-sm text-slate-600 hover:text-slate-900 flex items-center gap-1" data-testid="wizard-back"><ArrowLeft size={14} /> {staffMode() ? 'Start Production' : 'Production Batches'}</button>
-        <button onClick={cancel} className="text-xs text-rose-600 hover:text-rose-800 flex items-center gap-1" data-testid="wizard-cancel-run"><XCircle size={14} /> Cancel run</button>
+        <button onClick={() => setConfirmCancel(true)} className="text-xs text-rose-600 hover:text-rose-800 flex items-center gap-1" data-testid="wizard-cancel-run"><XCircle size={14} /> Cancel run</button>
+        <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
+          <AlertDialogContent data-testid="wizard-cancel-dialog">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2"><XCircle className="h-5 w-5 text-rose-600" /> Cancel production run {batch.batch_code}?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm text-slate-600">
+                  <p>This completely discards the batch — nothing is kept:</p>
+                  <ul className="list-disc pl-5 space-y-0.5 text-xs">
+                    <li>the draft batch <b>{batch.batch_code}</b> ({batch.sku_name}){batch.total_crates ? ` and its ${batch.total_crates} crates output` : ''}</li>
+                    {status === 'planned' && <li>{ticked ? `${ticked} pre-production check${ticked > 1 ? 's' : ''} ticked in this run` : 'any pre-production checks ticked in this run'}</li>}
+                    {status !== 'planned' && <li>its start/stop times and all checklist records tied to this run</li>}
+                  </ul>
+                  <p className="text-xs">The next batch starts with a fresh checklist. This cannot be undone.</p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="wizard-cancel-keep">Keep running</AlertDialogCancel>
+              <AlertDialogAction onClick={(e) => { e.preventDefault(); cancel(); }} disabled={saving} className="bg-rose-600 hover:bg-rose-700 text-white" data-testid="wizard-cancel-confirm">{saving ? 'Discarding…' : 'Yes, discard batch'}</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
       <div className="rounded-2xl bg-[#002FA7] text-white px-5 py-4 shadow-md">
         <p className="text-[11px] uppercase tracking-widest text-blue-200 font-semibold">Production Run · {batch.batch_code}</p>

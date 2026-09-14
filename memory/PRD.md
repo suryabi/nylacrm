@@ -76,6 +76,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-09-14 — 🐛 Fresh checklist per batch + proper cancel/discard ✅ DONE (tested, iteration_364)
+- **Root cause**: per-run clearances were "open until consumed" with no batch scope → ticks from a cancelled/parallel run showed as done on the next batch.
+- **Fix** (`maintenance_sheets.py`): `GeoBody.batch_id`; clearances ticked inside a run are tagged `batch_id`; `_open_clearance(tenant, eq, batch_id)` counts only (a) records tagged with this batch or (b) untagged QR-page records from **today (IST)**; clear/undo/consume/status all batch-aware; ticking for a non-planned batch → 409. Wizard sends `batch_id` on tick/untick.
+- **Cancel** (`production_run.cancel_run`): deletes tagged checklist records + post tasks + draft batch, writes `maintenance_audit` `production_run_cancelled`; wizard uses an AlertDialog listing what is discarded (`wizard-cancel-dialog/-keep/-confirm`).
+- Verified: `backend/tests/manual_run_scoping.py` + testing_agent 364. ⚠️ Redeploy to production.
+
 ### 2026-09-13 — 📱 "Start Production" QR (Face/PIN → SKU → run wizard) ✅ DONE (tested, iteration_362 + 363)
 - **Factory Staff**: new `production_operator` flag (checkbox + badge on Factory Staff page; `QCTeamMemberCreate/Update`). Only flagged staff appear in the Start Production roster / may drive runs; app users always may.
 - **QR**: `GET /api/maintenance/start-production/sticker?origin=` → tenant-wide QR to `/start-production/{tenantId}` (+ operator count). "Start Production QR" button + `components/StartProductionQrDialog.js` (print sticker) on Production Batches.

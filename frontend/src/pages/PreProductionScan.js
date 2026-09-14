@@ -143,7 +143,7 @@ export default function PreProductionScan() {
         {(state.post_items || []).length > 0 && <p className="px-4 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wide text-sky-700 border-t" data-testid="pre-production-section-post">After production run</p>}
         {(state.post_items || []).map((it) => <Row key={it.id} it={it} />)}
       </CardContent></Card>
-      <p className="text-[11px] text-muted-foreground text-center">Before-run clearances stay valid until the next batch of a matching SKU is created. After-run tasks appear when a batch is created and must be done before the next run.</p>
+      <p className="text-[11px] text-muted-foreground text-center">Before-run checks ticked here count for today's production batch (until it starts). Checks ticked inside a production run belong to that run only. After-run tasks appear when a batch is created and must be done before the next run.</p>
     </Shell>
   );
 }

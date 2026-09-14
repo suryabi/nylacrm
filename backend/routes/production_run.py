@@ -210,10 +210,16 @@ async def cancel_run(batch_id: str, current_user: dict = Depends(get_user_or_fac
     if b["status"] not in RUN_STATUSES:
         raise HTTPException(409, "Only in-progress runs can be cancelled")
     await db.post_run_tasks.delete_many({"tenant_id": tenant_id, "batch_id": batch_id})
+    # Checks ticked inside this run belong to it → discard with the batch; QR-page (untagged) checks are only unlinked.
+    discarded = await db.maintenance_records.delete_many({"tenant_id": tenant_id, "trigger": "per_run", "batch_id": batch_id})
     await db.maintenance_records.update_many({"tenant_id": tenant_id, "consumed_by_batch_id": batch_id},
                                              {"$set": {"cancelled_batch_id": batch_id, "cancelled_batch_code": b["batch_code"]}})
     await db.production_batches.delete_one({"tenant_id": tenant_id, "id": batch_id})
-    return {"ok": True, "cancelled": b["batch_code"]}
+    await db.maintenance_audit.insert_one({"id": str(uuid.uuid4()), "tenant_id": tenant_id, "action": "production_run_cancelled", "batch_id": batch_id,
+                                           "batch_code": b["batch_code"], "sku_name": b.get("sku_name"), "status_at_cancel": b["status"],
+                                           "discarded_checks": discarded.deleted_count, "by_id": current_user.get("id"),
+                                           "by_name": current_user.get("name") or current_user.get("email"), "at": _now()})
+    return {"ok": True, "cancelled": b["batch_code"], "discarded_checks": discarded.deleted_count}
 
 
 @router.get("/{batch_id}")
@@ -222,7 +228,7 @@ async def get_run(batch_id: str, current_user: dict = Depends(get_user_or_factor
     tenant_id = get_current_tenant_id()
     b = await _batch(tenant_id, batch_id)
     run = b["run"]
-    checklist = await pre_production_status(tenant_id, b["sku_id"], current_user) if b["status"] == "planned" else None
+    checklist = await pre_production_status(tenant_id, b["sku_id"], current_user, batch_id) if b["status"] == "planned" else None
     post_tasks = await db.post_run_tasks.find({"tenant_id": tenant_id, "batch_id": batch_id}, {"_id": 0}).to_list(200)
     eq_params = {e["id"]: e.get("maintenance_parameters") or [] for e in await db.equipment_master.find(
         {"tenant_id": tenant_id, "id": {"$in": [t["equipment_id"] for t in post_tasks]}}, {"_id": 0, "id": 1, "maintenance_parameters": 1}).to_list(200)}
@@ -267,7 +273,7 @@ async def start_production(batch_id: str, data: OverrideIn, current_user: dict =
     b = await _batch(tenant_id, batch_id)
     if b["status"] != "planned":
         raise HTTPException(409, "Production already started")
-    pre = await pre_production_status(tenant_id, b["sku_id"], current_user)
+    pre = await pre_production_status(tenant_id, b["sku_id"], current_user, batch_id)
     pre_qc = (b["run"] or {}).get("pre_qc")
     problems = []
     if pre["pending"]:

@@ -908,6 +908,7 @@ class GeoBody(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     parameter_values: Optional[Dict[str, Any]] = None
+    batch_id: Optional[str] = None   # set when ticking inside a production run → clearance belongs to that batch only
 
 
 async def _area_tick_one(tenant_id: str, ctx: dict, eq: dict, current_user: dict, geo, remarks=None, values=None) -> dict:
@@ -1031,14 +1032,18 @@ async def _sku_names(tenant_id: str, ids: list) -> list:
     return [by.get(i, "?") for i in ids]
 
 
-async def _open_clearance(tenant_id: str, equipment_id: str):
+async def _open_clearance(tenant_id: str, equipment_id: str, batch_id: Optional[str] = None):
+    """Un-consumed clearance valid right now: recorded for this batch, or an untagged (QR page) one recorded today (IST)."""
+    scopes = [{"batch_id": None, "scheduled_date": datetime.now(IST).date().isoformat()}]
+    if batch_id:
+        scopes.append({"batch_id": batch_id})
     return await db.maintenance_records.find_one(
         {"tenant_id": tenant_id, "equipment_id": equipment_id, "trigger": "per_run", "status": "completed",
-         "consumed_by_batch_id": None}, {"_id": 0}, sort=[("created_at", -1)])
+         "consumed_by_batch_id": None, "$or": scopes}, {"_id": 0}, sort=[("created_at", -1)])
 
 
-async def _per_run_item(tenant_id: str, eq: dict, actor: dict, sku_id: Optional[str] = None) -> dict:
-    rec = await _open_clearance(tenant_id, eq["id"])
+async def _per_run_item(tenant_id: str, eq: dict, actor: dict, sku_id: Optional[str] = None, batch_id: Optional[str] = None) -> dict:
+    rec = await _open_clearance(tenant_id, eq["id"], batch_id)
     sku_ids = eq.get("per_run_sku_ids") or []
     can = await _can_act(tenant_id, eq, actor)
     return {"id": eq["id"], "name": eq["name"], "type": eq.get("equipment_type_name"),
@@ -1083,10 +1088,10 @@ async def post_run_open_tasks(tenant_id: str, sku_id: Optional[str] = None) -> l
     return tasks
 
 
-async def pre_production_status(tenant_id: str, sku_id: Optional[str], actor: dict) -> dict:
+async def pre_production_status(tenant_id: str, sku_id: Optional[str], actor: dict, batch_id: Optional[str] = None) -> dict:
     """Checklist for the next production run of `sku_id`: per-run clearances + open post-run cleanups from earlier batches."""
     eqs = await db.equipment_master.find({"tenant_id": tenant_id, "per_run_maintenance": True}, {"_id": 0}).sort("name", 1).to_list(1000)
-    items = [{**(await _per_run_item(tenant_id, eq, actor, sku_id)), "kind": "pre"} for eq in eqs]
+    items = [{**(await _per_run_item(tenant_id, eq, actor, sku_id, batch_id)), "kind": "pre"} for eq in eqs]
     if sku_id:
         items = [i for i in items if i["applies"]]
     post_items = []
@@ -1204,7 +1209,9 @@ async def pre_production_clear(equipment_id: str, body: GeoBody = GeoBody(), cur
     eq = await _get_equipment(tenant_id, equipment_id)
     if not eq.get("per_run_maintenance"):
         raise HTTPException(400, "This equipment is not marked 'before every production run'")
-    if await _open_clearance(tenant_id, equipment_id):
+    if body.batch_id and not await db.production_batches.find_one({"tenant_id": tenant_id, "id": body.batch_id, "status": "planned"}, {"_id": 1}):
+        raise HTTPException(409, "This production run is no longer accepting pre-production checks")
+    if await _open_clearance(tenant_id, equipment_id, body.batch_id):
         raise HTTPException(409, "Already cleared for the next production run")
     staff_name = current_user.get("name") if current_user.get("is_factory_staff") else None
     geo = await _enforce_geofence(tenant_id, eq, current_user, body.lat, body.lng, staff_name=staff_name)
@@ -1221,7 +1228,7 @@ async def pre_production_clear(equipment_id: str, body: GeoBody = GeoBody(), cur
            "performed_via": "pre_production", "actor_kind": _actor_kind(current_user, staff),
            "verified_by_user": current_user.get("name") or current_user.get("email"),
            "geo": geo, "completed_at": now.isoformat(), "photos": [], "remarks": None, "corrections": [],
-           "consumed_by_batch_id": None, "created_at": datetime.now(timezone.utc).isoformat()}
+           "batch_id": body.batch_id, "consumed_by_batch_id": None, "created_at": datetime.now(timezone.utc).isoformat()}
     await db.maintenance_records.insert_one({**rec})
     await _flag_out_of_range(tenant_id, eq, rec, rec["performed_by"])
     await db.equipment_master.update_one({"tenant_id": tenant_id, "id": eq["id"]}, {"$set": {"last_maintenance_date": now.date().isoformat()}})
@@ -1230,10 +1237,10 @@ async def pre_production_clear(equipment_id: str, body: GeoBody = GeoBody(), cur
 
 
 @router.post("/pre-production/{equipment_id}/undo")
-async def pre_production_undo(equipment_id: str, current_user: dict = Depends(get_user_or_factory_staff)):
+async def pre_production_undo(equipment_id: str, body: GeoBody = GeoBody(), current_user: dict = Depends(get_user_or_factory_staff)):
     """Undo your own clearance while no batch has consumed it."""
     tenant_id = get_current_tenant_id()
-    rec = await _open_clearance(tenant_id, equipment_id)
+    rec = await _open_clearance(tenant_id, equipment_id, body.batch_id)
     if not rec or rec.get("performed_by_id") != current_user.get("id"):
         raise HTTPException(409, "Only your own un-consumed clearance can be undone")
     await db.maintenance_records.delete_one({"tenant_id": tenant_id, "id": rec["id"]})
@@ -1255,7 +1262,7 @@ async def consume_pre_production(tenant_id: str, sku_id: str, batch: dict) -> li
         ids = eq.get("per_run_sku_ids") or []
         if ids and sku_id not in ids:
             continue
-        rec = await _open_clearance(tenant_id, eq["id"])
+        rec = await _open_clearance(tenant_id, eq["id"], batch.get("id"))
         if not rec:
             continue
         await db.maintenance_records.update_one({"tenant_id": tenant_id, "id": rec["id"]},
