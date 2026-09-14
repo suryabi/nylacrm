@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only visual verification of Leave Policy sections 5-8 redesign (Company Documents → Leave Policy tab). Logged in as CEO admin@nylaairwater.earth, navigated to /company-documents?tab=leave, scrolled to the bottom. All 4 PolicySectionCards render with correct accent bars, icons, kickers, sentence bullets and example callout. Desktop shows 2-column grid; mobile stacks to 1 column. Sections 1-4 still render.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verifications": {
+    "policy-sections container": "present",
+    "policy-section-variable_policy": "amber accent, 'SECTION 5 · CHOOSE 2 PER YEAR', 3 bullets, no example",
+    "policy-section-carry_forward": "emerald accent, 'SECTION 6 · 50% CARRIES OVER', bullets + Example callout with '8 unused days on 31 Dec → 4 days'",
+    "policy-section-summary": "blue accent (#002FA7), 'SECTION 7 · AT A GLANCE'",
+    "policy-section-compliance": "slate accent, 'SECTION 8 · STATUTORY PRECEDENCE'",
+    "grid desktop 1920px": "grid-template-columns: 792px 792px (2 columns, children paired at same top)",
+    "grid mobile 390px": "grid-template-columns: 358px (single column, children stacked vertically)",
+    "bold numbers": "carry_forward bold tokens found: 50%, 31 December, 1 January, 8, 31 Dec, 4 days",
+    "sections 1-4": "still render (holidays table, fixed holidays by location, variable holiday pool visible in screenshot)",
+    "kicker case": "kickers are uppercase via 'uppercase tracking-widest' CSS class (rendered text UPPERCASE, source is title-case as specified)"
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor (pre-existing, not related to this change): React hydration warning 'In HTML, <p> cannot be a descendant of <p>' logged on the Company Documents page. Not introduced by this redesign but worth cleaning up."
+  ],
+  "updated_files": [],
+  "success_rate": {"frontend": "100%"},
+  "test_credentials": "admin@nylaairwater.earth / test123 (CEO)",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Redesign of Leave Policy sections 5-8 in LeavePolicyDoc.js (PolicySectionCard) verified visually — 2-col grid desktop, stacks on mobile, all accents/kickers/bullets/example callout correct."
+}

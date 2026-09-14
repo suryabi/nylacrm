@@ -76,6 +76,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-09-14 — Leave policy UI: text sections as accent cards ✅ DONE (iteration_367)
+- `PolicySectionCard` (LeavePolicyDoc.js): 2-col grid, per-key icon/accent (`SECTION_META`), sentence check-bullets with bold numbers, "Example" callout; unknown section keys fall back to blue/FileText.
+
 ### 2026-09-14 — Leave policy UI: variable pool as per-location cards ✅ DONE (iteration_366)
 - Section 4 now mirrors Section 3: one card per city (`variable-pool-<City>`), numbered options with dates, "N options · pick 2", user location highlighted.
 

@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
-import { CalendarOff, Pencil, Save, X, Plus, Trash2, Mail, RefreshCw, MapPin, History } from 'lucide-react';
+import { CalendarOff, Pencil, Save, X, Plus, Trash2, Mail, RefreshCw, MapPin, History, CalendarCheck, ArrowRightLeft, Sigma, Scale, FileText, CheckCircle2, Lightbulb } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const H = (extra = {}) => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json', ...extra });
@@ -74,6 +74,59 @@ const HolidayEditRow = ({ h, locations, onChange, onRemove, idx }) => (
     <td className="p-1"><button type="button" onClick={onRemove} className="text-slate-400 hover:text-rose-600" data-testid={`edit-holiday-remove-${idx}`}><Trash2 className="h-4 w-4" /></button></td>
   </tr>
 );
+
+const SECTION_META = {
+  variable_policy: { icon: CalendarCheck, accent: 'amber', kicker: 'Choose 2 per year' },
+  carry_forward: { icon: ArrowRightLeft, accent: 'emerald', kicker: '50% carries over' },
+  summary: { icon: Sigma, accent: 'blue', kicker: 'At a glance' },
+  compliance: { icon: Scale, accent: 'slate', kicker: 'Statutory precedence' },
+};
+const ACCENT = {
+  amber: { bar: 'bg-amber-400', ring: 'border-amber-200', soft: 'bg-amber-50', icon: 'bg-amber-100 text-amber-700', dot: 'text-amber-500' },
+  emerald: { bar: 'bg-emerald-500', ring: 'border-emerald-200', soft: 'bg-emerald-50', icon: 'bg-emerald-100 text-emerald-700', dot: 'text-emerald-500' },
+  blue: { bar: 'bg-[#002FA7]', ring: 'border-blue-200', soft: 'bg-blue-50', icon: 'bg-blue-100 text-[#002FA7]', dot: 'text-[#002FA7]' },
+  slate: { bar: 'bg-slate-500', ring: 'border-slate-200', soft: 'bg-slate-50', icon: 'bg-slate-200 text-slate-700', dot: 'text-slate-500' },
+};
+const splitSentences = (body) => (body || '').replace(/\s+/g, ' ').split(/(?<=[.!?])\s+(?=[A-Z0-9“"(])/).map((s) => s.trim()).filter(Boolean);
+const highlight = (text) => text.split(/(\d+(?:\.\d+)?%?(?:\s?(?:days?|paid|Fixed|Variable|December|January|Dec|Jan))?)/g).map((part, i) => (/^\d/.test(part) ? <b key={i} className="text-slate-900">{part}</b> : part));
+
+// Policy text section → card with accent bar, icon, sentence bullets and an "Example" callout.
+const PolicySectionCard = ({ n, s }) => {
+  const meta = SECTION_META[s.key] || { icon: FileText, accent: 'blue', kicker: null };
+  const a = ACCENT[meta.accent];
+  const Icon = meta.icon;
+  const sentences = splitSentences(s.body);
+  const example = sentences.find((x) => /^Example:/i.test(x));
+  const points = sentences.filter((x) => x !== example);
+  return (
+    <div className={`relative overflow-hidden rounded-2xl border ${a.ring} bg-white shadow-sm`} data-testid={`policy-section-${s.key}`}>
+      <div className={`absolute left-0 top-0 h-full w-1.5 ${a.bar}`} />
+      <div className="pl-6 pr-5 py-5">
+        <div className="flex items-start gap-3">
+          <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${a.icon}`}><Icon className="h-5 w-5" /></div>
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">Section {n}{meta.kicker ? ` · ${meta.kicker}` : ''}</p>
+            <h3 className="text-base md:text-lg font-bold text-slate-800 leading-tight">{s.title}</h3>
+          </div>
+        </div>
+        <ul className="mt-4 space-y-2">
+          {points.map((pt, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-slate-700 leading-relaxed">
+              <CheckCircle2 className={`h-4 w-4 mt-0.5 shrink-0 ${a.dot}`} />
+              <span>{highlight(pt)}</span>
+            </li>
+          ))}
+        </ul>
+        {example && (
+          <div className={`mt-4 rounded-xl ${a.soft} border ${a.ring} px-4 py-3 text-sm text-slate-800 flex items-start gap-2`}>
+            <Lightbulb className={`h-4 w-4 mt-0.5 shrink-0 ${a.dot}`} />
+            <span><span className="font-semibold">Example · </span>{highlight(example.replace(/^Example:\s*/i, ''))}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const LeavePolicyDoc = () => {
   const [p, setP] = useState(null);
@@ -217,9 +270,9 @@ export const LeavePolicyDoc = () => {
         </div>
       </Section>
 
-      {(p.sections || []).map((s, i) => (
-        <Section key={s.key || i} n={5 + i} title={s.title}><p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line" data-testid={`policy-section-${s.key}`}>{s.body}</p></Section>
-      ))}
+      <div className="grid md:grid-cols-2 gap-4" data-testid="policy-sections">
+        {(p.sections || []).map((s, i) => <PolicySectionCard key={s.key || i} n={5 + i} s={s} />)}
+      </div>
     </div>
   );
 };
