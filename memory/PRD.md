@@ -76,6 +76,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-09-14 — Leave policy UI: variable pool as per-location cards ✅ DONE (iteration_366)
+- Section 4 now mirrors Section 3: one card per city (`variable-pool-<City>`), numbered options with dates, "N options · pick 2", user location highlighted.
+
 ### 2026-09-14 — Leave policy amendment: 50% carry forward ✅ DONE (API-verified)
 - `default_policy()` gains structure row "Leave Carry Forward — 50% of unused Sick / Casual Leave carried forward to the next calendar year" and section `carry_forward` (credited 1 Jan, used first, not encashable, lapses otherwise; example); summary text updated. `_apply_carry_forward_rule` amends existing tenant policies once (idempotent, versioned, snapshot in history). No leave-balance engine exists yet (only requests) — carry-forward is policy text for now.
 

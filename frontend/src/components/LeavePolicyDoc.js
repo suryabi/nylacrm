@@ -201,9 +201,20 @@ export const LeavePolicyDoc = () => {
       </Section>
 
       <Section n="4" title="Variable Holiday Pool – Employee Selects 2">
-        <div className="rounded-lg border overflow-hidden"><table className="w-full text-sm" data-testid="variable-pool-table"><tbody>
-          {locs.map((l, i) => <tr key={l} className={`${i % 2 ? 'bg-slate-50/60' : ''} ${l === mine ? 'bg-blue-50/60' : ''}`}><td className="px-3 py-2 font-semibold w-32 align-top">{l}</td><td className="px-3 py-2 text-slate-700">{(p.variable_pool?.[l] || []).map((x) => x.name + (x.note ? '*' : '')).join('; ') || '—'}</td></tr>)}
-        </tbody></table></div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3" data-testid="variable-pool-table">
+          {locs.map((l) => {
+            const pool = p.variable_pool?.[l] || [];
+            return (
+              <div key={l} className={`rounded-lg border p-3 ${l === mine ? 'border-[#002FA7] bg-blue-50/40' : ''}`} data-testid={`variable-pool-${l}`}>
+                <p className="font-bold text-sm mb-1">{l} <span className="text-xs text-slate-500 font-normal">· {pool.filter((x) => x.date).length} options · pick 2</span></p>
+                <ol className="text-xs space-y-0.5 list-decimal pl-4">
+                  {pool.map((x, i) => <li key={i}>{x.name}{x.note && <span title={x.note} className="text-amber-600">*</span>} {x.date && <span className="text-slate-400">{fmt(x.date)}</span>}</li>)}
+                  {pool.length === 0 && <li className="list-none -ml-4 text-slate-400">—</li>}
+                </ol>
+              </div>
+            );
+          })}
+        </div>
       </Section>
 
       {(p.sections || []).map((s, i) => (
