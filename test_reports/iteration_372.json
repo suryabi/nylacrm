@@ -1,0 +1,25 @@
+{
+  "summary": "Reversal Alerts / Stock Unverified badge flow fully verified end-to-end on Nyla Air & Water CRM. Delivery QA-BADGE-0001 (reversed from complete, no stock_restored array) correctly showed the red 'Stock not verified' pill (data-testid stock-unverified-<id>) and the red banner 'stock-unverified-banner' with text '1 reversed delivery has no verified stock restore — the warehouse quantity may still be missing.' and the 'Review' button (stock-unverified-banner-btn). Clicking the pill opened the Stock Audit dialog (stock-audit-dialog) showing 'Verified units restored: none recorded' (stock-audit-verified-restore) and 'Re-add stock now' button (stock-audit-readd-btn). Clicking re-add produced toast '5 units for QA-BADGE-0001 added back to the warehouse.'; dialog then showed 'Verified units restored: 5 (5)' and after reload the red pill and banner were gone. In Reversals tab (ReversalsLog), QA-BADGE-0001 shows green 'Verified' badge (reversal-stock-verified-QA-BADGE-0001) as expected post re-add. All Mongo cleanup performed: deleted the delivery, its item, decremented and deleted the newly created distributor_stock row (qty went 5→0, created today), and deleted the stock_movements record with reference QA-BADGE-0001.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Distributor → Stock Out", "issues": ["Default Time Period filter is 'This Month' which hid the qualifying reversed delivery (Jun 2026) on a September system date — QA needed to change to 'Last 6 Months' before the banner/pill became visible. Consider surfacing the banner regardless of time filter, or default the range wide enough to include recent reversed items."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "isStockRestoreUnverified helper in DeliveriesTab.jsx only reads deliveries within the current Time Period window; the alert banner can be missed if the reversed delivery falls outside 'This Month'. Consider a global un-verified-count fetch decoupled from list pagination.",
+    "Reversals log rendered a 'Verified' badge only after full page reload; if the user re-adds from the audit dialog the ReversalsLog does not appear to be re-fetched in real time — okay but worth polishing."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123",
+  "seed_data_creation": "None — cleanup of pre-seeded QA-BADGE-0001 delivery, its item, the newly-created distributor_stock row and the stock_movements 'QA-BADGE-0001' entry was performed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reversal Alerts UI badge flow (DeliveriesTab pill + banner + stock audit dialog + Re-add stock now + ReversalsLog verified badge) has been fully validated. Test delivery QA-BADGE-0001 and all downstream artefacts (delivery item, distributor_stock row created by re-add at loc aa2eda05-..., stock_movements ref QA-BADGE-0001) have been removed from Mongo. Distributor Brian (bb12d90e-4d33-4890-ac5f-17573c551b5c) still has 2 legitimate reversals (DC-2606-0001 promo, DEL-2026-0027 delivery). Note: 'This Month' default time-period filter hides older reversed deliveries — pick a wider period when reproducing.",
+  "rca of the issue": "N/A — feature working as designed."
+}
