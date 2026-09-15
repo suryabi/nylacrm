@@ -2833,7 +2833,7 @@ async def transfer_to_warehouse(
     #    the right lineage. Child-keyed rows keep Generic vs customer-branded
     #    stock separately traceable (Model C).
     sku_name = batch.get("sku_name")
-    wh_tracks_batches = bool(warehouse.get("track_batches"))
+    wh_tracks_batches = True
     stock_query = {
         "tenant_id": tenant_id,
         "warehouse_location_id": data.warehouse_location_id,

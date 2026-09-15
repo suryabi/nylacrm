@@ -11232,6 +11232,11 @@ async def _ensure_txn_indexes_bg():
         await db.login_attempts.create_index("identifier")
     except Exception as e:
         logger.error(f"Failed to ensure login_attempts index: {e}")
+    try:
+        # Batch tracking is always on (Jun 2026) — normalise stale per-warehouse flags.
+        await db.distributor_locations.update_many({"track_batches": {"$ne": True}}, {"$set": {"track_batches": True}})
+    except Exception as e:
+        logger.error(f"Failed to normalise track_batches: {e}")
 
 
 @app.on_event("shutdown")

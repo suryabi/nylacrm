@@ -573,10 +573,9 @@ export default function DistributorDetail() {
   // location tracks batches. Batch list source depends on which:
   //   • source factory tracks  → /batches-available (stock at factory, FIFO)
   //   • only destination tracks → /production-batches (canonical SKU list)
-  const sourceFactoryTracksBatches = !!(factoryWarehouses.find(w => w.id === shipmentForm.source_warehouse_id)?.track_batches);
-  const destDistributorTracksBatches = !!(
-    (distributor?.locations || []).find(loc => loc.id === shipmentForm.distributor_location_id)?.track_batches
-  );
+  // Batch tracking is always on for every warehouse (Jun 2026).
+  const sourceFactoryTracksBatches = true;
+  const destDistributorTracksBatches = true;
   const shipmentNeedsBatch = sourceFactoryTracksBatches || destDistributorTracksBatches;
   // 🐛 FIX: batches are scoped to (source warehouse, destination location).
   // Resetting the cache whenever either side changes prevents the picker from
@@ -609,9 +608,7 @@ export default function DistributorDetail() {
 
   // Stock OUT — same idea. Source is a distributor warehouse; check its
   // `track_batches` flag on the loaded `distributor.locations` array.
-  const sourceDistributorTracksBatches = !!(
-    (distributor?.locations || []).find(loc => loc.id === deliveryForm.distributor_location_id)?.track_batches
-  );
+  const sourceDistributorTracksBatches = true;
   // 🐛 FIX: batches are scoped to the source location AND the delivery's
   // account (Phase 3 branded-stock filter). Reset the cache whenever either
   // changes, otherwise the picker keeps showing the previous warehouse's or
@@ -3052,7 +3049,7 @@ export default function DistributorDetail() {
             setShipmentLocationFilter={setShipmentLocationFilter}
             handleExportShipments={handleExportShipments}
             exportingShipments={exportingShipments}
-            sourceTracksBatches={!!(factoryWarehouses.find(w => w.id === shipmentForm.source_warehouse_id)?.track_batches)}
+            sourceTracksBatches={sourceFactoryTracksBatches}
             destTracksBatches={destDistributorTracksBatches}
             batchesBySku={shipmentBatchesBySku}
           />

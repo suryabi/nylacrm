@@ -988,7 +988,7 @@ async def create_distributor_location(
         "email": data.email,
         "is_default": data.is_default or False,
         "is_factory": data.is_factory or False,
-        "track_batches": bool(data.track_batches) if data.track_batches is not None else False,
+        "track_batches": True,
         "status": data.status or "active",
         "gstin": data.gstin,
         "zoho_branch_id": data.zoho_branch_id,
@@ -1041,7 +1041,7 @@ async def update_distributor_location(
     
     for field in ['location_name', 'location_code', 'address_line_1', 'address_line_2',
                   'state', 'city', 'pincode', 'contact_person', 'contact_number',
-                  'email', 'is_default', 'is_factory', 'track_batches', 'status',
+                  'email', 'is_default', 'is_factory', 'status',
                   'gstin', 'zoho_branch_id', 'zoho_branch_name',
                   'lat', 'lng', 'formatted_address']:
         value = getattr(data, field, None)
@@ -2522,7 +2522,7 @@ async def create_shipment(
     )
     if not location:
         raise HTTPException(status_code=400, detail="Invalid distributor location")
-    dest_tracks_batches = bool(location.get("track_batches"))
+    dest_tracks_batches = True
     
     # Validate source factory warehouse if provided
     source_warehouse_name = None
@@ -2535,7 +2535,7 @@ async def create_shipment(
         if not source_warehouse:
             raise HTTPException(status_code=400, detail="Invalid source factory warehouse")
         source_warehouse_name = source_warehouse.get('location_name')
-        source_tracks_batches = bool(source_warehouse.get('track_batches'))
+        source_tracks_batches = True
 
     # Validate items
     if not data.items or len(data.items) == 0:
@@ -2839,7 +2839,7 @@ async def confirm_shipment(
             {"id": source_warehouse_id, "tenant_id": tenant_id},
             {"_id": 0, "track_batches": 1, "location_name": 1},
         )
-        src_tracks_batches = bool(src_loc and src_loc.get("track_batches"))
+        src_tracks_batches = True
 
         # Get shipment items (now also batch_id / batch_code)
         items = await db.distributor_shipment_items.find(
@@ -3586,7 +3586,7 @@ async def _readd_shipment_source_stock(tenant_id: str, shipment: dict) -> None:
         {"id": source_warehouse_id, "tenant_id": tenant_id},
         {"_id": 0, "track_batches": 1},
     )
-    src_tracks_batches = bool(src_loc and src_loc.get("track_batches"))
+    src_tracks_batches = True
     items = await db.distributor_shipment_items.find(
         {"shipment_id": shipment.get("id"), "tenant_id": tenant_id}, {"_id": 0},
     ).to_list(500)
@@ -5087,7 +5087,7 @@ async def create_delivery(
     )
     if not location:
         raise HTTPException(status_code=400, detail="Invalid distributor location")
-    source_tracks_batches = bool(location.get("track_batches"))
+    source_tracks_batches = True
     source_is_factory = bool(location.get("is_factory"))
     
     # Validate account exists
@@ -6059,7 +6059,7 @@ async def complete_delivery(
         {"_id": 0, "is_factory": 1, "track_batches": 1, "location_name": 1},
     )
     src_is_factory = bool(src_loc and src_loc.get("is_factory"))
-    src_tracks_batches = bool(src_loc and src_loc.get("track_batches"))
+    src_tracks_batches = True
 
     items = await db.distributor_delivery_items.find(
         {"delivery_id": delivery_id, "tenant_id": tenant_id},

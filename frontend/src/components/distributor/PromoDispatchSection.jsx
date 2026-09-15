@@ -164,11 +164,7 @@ export default function PromoDispatchSection({
     maps_link: '',
     remarks: '',
   });
-  const selectedLoc = useMemo(
-    () => distributorLocations.find(l => l.id === form.distributor_location_id),
-    [distributorLocations, form.distributor_location_id],
-  );
-  const locTracksBatches = !!selectedLoc?.track_batches;
+  const locTracksBatches = true; // batch tracking is always on
 
   const filteredEmployees = useMemo(() => {
     const q = employeeSearch.trim().toLowerCase();

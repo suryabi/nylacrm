@@ -568,7 +568,7 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
         raise HTTPException(status_code=400, detail="Invalid reason. Pick one from the master list in Admin.")
 
     src_is_factory = bool(loc.get("is_factory"))
-    src_tracks_batches = bool(loc.get("track_batches"))
+    src_tracks_batches = True
 
     # ── Validate stock availability (reservation-aware) ────────────────────
     # Available = on-hand − reserved (open promo + regular Stock Outs at this
@@ -1006,7 +1006,7 @@ async def confirm_promo_dispatch(distributor_id: str, dispatch_id: str, current_
     if is_legacy:
         # Legacy behaviour: deduct immediately, mark dispatched.
         await _check_stock_availability(
-            tenant_id, src_is_factory=bool(d.get("is_factory")), src_tracks_batches=bool(loc.get("track_batches")),
+            tenant_id, src_is_factory=bool(d.get("is_factory")), src_tracks_batches=True,
             distributor_id=distributor_id, loc_id=d.get("distributor_location_id"), items=items)
         await _adjust_stock_for_dispatch(tenant_id, d, items, sign=-1)
         await db.promo_dispatches.update_one(
@@ -1017,7 +1017,7 @@ async def confirm_promo_dispatch(distributor_id: str, dispatch_id: str, current_
         coll = db.promo_dispatches
     else:
         # New flow: reservation-aware validation, NO deduction (reserve only).
-        tracks = bool(loc.get("track_batches"))
+        tracks = True
         # A stock-out auto-created from a Delivery Order never picks a batch.
         # On a batch-tracked warehouse, allocate batches FIFO now so the
         # validation below finds the (batched) stock instead of falsely

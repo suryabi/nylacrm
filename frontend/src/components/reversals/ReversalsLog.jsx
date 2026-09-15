@@ -81,7 +81,7 @@ export const ReversalsLog = ({ distributorId }) => {
     rows.forEach((r) => {
       lines.push([
         fmtDate(r.reversed_at), r.distributor_name, r.type, r.reference_number, r.recipient,
-        r.value, r.original_status, r.stock_readded ? 'Yes' : 'No', r.reversed_by, r.reason || '',
+        r.value, r.original_status, r.stock_restore_required && !r.stock_restore_verified ? 'NOT VERIFIED' : (r.stock_restore_verified ? 'Verified' : (r.stock_readded ? 'Yes' : 'No')), r.reversed_by, r.reason || '',
       ].map(esc).join(','));
     });
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -184,9 +184,13 @@ export const ReversalsLog = ({ distributorId }) => {
                   <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums text-slate-900">{fmtINR(r.value)}</td>
                   <td className="px-4 py-3"><span className="capitalize text-slate-600">{r.original_status}</span></td>
                   <td className="px-4 py-3 text-center">
-                    {r.stock_readded
-                      ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Yes</Badge>
-                      : <span className="text-slate-400">—</span>}
+                    {r.stock_restore_required && !r.stock_restore_verified
+                      ? <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 gap-1" title="No verified stock restore — open the delivery's Stock Audit and re-add" data-testid={`reversal-stock-unverified-${r.reference_number}`}><AlertTriangle className="h-3 w-3" /> Not verified</Badge>
+                      : r.stock_restore_verified
+                        ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100" data-testid={`reversal-stock-verified-${r.reference_number}`}>Verified</Badge>
+                        : r.stock_readded
+                          ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Yes</Badge>
+                          : <span className="text-slate-400">—</span>}
                   </td>
                   <td className="px-4 py-3 text-slate-700">{r.reversed_by}</td>
                   <td className="px-4 py-3 max-w-[220px] truncate text-slate-500" title={r.reason || ''}>

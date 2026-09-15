@@ -32,6 +32,11 @@ const TIME_FILTERS = [
 
 // Statuses whose figures are voided — excluded from totals & shown struck-through.
 const VOIDED_DELIVERY_STATUSES = ['reversed', 'cancelled'];
+// A reversed delivery that had physically deducted stock but has no verified
+// restore record — the warehouse quantity may still be missing.
+const isStockRestoreUnverified = (d) => d?.status === 'reversed'
+  && ['complete', 'completed', 'delivered'].includes((d.reversed_from_status || '').toLowerCase())
+  && !(Array.isArray(d.stock_restored) && d.stock_restored.length > 0);
 
 // Sum the billing/margin columns across a list of deliveries. Mirrors the
 // per-row math in the table so the grand total and per-date subtotals stay
@@ -2341,6 +2346,18 @@ export default function DeliveriesTab({
           </div>
         ) : (
           <>
+          {deliveries.some(isStockRestoreUnverified) && (
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-800" data-testid="stock-unverified-banner">
+              <span className="inline-flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                {deliveries.filter(isStockRestoreUnverified).length} reversed {deliveries.filter(isStockRestoreUnverified).length === 1 ? 'delivery has' : 'deliveries have'} no verified stock restore — the warehouse quantity may still be missing.
+              </span>
+              <Button size="sm" variant="outline" className="border-rose-300 text-rose-700 hover:bg-rose-100"
+                onClick={() => openStockAudit(deliveries.find(isStockRestoreUnverified))} data-testid="stock-unverified-banner-btn">
+                Review
+              </Button>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm" data-testid="deliveries-table">
               <thead>
@@ -2571,6 +2588,17 @@ export default function DeliveriesTab({
                       {/* Status */}
                       <td className="p-3 text-center">
                         {getDeliveryStatusBadge(delivery.status)}
+                        {isStockRestoreUnverified(delivery) && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); openStockAudit(delivery); }}
+                            className="mt-1 inline-flex items-center gap-1 rounded-full border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 hover:bg-rose-100"
+                            title="Stock restore not verified — open Stock Audit to re-add"
+                            data-testid={`stock-unverified-${delivery.id}`}
+                          >
+                            <AlertTriangle className="h-3 w-3" /> Stock not verified
+                          </button>
+                        )}
                       </td>
                       
                       {/* Actions */}

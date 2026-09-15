@@ -289,30 +289,26 @@ class AssignBatchIn(BaseModel):
     quantity: Optional[int] = Field(None, gt=0, description="Bottles; None = all legacy stock in the bucket")
 
 
-@router.post("/assign-batch")
-async def assign_batch_to_legacy(payload: AssignBatchIn, current_user: dict = Depends(get_current_user)):
-    """Repair tool: assign a real batch to batch-less (legacy) stock rows of one
-    classification bucket at a warehouse. Moves qty from the no-batch row into the
-    batch row (upsert). Audited in db.stock_batch_assignments."""
-    if current_user.get("role") not in REPAIR_ROLES:
-        raise HTTPException(403, "Only CEO / Admin can assign batches to legacy stock.")
-    tenant_id = get_current_tenant_id()
-    loc = await _load_location(tenant_id, payload.warehouse_location_id)
+async def assign_batch_to_legacy_rows(tenant_id: str, loc: dict, sku_id: str, child_sku_id, batch_id: str,
+                                      quantity, current_user: dict, source: str = "manual") -> dict:
+    """Move `quantity` (None = all) legacy (batch-less) bottles of one
+    (warehouse, sku, classification) bucket into the given batch's row.
+    Totals unchanged. Audited in db.stock_batch_assignments."""
     batch = await db.production_batches.find_one(
-        {"tenant_id": tenant_id, "id": payload.batch_id}, {"_id": 0, "id": 1, "batch_code": 1})
+        {"tenant_id": tenant_id, "id": batch_id}, {"_id": 0, "id": 1, "batch_code": 1})
     if not batch:
         raise HTTPException(404, "Production batch not found")
 
     coll, base = _stock_coll_and_base(loc, tenant_id)
-    cid = payload.child_sku_id or None
-    legacy_q = {**base, "sku_id": payload.sku_id,
+    cid = child_sku_id or None
+    legacy_q = {**base, "sku_id": sku_id,
                 "child_sku_id": cid if cid else {"$in": [None]},
                 "batch_id": {"$in": [None]}, "quantity": {"$gt": 0}}
     legacy_rows = await coll.find(legacy_q, {"_id": 0}).to_list(100)
     available = sum(int(r.get("quantity") or 0) for r in legacy_rows)
     if available <= 0:
         raise HTTPException(400, "No legacy (no batch) stock found in that bucket.")
-    qty = int(payload.quantity) if payload.quantity else available
+    qty = int(quantity) if quantity else available
     if qty > available:
         raise HTTPException(400, f"Only {available} legacy bottles available in that bucket.")
 
@@ -324,27 +320,28 @@ async def assign_batch_to_legacy(payload: AssignBatchIn, current_user: dict = De
         take = min(remaining, int(r.get("quantity") or 0))
         remaining -= take
         await coll.update_one(
-            {**base, "sku_id": payload.sku_id,
+            {**base, "sku_id": sku_id,
              "child_sku_id": cid if cid else {"$in": [None]}, "batch_id": {"$in": [None]}},
             {"$inc": {"quantity": -take}, "$set": {"updated_at": now}})
         on_insert = {k: v for k, v in r.items() if k not in ("quantity", "updated_at", "batch_id", "batch_code", "id")}
         on_insert.update({"id": str(uuid.uuid4()), "batch_id": batch["id"], "batch_code": batch.get("batch_code"), "created_at": r.get("created_at") or now})
         await coll.update_one(
-            {**base, "sku_id": payload.sku_id,
+            {**base, "sku_id": sku_id,
              "child_sku_id": cid if cid else {"$in": [None]}, "batch_id": batch["id"]},
             {"$inc": {"quantity": take}, "$setOnInsert": on_insert, "$set": {"updated_at": now}},
             upsert=True)
     # Drop emptied legacy rows so pickers no longer show a zero legacy bucket.
     await coll.delete_many({**legacy_q, "quantity": {"$lte": 0}})
 
-    sku = await db.master_skus.find_one({"id": payload.sku_id}, {"_id": 0, "sku_name": 1})
+    sku = await db.master_skus.find_one({"id": sku_id}, {"_id": 0, "sku_name": 1})
     audit = {
         "id": str(uuid.uuid4()), "tenant_id": tenant_id,
-        "warehouse_location_id": payload.warehouse_location_id,
+        "warehouse_location_id": loc["id"],
         "warehouse_name": loc.get("location_name"),
-        "sku_id": payload.sku_id, "sku_name": (sku or {}).get("sku_name"),
-        "child_sku_id": cid, "batch_id": batch["id"], "batch_code": batch.get("batch_code"),
-        "quantity": qty,
+        "sku_id": sku_id, "sku_name": (sku or {}).get("sku_name") or (legacy_rows[0].get("sku_name") if legacy_rows else None),
+        "child_sku_id": cid, "child_sku_name": legacy_rows[0].get("child_sku_name") if legacy_rows else None,
+        "batch_id": batch["id"], "batch_code": batch.get("batch_code"),
+        "quantity": qty, "source": source,
         "created_by": current_user.get("id"),
         "created_by_name": current_user.get("name") or current_user.get("email"),
         "created_at": now,
@@ -352,3 +349,16 @@ async def assign_batch_to_legacy(payload: AssignBatchIn, current_user: dict = De
     await db.stock_batch_assignments.insert_one(dict(audit))
     return {"ok": True, "assigned_units": qty, "batch_code": batch.get("batch_code"),
             "remaining_legacy": available - qty}
+
+
+@router.post("/assign-batch")
+async def assign_batch_to_legacy(payload: AssignBatchIn, current_user: dict = Depends(get_current_user)):
+    """Repair tool: assign a real batch to batch-less (legacy) stock rows of one
+    classification bucket at a warehouse. Moves qty from the no-batch row into the
+    batch row (upsert). Audited in db.stock_batch_assignments."""
+    if current_user.get("role") not in REPAIR_ROLES:
+        raise HTTPException(403, "Only CEO / Admin can assign batches to legacy stock.")
+    tenant_id = get_current_tenant_id()
+    loc = await _load_location(tenant_id, payload.warehouse_location_id)
+    return await assign_batch_to_legacy_rows(tenant_id, loc, payload.sku_id, payload.child_sku_id,
+                                             payload.batch_id, payload.quantity, current_user)

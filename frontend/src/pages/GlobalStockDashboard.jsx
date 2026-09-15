@@ -9,8 +9,9 @@ import { getTerm } from '../context/TenantConfigContext';
 import {
   Globe, RefreshCw, Search, ChevronDown, ChevronRight, Factory, Warehouse,
   Boxes, Truck, Clock, PackageCheck, Loader2, ArrowDownToLine, Recycle,
-  PackageX, Undo2, CheckCircle2, FileSpreadsheet, Scale, History,
+  PackageX, Undo2, CheckCircle2, FileSpreadsheet, Scale, History, Wand2,
 } from 'lucide-react';
+import { LegacyStockRepairDialog } from '../components/stock/LegacyStockRepairDialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { useAuth } from '../context/AuthContext';
 
@@ -73,6 +74,8 @@ export default function GlobalStockDashboard() {
   const [trace, setTrace] = useState(null);
   const [traceLoading, setTraceLoading] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
+  const [showLegacy, setShowLegacy] = useState(false);
+  const [legacySummary, setLegacySummary] = useState(null);
 
   const fetchTrace = useCallback(async (locationId, skuId) => {
     setShowTrace(true);
@@ -215,7 +218,13 @@ export default function GlobalStockDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+    if (isAdmin) {
+      try {
+        const r = await axios.get(`${API_URL}/api/distributor/legacy-stock`, { headers: HEAD() });
+        setLegacySummary({ rows: (r.data.rows || []).length, units: r.data.total_units || 0 });
+      } catch (e) { /* non-admin or unavailable */ }
+    }
+  }, [isAdmin]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -270,6 +279,13 @@ export default function GlobalStockDashboard() {
           {isAdmin && (
             <Button variant="outline" size="sm" onClick={() => { setRealignScan(null); setRealignHistory(null); setRealignDistId(''); setRealignView('drift'); setShowRealign(true); fetchRealignDists(); }} data-testid="gsd-realign-btn">
               <Scale className="h-4 w-4 mr-1.5 text-amber-600" /> Reconcile
+            </Button>
+          )}
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={() => setShowLegacy(true)}
+              className={legacySummary?.rows ? 'border-rose-300 bg-rose-50 hover:bg-rose-100' : ''} data-testid="gsd-legacy-btn">
+              <Wand2 className="h-4 w-4 mr-1.5 text-rose-600" /> Legacy Stock
+              {legacySummary?.rows ? <Badge className="ml-1.5 bg-rose-600 text-white hover:bg-rose-600" data-testid="gsd-legacy-count">{legacySummary.rows}</Badge> : null}
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={() => { setShowMovements(true); fetchMovements(); }} data-testid="gsd-movements-btn">
@@ -430,6 +446,8 @@ export default function GlobalStockDashboard() {
       </div>
 
       {/* Child-split reconciliation dialog */}
+      <LegacyStockRepairDialog open={showLegacy} onOpenChange={setShowLegacy} onApplied={fetchData} />
+
       <Dialog open={showMovements} onOpenChange={setShowMovements}>
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col" data-testid="gsd-movements-dialog">
           <DialogHeader>

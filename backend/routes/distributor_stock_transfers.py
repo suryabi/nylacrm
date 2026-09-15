@@ -587,7 +587,7 @@ async def list_batches_available(
     _ = current_user
     tenant_id = get_current_tenant_id()
     loc = await _load_location(tenant_id, location_id)
-    track_batches = bool(loc.get("track_batches"))
+    track_batches = True
 
     if loc.get("is_factory"):
         rows = await db.factory_warehouse_stock.find(
@@ -968,7 +968,7 @@ async def list_eligible_sources(current_user: dict = Depends(get_current_user)):
             "total_qty": 0,
             "is_self_managed": bool(d.get("is_self_managed")),
             "is_factory": bool(loc.get("is_factory")),
-            "track_batches": bool(loc.get("track_batches")),
+            "track_batches": True,
             "gstin": gstin,
             "pan": _extract_pan(gstin) or None,
         })
@@ -990,7 +990,7 @@ async def list_eligible_sources(current_user: dict = Depends(get_current_user)):
             "total_qty": 0,
             "is_self_managed": bool(d.get("is_self_managed")),
             "is_factory": True,
-            "track_batches": bool(loc.get("track_batches")),
+            "track_batches": True,
             "gstin": gstin,
             "pan": _extract_pan(gstin) or None,
         })
@@ -1275,7 +1275,7 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
     # ── Batch tracking validation (Phase 1) ──
     # If the source warehouse has `track_batches=true`, every line item must
     # carry a `batch_id`. We then validate stock per-batch (not per-SKU).
-    src_tracks_batches = bool(src_loc.get("track_batches"))
+    src_tracks_batches = True
     if src_tracks_batches:
         missing_batch = [it for it in payload.items if not it.batch_id]
         if missing_batch:

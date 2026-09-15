@@ -217,8 +217,8 @@ function NewTransferDialog({ open, onClose, onCreated, prefill }) {
     });
   }, [targets, sourceObj]);
 
-  // Source warehouse opt-in: if true, the user must pick a batch on every line.
-  const sourceTracksBatches = !!sourceObj?.track_batches;
+  // Batch tracking is always on: the user must pick a batch on every line.
+  const sourceTracksBatches = true;
 
   // Fetch available batches for an item from the new /batches-available endpoint
   // whenever the source warehouse + SKU is set AND the source tracks batches.

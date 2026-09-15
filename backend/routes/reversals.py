@@ -46,6 +46,9 @@ def _row(doc: dict, dist_name: str) -> dict:
         "value": round(float(value or 0), 2),
         "original_status": doc.get("reversed_from_status") or "—",
         "stock_readded": bool(doc.get("stock_readded")),
+        # Physically-deducted deliveries must carry a verified restore record.
+        "stock_restore_required": (doc.get("reversed_from_status") or "").lower() in ("complete", "completed", "delivered"),
+        "stock_restore_verified": bool(doc.get("stock_restored")),
         "reversed_at": doc.get("reversed_at"),
         "reversed_by": doc.get("reversed_by_name") or "—",
         "reason": _parse_reason(doc),
