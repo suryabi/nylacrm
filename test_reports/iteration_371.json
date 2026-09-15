@@ -1,0 +1,32 @@
+{
+  "summary": "Tested Legacy Stock Repair (admin flow), Always-On Batches (transfer-locations track_batches=true; shipment without batch_id rejected with 'batch' message), and Reversal Alerts foundation. Backend: 8/8 tests pass. Frontend: full Legacy Stock Repair flow works (dialog open, uncheck-all, single row selection, confirm dialog, apply → row disappears, counts update 24→23, header units 11,261→11,213, history shows the new row '48 units, 20L-APR-002, Surya Yadavalli'). Non-admin (creative.director) gets Access Denied on /global-stock-dashboard with no legacy button and no crash. Add Location dialog shows the 'Batch tracking — always on' note (data-testid location-track-batches-note) with correct text. Reversals Audit Log renders 2 rows; no reversed-delivery-with-missing-stock_restored in DB to observe stock-unverified pill/banner — did not fabricate a delivery to avoid mutating preview data further (already did the 1 legacy assignment). Regression: GSD KPIs still load, dialogs open normally.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_legacy_and_always_on_batches.py",
+    "/app/test_reports/pytest/legacy_alwayson.xml"
+  ],
+  "action_items": [
+    "Verify stock-unverified pill/banner path manually or by creating a test delivery: no delivery in Brian's current DB matches (reversed + reversed_from_status in complete/delivered + no stock_restored). Main agent can either (a) seed a Mongo doc with the shape from backend/tests/manual_delivery_reverse_restock.py or (b) manually create+complete+reverse+unset stock_restored to verify the pill, banner, and 'Re-add stock now' UI end-to-end.",
+    "Legacy Stock header count displayed only warehouse count '12' initially – matches spec (24 rows · 11,261 units · 12 warehouses). After 1 assignment, updated correctly to 23/11,213."
+  ],
+  "critical_code_review_comments": [
+    "Backend endpoints in legacy_stock_repair.py behave correctly (CEO 200, non-admin 403, missing sku_id -> 400).",
+    "eligible-sources returns hardcoded track_batches:true for every source (lines 971, 993 of distributor_stock_transfers.py) — matches 'always-on' requirement.",
+    "Shipment validation returns 400 with message containing 'batch' when items lack batch_id — always-on rule enforced server-side."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_legacy_and_always_on_batches.py (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "95% (legacy stock flow + non-admin + location note verified; reversal badge not directly observable due to no matching data)"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth/test123 (X-Tenant-ID: nyla-air-water); non-admin creative.director@nylaairwater.earth/test123. Login response contains 'session_token' (NOT 'access_token').",
+  "seed_data_creation": "Performed 1 legacy stock assignment: Default master · 20L Premium · 48 units → batch 20L-APR-002 (visible in Legacy history and in Mongo stock_batch_assignments as source=legacy_repair, user=Surya Yadavalli). Intentional and permitted by request; no cleanup performed as request says 'acceptable to leave'.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login token key is 'session_token' + must include X-Tenant-ID: nyla-air-water header for backend API calls. On GSD, Legacy Stock button is testid gsd-legacy-btn (admin only). Distributor page tabs (Brian): Stock, Profile, Commercial, Stock In, Stock Out, Returns, Settlements, Reconciliation, Reversals — Locations UI is inside the Profile tab (Add Location button opens the dialog with location-track-batches-note). Reversals log lives on its own /distributors/{id} → Reversals tab. To exercise stock-unverified UI, create a test delivery: reversed + reversed_from_status in {complete,completed,delivered} + no stock_restored field.",
+  "rca of the issue": "N/A — all requested features function correctly."
+}
