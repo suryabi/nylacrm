@@ -76,6 +76,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-09-14 — 🗓️ Leave module upgrade: balances, working-day counting, variable holidays, routing, admin delete ✅ DONE (iterations 368–370)
+- **Balance engine** (`routes/leave_policy.py`): `compute_balance()` per policy — Sick/Casual 18/yr, accrual 1.5/month, carry forward = min(9, 18 − prev-year used) (assumed for users without joining_date), used/pending (working days), available; Variable holidays 2/yr from the user's city pool; fixed holidays + upcoming; reporting manager or Admin/CEO fallback. `GET /api/leave-policy/my-balance`, `GET /balance/{user_id}`. `working_days()` skips Sundays + city fixed holidays. `leave_approvers()`.
+- **server.py leave endpoints**: create → validates type (casual/sick/variable_holiday/unpaid; Earned removed from UI), working-day total, blocks Sick/Casual over available (400 → suggest Unpaid), variable holiday must be a single pool date not already taken and within 2/yr; stores `approver_ids`/`routed_to_admins`; approval tasks + in-app+email to approvers. Approve/reject: approver_ids allowed, 409 if already decided, requester notified (in-app+email). NEW `DELETE /api/leave-requests/{id}` (Admin/CEO/System Admin; audit `leave_request_deletions`, closes task, notifies requester). `for-approver` also returns `approver_ids` matches.
+- **Frontend**: `components/LeaveBalancePanel.js`; `LeaveManagement.js` (balance panel, apply-form balance strip, live working-days + remaining, over-balance block, Variable Holiday dropdown, approver hint, admin trash + AlertDialog). **Access**: `leaves` is a self-service module for every employee (`SELF_SERVICE_MODULES` in TenantConfigContext + DashboardLayout; Leaves link added to all nav contexts).
+
 ### 2026-09-14 — Carry-forward wording corrected ✅ DONE (API-verified)
 - Rule = up to **50% of the annual entitlement (9 of 18 days)** may be carried forward; excess lapses 31 Dec. `default_policy()` updated; `_fix_carry_forward_wording` migrates existing tenant docs once (matches old texts, versioned, snapshot kept).
 

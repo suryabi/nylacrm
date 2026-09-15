@@ -1,0 +1,27 @@
+{
+  "summary": "Leave Management retest #2 (frontend only). BOTH iter-369 blockers are now RESOLVED. As Creative Director: sidebar 'REQUESTS → Leaves' is present in the Marketing context (link active + green-highlighted after navigating to /leaves); Apply modal → Casual 2026-09-23 to 2026-09-23 with reason 'QA route' submitted successfully → toast 'Leave request sent to Admin/CEO for approval'; card renders PENDING with '· routed to admins' subtitle and balance moved to available=26, USED·PENDING='0 · 1'. As CEO (admin@nylaairwater.earth): /leaves now renders 'Team Requests (1)' with the CD's 'QA route' Casual card, showing Approve + Reject buttons AND a trash icon (data-testid=leave-delete-<id>). Clicked Approve → toast 'Leave approved!' and card moved to 'Previously Reviewed' section with APPROVED status. Clicked trash → leave-delete-dialog opened → leave-delete-confirm → toast 'Leave request deleted' → card removed from CEO view. CEO sidebar was inspected in the Sales context: 'REQUESTS' group contains 'Leaves' (verified via aside DOM dump: Leaves, Travel Request, Budget Request, Delivery Requests, Tasks & Requests). CLEANUP verified: 0 leave_requests with reason='QA route' remain across nylacrm/sales_crm/test_database. No backend or frontend bugs observed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verifications_passed": {
+    "cd_sidebar_marketing_requests_leaves": "visible + navigates to /leaves (green active state)",
+    "cd_create_leave_qa_route": "Casual 2026-09-23 → 2026-09-23, reason 'QA route' submitted, toast success, card PENDING + 'routed to admins', balance 27→26",
+    "ceo_team_requests_section": "'Team Requests (1)' rendered with Approve/Reject/trash for CD's QA route card",
+    "ceo_approve_to_previously_reviewed": "Approve click → 'Leave approved!' toast, card moved to 'Previously Reviewed' as APPROVED",
+    "ceo_delete_flow": "trash → leave-delete-dialog → leave-delete-confirm → 'Leave request deleted' toast → card removed",
+    "ceo_sales_sidebar_leaves": "REQUESTS group contains Leaves entry (verified via DOM text dump)",
+    "cleanup_db": "0 leave_requests with reason='QA route' across all candidate DBs"
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Note (informational): iter-369 flagged that the sidebar navigation items use onClick+useNavigate rather than <a href>, which makes selector-based checks with a[href='/leaves'] miss the entry. Consider rendering them as react-router <Link> for accessibility + testability. This did NOT block anything in this retest — DOM text dump confirms Leaves is present in every context checked."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (all 6 spec bullets verified end-to-end)"},
+  "test_credentials": "creative.director@nylaairwater.earth / test123 (Creative Director); admin@nylaairwater.earth / test123 (CEO)",
+  "seed_data_creation": "1 leave request created as CD (QA route, Casual, 2026-09-23) — approved and then trash-deleted by CEO via UI. DB confirmed clean (0 residual).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Both iter-369 blockers are fixed. Sidebar 'Requests → Leaves' now shows in Marketing (CD) and Sales (CEO) contexts. GET /api/leave-requests/for-approver correctly surfaces routed_to_admins leaves to the CEO — full Team Requests approve/reject/trash flow exercised end-to-end via UI. No open action items.",
+  "rca_of_the_issue": "N/A — both fixes verified working."
+}

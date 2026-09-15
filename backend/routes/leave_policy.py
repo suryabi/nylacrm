@@ -308,3 +308,97 @@ async def banner(current_user: dict = Depends(get_current_user)):
         out.append({"label": label, "date": ds, "day": d.strftime("%A"), "is_sunday": d.weekday() == 6, "holidays": holidays, "on_leave": on_leave,
                     "note": (hol or {}).get("note")})
     return {"days": out, "my_location": current_user.get("city"), "has_items": any(x["holidays"] or x["on_leave"] for x in out)}
+
+
+# ── Leave balance (per policy: 18 Sick/Casual per year, 1.5/month accrual, carry forward max 9, 2 variable holidays) ──
+ANNUAL_SC = 18.0
+MONTHLY_ACCRUAL = 1.5
+CARRY_CAP = 9.0
+VARIABLE_PER_YEAR = 2
+PAID_TYPES = ("sick", "casual")
+
+
+def _city_of(user: dict, locations: list) -> Optional[str]:
+    c = (user.get("city") or "").strip().lower()
+    return next((l for l in locations if l.lower() == c), None)
+
+
+def working_days(start: str, end: str, holiday_dates: set) -> int:
+    """Calendar days minus Sundays and the user's fixed holidays."""
+    s, e = date.fromisoformat(start), date.fromisoformat(end)
+    n, d = 0, s
+    while d <= e:
+        if d.weekday() != 6 and d.isoformat() not in holiday_dates:
+            n += 1
+        d += timedelta(days=1)
+    return n
+
+
+def _overlap_days(r: dict, year: int, holiday_dates: set) -> float:
+    s, e = max(date.fromisoformat(r["start_date"]), date(year, 1, 1)), min(date.fromisoformat(r["end_date"]), date(year, 12, 31))
+    return working_days(s.isoformat(), e.isoformat(), holiday_dates) if s <= e else 0
+
+
+async def compute_balance(tenant_id: str, user: dict, year: Optional[int] = None) -> dict:
+    p = await _policy(tenant_id)
+    d = derived(p)
+    today = datetime.now(IST).date()
+    year = year or today.year
+    city = _city_of(user, p.get("locations") or [])
+    fixed = d["fixed_by_location"].get(city, []) if city else []
+    fixed_dates = {x["date"] for x in fixed}
+    pool = [x for x in d["variable_pool"].get(city, []) if x.get("date")] if city else []
+    reqs = await db.leave_requests.find({"tenant_id": tenant_id, "user_id": user["id"], "status": {"$in": ["approved", "pending"]}}, {"_id": 0}).to_list(1000)
+    def used(kinds, status, y):
+        return sum(_overlap_days(r, y, fixed_dates) for r in reqs if r["leave_type"] in kinds and r["status"] == status and r["start_date"][:4] <= str(y) <= r["end_date"][:4])
+    prev_used = used(PAID_TYPES, "approved", year - 1)
+    joined = (user.get("joining_date") or user.get("date_of_joining") or "")[:10]
+    had_prev_year = (joined < f"{year}-01-01") if joined else True
+    carry = min(CARRY_CAP, max(0.0, ANNUAL_SC - prev_used)) if had_prev_year else 0.0
+    used_sc, pending_sc = used(PAID_TYPES, "approved", year), used(PAID_TYPES, "pending", year)
+    months = today.month if year == today.year else (12 if year < today.year else 0)
+    accrued = min(ANNUAL_SC, MONTHLY_ACCRUAL * months)
+    var_used = sum(1 for r in reqs if r["leave_type"] == "variable_holiday" and r["status"] == "approved" and r["start_date"][:4] == str(year))
+    var_pending = sum(1 for r in reqs if r["leave_type"] == "variable_holiday" and r["status"] == "pending" and r["start_date"][:4] == str(year))
+    unpaid = used(("unpaid",), "approved", year)
+    mgr = None
+    if user.get("reports_to"):
+        m = await db.users.find_one({"tenant_id": tenant_id, "id": user["reports_to"]}, {"_id": 0, "id": 1, "name": 1, "email": 1, "designation": 1, "role": 1})
+        if m:
+            mgr = {"id": m["id"], "name": m.get("name"), "email": m.get("email"), "title": m.get("designation") or m.get("role")}
+    upcoming = [x for x in fixed if x["date"] >= today.isoformat()][:3]
+    return {
+        "year": year, "city": city, "policy_locations": p.get("locations") or [],
+        "sick_casual": {"annual": ANNUAL_SC, "carry_forward": carry, "accrued_to_date": accrued, "used": used_sc, "pending": pending_sc,
+                        "available": max(0.0, ANNUAL_SC + carry - used_sc - pending_sc), "carry_cap": CARRY_CAP, "prev_year_used": prev_used},
+        "variable": {"total": VARIABLE_PER_YEAR, "used": var_used, "pending": var_pending, "available": max(0, VARIABLE_PER_YEAR - var_used - var_pending),
+                     "pool": pool, "taken_dates": [r["start_date"] for r in reqs if r["leave_type"] == "variable_holiday" and r["start_date"][:4] == str(year)]},
+        "fixed_holidays": fixed, "fixed_holiday_dates": sorted(fixed_dates), "upcoming_holidays": upcoming, "unpaid_used": unpaid,
+        "reporting_manager": mgr, "routes_to_admins": mgr is None,
+    }
+
+
+@router.get("/my-balance")
+async def my_balance(current_user: dict = Depends(get_current_user)):
+    return await compute_balance(get_current_tenant_id(), current_user)
+
+
+@router.get("/balance/{user_id}")
+async def user_balance(user_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    u = await db.users.find_one({"tenant_id": tenant_id, "id": user_id}, {"_id": 0})
+    if not u:
+        raise HTTPException(404, "User not found")
+    if not (_is_admin(current_user) or u.get("reports_to") == current_user["id"] or user_id == current_user["id"]):
+        raise HTTPException(403, "Not allowed")
+    return await compute_balance(tenant_id, u)
+
+
+async def leave_approvers(tenant_id: str, user: dict) -> list:
+    """Reporting manager, else all Admin/CEO users."""
+    if user.get("reports_to"):
+        m = await db.users.find_one({"tenant_id": tenant_id, "id": user["reports_to"]}, {"_id": 0, "id": 1, "name": 1, "email": 1})
+        if m:
+            return [m]
+    return await db.users.find({"tenant_id": tenant_id, "is_active": {"$ne": False}, "role": {"$in": ["CEO", "ceo", "Admin", "admin", "System Admin", "system admin", "System admin"]}},
+                               {"_id": 0, "id": 1, "name": 1, "email": 1}).to_list(50)

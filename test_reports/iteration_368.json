@@ -1,0 +1,53 @@
+{
+  "summary": "Backend verified end-to-end (5/5 pytest passed) — my-balance shape correct (city=Hyderabad, annual=18, carry_forward=9, upcoming has 2026-10-20 Vijaya Dasami, variable pool has Mahanavami, reporting_manager=None → routes_to_admins=true), sick over-balance returns 400, variable_holiday on non-pool date returns 400, non-admin DELETE → 403 and admin DELETE → 204. Frontend CEO flow verified: /leaves loads, balance panel renders all Stat cards + upcoming fixed holidays (Hyderabad) + variable holiday pool text with 9 options (incl. Mahanavami 19 Oct), leave-type dropdown has Casual/Sick/Variable Holiday/Unpaid and NOT Earned, days-summary shows '2 working days (Sundays & fixed holidays skipped)', form-approver-hint routes to reporting manager, trash icons visible for admin, delete confirmation dialog opens with description ('… restores the balance and notifies the employee'), Delete confirm triggers 'Leave request deleted' toast and card disappears. CRITICAL BLOCKER: Non-admin Creative Director cannot reach /leaves — the ProtectedRoute uses moduleKey='leaves' and Creative Director role only has design_requests_new granted, so the page shows 'Access Denied — Your role does not have permission to view this page'. Every employee must be able to apply for their own leave, so the full non-admin UI flow specified in the review (balance strip 27/9/2, Variable Holiday select of Hyderabad pool, over-balance red state, submit → 'sent to Admin/CEO', balance now 25 and 0·2, variable 1/2 with ✓ mark) could NOT be exercised through the UI. Backend confirms all those data points already work (see pytest).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "App.js ProtectedRoute /leaves", "issue": "Route is guarded by moduleKey='leaves' — Creative Director (and any non-admin role that doesn't have the 'leaves' module explicitly granted in Role Management) sees 'Access Denied' and cannot apply for leave. Leave application is inherently a self-service employee feature and must be reachable by every active user.", "selector": "/leaves route in /app/frontend/src/App.js line 433", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verifications_ceo_ui": {
+    "leave-balance-panel": "renders",
+    "leave-balance-manager": "'Requests go to Karanabir Singh Gulati (Vice President)' (CEO reports to VP in seed)",
+    "leave-type dropdown": "Casual, Sick, Variable Holiday (pick from your city pool), Unpaid — Earned removed",
+    "leave-days-summary": "'2 working days (Sundays & fixed holidays skipped)' for 19–21 Sep 2026",
+    "form-approver-hint": "'Will be sent to <manager> for approval'",
+    "trash icons on cards": "visible for admin (3 cards)",
+    "leave-delete-dialog": "shows employee name, leave type, date range, day count, status + 'restores the balance and notifies the employee'",
+    "leave-delete-confirm": "deletes card and shows 'Leave request deleted' toast",
+    "next fixed holidays (Hyderabad)": "2 Oct Gandhi Jayanti · 20 Oct Vijaya Dasami · 9 Nov Diwali – Company Holiday",
+    "variable holiday pool text": "Holi (3 Mar) · Good Friday (3 Apr) · Ambedkar Jayanti (14 Apr) · May Day (1 May) · Telangana Formation Day (2 Jun) · Bonalu (10 Aug) · Rakhi (28 Aug) · Bathukamma (18 Oct) · Mahanavami (19 Oct)"
+  },
+  "verifications_backend_api": {
+    "GET /api/leave-policy/my-balance (CD)": "city=Hyderabad, annual=18, carry_cap=9, carry_forward=9, upcoming contains 2026-10-20, variable.pool contains Mahanavami, reporting_manager=null, routes_to_admins=true",
+    "POST /api/leave-requests sick 2026-10-01..2026-11-30 (CD)": "400 with 'available' in body",
+    "POST /api/leave-requests variable_holiday 2026-07-15 (non-pool) (CD)": "400",
+    "DELETE /api/leave-requests/<id> as CD": "403",
+    "DELETE /api/leave-requests/<id> as CEO": "204"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_leave_upgrade.py",
+    "/app/test_reports/pytest/leave_upgrade.xml"
+  ],
+  "action_items": [
+    "Fix ProtectedRoute for /leaves so every authenticated employee can access it. Recommended: drop the moduleKey='leaves' guard on the /leaves route in /app/frontend/src/App.js (leave management is self-service, similar to a personal profile), OR make sure the tenant-config seed grants view permission on the 'leaves' module to every role (not just Admin/CEO/managers). After that, retest the full non-admin (creative.director@nylaairwater.earth) flow specified in the review.",
+    "Nice-to-have: the delete dialog uses AlertDialog inside the page — verify keyboard focus is trapped."
+  ],
+  "critical_code_review_comments": [
+    "LeaveManagement.js — role check for showing Team Requests uses `isManager` (['ceo','director','vp','admin','sales_manager']) but the trash icon separately uses `isAdmin` (['admin','ceo','system admin','system_admin']). Consistent single source of truth would be safer.",
+    "LeaveBalancePanel: `pct` uses `sc.annual + sc.carry_forward || 1` — operator precedence makes the fallback apply only when carry_forward is 0 AND annual is 0. Works today (annual=18) but is fragile; wrap in parentheses: `((sc.annual + sc.carry_forward) || 1)`.",
+    "Frontend workingDays helper duplicates backend logic and does not consume the user's fixed_holiday_dates when computing days for over-balance UI — passing holidayDates=[] means Sundays skipped but city holidays counted client-side. Server enforces the correct count, but the 'Remaining after this request' hint may briefly mismatch server value for date ranges spanning city fixed holidays.",
+    "leave_policy.py compute_balance uses `today.month if year == today.year else (12 if year < today.year else 0)` — 'else 0' is a typo (should be 12 for past years, 0 for future). Currently works because year defaults to today.year; still worth flipping the branches."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_leave_upgrade.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "70% — CEO/admin flow verified, non-admin CD flow blocked by RBAC before it can be tested"},
+  "test_credentials": "admin@nylaairwater.earth / test123 (CEO); creative.director@nylaairwater.earth / test123 (blocked from /leaves by RBAC)",
+  "seed_data_creation": "One QA casual leave was created via CEO UI and immediately deleted via trash icon. Backend RBAC test created one leave and deleted it. No dangling QA leave_requests remain (verified via API).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Once the /leaves ProtectedRoute is opened up (drop moduleKey guard or seed 'leaves' module for every role), re-run the CD flow: login as creative.director@nylaairwater.earth, verify balance-available 27, carry 9, variable 2/2, upcoming holidays list, manager text 'No reporting manager set — requests go to Admin/CEO', no trash icons, apply Casual 2026-09-19..21 → 2 working days remaining 25, over-balance red state when end=2026-11-30, submit → toast 'sent to Admin/CEO for approval', then apply Variable Holiday Mahanavami (19 Oct), verify balance-variable becomes 1/2 with ✓ next to Mahanavami. Then login as CEO, approve/reject and trash from Team Requests. Backend already validated — no need to reblock server work."
+}

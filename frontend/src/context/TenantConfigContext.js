@@ -3,6 +3,8 @@ import { useAuth } from './AuthContext';
 import axios from 'axios';
 import { syncTenantCurrency } from '../utils/currency';
 
+export const SELF_SERVICE_MODULES = ['leaves'];
+
 const TenantConfigContext = createContext();
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -415,6 +417,10 @@ export const TenantConfigProvider = ({ children }) => {
 
   // Check if the current user's role has permission to view a module
   const hasRolePermission = useCallback((moduleKey) => {
+    // Self-service modules every employee needs regardless of role permissions.
+    if (SELF_SERVICE_MODULES.includes(moduleKey)) {
+      return true;
+    }
     if (moduleKey && moduleKey.startsWith('accounting_') && isAccountingDeptUser()) {
       return true;
     }

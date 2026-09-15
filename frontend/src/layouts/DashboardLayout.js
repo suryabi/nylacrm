@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useAppContext } from '../context/AppContextContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '../context/NavigationContext';
-import { useTenantConfig } from '../context/TenantConfigContext';
+import { useTenantConfig, SELF_SERVICE_MODULES } from '../context/TenantConfigContext';
 import { Button } from '../components/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 import AIAssistant from '../components/ai/AIAssistant';
@@ -99,7 +99,7 @@ const salesNavigationGroups = [
   {
     title: 'Requests',
     items: [
-      { name: 'Leaves', href: '/leaves', icon: CalendarOff, moduleKey: 'leaves', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
+      { name: 'Leaves', href: '/leaves', icon: CalendarOff, moduleKey: 'leaves' },
       { name: 'Travel Request', href: '/travel-requests', icon: Plane, moduleKey: 'travel_requests', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Budget Request', href: '/budget-requests', icon: Wallet, moduleKey: 'budget_requests', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Delivery Requests', href: '/delivery-orders', icon: Package, moduleKey: 'delivery_orders', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
@@ -156,6 +156,7 @@ const productionNavigationGroups = [
   {
     title: 'Requests',
     items: [
+      { name: 'Leaves', href: '/leaves', icon: CalendarOff, moduleKey: 'leaves' },
       { name: 'Design Requests', href: '/design-requests-new', icon: Sparkles, moduleKey: 'design_requests_new', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Design Requests - OLD', href: '/marketing-requests', icon: Sparkles, moduleKey: 'marketing_requests', roles: ['CEO', 'Admin', 'System Admin'] },
       { name: 'Print Requests', href: '/print-requests', icon: Printer, moduleKey: 'print_requests', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
@@ -221,6 +222,12 @@ const distributionNavigationGroups = [
       { name: 'Tasks & Requests', href: '/tasks', icon: ClipboardList, moduleKey: 'task_management', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
     ]
   },
+  {
+    title: 'Requests',
+    items: [
+      { name: 'Leaves', href: '/leaves', icon: CalendarOff, moduleKey: 'leaves' },
+    ]
+  },
 ];
 
 // Distributor User Navigation (full self-service portal menu).
@@ -283,6 +290,12 @@ const marketingNavigationGroups = [
     ]
   },
   {
+    title: 'Requests',
+    items: [
+      { name: 'Leaves', href: '/leaves', icon: CalendarOff, moduleKey: 'leaves' },
+    ]
+  },
+  {
     title: 'Organization',
     items: [
       { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
@@ -309,6 +322,12 @@ const accountingNavigationGroups = [
       { name: 'Vendors', href: '/accounting/vendors', icon: Building, moduleKey: 'accounting_vendors', roles: ACCOUNTING_ROLES },
       { name: 'Employees', href: '/accounting/employees', icon: Users, moduleKey: 'accounting_employees', roles: ACCOUNTING_ROLES },
     ],
+  },
+  {
+    title: 'Requests',
+    items: [
+      { name: 'Leaves', href: '/leaves', icon: CalendarOff, moduleKey: 'leaves' },
+    ]
   },
 ];
 
@@ -523,6 +542,8 @@ export default function DashboardLayout({ children }) {
       return !item.roles || item.roles.includes(user?.role);
     }
     if (!isModuleEnabled(item.moduleKey)) return false;
+    // Self-service modules (e.g. Leaves) are visible to every employee.
+    if (SELF_SERVICE_MODULES.includes(item.moduleKey)) return true;
     // Accounting/Finance-department users always see Accounting menu items —
     // department membership grants the workspace regardless of role matrix.
     if (item.moduleKey.startsWith('accounting_')) {

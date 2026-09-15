@@ -8754,11 +8754,38 @@ async def calculate_transport_route(params: dict, current_user: dict = Depends(g
 async def create_leave_request(request: LeaveRequestCreate, current_user: dict = Depends(get_current_user)):
     """Create leave request"""
     
-    # Calculate total days
-    from datetime import datetime as dt
-    start = dt.fromisoformat(request.start_date)
-    end = dt.fromisoformat(request.end_date)
-    total_days = (end - start).days + 1
+    from routes.leave_policy import compute_balance, working_days, leave_approvers
+    from utils.notify import notify_users
+    from datetime import date as _date
+    tenant_id = get_current_tenant_id()
+    try:
+        start, end = _date.fromisoformat(request.start_date), _date.fromisoformat(request.end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail='Invalid dates')
+    if end < start:
+        raise HTTPException(status_code=400, detail='End date must be on or after the start date')
+    if request.leave_type not in ('sick', 'casual', 'variable_holiday', 'unpaid', 'earned'):
+        raise HTTPException(status_code=400, detail='Unknown leave type')
+    bal = await compute_balance(tenant_id, current_user, start.year)
+    fixed_dates = set(bal['fixed_holiday_dates'])
+    if request.leave_type == 'variable_holiday':
+        if start != end:
+            raise HTTPException(status_code=400, detail='A variable holiday is a single day')
+        if not bal['city']:
+            raise HTTPException(status_code=400, detail='Your work location is not set — ask an admin to set your city to pick variable holidays')
+        if request.start_date not in {x['date'] for x in bal['variable']['pool']}:
+            raise HTTPException(status_code=400, detail=f"{request.start_date} is not in the {bal['city']} variable-holiday pool")
+        if request.start_date in bal['variable']['taken_dates']:
+            raise HTTPException(status_code=400, detail='You have already applied for this variable holiday')
+        if bal['variable']['available'] <= 0:
+            raise HTTPException(status_code=400, detail=f"All {bal['variable']['total']} variable holidays for {start.year} are already used or pending")
+        total_days = 1
+    else:
+        total_days = working_days(request.start_date, request.end_date, fixed_dates)
+        if total_days <= 0:
+            raise HTTPException(status_code=400, detail='The selected dates contain no working days (Sundays / fixed holidays)')
+        if request.leave_type in ('sick', 'casual') and total_days > bal['sick_casual']['available']:
+            raise HTTPException(status_code=400, detail=f"Only {bal['sick_casual']['available']:g} Sick/Casual day(s) available (incl. pending). Reduce the dates or apply as Unpaid Leave.")
     
     leave_data = request.model_dump()
     leave_data['user_id'] = current_user['id']
@@ -8770,23 +8797,38 @@ async def create_leave_request(request: LeaveRequestCreate, current_user: dict =
     doc['updated_at'] = doc['updated_at'].isoformat()
     if doc.get('approval_date'):
         doc['approval_date'] = doc['approval_date'].isoformat()
+    doc['tenant_id'] = tenant_id
+    doc['user_name'] = current_user.get('name')
     
     await get_tdb().leave_requests.insert_one(doc)
     
-    # Create approval task for reporting manager
-    reports_to = current_user.get('reports_to')
-    if reports_to:
-        leave_details = f"{request.leave_type.capitalize()} Leave ({request.start_date} to {request.end_date})"
-        await create_approval_task(
-            approval_type=ApprovalType.LEAVE_REQUEST,
-            requester_id=current_user['id'],
-            requester_name=current_user.get('name', 'Unknown'),
-            approver_id=reports_to,
-            details=leave_details,
-            description=f"Leave request from {current_user.get('name')}:\n\nType: {request.leave_type.capitalize()}\nDates: {request.start_date} to {request.end_date}\nDays: {total_days}\nReason: {request.reason or 'Not specified'}",
-            reference_id=leave_obj.id,
-            reference_type='leave_request'
-        )
+    approvers = await leave_approvers(tenant_id, current_user)
+    doc['approver_ids'] = [a['id'] for a in approvers]
+    await get_tdb().leave_requests.update_one({'id': leave_obj.id}, {'$set': {'approver_ids': doc['approver_ids'], 'routed_to_admins': not current_user.get('reports_to')}})
+    label = 'Variable Holiday' if request.leave_type == 'variable_holiday' else f"{request.leave_type.capitalize()} Leave"
+    leave_details = f"{label} ({request.start_date} to {request.end_date}, {total_days} day{'s' if total_days != 1 else ''})"
+    for a in approvers:
+        try:
+            await create_approval_task(
+                approval_type=ApprovalType.LEAVE_REQUEST,
+                requester_id=current_user['id'],
+                requester_name=current_user.get('name', 'Unknown'),
+                approver_id=a['id'],
+                details=leave_details,
+                description=f"Leave request from {current_user.get('name')}:\n\nType: {label}\nDates: {request.start_date} to {request.end_date}\nDays: {total_days}\nReason: {request.reason or 'Not specified'}",
+                reference_id=leave_obj.id,
+                reference_type='leave_request'
+            )
+        except Exception:
+            logging.getLogger('leave').exception('approval task failed')
+    try:
+        who = f"{current_user.get('name')}" + (f" ({current_user.get('designation')})" if current_user.get('designation') else '')
+        await notify_users(tenant_id, [a['id'] for a in approvers],
+                           title=f"Leave approval needed — {who}: {leave_details}",
+                           body=f"Reason: {request.reason or 'Not specified'}. Balance after approval: {max(0, bal['sick_casual']['available'] - (total_days if request.leave_type in ('sick', 'casual') else 0)):g} Sick/Casual day(s) left." + (" (No reporting manager set — routed to admins.)" if not current_user.get('reports_to') else ''),
+                           link='/leaves', kind='approval', category='approval', entity_type='leave_request', entity_id=leave_obj.id, send_email_too=True)
+    except Exception:
+        logging.getLogger('leave').exception('leave notify failed')
     
     return leave_obj
 
@@ -8855,7 +8897,8 @@ async def get_leave_requests_for_approver(
     query = {
         '$or': [
             {'user_id': {'$in': reporter_ids}},  # From reportees
-            {'approved_by': current_user['id']}   # Previously acted upon
+            {'approved_by': current_user['id']},  # Previously acted upon
+            {'approver_ids': current_user['id']}  # Explicitly routed (reporting manager or Admin/CEO fallback)
         ]
     }
     logger.info(f"Query: {query}")
@@ -8898,8 +8941,13 @@ async def approve_leave_request(
     if not requester:
         raise HTTPException(status_code=404, detail='Requester not found')
     
-    if requester.get('reports_to') != current_user['id'] and current_user['role'] not in ['admin', 'ceo']:
+    if requester.get('reports_to') != current_user['id'] and (current_user.get('role') or '').lower() not in ['admin', 'ceo', 'system admin', 'system_admin'] \
+            and current_user['id'] not in (leave_req.get('approver_ids') or []):
         raise HTTPException(status_code=403, detail='Only the reporting manager can approve leaves')
+    if approval.status not in ('approved', 'rejected'):
+        raise HTTPException(status_code=400, detail='Status must be approved or rejected')
+    if leave_req.get('status') != 'pending':
+        raise HTTPException(status_code=409, detail=f"Request already {leave_req.get('status')}")
     
     # Update leave request
     update_data = {
@@ -8920,8 +8968,43 @@ async def approve_leave_request(
         reference_id=request_id,
         status='completed'
     )
+    try:
+        from utils.notify import notify_users
+        label = 'Variable Holiday' if leave_req['leave_type'] == 'variable_holiday' else f"{leave_req['leave_type'].capitalize()} Leave"
+        await notify_users(get_current_tenant_id(), [leave_req['user_id']],
+                           title=f"Your {label} ({leave_req['start_date']} to {leave_req['end_date']}) was {approval.status} by {current_user.get('name')}",
+                           body=(f"Reason: {approval.rejection_reason}" if approval.status == 'rejected' and approval.rejection_reason else 'Open Leave Management to see your updated balance.'),
+                           link='/leaves', kind='approval' if approval.status == 'approved' else 'alert', category='approval', entity_type='leave_request', entity_id=request_id, send_email_too=True)
+    except Exception:
+        logging.getLogger('leave').exception('leave decision notify failed')
     
     return {'message': f'Leave request {approval.status}'}
+
+
+@api_router.delete("/leave-requests/{request_id}")
+async def delete_leave_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    """Admin / CEO / System Admin: permanently remove a leave request (closes its approval task, notifies the requester)."""
+    if (current_user.get('role') or '').lower() not in ['admin', 'ceo', 'system admin', 'system_admin']:
+        raise HTTPException(status_code=403, detail='Only Admin / CEO can delete leave requests')
+    leave_req = await get_tdb().leave_requests.find_one({'id': request_id}, {'_id': 0})
+    if not leave_req:
+        raise HTTPException(status_code=404, detail='Leave request not found')
+    await get_tdb().leave_requests.delete_one({'id': request_id})
+    try:
+        await complete_approval_task(approval_type=ApprovalType.LEAVE_REQUEST, reference_id=request_id, status='cancelled')
+    except Exception:
+        pass
+    await get_tdb().leave_request_deletions.insert_one({'id': str(uuid.uuid4()), 'request': leave_req, 'deleted_by': current_user.get('name'), 'deleted_by_id': current_user['id'],
+                                                        'deleted_at': datetime.now(timezone.utc).isoformat()})
+    try:
+        from utils.notify import notify_users
+        if leave_req['user_id'] != current_user['id']:
+            await notify_users(get_current_tenant_id(), [leave_req['user_id']],
+                               title=f"Your {leave_req['leave_type'].replace('_', ' ')} request ({leave_req['start_date']} to {leave_req['end_date']}) was deleted by {current_user.get('name')}",
+                               body='Contact your admin if this was unexpected.', link='/leaves', kind='alert', category='approval', entity_type='leave_request', send_email_too=False)
+    except Exception:
+        pass
+    return {'ok': True, 'deleted': request_id}
 
 @api_router.get("/leave-requests/pending-approvals")
 async def get_pending_approvals(current_user: dict = Depends(get_current_user)):

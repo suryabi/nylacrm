@@ -1,0 +1,68 @@
+{
+  "summary": "Retest of Creative Director (non-admin) leave self-service after main agent's TenantConfig.SELF_SERVICE_MODULES + DashboardLayout.canSeeItem fix. RESULT: The /leaves ROUTE now opens for the Creative Director (no more Access Denied) and every UI verification listed for the non-admin flow passes. Balance panel shows balance-available=27, balance-carry=9, balance-variable=2/2, leave-balance-manager='No reporting manager set — requests go to Admin/CEO', no trash icons on cards. Apply modal: form-balance-strip shows 27/9/2/2; leave type options are exactly Casual/Sick/Variable Holiday/Unpaid (Earned removed); Casual 2026-09-19..21 → leave-days-summary '2 working days (Sundays & fixed holidays skipped)' + 'Remaining after this request: 25 Sick/Casual days'; end=2026-11-30 → red 'Exceeds your balance by 32 — use Unpaid Leave for the rest' + leave-submit disabled; back to 2026-09-21, reason 'QA test leave', submit → toast 'Leave request sent to Admin/CEO for approval', card PENDING with '· routed to admins' subtitle, balance-available=25, 'USED · PENDING' shows 0 · 2. Variable Holiday flow: variable-holiday-select shows Hyderabad pool with 9 options incl 'Mahanavami — 19 Oct'; submitted 'QA var' → balance-variable=1/2 and pool text renders 'Mahanavami (19 Oct) ✓'. TWO BLOCKERS FOUND: (1) Sidebar 'Requests → Leaves' link is NOT visible for the CD — the item is only registered in salesNavigationGroups; the marketingNavigationGroups (which the CD lands on) has no Leaves entry, so the sidebar shortcut required by the spec is missing. (2) Backend endpoint GET /api/leave-requests/for-approver does NOT surface routed_to_admins=True leaves to CEO/Admin — it only returns rows where user_id ∈ my direct reportees OR approved_by == me. As a result the CEO 'Team Requests' section on /leaves does NOT list the CD's admin-routed QA requests, so the Approve → APPROVED and Approve/Reject/Trash-in-Team-Requests parts of the spec CANNOT be executed via the UI (there is no Team Requests section rendered at all for the CEO for these two requests). Deletion via the API works (verified 200) but the trash icon + confirm-dialog UI path for these specific requests cannot be exercised because they never appear in a manager section. Note: iteration_368 observed 'CEO trash icons visible on 3 cards' — those were on the CEO's OWN My Leave Requests, not admin-routed items. Cleanup fully performed via DELETE /api/leave-requests (200 for both) and DB check across nylacrm/sales_crm/test_database confirms 0 residual leave_requests with reason='QA*', 0 notifications/approval_tasks/leave_request_deletions referencing the two ids.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/leave-requests/for-approver", "issue": "Does not include leave_requests where routed_to_admins=True when the current user is Admin/CEO. Should union $or with {'routed_to_admins': True, 'status': 'pending'} (and previously acted-on admin-routed ones) so admins can see the Team Requests bucket. Duplicated in /app/backend/server.py line 8881 and /app/backend/routes/requests.py line 351 — both need the fix.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "DashboardLayout.js sidebar navigation groups", "issue": "'Leaves' link is only registered inside salesNavigationGroups (line 102). It is not present in marketingNavigationGroups (line 271), production/distribution/accounting groups, so a Creative Director (Marketing module) has no sidebar entry to Leaves even though the /leaves route is now reachable via direct URL. Add {name:'Leaves', href:'/leaves', icon:CalendarOff, moduleKey:'leaves'} to every module's Requests group (or promote it to a global self-service section) — canSeeItem already whitelists SELF_SERVICE_MODULES so no role list is needed.", "selector": "aside a[href=\"/leaves\"]", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "CEO Team Requests → approve/reject/trash admin-routed QA leaves", "issue": "Blocked by the backend /leave-requests/for-approver gap above — the Team Requests section is not rendered because pendingApprovals array comes back empty for CEO even though two admin-routed pending requests exist.", "affected_selectors": ["h2:has-text('Team Requests')", "button:has-text('Approve')", "button:has-text('Reject')", "[data-testid^='leave-delete-']"]}
+    ],
+    "design_issues": []
+  },
+  "verifications_passed_cd_ui": {
+    "route_access": "/leaves opens for creative.director@nylaairwater.earth (no Access Denied)",
+    "leave-balance-panel": "renders",
+    "balance-available": "27",
+    "balance-carry": "9",
+    "balance-variable": "2 / 2",
+    "leave-balance-manager": "'No reporting manager set — requests go to Admin/CEO'",
+    "trash-on-own-cards": "0 (correct for non-admin)",
+    "apply.form-balance-strip": "27 / 9 / 2/2",
+    "apply.leave_type_options": "['Casual Leave','Sick Leave','Variable Holiday (pick from your city pool)','Unpaid Leave'] — Earned removed",
+    "apply.casual_19_21_sep.days_summary": "'2 working days (Sundays & fixed holidays skipped)\\nRemaining after this request: 25 Sick/Casual days'",
+    "apply.casual_over_balance": "red 'Exceeds your balance by 32 — use Unpaid Leave for the rest' + submit disabled",
+    "apply.submit_casual_toast": "'Leave request sent to Admin/CEO for approval'",
+    "card_after_submit": "PENDING + '· routed to admins' subtitle",
+    "balance_after_casual": "available=25, USED·PENDING='0 · 2'",
+    "variable_holiday_select_pool": "9 options incl Holi, Good Friday, Ambedkar Jayanti, May Day, Telangana Formation Day, Bonalu, Rakhi, Bathukamma, Mahanavami — 19 Oct",
+    "apply.submit_var_toast": "success",
+    "balance_after_var": "variable=1/2, pool text 'Mahanavami (19 Oct) ✓'"
+  },
+  "verifications_failed": {
+    "sidebar_requests_leaves_link": "count=0 for CD (Marketing module) — link missing from marketingNavigationGroups",
+    "ceo_team_requests_section": "section not rendered because /leave-requests/for-approver returns [] (two admin-routed pending requests exist in DB but are not surfaced)",
+    "ceo_approve_qa_casual_via_ui": "cannot execute — no Approve button rendered",
+    "ceo_trash_both_qa_via_ui": "cannot execute — cards never appear under CEO"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_leave_upgrade.py"
+  ],
+  "action_items": [
+    "Backend: extend GET /api/leave-requests/for-approver so that when the current user has role admin/ceo/system admin/system_admin the $or also matches {'routed_to_admins': True} (and status pending for the primary bucket). Apply the same change in the duplicate route inside /app/backend/routes/requests.py.",
+    "Frontend: add the 'Leaves' nav item to marketingNavigationGroups (and production/distribution/accounting/admin groups) inside /app/frontend/src/layouts/DashboardLayout.js so the sidebar exposes /leaves for every module context — the moduleKey='leaves' + SELF_SERVICE_MODULES already handles the RBAC.",
+    "After those two fixes, re-verify the CEO flow: Team Requests shows two QA cards with Approve/Reject + trash, approving the Casual card moves it to APPROVED, and both cards can be deleted via leave-delete-dialog → leave-delete-confirm.",
+    "Nice-to-have (from iter 368, still present): unify isAdmin/isManager role-list source of truth in LeaveManagement.js; wrap `(sc.annual + sc.carry_forward) || 1` in LeaveBalancePanel; the workingDays helper on the client passes holidayDates=[] so the 'Remaining after this request' hint miscounts city fixed holidays for ranges spanning them (server enforces correct count so no data corruption)."
+  ],
+  "critical_code_review_comments": [
+    "LeaveManagement.js line 185: `isManager` gate for Team Requests uses role list ['ceo','director','vp','admin','sales_manager']. Even after the backend fix, this list omits 'system admin'/'system_admin' — the admin@nylaairwater.earth user in this tenant has role 'CEO' so is OK, but any tenant that uses 'system_admin' would still hide Team Requests. Extend the role list or key off the same ADMIN_ROLES const already declared line 39.",
+    "server.py leave-requests approve endpoint (line 8926) already accepts admin/ceo/system_admin so approval will work once the list endpoint is fixed — the block is purely the list query. Fix is a 2-line change.",
+    "Two duplicate implementations of /leave-requests/for-approver (server.py 8881 and routes/requests.py 351) is a maintenance hazard — pick one and route the other through it. The dead-code path may silently diverge again."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (no pytest run this iteration — 1 endpoint bug found by manual API probe)",
+    "frontend": "CD self-service flow: 100% passing (12/12 spec bullets). CEO team-requests+approve/delete via UI: 0% (blocked by backend for-approver bug + missing sidebar entry)."
+  },
+  "test_credentials": "admin@nylaairwater.earth / test123 (role CEO); creative.director@nylaairwater.earth / test123 (role Creative Director)",
+  "seed_data_creation": "Created 2 leave requests as CD ('QA test leave' 19-21 Sep casual, 'QA var' 19 Oct variable_holiday). Both DELETED via DELETE /api/leave-requests as CEO after the test (HTTP 200). DB verified clean across nylacrm/sales_crm/test_database.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The moduleKey='leaves' + SELF_SERVICE_MODULES fix works — /leaves is fully functional for a Creative Director from a URL / direct-nav perspective and every non-admin apply flow passes. Two remaining blockers: (a) sidebar link missing in non-sales modules, (b) /leave-requests/for-approver ignores routed_to_admins so CEO cannot see admin-routed requests under Team Requests. Once both are fixed, retest the CEO branch: login admin@nylaairwater.earth, /leaves should render 'Team Requests (n)' with Approve/Reject buttons AND trash icons on each admin-routed pending card. Cards are already cleaned; you'll need to re-seed via CD submit before validating.",
+  "rca_of_the_issue": "1) Sidebar bug: DashboardLayout maintains SEPARATE module-scoped nav arrays; when the initial fix was applied only to canSeeItem/hasRolePermission, the item still had to be physically present in the visible nav array — it isn't for the Marketing module. 2) for-approver bug: legacy query joins on `reports_to` only. When leave_requests.py started emitting routed_to_admins=True for users without a manager, the corresponding admin-routing branch was never added to the list query — approve endpoint was updated (line 8943) but list wasn't."
+}
