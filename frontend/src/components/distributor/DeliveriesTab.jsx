@@ -983,6 +983,11 @@ export default function DeliveriesTab({
                       <div>Source: <span className="font-semibold">{stockAudit.source_location || '—'}</span></div>
                       <div>Stock re-added on reverse: <span className={`font-semibold ${stockAudit.stock_readded ? 'text-emerald-700' : 'text-rose-600'}`}>{stockAudit.stock_readded ? 'Yes' : 'No'}</span></div>
                       <div>Manual re-add: <span className="font-semibold">{stockAudit.stock_manual_readd_at ? new Date(stockAudit.stock_manual_readd_at).toLocaleString() : 'Not done'}</span></div>
+                      <div className="col-span-2" data-testid="stock-audit-verified-restore">Verified units restored: <span className={`font-semibold ${(stockAudit.stock_restored || []).length ? 'text-emerald-700' : 'text-rose-600'}`}>
+                        {(stockAudit.stock_restored || []).length
+                          ? `${stockAudit.stock_restored.reduce((s, r) => s + (r.qty || 0), 0)} (${stockAudit.stock_restored.map((r) => `${r.qty}${r.batch_code ? ` → ${r.batch_code}` : ''}`).join(', ')})`
+                          : 'none recorded'}
+                      </span></div>
                       {stockAudit.stock_readd_error && (
                         <div className="col-span-2 text-rose-600">Re-add error: {stockAudit.stock_readd_error}</div>
                       )}
@@ -1008,7 +1013,7 @@ export default function DeliveriesTab({
                         )}
                       </div>
                     ))}
-                    {stockAuditDelivery?.status === 'reversed' && !stockAudit.stock_manual_readd_at && (
+                    {stockAuditDelivery?.status === 'reversed' && !(stockAudit.stock_restored || []).length && (
                       <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 p-3">
                         <span className="text-xs text-amber-800">If the delivered quantities are missing from the rows above, add them back:</span>
                         <Button

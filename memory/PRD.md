@@ -3353,3 +3353,12 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 
 ## 2026-06 — Per-equipment maintenance parameters
 - Equipment Master form → "Parameters to capture on completion" (`maintenance_parameters: [{key,name,unit,min,max,required}]`). `_capture_params` validates values on every completion path (daily scan submit `parameter_values`, area tick, before-run clear, after-run complete; run panel/checklist/equipment pages open `ParamCaptureDialog`, daily scan shows inline `ParamInputs`). Required values enforced when status=completed (400), stored on record as `parameters[]` + `parameters_out_of_range[]`; out-of-range flagged (in-app alert to admins + supervisors) but not blocked. Bulk area "tick all" skips parameter equipment with a reason. Verified by testing agent (iteration_358). Needs redeploy.
+
+## 2026-06 — Delivery reversal: stock now verifiably restored
+- Root cause: completion deducted FIFO across batch rows, but reversal did one `update_one` on a single key (no upsert, no matched check) → silent no-op when that row didn't exist; delivery still flagged `stock_readded`.
+- Fix (`routes/distributors.py`): completion records `stock_deductions` (row id + units) on the delivery; reversal credits those exact rows (re-creates if deleted). Fallback for older deliveries: upsert into line batch row, else oldest batch row (never a legacy row); raises if nothing credited. Delivery stores `stock_restored`; Stock Audit shows "Verified units restored"; "Re-add stock now" allowed until a verified restore exists.
+- Test: `backend/tests/manual_delivery_reverse_restock.py` (all pass, cleanup 0). Production: redeploy, then open DEL-2026-0728 → Stock Audit → Re-add stock now.
+
+## Pending — "(legacy / no batch)" stock everywhere (user question, plan proposed, awaiting answers)
+- Causes traced: stock predating `track_batches` flag; Stock Realign credits batch-less row (`global_stock_dashboard._apply_child_delta`); Factory Returns carry no batch; production→warehouse drops batch when warehouse flag off.
+- Proposed: A always-on batch tracking (ignore/remove flag), B batch picker on factory returns, C realign credits batch rows FIFO, D "Legacy Stock Repair" admin screen (list batch-less rows, suggest from inbound history, per-row / auto-assign FIFO with preview).

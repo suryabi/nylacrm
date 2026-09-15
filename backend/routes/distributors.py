@@ -5958,22 +5958,34 @@ async def _deduct_stock_with_spill(coll, stock_key: dict, qty: int, now: str):
     truth after retro-categorization splits a batch across Generic + branded
     rows. When nothing is left to spill into, the legacy behaviour (negative
     $inc on the primary row) applies so the NET on-hand stays correct.
-    Returns (matched_primary: bool, leftover_units: int)."""
+    Returns (matched_primary: bool, leftover_units: int, deductions: list) where
+    `deductions` records exactly which stock row (by `id`) lost how many units so
+    a later reversal can restore the very same rows."""
     remaining = int(qty or 0)
-    primary = await coll.find(stock_key, {"quantity": 1, "created_at": 1}).sort("created_at", 1).to_list(50)
+    proj = {"id": 1, "quantity": 1, "created_at": 1, "batch_id": 1, "batch_code": 1,
+            "child_sku_id": 1, "child_sku_name": 1}
+    deductions = []
+
+    async def _take(r, units):
+        await coll.update_one({"_id": r["_id"]}, {"$inc": {"quantity": -units}, "$set": {"updated_at": now}})
+        deductions.append({"row_id": r.get("id"), "qty": units, "batch_id": r.get("batch_id"),
+                           "batch_code": r.get("batch_code"), "child_sku_id": r.get("child_sku_id"),
+                           "child_sku_name": r.get("child_sku_name")})
+
+    primary = await coll.find(stock_key, proj).sort("created_at", 1).to_list(50)
     matched_primary = len(primary) > 0
     for r in primary:
         if remaining <= 0:
             break
         take = min(remaining, max(int(r.get("quantity") or 0), 0))
         if take > 0:
-            await coll.update_one({"_id": r["_id"]}, {"$inc": {"quantity": -take}, "$set": {"updated_at": now}})
+            await _take(r, take)
             remaining -= take
     if remaining > 0:
         sibling_key = {k: v for k, v in stock_key.items() if k != "child_sku_id"}
         primary_ids = {r["_id"] for r in primary}
         siblings = await coll.find(
-            {**sibling_key, "quantity": {"$gt": 0}}, {"quantity": 1}
+            {**sibling_key, "quantity": {"$gt": 0}}, proj
         ).sort("created_at", 1).to_list(50)
         for r in siblings:
             if remaining <= 0:
@@ -5982,12 +5994,12 @@ async def _deduct_stock_with_spill(coll, stock_key: dict, qty: int, now: str):
                 continue
             take = min(remaining, int(r.get("quantity") or 0))
             if take > 0:
-                await coll.update_one({"_id": r["_id"]}, {"$inc": {"quantity": -take}, "$set": {"updated_at": now}})
+                await _take(r, take)
                 remaining -= take
     if remaining > 0 and matched_primary:
-        await coll.update_one({"_id": primary[0]["_id"]}, {"$inc": {"quantity": -remaining}, "$set": {"updated_at": now}})
+        await _take(primary[0], remaining)
         remaining = 0
-    return matched_primary, remaining
+    return matched_primary, remaining, deductions
 
 
 @router.post("/{distributor_id}/deliveries/{delivery_id}/complete")
@@ -6054,6 +6066,7 @@ async def complete_delivery(
         {"_id": 0}
     ).to_list(500)
 
+    stock_deductions = []
     for item in items:
         batch_id = item.get('batch_id')
         qty = item.get('quantity', 0)
@@ -6089,7 +6102,10 @@ async def complete_delivery(
             if batch_id:
                 stock_key["batch_id"] = batch_id
 
-        matched_primary, leftover = await _deduct_stock_with_spill(stock_coll, stock_key, qty, now)
+        matched_primary, leftover, deducted_rows = await _deduct_stock_with_spill(stock_coll, stock_key, qty, now)
+        for d in deducted_rows:
+            stock_deductions.append({**d, "sku_id": item.get('sku_id'), "sku_name": item.get('sku_name'),
+                                     "item_id": item.get('id')})
         try:
             from utils.stock_ledger import log_stock_movement
             await log_stock_movement(
@@ -6156,6 +6172,13 @@ async def complete_delivery(
                     f"Refresh the delivery and re-select a classification that has stock."
                 ),
             )
+
+    # Persist exactly which stock rows were debited so a reversal can credit
+    # the very same rows (see `_readd_completed_delivery_stock`).
+    await db.distributor_deliveries.update_one(
+        {"id": delivery_id, "tenant_id": tenant_id},
+        {"$set": {"stock_deductions": stock_deductions, "stock_deducted_at": now}},
+    )
 
     # If the account is billed by a third-party distributor, generate an
     # External Billing Entry instead of a Zoho invoice. Idempotent — running
@@ -6437,63 +6460,125 @@ async def _reverse_delivery_invoice_mirror(tenant_id: str, delivery: dict) -> No
 
 async def _readd_completed_delivery_stock(tenant_id: str, distributor_id: str, delivery: dict,
                                           source_type: str = "delivery_reverse",
-                                          performed_by: str = None) -> None:
+                                          performed_by: str = None) -> dict:
     """Inverse of `complete_delivery`'s deduction: add the delivered quantities
     back to the source warehouse (factory_warehouse_stock for a factory source,
-    distributor_stock otherwise), using the same batch/aggregate row convention."""
+    distributor_stock otherwise).
+
+    Preferred path: the delivery carries `stock_deductions` (row id + units)
+    recorded at completion → credit exactly those rows (re-creating a row that
+    was since deleted). Fallback (older deliveries): credit the line's batch
+    row, else the FIFO batch row of the same SKU/classification, else the
+    aggregate row — always with upsert, and every write is verified so a
+    silent no-op can never be reported as success again."""
     now = datetime.now(timezone.utc).isoformat()
+    loc_id = delivery.get("distributor_location_id")
     src_loc = await db.distributor_locations.find_one(
-        {"id": delivery.get("distributor_location_id"), "tenant_id": tenant_id},
-        {"_id": 0, "is_factory": 1, "track_batches": 1},
+        {"id": loc_id, "tenant_id": tenant_id},
+        {"_id": 0, "is_factory": 1, "location_name": 1, "distributor_id": 1},
     )
     src_is_factory = bool(src_loc and src_loc.get("is_factory"))
-    src_tracks_batches = bool(src_loc and src_loc.get("track_batches"))
+    coll = db.factory_warehouse_stock if src_is_factory else db.distributor_stock
+    loc_field = "warehouse_location_id" if src_is_factory else "distributor_location_id"
+
+    def _base(sku_id, child_id):
+        b = {"tenant_id": tenant_id, loc_field: loc_id, "sku_id": sku_id,
+             "child_sku_id": child_id if child_id else {"$in": [None]}}
+        if not src_is_factory:
+            b["distributor_id"] = distributor_id
+        return b
+
+    def _on_insert(sku_id, sku_name, child_id, child_name, batch_id, batch_code):
+        d = {"id": str(uuid.uuid4()), "tenant_id": tenant_id, loc_field: loc_id,
+             "sku_id": sku_id, "sku_name": sku_name, "child_sku_id": child_id,
+             "child_sku_name": child_name, "batch_id": batch_id, "batch_code": batch_code,
+             "created_at": now}
+        if src_is_factory:
+            d["warehouse_name"] = (src_loc or {}).get("location_name")
+        else:
+            d["distributor_id"] = distributor_id
+            d["location_name"] = (src_loc or {}).get("location_name")
+        return d
+
+    async def _credit_key(key, units, on_insert):
+        res = await coll.update_one(
+            key, {"$inc": {"quantity": units}, "$set": {"updated_at": now}, "$setOnInsert": on_insert},
+            upsert=True)
+        return (res.matched_count or 0) + (1 if res.upserted_id is not None else 0)
+
+    restored = []
     items = await db.distributor_delivery_items.find(
         {"delivery_id": delivery.get("id"), "tenant_id": tenant_id}, {"_id": 0},
     ).to_list(500)
-    for item in items:
-        batch_id = item.get("batch_id")
-        qty = item.get("quantity", 0) or 0
-        if not qty:
-            continue
-        child_key = item.get("child_sku_id") if item.get("child_sku_id") else {"$in": [None]}
-        if src_is_factory:
-            stock_key = {
-                "tenant_id": tenant_id,
-                "warehouse_location_id": delivery.get("distributor_location_id"),
-                "sku_id": item.get("sku_id"),
-                "child_sku_id": child_key,
-            }
-            if src_tracks_batches and batch_id:
-                stock_key["batch_id"] = batch_id
-            await db.factory_warehouse_stock.update_one(
-                stock_key, {"$inc": {"quantity": qty}, "$set": {"updated_at": now}}, upsert=True,
-            )
-        else:
-            stock_key = {
-                "tenant_id": tenant_id,
-                "distributor_id": distributor_id,
-                "distributor_location_id": delivery.get("distributor_location_id"),
-                "sku_id": item.get("sku_id"),
-                "child_sku_id": child_key,
-            }
-            stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
-            await db.distributor_stock.update_one(
-                stock_key, {"$inc": {"quantity": qty}, "$set": {"updated_at": now}},
-            )
+    item_by_id = {it.get("id"): it for it in items}
+
+    deductions = delivery.get("stock_deductions") or []
+    if deductions:
+        for d in deductions:
+            units = int(d.get("qty") or 0)
+            if units <= 0:
+                continue
+            it = item_by_id.get(d.get("item_id"), {})
+            sku_id = d.get("sku_id") or it.get("sku_id")
+            hit = 0
+            if d.get("row_id"):
+                res = await coll.update_one({"id": d["row_id"], "tenant_id": tenant_id},
+                                            {"$inc": {"quantity": units}, "$set": {"updated_at": now}})
+                hit = res.matched_count
+            if not hit:
+                key = {**_base(sku_id, d.get("child_sku_id")),
+                       "batch_id": d.get("batch_id") if d.get("batch_id") else {"$in": [None]}}
+                hit = await _credit_key(key, units, _on_insert(
+                    sku_id, d.get("sku_name") or it.get("sku_name"), d.get("child_sku_id"),
+                    d.get("child_sku_name"), d.get("batch_id"), d.get("batch_code")))
+            if not hit:
+                raise RuntimeError(f"could not credit {units} units of {d.get('sku_name') or sku_id} back to the warehouse")
+            restored.append({"sku_id": sku_id, "batch_id": d.get("batch_id"), "batch_code": d.get("batch_code"),
+                             "child_sku_id": d.get("child_sku_id"), "qty": units})
+    else:
+        for item in items:
+            qty = int(item.get("quantity", 0) or 0)
+            if not qty:
+                continue
+            sku_id = item.get("sku_id")
+            child_id = item.get("child_sku_id") or None
+            batch_id = item.get("batch_id")
+            batch_code = item.get("batch_code")
+            if not batch_id:
+                # Line has no batch: the deduction was FIFO across this SKU's
+                # rows — credit the oldest batch row rather than a legacy row.
+                rows = await coll.find({**_base(sku_id, child_id), "batch_id": {"$ne": None}},
+                                       {"_id": 0, "batch_id": 1, "batch_code": 1, "created_at": 1}
+                                       ).sort("created_at", 1).to_list(1)
+                if rows:
+                    batch_id, batch_code = rows[0].get("batch_id"), rows[0].get("batch_code")
+            key = {**_base(sku_id, child_id), "batch_id": batch_id if batch_id else {"$in": [None]}}
+            hit = await _credit_key(key, qty, _on_insert(
+                sku_id, item.get("sku_name"), child_id, item.get("child_sku_name"), batch_id, batch_code))
+            if not hit:
+                raise RuntimeError(f"could not credit {qty} units of {item.get('sku_name') or sku_id} back to the warehouse")
+            restored.append({"sku_id": sku_id, "batch_id": batch_id, "batch_code": batch_code,
+                             "child_sku_id": child_id, "qty": qty})
+
+    for r in restored:
+        it = next((i for i in items if i.get("sku_id") == r["sku_id"]), {})
         try:
             from utils.stock_ledger import log_stock_movement
             await log_stock_movement(
-                tenant_id, direction="in", quantity=qty,
-                sku_id=item.get("sku_id"), sku_name=item.get("sku_name"),
-                child_sku_id=item.get("child_sku_id"), child_sku_name=item.get("child_sku_name"),
-                batch_id=batch_id, batch_code=item.get("batch_code"),
-                location_id=delivery.get("distributor_location_id"),
+                tenant_id, direction="in", quantity=r["qty"],
+                sku_id=r["sku_id"], sku_name=it.get("sku_name"),
+                child_sku_id=r.get("child_sku_id"), child_sku_name=it.get("child_sku_name"),
+                batch_id=r.get("batch_id"), batch_code=r.get("batch_code"),
+                location_id=loc_id,
                 location_kind="factory" if src_is_factory else "distributor",
                 source_type=source_type, reference=delivery.get("delivery_number"),
                 performed_by=performed_by)
         except Exception:
             pass
+    await db.distributor_deliveries.update_one(
+        {"id": delivery.get("id"), "tenant_id": tenant_id},
+        {"$set": {"stock_restored": restored, "stock_restored_at": now}})
+    return {"restored": restored, "total_units": sum(r["qty"] for r in restored)}
 
 
 @router.post("/{distributor_id}/deliveries/{delivery_id}/reverse")
@@ -6685,6 +6770,9 @@ async def delivery_stock_audit(
         "stock_readded": delivery.get("stock_readded"),
         "stock_readd_error": delivery.get("stock_readd_error"),
         "stock_manual_readd_at": delivery.get("stock_manual_readd_at"),
+        "stock_deductions": delivery.get("stock_deductions") or [],
+        "stock_restored": delivery.get("stock_restored") or [],
+        "stock_restored_at": delivery.get("stock_restored_at"),
         "source_location": (src_loc or {}).get("location_name"),
         "is_factory_source": src_is_factory,
         "lines": lines,
@@ -6712,11 +6800,11 @@ async def manually_readd_delivery_stock(
         raise HTTPException(status_code=404, detail="Delivery not found")
     if (delivery.get("status") or "").lower() != "reversed":
         raise HTTPException(status_code=400, detail="Stock re-add is only available for reversed deliveries.")
-    if delivery.get("stock_manual_readd_at"):
-        raise HTTPException(status_code=400, detail=f"Stock was already manually re-added on {delivery.get('stock_manual_readd_at')}.")
-    await _readd_completed_delivery_stock(tenant_id, distributor_id, delivery,
-                                          source_type="manual_readd",
-                                          performed_by=current_user.get("name"))
+    if delivery.get("stock_restored"):
+        raise HTTPException(status_code=400, detail=f"Stock was already added back on {delivery.get('stock_restored_at') or delivery.get('stock_manual_readd_at')}.")
+    result = await _readd_completed_delivery_stock(tenant_id, distributor_id, delivery,
+                                                   source_type="manual_readd",
+                                                   performed_by=current_user.get("name"))
     now = datetime.now(timezone.utc).isoformat()
     await db.distributor_deliveries.update_one(
         {"id": delivery_id, "tenant_id": tenant_id},
@@ -6724,7 +6812,8 @@ async def manually_readd_delivery_stock(
                   "stock_manual_readd_at": now,
                   "stock_manual_readd_by": current_user.get("name"), "updated_at": now}})
     logger.info(f"[STOCK] Manual re-add for reversed delivery {delivery.get('delivery_number')} by {current_user.get('email')}")
-    return {"ok": True, "message": f"Stock for {delivery.get('delivery_number')} added back to the warehouse."}
+    return {"ok": True, "message": f"{result['total_units']} units for {delivery.get('delivery_number')} added back to the warehouse.",
+            "restored": result["restored"]}
 
 
 @router.post("/{distributor_id}/deliveries/{delivery_id}/reverse-zoho-cleanup")
