@@ -1,0 +1,26 @@
+{
+  "summary": "Frontend-only visual regression on /customer-stock-dashboard for CEO surya.yadavalli. All acceptance criteria met: 15 tiles rendered, 'Expected Next Order' label present as small uppercase slate text, right side shows coloured dot + date in text-sm (14px) font-semibold (600). No 'overdue' or 'in Nd' text anywhere on the page. Colours verified: red = rgb(190,18,60) rose-700, amber legend dot = rgb(180,83,9) amber-700, green = rgb(4,120,87) emerald-700. Em-dash '—' shown for the 6 tiles without orders. Legend (csd-legend) uses the same three colours. No console errors after login (only expected pre-login 401/400 during auth flow).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/screenshots/csd_iter376.jpg"],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Distribution observed: red=8, amber=0, green=1, none(—)=6 out of 15 tiles. No amber tile occurred naturally, but legend/CSS classes and URGENCY map cover amber correctly (bg-amber-700 -> rgb(180,83,9)).",
+  "verification_details": {
+    "tile_count": 15,
+    "expected_next_order_labels": 16,
+    "urgency_distribution": {"red": 8, "amber": 0, "green": 1, "none_dash": 6},
+    "sample_style": "color=rgb(190,18,60) fontWeight=600 fontSize=14px",
+    "legend_colors": ["rgb(190,18,60)", "rgb(180,83,9)", "rgb(4,120,87)"],
+    "forbidden_text_found": []
+  }
+}
