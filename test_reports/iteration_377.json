@@ -1,0 +1,28 @@
+{
+  "summary": "Tested new crate-based forecast + colour logic for /customer-stock-dashboard end-to-end. Seeded 4 delivered deliveries (QA-CSD2-000N, quantities 200,100,200,200 crates, gaps ~30 days) for 'Drive Folder Test Lead' (parent SKU bottles_per_crate resolved to U=1). Backend pytest (4/4) + frontend Playwright assertions all passed. Cleaned up seed data at end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "CustomerStockDashboard.jsx (CustomerTile)", "issue": "Line 93 renders literal '\\u00b7' instead of middle-dot '·'. JSX text nodes do NOT parse JS unicode escapes — the subline currently reads '200 units \\u00b7 QA-CSD2-0003'. Fix: replace the escape with the real character '·' (or embed as {'\\u00b7'} in a JS expression).", "selector": "p.mt-0.5.truncate.text-[11px].text-slate-400 inside last-order-qty area", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_csd_crate_logic.py", "/app/test_reports/pytest/csd_crate.xml", "/app/test_reports/screenshots/csd_desktop.png"],
+  "action_items": [
+    "Fix JSX literal-escape bug in CustomerStockDashboard.jsx line 93: change 'units \\u00b7 {tile.last_order_number}' to 'units \u00b7 {tile.last_order_number}' (embed the actual middle-dot character). Screenshot shows this rendering issue in every tile that has a last order."
+  ],
+  "critical_code_review_comments": [
+    "CustomerStockDashboard.jsx: `\\u00b7` inside JSX text is rendered literally. Use the raw character '·' in JSX text, or move the string into a JS expression string literal.",
+    "customer_stock_dashboard.py: _forecast() sets forecast_basis using median gap when med_gap<=20 but description says 'monthly buyers' — the branching is correct but forecast_basis text 'usually orders around the …' has ordinal suffix formatting that will pick 'st' for day 21 (21st ✓) — logic is fine.",
+    "Consider indexing distributor_deliveries by (tenant_id, account_id, status) — build() scans by \\$in over acct_ids which can be large."
+  ],
+  "updated_files": ["/app/backend/tests/test_csd_crate_logic.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (login returns 'session_token', stored in localStorage as 'token')",
+  "seed_data_creation": "Backend test fixture inserts 4 QA-CSD2-* deliveries + items for Drive Folder Test Lead and cleans up on teardown. Frontend test used /tmp/seed_csd_only.py to persist seed during UI run; final cleanup removed them (0 QA-CSD2-* rows remain).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend forecast returns expected_crates as int when whole, else float; forecast_basis contains 'ordered N of M times' when a mode exists. Tile ordering: priority (low_stock) first A→Z, then rest A→Z. Colour scheme: red = rose-700 rgb(190,18,60), green = emerald-700 rgb(4,120,87), neutral = slate-600 rgb(71,85,105). Xlsx header verified. The only UI issue is a literal '\\u00b7' rendering — a tiny 1-line JSX fix.",
+  "rca of the issue": "In CustomerStockDashboard.jsx JSX text between tags, escape sequences like \\u00b7 are NOT parsed — they are literal characters, unlike JS string literals. Reproduction: any tile with a last order shows '<units> units \\u00b7 <delivery-number>' verbatim. Mitigation: use the actual '·' character or place it inside a JS expression: {'\u00b7'}."
+}

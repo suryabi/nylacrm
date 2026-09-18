@@ -90,7 +90,7 @@ const CustomerTile = ({ tile }) => {
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Last Order Quantity</p>
           <p className="mt-1 text-2xl font-extrabold tabular-nums text-slate-900" data-testid={`last-order-qty-${tile.account_id}`}>{hasOrder ? fmtCrates(tile.last_order_crates) : '\u2014'}{hasOrder && <span className="ml-1 text-xs font-semibold text-slate-400">crates</span>}</p>
-          {hasOrder && <p className="mt-0.5 truncate text-[11px] text-slate-400">{fmt(tile.last_order_quantity)} units \u00b7 {tile.last_order_number}</p>}
+          {hasOrder && <p className="mt-0.5 truncate text-[11px] text-slate-400">{fmt(tile.last_order_quantity)} units{tile.last_order_number ? ` · ${tile.last_order_number}` : ''}</p>}
         </div>
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Last Order Date</p>
