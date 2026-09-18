@@ -57,10 +57,11 @@ const AutoComplete = ({ label, icon: Icon, options, value, onChange, placeholder
   );
 };
 
+// Colour code shared with Global Stock Dashboard (rose / amber / emerald 700).
 const URGENCY = {
-  red: { text: 'text-red-600', label: (d) => (d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'today' : `in ${d}d`) },
-  amber: { text: 'text-yellow-600', label: (d) => `in ${d}d` },
-  green: { text: 'text-emerald-600', label: (d) => `in ${d}d` },
+  red: { text: 'text-rose-700', dot: 'bg-rose-700' },
+  amber: { text: 'text-amber-700', dot: 'bg-amber-700' },
+  green: { text: 'text-emerald-700', dot: 'bg-emerald-700' },
 };
 
 const CustomerTile = ({ tile }) => {
@@ -69,9 +70,9 @@ const CustomerTile = ({ tile }) => {
   const initials = (tile.account_name || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
   const urg = URGENCY[tile.next_order_urgency];
   return (
-    <div className={`group relative flex flex-col rounded-2xl border bg-white p-5 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/60 ${tile.priority ? 'border-red-300 ring-1 ring-red-200' : 'border-slate-200/80'}`} data-testid={`customer-tile-${tile.account_id}`} data-priority={tile.priority ? 'true' : 'false'}>
+    <div className={`group relative flex flex-col rounded-2xl border bg-white p-5 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/60 ${tile.priority ? 'border-rose-300 ring-1 ring-rose-200' : 'border-slate-200/80'}`} data-testid={`customer-tile-${tile.account_id}`} data-priority={tile.priority ? 'true' : 'false'}>
       {tile.priority && (
-        <span className="absolute -top-2.5 right-4 inline-flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm" data-testid={`priority-badge-${tile.account_id}`}>
+        <span className="absolute -top-2.5 right-4 inline-flex items-center gap-1 rounded-full bg-rose-700 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white shadow-sm" data-testid={`priority-badge-${tile.account_id}`}>
           <AlertTriangle className="h-3 w-3" /> Reorder now
         </span>
       )}
@@ -93,21 +94,21 @@ const CustomerTile = ({ tile }) => {
           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Last Order Date</p>
           <p className="mt-1 text-lg font-bold text-slate-800" data-testid={`last-order-date-${tile.account_id}`}>{fmtDate(tile.last_order_date)}</p>
         </div>
-        <div className="col-span-2 flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400"><CalendarClock className="h-3.5 w-3.5" /> Expected Next Order</span>
+        <div className="col-span-2 flex items-center justify-between border-t border-slate-100 pt-3">
+          <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-400"><CalendarClock className="h-3.5 w-3.5" /> Expected Next Order</span>
           {urg ? (
-            <span className="text-right" data-testid={`next-order-date-${tile.account_id}`} data-urgency={tile.next_order_urgency}>
-              <span className={`block text-base font-extrabold ${urg.text}`}>{fmtDate(tile.expected_next_order_date)}</span>
-              <span className={`block text-[11px] font-semibold ${urg.text}`} title={tile.interval_basis}>{urg.label(tile.next_order_in_days)} · every ~{tile.order_interval_days}d</span>
+            <span className="inline-flex items-center gap-1.5 text-right" data-testid={`next-order-date-${tile.account_id}`} data-urgency={tile.next_order_urgency} title={`Every ~${tile.order_interval_days} days · ${tile.interval_basis}`}>
+              <span className={`h-2 w-2 rounded-full ${urg.dot}`} />
+              <span className={`text-sm font-semibold ${urg.text}`}>{fmtDate(tile.expected_next_order_date)}</span>
             </span>
-          ) : <span className="text-base font-bold text-slate-300" data-testid={`next-order-date-${tile.account_id}`}>{'\u2014'}</span>}
+          ) : <span className="text-sm font-semibold text-slate-300" data-testid={`next-order-date-${tile.account_id}`}>{'\u2014'}</span>}
         </div>
       </div>
 
-      <div className={`mt-auto rounded-xl p-4 ${tile.low_stock ? 'bg-red-50' : 'bg-slate-50'}`}>
+      <div className={`mt-auto rounded-xl p-4 ${tile.low_stock ? 'bg-rose-50' : 'bg-slate-50'}`}>
         <div className="flex items-center justify-between">
-          <p className={`text-[11px] font-semibold uppercase tracking-wider ${tile.low_stock ? 'text-red-700' : 'text-[#002FA7]'}`}>Stock in Hand</p>
-          {tile.low_stock && <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white" data-testid={`low-stock-badge-${tile.account_id}`}>Low stock · below last order {fmt(tile.last_order_quantity)}</span>}
+          <p className={`text-[11px] font-semibold uppercase tracking-wider ${tile.low_stock ? 'text-rose-700' : 'text-[#002FA7]'}`}>Stock in Hand</p>
+          {tile.low_stock && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700" data-testid={`low-stock-badge-${tile.account_id}`}>Low stock · below last order {fmt(tile.last_order_quantity)}</span>}
         </div>
         {noStock ? (
           <p className="mt-2 text-sm font-medium text-slate-400" data-testid={`stock-none-${tile.account_id}`}>No branded SKU for this customer</p>
@@ -119,12 +120,12 @@ const CustomerTile = ({ tile }) => {
                   <span className="block truncate text-sm font-semibold text-slate-800" title={s.child_sku_name}>{s.child_sku_name}</span>
                   {s.warehouses.length > 0 && <span className="block truncate text-[11px] text-slate-400">{s.warehouses.map((w) => `${w.location_name} ${fmt(w.quantity)}`).join(' \u00b7 ')}</span>}
                 </span>
-                <span className={`shrink-0 text-3xl font-extrabold tabular-nums tracking-tight ${tile.low_stock ? 'text-red-600' : s.stock_in_hand > 0 ? 'text-[#002FA7]' : 'text-slate-300'}`} data-testid={`stock-qty-${s.child_sku_id}`}>{fmt(s.stock_in_hand)}</span>
+                <span className={`shrink-0 text-3xl font-extrabold tabular-nums tracking-tight ${tile.low_stock ? 'text-rose-700' : s.stock_in_hand > 0 ? 'text-[#002FA7]' : 'text-slate-300'}`} data-testid={`stock-qty-${s.child_sku_id}`}>{fmt(s.stock_in_hand)}</span>
               </li>
             ))}
             {tile.child_skus.length > 1 && (
               <li className="flex items-center justify-between border-t border-slate-200 pt-2 text-sm font-bold text-slate-700">
-                <span>Total</span><span className={`text-xl tabular-nums ${tile.low_stock ? 'text-red-600' : 'text-[#002FA7]'}`} data-testid={`stock-total-${tile.account_id}`}>{fmt(tile.stock_in_hand)}</span>
+                <span>Total</span><span className={`text-xl tabular-nums ${tile.low_stock ? 'text-rose-700' : 'text-[#002FA7]'}`} data-testid={`stock-total-${tile.account_id}`}>{fmt(tile.stock_in_hand)}</span>
               </li>
             )}
           </ul>
@@ -213,12 +214,12 @@ export default function CustomerStockDashboard() {
           <span><span className="font-bold text-slate-900">{fmt(tiles.length)}</span> customers</span>
           <span><span className="font-bold text-slate-900">{fmt(data.summary.with_orders)}</span> with orders</span>
           <span><span className="font-bold text-slate-900">{fmt(data.summary.branded_skus)}</span> branded SKUs</span>
-          {data.summary.low_stock > 0 && <span className="font-semibold text-red-600" data-testid="csd-low-stock-count">{fmt(data.summary.low_stock)} low stock</span>}
-          {data.summary.due_soon > 0 && <span className="font-semibold text-red-600" data-testid="csd-due-soon-count">{fmt(data.summary.due_soon)} orders due ≤ 7 days</span>}
+          {data.summary.low_stock > 0 && <span className="font-semibold text-rose-700" data-testid="csd-low-stock-count">{fmt(data.summary.low_stock)} low stock</span>}
+          {data.summary.due_soon > 0 && <span className="font-semibold text-rose-700" data-testid="csd-due-soon-count">{fmt(data.summary.due_soon)} orders due ≤ 7 days</span>}
           <span className="ml-auto hidden items-center gap-3 text-[11px] font-medium md:inline-flex" data-testid="csd-legend">
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-red-600" /> ≤ 7 days</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-yellow-500" /> ≤ 10 days</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-600" /> later</span>
+            <span className="inline-flex items-center gap-1 text-rose-700"><span className="h-2 w-2 rounded-full bg-rose-700" /> ≤ 7 days</span>
+            <span className="inline-flex items-center gap-1 text-amber-700"><span className="h-2 w-2 rounded-full bg-amber-700" /> ≤ 10 days</span>
+            <span className="inline-flex items-center gap-1 text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-700" /> later</span>
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#002FA7]/10 px-3 py-1 font-semibold text-[#002FA7]"><Package className="h-3.5 w-3.5" /> {fmt(data.summary.stock_in_hand)} units in hand</span>
         </div>
