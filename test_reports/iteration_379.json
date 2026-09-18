@@ -1,0 +1,43 @@
+{
+  "summary": "Frontend visual/smoke test of /customer-stock-dashboard as CEO (surya.yadavalli). Verified tile visuals, stat weights/colors, critical rose styling, shortfall badges, summary row, Excel download and distributor filter. Screenshots captured at 1450, 1920 and 390 px. Two layout issues found: (a) header does NOT stay on one row at 1450 px — refresh + Excel wrap to a third row; (b) stat 'next order' value truncates (scrollWidth 73 > clientWidth 68) for dates whose month is 4+ letters (Sept) on tiles Seed C / Seed G / Seed H / Demo Grand Hotel at 1450 px, so text shows an ellipsis.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "CustomerStockDashboard header row",
+        "issue": "At 1450 px the header/filters do NOT all sit on the same row. Distributor+Account+Find align at top=31 with the title, but Refresh and Excel wrap to a new row (measured top=86). At 1920 px all controls correctly share top=31. Root cause: the title block is <div class='mr-auto'> containing h1 + subtitle paragraph 'Expected next order vs branded stock in hand · customers who cannot cover it come first'. The long subtitle inflates the mr-auto column so the flex-wrap container overflows 1450. Fix suggestions: shorten/hide the subtitle at <1536px (hide via `hidden xl:block`), or move the subtitle to a second line under the h1 only when there is room, or drop it entirely as the tile bar already conveys context.",
+        "selector": "[data-testid=\"csd-refresh\"], [data-testid=\"csd-export-btn\"]",
+        "priority": "HIGH"
+      },
+      {
+        "component": "CustomerTile → Stat (next order date)",
+        "issue": "Requirement says 'the three stat values each render on a single line (scrollWidth ≤ clientWidth and no line-break)'. At 1450 px the middle column is 68 px wide, but any date whose month string is 4+ chars ('Sept') renders at 73 px scrollWidth (`.truncate` clips it to '25 Sept '2…', '22 Sept '2…', '29 Sept '2…', '09 Sept '2…'). Verified on tiles Seed C, Seed G, Seed H, Demo Grand Hotel. Fix: either abbreviate 4-letter months to 3 letters in fmtDate compact mode ('Sep' instead of 'Sept'), reduce the p font-size for the date cell to 13px, or widen the date column via `grid-template-columns` (e.g., give the date column more fr).",
+        "selector": "[data-testid^=\"next-order-date-\"] p.tabular-nums:first-child",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/screenshots/csd_1450.png",
+    "/app/test_reports/screenshots/csd_1920.png",
+    "/app/test_reports/screenshots/csd_390.png"
+  ],
+  "action_items": [
+    "Make header row fit on one row at 1450 px (hide/move subtitle or shrink title block).",
+    "Prevent truncation of 'Sept'-month dates in the stat strip at 1450 px (use 3-letter month or shrink font / widen column)."
+  ],
+  "critical_code_review_comments": [
+    "CustomerStockDashboard.jsx: subtitle sits inside `mr-auto` header block, so long text pushes filters onto next lines at intermediate widths – consider `hidden 2xl:block` for the subtitle or move it below the row.",
+    "fmtDate(compact=true) uses browser default which yields 'Sept' for September on en-GB. Coerce to `.slice(0,3)` if a strict 3-char month is required for tight columns."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "85%"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (login OK)",
+  "seed_data_creation": "None (Seed A–I already present, untouched)",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Verified at 1450 px: Seed A/C/G/H are critical (rose-300 border rgb(253,164,175), rose-700 avatar bg rgb(190,18,60), AlertTriangle present, stat values rose-700 weight 700 14px, shortfall '−12 cr'/'−2 cr'/'−4 cr'/'−5 cr' text-rose-700 weight 500 10px). Non-critical tiles: weight 500 stat values 14px. Customer names h3 = 14px weight 600. Footer 11px muted. Summary pill '4 reorder' + counts + legend short/covered all present. Excel download works (customer-stock-2026-09-18.xlsx). Distributor filter drops list 24→13. Console 401/400 are only from pre-login page. Remaining bugs are header wrap at 1450 and date truncation for 'Sept' month at 1450.",
+  "rca of the issue": "1) Header wrap: content available width at 1450 px minus sidebar (~264 px) ≈ 1186 px. Fixed widths: distributor 208 + account 208 + find 176 + refresh 36 + excel ~98 + gaps ~48 ≈ 774 px, leaving ~412 px for the title cell. The subtitle text needs ~500 px, so flex-wrap breaks. Solutions listed above. 2) Sept truncation: 68 px column is too tight for a 4-letter month; date renders 73 px causing `.truncate` to show ellipsis."
+}

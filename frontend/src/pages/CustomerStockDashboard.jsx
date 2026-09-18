@@ -10,12 +10,12 @@ import { Input } from '../components/ui/input';
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 const fmt = (v) => Number(v || 0).toLocaleString('en-IN');
-const fmtDate = (iso, compact = false) => {
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// Day + 3-letter month, no year (e.g. "15 Oct").
+const fmtDate = (iso) => {
   if (!iso) return '—';
   const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  if (compact) return `${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} '${String(d.getFullYear()).slice(2)}`;
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return Number.isNaN(d.getTime()) ? iso : `${String(d.getDate()).padStart(2, '0')} ${MONTHS[d.getMonth()]}`;
 };
 
 const AutoComplete = ({ label, icon: Icon, options, value, onChange, placeholder, testId }) => {
@@ -25,7 +25,7 @@ const AutoComplete = ({ label, icon: Icon, options, value, onChange, placeholder
     <div className="flex flex-col">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" aria-expanded={open} className="h-9 w-52 justify-between text-sm font-normal" data-testid={`${testId}-trigger`}>
+          <Button variant="outline" role="combobox" aria-expanded={open} className="h-9 w-44 justify-between text-sm font-normal" data-testid={`${testId}-trigger`}>
             <span className="flex items-center gap-2 truncate">
               <Icon className="h-4 w-4 text-slate-400 shrink-0" />
               <span className={`truncate ${current ? 'text-slate-900' : 'text-slate-400'}`}>{current ? current.name : placeholder}</span>
@@ -67,10 +67,14 @@ const URGENCY = {
 };
 const fmtCrates = (v) => (v == null ? '\u2014' : Number(v).toLocaleString('en-IN', { maximumFractionDigits: 1 }));
 
-const Stat = ({ label, value, sub, tone = 'text-slate-800', strong = false, testId, extra }) => (
-  <div className="min-w-0">
-    <p className={`truncate whitespace-nowrap text-sm tabular-nums ${strong ? 'font-bold' : 'font-medium'} ${tone}`} data-testid={testId} {...extra}>{value}{sub && <span className="ml-0.5 text-[10px] font-normal text-slate-400">{sub}</span>}</p>
-    <p className="text-[10px] leading-tight text-slate-400">{label}</p>
+const Row = ({ label, value, sub, tone = 'text-slate-800', strong = false, testId, extra, note }) => (
+  <div className="flex items-baseline justify-between gap-3 whitespace-nowrap">
+    <span className="text-[11px] text-slate-400">{label}</span>
+    <span className="text-right">
+      {note && <span className="mr-2 text-[11px] font-medium text-rose-700">{note}</span>}
+      <span className={`text-base tabular-nums ${strong ? 'font-bold' : 'font-medium'} ${tone}`} data-testid={testId} {...extra}>{value}</span>
+      {sub && <span className="ml-1 text-[11px] text-slate-400">{sub}</span>}
+    </span>
   </div>
 );
 
@@ -81,8 +85,9 @@ const CustomerTile = ({ tile }) => {
   const critical = tile.low_stock;
   const tone = critical ? 'text-rose-700' : tile.next_order_urgency === 'green' ? 'text-emerald-700' : 'text-slate-800';
   const shortfall = critical ? tile.expected_crates - tile.stock_crates : 0;
+  const hasForecast = !!tile.expected_next_order_date;
   return (
-    <div className={`group relative flex flex-col rounded-xl border bg-white p-4 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-md ${critical ? 'border-rose-300' : 'border-slate-200'}`} data-testid={`customer-tile-${tile.account_id}`} data-priority={tile.priority ? 'true' : 'false'}>
+    <div className={`group relative flex min-h-[15rem] flex-col rounded-xl border bg-white p-4 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-md ${critical ? 'border-rose-300' : 'border-slate-200'}`} data-testid={`customer-tile-${tile.account_id}`} data-priority={tile.priority ? 'true' : 'false'}>
       <div className="flex items-center gap-2.5">
         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold ${critical ? 'bg-rose-700 text-white' : 'bg-[#002FA7]/10 text-[#002FA7]'}`}>{initials}</div>
         <div className="min-w-0 flex-1">
@@ -92,34 +97,37 @@ const CustomerTile = ({ tile }) => {
         {critical && <AlertTriangle className="h-4 w-4 shrink-0 text-rose-700" title="Cannot cover next order" data-testid={`priority-badge-${tile.account_id}`} />}
       </div>
 
-      <div className={`mt-3 grid grid-cols-3 gap-2 rounded-lg px-3 py-2 ${critical ? 'bg-rose-50' : tile.next_order_urgency === 'green' ? 'bg-emerald-50/60' : 'bg-slate-50'}`}
+      <div className={`mt-3 space-y-1.5 rounded-lg px-3 py-2.5 ${critical ? 'bg-rose-50' : tile.next_order_urgency === 'green' ? 'bg-emerald-50/60' : 'bg-slate-50'}`}
         data-testid={`next-order-date-${tile.account_id}`} data-urgency={tile.next_order_urgency || ''} title={tile.forecast_basis || ''}>
-        <Stat label="next order" value={tile.expected_next_order_date ? fmtDate(tile.expected_next_order_date, true) : '\u2014'} tone={tile.expected_next_order_date ? tone : 'text-slate-300'} strong={critical} />
-        <Stat label="expected" value={fmtCrates(tile.expected_crates)} sub={tile.expected_crates != null ? 'cr' : ''} tone={tile.expected_crates != null ? tone : 'text-slate-300'} strong={critical} testId={`expected-crates-${tile.account_id}`} />
-        <Stat label="in hand" value={noStock ? '\u2014' : fmtCrates(tile.stock_crates)} sub={noStock ? '' : 'cr'} tone={noStock ? 'text-slate-300' : critical ? 'text-rose-700' : 'text-slate-900'} strong={critical} testId={`stock-total-${tile.account_id}`}
-          extra={critical ? { 'data-shortfall': shortfall } : {}} />
+        <Row label="Next order" value={hasForecast ? fmtDate(tile.expected_next_order_date) : '\u2014'} tone={hasForecast ? tone : 'text-slate-300'} strong={critical} />
+        <Row label="Expected" value={fmtCrates(tile.expected_crates)} sub={tile.expected_crates != null ? 'cr' : ''} tone={tile.expected_crates != null ? tone : 'text-slate-300'} strong={critical} testId={`expected-crates-${tile.account_id}`} />
+        <Row label="In hand" value={noStock ? '\u2014' : fmtCrates(tile.stock_crates)} sub={noStock ? '' : 'cr'} tone={noStock ? 'text-slate-300' : critical ? 'text-rose-700' : 'text-slate-900'} strong={critical}
+          testId={`stock-total-${tile.account_id}`} extra={critical ? { 'data-shortfall': shortfall } : {}} note={critical ? `−${fmtCrates(shortfall)}` : null} />
+        {critical && <span className="sr-only" data-testid={`low-stock-badge-${tile.account_id}`}>short by {fmtCrates(shortfall)} crates</span>}
       </div>
-      {critical && <p className="mt-1 text-right text-[10px] font-medium text-rose-700" data-testid={`low-stock-badge-${tile.account_id}`}>−{fmtCrates(shortfall)} cr</p>}
 
-      {!noStock && (
-        <ul className="mt-2 divide-y divide-slate-100">
-          {tile.child_skus.map((sk) => (
-            <li key={sk.child_sku_id} className="flex items-center justify-between gap-3 py-1" data-testid={`stock-sku-${sk.child_sku_id}`}>
-              <span className="min-w-0 truncate text-xs text-slate-600" title={`${sk.child_sku_name} · ${fmt(sk.stock_in_hand)} units${sk.warehouses.length ? ' · ' + sk.warehouses.map((w) => `${w.location_name} ${fmt(w.quantity)}`).join(', ') : ''}`}>{sk.child_sku_name}</span>
-              <span className={`shrink-0 whitespace-nowrap text-xs tabular-nums ${critical ? 'font-semibold text-rose-700' : sk.stock_in_hand > 0 ? 'text-slate-800' : 'text-slate-400'}`} data-testid={`stock-qty-${sk.child_sku_id}`}>{fmtCrates(sk.stock_crates)}<span className="ml-0.5 text-[10px] text-slate-400">cr</span></span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {noStock && <p className="mt-2 text-[11px] text-slate-400" data-testid={`stock-none-${tile.account_id}`}>No branded SKU</p>}
+      <div className="mt-3 flex-1">
+        {noStock ? (
+          <p className="text-[11px] text-slate-400" data-testid={`stock-none-${tile.account_id}`}>No branded SKU</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {tile.child_skus.map((sk) => (
+              <li key={sk.child_sku_id} className="flex items-center justify-between gap-3 py-1.5" data-testid={`stock-sku-${sk.child_sku_id}`}>
+                <span className="min-w-0 truncate text-xs text-slate-600" title={`${sk.child_sku_name} · ${fmt(sk.stock_in_hand)} units${sk.warehouses.length ? ' · ' + sk.warehouses.map((w) => `${w.location_name} ${fmt(w.quantity)}`).join(', ') : ''}`}>{sk.child_sku_name}</span>
+                <span className={`shrink-0 whitespace-nowrap text-xs tabular-nums ${critical ? 'font-semibold text-rose-700' : sk.stock_in_hand > 0 ? 'text-slate-800' : 'text-slate-400'}`} data-testid={`stock-qty-${sk.child_sku_id}`}>{fmtCrates(sk.stock_crates)}<span className="ml-0.5 text-[10px] text-slate-400">cr</span></span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
-      <div className="mt-auto flex items-center justify-between whitespace-nowrap border-t border-slate-100 pt-2 text-[11px] text-slate-400">
-        <span>last</span>
+      <div className="mt-3 flex items-center justify-between whitespace-nowrap border-t border-slate-100 pt-2 text-[11px] text-slate-400">
+        <span>Last order</span>
         {hasOrder ? (
           <span className="tabular-nums">
             <span data-testid={`last-order-qty-${tile.account_id}`}>{fmtCrates(tile.last_order_crates)} cr</span>
             <span className="mx-1.5 text-slate-300">·</span>
-            <span data-testid={`last-order-date-${tile.account_id}`}>{fmtDate(tile.last_order_date, true)}</span>
+            <span data-testid={`last-order-date-${tile.account_id}`}>{fmtDate(tile.last_order_date)}</span>
           </span>
         ) : <span data-testid={`last-order-qty-${tile.account_id}`}>{'\u2014'}</span>}
       </div>
@@ -179,16 +187,16 @@ export default function CustomerStockDashboard() {
 
   return (
     <div className="space-y-4" style={{ fontFamily: 'Helvetica, "Helvetica Neue", Arial, sans-serif' }} data-testid="customer-stock-dashboard">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="mr-auto">
-          <h1 className="text-xl font-semibold text-slate-900 md:text-2xl">Customer Stock Dashboard</h1>
-          <p className="mt-0.5 text-xs text-slate-500">Expected next order vs branded stock in hand · customers who cannot cover it come first</p>
+      <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
+        <div className="mr-auto min-w-0">
+          <h1 className="truncate text-xl font-semibold text-slate-900">Customer Stock Dashboard</h1>
+          <p className="mt-0.5 hidden truncate text-xs text-slate-500 xl:block">Expected next order vs branded stock in hand · customers who cannot cover it come first</p>
         </div>
         <AutoComplete label="Distributor" icon={Store} options={data?.filters?.distributors || []} value={distributorId} onChange={(v) => { setDistributorId(v); setAccountId(''); }} placeholder="Distributor" testId="csd-distributor" />
         <AutoComplete label="Account" icon={Users} options={data?.filters?.accounts || []} value={accountId} onChange={setAccountId} placeholder="Account" testId="csd-account" />
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find customer" className="h-9 w-44 pl-8 text-sm" data-testid="csd-quick-find" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find customer" className="h-9 w-40 pl-8 text-sm" data-testid="csd-quick-find" />
         </div>
         <Button variant="outline" size="icon" className="h-9 w-9" onClick={fetchData} disabled={loading} data-testid="csd-refresh"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></Button>
         <Button variant="outline" className="h-9" onClick={exportExcel} disabled={exporting || !data} data-testid="csd-export-btn">
