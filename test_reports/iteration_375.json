@@ -1,0 +1,27 @@
+{
+  "summary": "Tested new Customer Stock Dashboard logic (low_stock, expected_next_order_date, urgency, priority sort, export columns). Seeded 3 QA-CSD-* deliveries via /app/backend/tests/seed_csd_qa.py: (a) Drive Folder Test Lead (DFT) with two deliveries 55d & 25d ago at qty 150 → interval 30d, expected today+5d, urgency red, low_stock true (stock 100 < 150), priority true; (b) Taj Sarees single delivery 21d ago → default 30d interval, expected in 9d, urgency amber. Backend: 8/8 pytest passed (/app/backend/tests/test_csd_new_logic.py). Frontend (CEO login, /customer-stock-dashboard, viewport 1920x1080): first tile IS Drive Folder Test Lead with data-priority='true', red ring, 'REORDER NOW' priority-badge, Low stock badge showing 'Low stock · below last order 150', stock-qty in red rgb(220,38,38), next-order-date-{id} data-urgency='red' rgb(220,38,38) '23 Sept 2026\\nin 5d · every ~30d'. Taj Sarees: data-urgency='amber' rgb(202,138,4) 'in 9d'. Demo Grand Hotel (Low Stock): urgency 'green' rgb(5,150,105). 4 tiles without orders correctly show '—'. csd-low-stock-count='1 low stock', csd-due-soon-count='9 orders due ≤ 7 days' (many pre-existing overdue customers), csd-legend visible. Tiles 2..15 alphabetical A→Z (verified sorted). Export xlsx contains 'Expected Next Order' and 'Low Stock' headers; DFT row Low Stock='YES', Expected Next Order='23 Sep 2026' (DD Mon YYYY). All last_order_date values are 10-char YYYY-MM-DD. Cleanup deleted all 3 QA-CSD-* deliveries.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_csd_new_logic.py",
+    "/app/backend/tests/seed_csd_qa.py",
+    "/app/test_reports/pytest/csd_new_logic.xml",
+    "/app/test_reports/screenshots/csd_iter375_desktop.jpg"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: summary.due_soon counts customers whose next_order_urgency == 'red' which includes long-overdue customers (e.g. 94d overdue). UI label 'orders due ≤ 7 days' can be misleading when overdue count dominates. Consider splitting into 'overdue' vs 'due ≤ 7d' or renaming to 'due or overdue'.",
+    "Minor: _expected_next_order 'interval_basis' says 'avg of last N orders' where N = len(gaps)+1 which equals number of dates used; wording is fine but could clarify when gaps < 5.",
+    "Minor: In export, the Excel filename in backend uses 'customer-stock-YYYYMMDD-HHMM.xlsx' but frontend saves as 'customer-stock-YYYY-MM-DD.xlsx' — frontend overrides via <a download>, so backend Content-Disposition filename is ignored. Not a bug, just redundancy."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_csd_new_logic.py (new)",
+    "/app/backend/tests/seed_csd_qa.py (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100%"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123",
+  "seed_data_creation": "3 QA-CSD-* distributor_deliveries seeded then cleaned. Reusable seed/clean script at /app/backend/tests/seed_csd_qa.py.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Server today is UTC. QA-CSD-* seed script at /app/backend/tests/seed_csd_qa.py (seed|clean). Test file /app/backend/tests/test_csd_new_logic.py — run with REACT_APP_BACKEND_URL exported from /app/frontend/.env (default fallback removed). Cleanup was performed at end of run."
+}
