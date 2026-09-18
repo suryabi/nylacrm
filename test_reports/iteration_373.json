@@ -1,0 +1,19 @@
+{
+  "summary": "Customer Stock Dashboard fully validated. Backend (7/7 pytest) and Frontend (all flows) pass. Backend GET /api/distributor/customer-stock-dashboard returns tiles A-Z sorted, correct shape (account_id/name/last_order_quantity/last_order_date/child_skus[]/stock_in_hand); 15 customers in preview; Demo Fresh Mart (New) shows qty=24, date=2026-08-23, child SKU 'Demo NoBPC – Fresh Mart' stock=240 in 'Demo Stock WH'; Drive Folder Test Lead shows qty=null,date=null,stock=100; distributor_id=Brian filter returns exactly {Bangalore Tech Park, Empire Restaurant, Tansen, Toopa Ice-creamery}; account_id=vgdemo-acc-new returns 1 tile; unauthenticated → 401/403. Frontend page loads at /customer-stock-dashboard with data-testid=customer-stock-dashboard, shows 15 customer-tile-{id} cards A→Z; each renders dark header with bold customer-name-{id}, last-order-qty-{id} showing formatted number or '—', last-order-date-{id} formatted like '23 Aug 2026' or '—', Stock in Hand section with prominent stock-qty-{childSkuId} chips (Demo Fresh Mart shows 240, Drive Folder Test Lead 100) or stock-none-{id} 'No branded SKU for this customer'. Summary badges (csd-summary) show '15 customers · 9 with orders · 2 branded SKUs · 340 units in hand'. Distributor autocomplete (csd-distributor-trigger→input 'Bri'→option) filters to Brian's 4 customers; Account autocomplete filters to 1 tile. Quick find (csd-quick-find) filters client-side. Refresh (csd-refresh) works. Responsive at 390px: grid stacks single-column (grid width == tile width). Regression: /global-stock-dashboard still loads. Sidebar link 'Customer Stock Dashboard' appears in Distribution module (not visible under Sales module — expected). Route protected via moduleKey customer_stock_dashboard.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_customer_stock_dashboard.py", "/app/test_reports/pytest/csd_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: the tiny X clear icon inside the radix Popover trigger (AutoComplete) can be occluded by the trigger's own click surface — Playwright's click(force=True) on the SVG often bubbles through and opens the popover instead of firing onClick. onChange('') dispatches correctly when clicked directly (verified via JS event). Consider wrapping the X in a real <button> with pointer-events isolation to make it clearer/more reliable for keyboard & E2E automation.",
+    "Optional polish: when distributor filter is set, account autocomplete list still shows ALL accounts (via the second /accounts fetch), which is intentional but can be confusing; a subtle hint like 'filtered by distributor' near the account trigger would help."
+  ],
+  "updated_files": ["/app/backend/tests/test_customer_stock_dashboard.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100%"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123",
+  "seed_data_creation": "None. Read-only feature.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend regression test at /app/backend/tests/test_customer_stock_dashboard.py covers shape, sorting, Demo Fresh Mart/Drive Folder data, Brian distributor filter (4 customers), account_id filter, and unauthenticated 401/403. Frontend sidebar entry for 'Customer Stock Dashboard' is under Distribution module only — switch module before verifying nav. The AutoComplete clear X icon is a small SVG; use JS dispatchEvent or precise coordinates to test clear in Playwright.",
+  "rca of the issue": "N/A — feature works as designed."
+}

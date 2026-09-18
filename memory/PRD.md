@@ -3371,3 +3371,7 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 
 ## 2026-06 — Before/after-run checklists strictly batch-scoped
 - `pre_production_status` no longer pulls earlier batches' after-run tasks into the next batch's before-run list (post_items always []); `consume_pre_production` no longer consumes other batches' post-run tasks; a new batch can start once ITS OWN before-run items are cleared. After-run tasks live only in their batch's Stop → After-run step (and production close gate). QR equipment page shows pending after-run tasks + those completed in last 2 days. Tests: `tests/manual_post_run_batch_scoping.py`, `tests/manual_run_scoping.py`.
+
+## 2026-06 — Customer Stock Dashboard (tested: iteration_373)
+- Route `/customer-stock-dashboard` (Distribution menu, same roles as Global Stock Dashboard; moduleKey `customer_stock_dashboard`). Backend `routes/customer_stock_dashboard.py` GET `/api/distributor/customer-stock-dashboard?distributor_id=&account_id=`.
+- Tile per active account (A→Z): bold name header, Last Order Quantity (total of latest delivered/complete Stock-Out delivery), Last Order Date (dd MMM yyyy), Stock in Hand per customer-branded child SKU (all listed, warehouse breakdown, total) across all warehouses. Distributor/Account autocomplete filters (Popover+Command) + quick-find. Distributor filter = accounts assigned to / served by that distributor, last order from that distributor only.
