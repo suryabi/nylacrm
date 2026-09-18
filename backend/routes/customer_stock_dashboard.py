@@ -4,10 +4,16 @@ own branded child SKUs across every warehouse.
 
 GET /api/distributor/customer-stock-dashboard?distributor_id=&account_id=
 """
+import io
 from collections import defaultdict
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from utils.excel_branding import brand_workbook
 
 from database import db
 from core.tenant import get_current_tenant_id
@@ -24,7 +30,86 @@ async def customer_stock_dashboard(
     account_id: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user),
 ):
-    tenant_id = get_current_tenant_id()
+    return await _build(get_current_tenant_id(), distributor_id, account_id)
+
+
+def _fmt_date(iso):
+    if not iso:
+        return ""
+    try:
+        return datetime.fromisoformat(iso[:10]).strftime("%d %b %Y")
+    except ValueError:
+        return iso
+
+
+@router.get("/distributor/customer-stock-dashboard/export")
+async def export_customer_stock_dashboard(
+    distributor_id: Optional[str] = Query(None),
+    account_id: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    data = await _build(get_current_tenant_id(), distributor_id, account_id)
+    dist_name = next((d["name"] for d in data["filters"]["distributors"] if d["id"] == distributor_id), None) if distributor_id else None
+    acct_name = next((t["account_name"] for t in data["tiles"] if t["account_id"] == account_id), None) if account_id else None
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Customer Stock"
+    ws.append(["Customer Stock Dashboard", "", "", "", "", "", "", "", ""])
+    ws["A1"].font = Font(bold=True, size=14)
+    ws.append([f"Distributor: {dist_name or 'All'}", f"Account: {acct_name or 'All'}",
+               f"Generated: {datetime.now(timezone.utc).strftime('%d %b %Y %H:%M UTC')}"])
+    ws.append([])
+    headers = ["Customer", "City", "Category", "Last Order Quantity", "Last Order Date", "Last Order No.",
+               "Branded Child SKU", "Stock in Hand", "Warehouses"]
+    ws.append(headers)
+    hdr_row = ws.max_row
+    for cell in ws[hdr_row]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="0F172A", end_color="0F172A", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    cust_fill = PatternFill(start_color="ECFEFF", end_color="ECFEFF", fill_type="solid")
+    for t in data["tiles"]:
+        base = [t["account_name"], t.get("city") or "", t.get("category") or "",
+                t["last_order_quantity"] if t["last_order_quantity"] is not None else "—",
+                _fmt_date(t["last_order_date"]) or "—", t.get("last_order_number") or "—"]
+        skus = t["child_skus"] or [{"child_sku_name": "No branded SKU", "stock_in_hand": "—", "warehouses": []}]
+        for i, s in enumerate(skus):
+            row = (base if i == 0 else ["", "", "", "", "", ""]) + [
+                s["child_sku_name"], s["stock_in_hand"],
+                " · ".join(f"{w['location_name']} {w['quantity']}" for w in s.get("warehouses") or [])]
+            ws.append(row)
+            if i == 0:
+                ws.cell(row=ws.max_row, column=1).font = Font(bold=True)
+                for cell in ws[ws.max_row]:
+                    cell.fill = cust_fill
+        if len(skus) > 1:
+            ws.append(["", "", "", "", "", "", "Total", t["stock_in_hand"], ""])
+            ws.cell(row=ws.max_row, column=7).font = Font(bold=True)
+            ws.cell(row=ws.max_row, column=8).font = Font(bold=True)
+
+    sm = data["summary"]
+    ws.append([])
+    ws.append([f"{sm['customers']} customers · {sm['with_orders']} with orders · {sm['branded_skus']} branded SKUs", "", "", "", "", "", "TOTAL STOCK IN HAND", sm["stock_in_hand"], ""])
+    for cell in ws[ws.max_row]:
+        cell.font = Font(bold=True, size=12)
+        cell.fill = PatternFill(start_color="C7D2FE", end_color="C7D2FE", fill_type="solid")
+
+    for i, wd in enumerate([32, 16, 16, 18, 16, 18, 34, 14, 40], start=1):
+        ws.column_dimensions[ws.cell(row=hdr_row, column=i).column_letter].width = wd
+    ws.freeze_panes = ws.cell(row=hdr_row + 1, column=1)
+
+    buf = io.BytesIO()
+    brand_workbook(wb)
+    wb.save(buf)
+    buf.seek(0)
+    fname = f"customer-stock-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M')}.xlsx"
+    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
+async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Optional[str]) -> dict:
 
     active = {"$in": ["active", None]}
     acct_q = {"tenant_id": tenant_id, "status": active}

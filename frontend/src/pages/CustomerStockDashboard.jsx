@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Check, ChevronsUpDown, Loader2, Package, RefreshCw, Search, Store, Users, X } from 'lucide-react';
+import { Check, ChevronsUpDown, FileSpreadsheet, Loader2, Package, RefreshCw, Search, Store, Users, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
@@ -112,6 +112,28 @@ export default function CustomerStockDashboard() {
   const [distributorId, setDistributorId] = useState('');
   const [accountId, setAccountId] = useState('');
   const [q, setQ] = useState('');
+  const [exporting, setExporting] = useState(false);
+
+  const exportExcel = useCallback(async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (distributorId) params.set('distributor_id', distributorId);
+      if (accountId) params.set('account_id', accountId);
+      const res = await axios.get(`${API_URL}/api/distributor/customer-stock-dashboard/export?${params}`, { headers: HEAD(), responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `customer-stock-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Excel downloaded');
+    } catch (e) {
+      toast.error('Export failed');
+    } finally { setExporting(false); }
+  }, [distributorId, accountId]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -152,6 +174,9 @@ export default function CustomerStockDashboard() {
             </div>
           </div>
           <Button variant="outline" size="icon" className="h-10 w-10" onClick={fetchData} disabled={loading} data-testid="csd-refresh"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></Button>
+          <Button variant="outline" className="h-10" onClick={exportExcel} disabled={exporting || !data} data-testid="csd-export-btn">
+            {exporting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-1.5 h-4 w-4 text-emerald-600" />} Excel
+          </Button>
         </div>
       </div>
 
