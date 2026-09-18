@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend visual + smoke regression for restyled /customer-stock-dashboard. All checks PASSED: 15 tiles render, no dark (slate-900) header backgrounds inside customer-tile-*, customer-name-* is bold (font-weight 800), stock-qty-* renders as large bold brand-blue text (color rgb(0,47,167) = #002FA7, font-weight 800, font-size 30px) — verified specifically on Demo Fresh Mart (New)=240 and Drive Folder Test Lead=100. 13 tiles correctly show 'No branded SKU for this customer' via stock-none-*. csd-summary is plain text with a single blue pill '340 units in hand'. Excel export button (csd-export-btn) triggered a real download named 'customer-stock-2026-09-18.xlsx' (matches pattern customer-stock-YYYY-MM-DD.xlsx) and toast 'Excel downloaded' appeared. Distributor autocomplete filter → Brian returns 4 tiles as expected. Mobile 390px renders single-column (grid-template-columns=358px, 15 tiles). No console errors captured.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/screenshots/csd_desktop_1920x900.jpg",
+    "/app/test_reports/screenshots/csd_desktop_full.jpg",
+    "/app/test_reports/screenshots/csd_mobile_390x844.jpg",
+    "/app/test_reports/screenshots/csd_mobile_full.jpg",
+    "/app/test_reports/screenshots/customer-stock-2026-09-18.xlsx"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: AutoComplete csd-distributor-clear X icon relies on stopPropagation while popup is open — a follow-up click on X while dropdown is still open may not always fire onChange('') if the popover overlay intercepts. Not blocking (users typically close popup first). Consider always onChange('') and closing popover in one handler."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only run)", "frontend": "100%"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (from review_request)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Restyled CSD verified visually. Screenshots at /app/test_reports/screenshots/csd_desktop_1920x900.jpg (viewport), csd_desktop_full.jpg (full page), csd_mobile_390x844.jpg, csd_mobile_full.jpg. Exported XLSX saved at same folder. Distributor autocomplete uses shadcn Popover+Command — use data-testids csd-distributor-trigger, csd-distributor-input, csd-distributor-option-<id>, csd-distributor-clear (do NOT try 'input inside wrapper' — the trigger is a Button, and CommandInput appears inside a Popover).",
+  "rca of the issue": "N/A — no issues found."
+}
