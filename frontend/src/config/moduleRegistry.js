@@ -132,6 +132,7 @@ export const MODULE_REGISTRY = [
     description: 'Distributor & supply chain management',
     items: [
       { key: 'global_stock_dashboard', label: 'Global Stock Dashboard', description: 'Warehouse → SKU → child SKU quantity snapshot (crates/units)' },
+      { key: 'customer_stock_dashboard', label: 'Customer Stock Dashboard', description: 'Per-customer last order and branded child SKU stock in hand' },
       { key: 'distributors', label: 'Distributors', description: 'Distributor master data & portal' },
       { key: 'stock_transfers', label: 'Stock Transfers', description: 'Inter-distributor stock transfers' },
       { key: 'stock_dashboard', label: 'Stock Dashboard', description: 'Stock levels across distributors' },

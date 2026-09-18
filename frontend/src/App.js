@@ -159,6 +159,7 @@ const DistributorDetail = lazy(() => import('./pages/DistributorDetail'));
 const StockTransfers = lazy(() => import('./pages/StockTransfers'));
 const StockDashboard = lazy(() => import('./pages/StockDashboard'));
 const GlobalStockDashboard = lazy(() => import('./pages/GlobalStockDashboard'));
+const CustomerStockDashboard = lazy(() => import('./pages/CustomerStockDashboard'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const TaskManagement = lazy(() => import('./pages/TaskManagement'));
 const TaskDetail = lazy(() => import('./pages/TaskDetail'));
@@ -535,6 +536,7 @@ function AppRouter() {
           <Route path="/admin/task-categories" element={<ProtectedRoute moduleKey="task_categories"><TaskCategories /></ProtectedRoute>} />
           <Route path="/stock-dashboard" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><StockDashboard /></ProtectedRoute>} />
           <Route path="/global-stock-dashboard" element={<ProtectedRoute moduleKey="global_stock_dashboard" appModule="distribution"><GlobalStockDashboard /></ProtectedRoute>} />
+          <Route path="/customer-stock-dashboard" element={<ProtectedRoute moduleKey="customer_stock_dashboard" appModule="distribution"><CustomerStockDashboard /></ProtectedRoute>} />
           <Route path="/cost-cards" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><CostCards /></ProtectedRoute>} />
           
           {/* Task Management */}
