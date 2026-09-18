@@ -1,0 +1,23 @@
+{
+  "summary": "FRONTEND visual/smoke pass on Customer Stock Dashboard rework. All acceptance criteria verified: 24 tiles render; first 4 tiles are Seed A, Seed C, Seed G, Seed H with data-priority='true', rose border, rose initials avatar and 'Reorder' priority-badge; 4 priority-badge-* and 4 low-stock-badge-* elements present; csd-low-stock-count reads '4 customers need a reorder'; priority tile stock number rendered in rgb(190,18,60)=rose-700; grid is 5 columns at 1920px; all customer names are 14px weight 700; no visible leaf element exceeds 20px font size. Excel export button downloads customer-stock-2026-09-18.xlsx; distributor filter narrows tiles 24 -> 13 as expected. Green tiles (Seed B, D, I, Demo Fresh Mart) show emerald next-order block with dates; Seed E shows 'No branded SKU'; Seed F shows em-dash for next order and last order; Seed H shows '0 cr'; Seed G shows two SKU rows plus Total row (10 cr). Mobile 390px screenshot renders single-column, readable. Only console noise: two 401s on unrelated resource fetches (not blocking).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/screenshots/csd_desktop_1920.png",
+    "/app/test_reports/screenshots/csd_mobile_390.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100%"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123",
+  "seed_data_creation": "None (preserved Seed A-I as instructed)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "CustomerStockDashboard rework verified in iteration 378. Screenshots at /app/test_reports/screenshots/csd_desktop_1920.png and csd_mobile_390.png. All data-testids used: customer-tile-*, customer-name-*, priority-badge-*, low-stock-badge-*, stock-number-*, csd-low-stock-count, csd-export-btn, csd-distributor-filter, csd-grid.",
+  "rca of the issue": "N/A - no issues found"
+}
