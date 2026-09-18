@@ -669,8 +669,11 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_user_
         raise HTTPException(status_code=400, detail=f"Batch code '{data.batch_code}' already exists")
 
     # Pre-production gate: every per-run equipment applicable to this SKU must be cleared.
+    # External systems (API-key callers) are exempt — the checklist is validated only
+    # when the batch is created from within the application.
     from routes.maintenance_sheets import pre_production_status, consume_pre_production, create_post_run_tasks
-    pre = {"pending": []} if data.use_run_workflow else await pre_production_status(tenant_id, sku_id, current_user)
+    is_external = bool(current_user.get("is_api_key"))
+    pre = {"pending": []} if (data.use_run_workflow or is_external) else await pre_production_status(tenant_id, sku_id, current_user)
     pre_override = None
     if pre["pending"]:
         names = ", ".join(i["name"] for i in pre["pending"])
@@ -762,8 +765,10 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_user_
         batch.update({"status": "planned", "total_crates": 0, "total_bottles": 0, "unallocated_crates": 0,
                       "run": {"created_at": now, "pre_qc": None}, "pre_production_clearances": [], "pre_production_override": None, "post_run_tasks": []})
     else:
-        batch["pre_production_clearances"] = await consume_pre_production(tenant_id, sku_id, batch)
+        # External batches do not consume the app's pre-production clearances.
+        batch["pre_production_clearances"] = [] if is_external else await consume_pre_production(tenant_id, sku_id, batch)
         batch["pre_production_override"] = pre_override
+        batch["pre_production_skipped"] = "external_api" if is_external else None
         batch["post_run_tasks"] = await create_post_run_tasks(tenant_id, sku_id, batch)
     await tdb.production_batches.insert_one(batch)
     batch.pop("_id", None)
