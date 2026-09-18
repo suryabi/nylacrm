@@ -448,7 +448,10 @@ async def equipment_scan_resolve(equipment_id: str, current_user: dict = Depends
     if eq.get("per_run_maintenance"):
         base["per_run"] = await _per_run_item(tenant_id, eq, current_user)
     if eq.get("post_run_maintenance"):
-        tasks = await db.post_run_tasks.find({"tenant_id": tenant_id, "equipment_id": eq["id"], "consumed_by_batch_id": None}, {"_id": 0}).sort("created_at", 1).to_list(50)
+        recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+        tasks = await db.post_run_tasks.find({"tenant_id": tenant_id, "equipment_id": eq["id"],
+                                              "$or": [{"status": {"$ne": "completed"}}, {"completed_at": {"$gte": recent}}]},
+                                             {"_id": 0}).sort("created_at", 1).to_list(50)
         base["post_run"] = [await _post_run_item(tenant_id, t, eq, current_user) for t in tasks]
     freq = eq.get("maintenance_frequency_days")
     if not freq:
@@ -1089,20 +1092,15 @@ async def post_run_open_tasks(tenant_id: str, sku_id: Optional[str] = None) -> l
 
 
 async def pre_production_status(tenant_id: str, sku_id: Optional[str], actor: dict, batch_id: Optional[str] = None) -> dict:
-    """Checklist for the next production run of `sku_id`: per-run clearances + open post-run cleanups from earlier batches."""
+    """Before-run checklist for one production run of `sku_id` (batch-scoped).
+    After-run tasks belong to their own batch's Stop → After-run step and are never
+    propagated into another batch's before-run list."""
     eqs = await db.equipment_master.find({"tenant_id": tenant_id, "per_run_maintenance": True}, {"_id": 0}).sort("name", 1).to_list(1000)
     items = [{**(await _per_run_item(tenant_id, eq, actor, sku_id, batch_id)), "kind": "pre"} for eq in eqs]
     if sku_id:
         items = [i for i in items if i["applies"]]
-    post_items = []
-    eq_cache = {}
-    for t in await post_run_open_tasks(tenant_id, sku_id):
-        eq = eq_cache.get(t["equipment_id"])
-        if eq is None:
-            eq = eq_cache[t["equipment_id"]] = await db.equipment_master.find_one({"tenant_id": tenant_id, "id": t["equipment_id"]}, {"_id": 0}) or {"id": t["equipment_id"], "name": t.get("equipment_name")}
-        post_items.append(await _post_run_item(tenant_id, t, eq, actor))
-    pending = [i for i in items if not i["cleared"]] + [i for i in post_items if not i["cleared"]]
-    return {"items": items, "post_items": post_items, "pending": pending, "all_clear": not pending, "sku_id": sku_id}
+    pending = [i for i in items if not i["cleared"]]
+    return {"items": items, "post_items": [], "pending": pending, "all_clear": not pending, "sku_id": sku_id}
 
 
 async def create_post_run_tasks(tenant_id: str, sku_id: str, batch: dict) -> list:
@@ -1270,14 +1268,7 @@ async def consume_pre_production(tenant_id: str, sku_id: str, batch: dict) -> li
                                                           "consumed_at": datetime.now(timezone.utc).isoformat()}})
         snap.append({"kind": "pre", "equipment_id": eq["id"], "equipment_name": eq["name"], "record_id": rec["id"],
                      "performed_by": rec.get("performed_by"), "completed_at": rec.get("completed_at"), "parameters": rec.get("parameters") or []})
-    for t in await post_run_open_tasks(tenant_id, sku_id):
-        if t.get("status") != "completed":
-            continue  # overridden-but-still-pending cleanups stay open until actually done
-        await db.post_run_tasks.update_one({"tenant_id": tenant_id, "id": t["id"]},
-                                           {"$set": {"consumed_by_batch_id": batch["id"], "consumed_by_batch_code": batch.get("batch_code")}})
-        snap.append({"kind": "post", "equipment_id": t["equipment_id"], "equipment_name": t["equipment_name"], "record_id": t.get("record_id"),
-                     "after_batch_code": t.get("batch_code"), "performed_by": t.get("performed_by"), "completed_at": t.get("completed_at"),
-                     "status": t.get("status"), "parameters": t.get("parameters") or []})
+    # After-run tasks stay with their own batch; they are not consumed by the next run.
     return snap
 
 

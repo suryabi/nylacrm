@@ -3368,3 +3368,6 @@ Brief fields added: linkedin_url, instagram_url, image_url, email, phone (create
 
 ## 2026-06 — External batch API skips checklist gate
 - `POST /api/production/batches` via API key (`current_user.is_api_key`) no longer runs the pre-production checklist validation and does not consume app clearances; batch stores `pre_production_skipped: "external_api"`. In-app creation still returns 409 when checklist pending. Post-run maintenance tasks are still created. Test: `backend/tests/manual_external_batch_no_gate.py`.
+
+## 2026-06 — Before/after-run checklists strictly batch-scoped
+- `pre_production_status` no longer pulls earlier batches' after-run tasks into the next batch's before-run list (post_items always []); `consume_pre_production` no longer consumes other batches' post-run tasks; a new batch can start once ITS OWN before-run items are cleared. After-run tasks live only in their batch's Stop → After-run step (and production close gate). QR equipment page shows pending after-run tasks + those completed in last 2 days. Tests: `tests/manual_post_run_batch_scoping.py`, `tests/manual_run_scoping.py`.
