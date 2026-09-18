@@ -3,7 +3,6 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { Check, ChevronsUpDown, FileSpreadsheet, Loader2, Package, RefreshCw, Search, Store, Users, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../components/ui/command';
 import { Input } from '../components/ui/input';
@@ -61,42 +60,47 @@ const AutoComplete = ({ label, icon: Icon, options, value, onChange, placeholder
 const CustomerTile = ({ tile }) => {
   const hasOrder = tile.last_order_date != null;
   const noStock = tile.child_skus.length === 0;
+  const initials = (tile.account_name || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
   return (
-    <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md" data-testid={`customer-tile-${tile.account_id}`}>
-      <div className="relative bg-slate-900 px-4 py-3 text-white">
-        <div className="absolute inset-y-0 left-0 w-1.5 bg-cyan-400" />
-        <h3 className="truncate pl-2 text-base font-extrabold tracking-tight md:text-lg" title={tile.account_name} data-testid={`customer-name-${tile.account_id}`}>{tile.account_name}</h3>
-        <p className="pl-2 text-[11px] text-slate-300 truncate">{[tile.city, tile.category].filter(Boolean).join(' · ') || tile.account_code || ''}</p>
-      </div>
-      <div className="grid grid-cols-2 gap-px bg-slate-100 text-sm">
-        <div className="bg-white p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Last Order Quantity</p>
-          <p className="mt-0.5 text-xl font-bold text-slate-900" data-testid={`last-order-qty-${tile.account_id}`}>{hasOrder ? fmt(tile.last_order_quantity) : '—'}</p>
-          {hasOrder && <p className="text-[10px] text-slate-400 truncate">{tile.last_order_number}{tile.last_order_distributor ? ` · ${tile.last_order_distributor}` : ''}</p>}
-        </div>
-        <div className="bg-white p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Last Order Date</p>
-          <p className="mt-0.5 text-base font-semibold text-slate-800" data-testid={`last-order-date-${tile.account_id}`}>{fmtDate(tile.last_order_date)}</p>
+    <div className="group relative flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/60" data-testid={`customer-tile-${tile.account_id}`}>
+      <div className="flex items-start gap-3 border-b border-slate-100 pb-4">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#002FA7]/10 text-sm font-extrabold text-[#002FA7]">{initials}</div>
+        <div className="min-w-0">
+          <h3 className="truncate text-lg font-extrabold tracking-tight text-slate-900" title={tile.account_name} data-testid={`customer-name-${tile.account_id}`}>{tile.account_name}</h3>
+          <p className="truncate text-xs text-slate-500">{[tile.city, tile.category].filter(Boolean).join(' · ') || tile.account_code || '\u00a0'}</p>
         </div>
       </div>
-      <div className="flex-1 border-t border-slate-100 bg-gradient-to-b from-cyan-50/60 to-white p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-cyan-800">Stock in Hand</p>
+
+      <div className="grid grid-cols-2 gap-4 py-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Last Order Quantity</p>
+          <p className="mt-1 text-2xl font-extrabold tabular-nums text-slate-900" data-testid={`last-order-qty-${tile.account_id}`}>{hasOrder ? fmt(tile.last_order_quantity) : '\u2014'}</p>
+          {hasOrder && <p className="mt-0.5 truncate text-[11px] text-slate-400">{tile.last_order_number}{tile.last_order_distributor ? ` \u00b7 ${tile.last_order_distributor}` : ''}</p>}
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Last Order Date</p>
+          <p className="mt-1 text-lg font-bold text-slate-800" data-testid={`last-order-date-${tile.account_id}`}>{fmtDate(tile.last_order_date)}</p>
+        </div>
+      </div>
+
+      <div className="mt-auto rounded-xl bg-slate-50 p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#002FA7]">Stock in Hand</p>
         {noStock ? (
-          <p className="mt-1 text-sm text-slate-400" data-testid={`stock-none-${tile.account_id}`}>No branded SKU for this customer</p>
+          <p className="mt-2 text-sm font-medium text-slate-400" data-testid={`stock-none-${tile.account_id}`}>No branded SKU for this customer</p>
         ) : (
-          <ul className="mt-1 space-y-1.5">
+          <ul className="mt-2 space-y-3">
             {tile.child_skus.map((s) => (
-              <li key={s.child_sku_id} className="flex items-center justify-between gap-2" data-testid={`stock-sku-${s.child_sku_id}`}>
+              <li key={s.child_sku_id} className="flex items-center justify-between gap-3" data-testid={`stock-sku-${s.child_sku_id}`}>
                 <span className="min-w-0">
-                  <span className="block truncate text-xs font-medium text-slate-700" title={s.child_sku_name}>{s.child_sku_name}</span>
-                  {s.warehouses.length > 0 && <span className="block truncate text-[10px] text-slate-400">{s.warehouses.map((w) => `${w.location_name} ${fmt(w.quantity)}`).join(' · ')}</span>}
+                  <span className="block truncate text-sm font-semibold text-slate-800" title={s.child_sku_name}>{s.child_sku_name}</span>
+                  {s.warehouses.length > 0 && <span className="block truncate text-[11px] text-slate-400">{s.warehouses.map((w) => `${w.location_name} ${fmt(w.quantity)}`).join(' \u00b7 ')}</span>}
                 </span>
-                <span className={`shrink-0 rounded-lg px-2 py-0.5 font-mono text-lg font-extrabold ${s.stock_in_hand > 0 ? 'bg-cyan-600 text-white' : 'bg-slate-100 text-slate-400'}`} data-testid={`stock-qty-${s.child_sku_id}`}>{fmt(s.stock_in_hand)}</span>
+                <span className={`shrink-0 text-3xl font-extrabold tabular-nums tracking-tight ${s.stock_in_hand > 0 ? 'text-[#002FA7]' : 'text-slate-300'}`} data-testid={`stock-qty-${s.child_sku_id}`}>{fmt(s.stock_in_hand)}</span>
               </li>
             ))}
             {tile.child_skus.length > 1 && (
-              <li className="flex items-center justify-between border-t border-cyan-100 pt-1.5 text-xs font-semibold text-cyan-900">
-                <span>Total</span><span className="font-mono text-base" data-testid={`stock-total-${tile.account_id}`}>{fmt(tile.stock_in_hand)}</span>
+              <li className="flex items-center justify-between border-t border-slate-200 pt-2 text-sm font-bold text-slate-700">
+                <span>Total</span><span className="text-xl tabular-nums text-[#002FA7]" data-testid={`stock-total-${tile.account_id}`}>{fmt(tile.stock_in_hand)}</span>
               </li>
             )}
           </ul>
@@ -181,11 +185,11 @@ export default function CustomerStockDashboard() {
       </div>
 
       {data && (
-        <div className="flex flex-wrap gap-2" data-testid="csd-summary">
-          <Badge variant="outline" className="bg-white">{fmt(tiles.length)} customers</Badge>
-          <Badge variant="outline" className="bg-white">{fmt(data.summary.with_orders)} with orders</Badge>
-          <Badge variant="outline" className="bg-white">{fmt(data.summary.branded_skus)} branded SKUs</Badge>
-          <Badge className="bg-cyan-600 text-white hover:bg-cyan-600"><Package className="mr-1 h-3 w-3" /> {fmt(data.summary.stock_in_hand)} units in hand</Badge>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-500" data-testid="csd-summary">
+          <span><span className="font-bold text-slate-900">{fmt(tiles.length)}</span> customers</span>
+          <span><span className="font-bold text-slate-900">{fmt(data.summary.with_orders)}</span> with orders</span>
+          <span><span className="font-bold text-slate-900">{fmt(data.summary.branded_skus)}</span> branded SKUs</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#002FA7]/10 px-3 py-1 font-semibold text-[#002FA7]"><Package className="h-3.5 w-3.5" /> {fmt(data.summary.stock_in_hand)} units in hand</span>
         </div>
       )}
 
@@ -194,7 +198,7 @@ export default function CustomerStockDashboard() {
       ) : tiles.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 py-16 text-center text-sm text-slate-500" data-testid="csd-empty">No customers match the current filters.</div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-testid="csd-grid">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-testid="csd-grid">
           {tiles.map((t) => <CustomerTile key={t.account_id} tile={t} />)}
         </div>
       )}
