@@ -1,0 +1,23 @@
+{
+  "summary": "Frontend-only verification of Customer Stock Dashboard layout fix at 1450px, 1920px, and 390px. All acceptance criteria met: header on single row with h1 and Excel button (top diff 9px) at both desktop widths, next-order dates render as 'DD Mon' two-token format with no year and no 'Sept' (e.g. '15 Oct', '25 Sep', '22 Sep', '29 Sep'), zero truncation across all 8 tiles (scrollWidth == clientWidth), critical tiles (Seed A/C/G/H) display shortfall in rose before In hand value (-12/8cr, -2/3cr, -4/10cr, -5/0cr), footer 'Last order 20 cr · 14 Sep' has no year, mobile 390px has no horizontal overflow (docScrollW == 390). Only unrelated pre-login 401/400 console errors observed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/screenshots/csd_1450.png",
+    "/app/test_reports/screenshots/csd_1920.png",
+    "/app/test_reports/screenshots/csd_390.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123",
+  "seed_data_creation": "None (used existing Seed A-I).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "CustomerStockDashboard layout fully verified at 1450/1920/390. Header controls (Distributor, Account, Find customer, refresh, Excel) remain on same row as h1 at desktop widths. Date fmt is 'DD Mon' with no year, 3-row stacked strip (Next order/Expected/In hand) is not truncated. Seeded demo customers A-I are present and rendered correctly."
+}
