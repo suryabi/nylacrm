@@ -1,0 +1,38 @@
+{
+  "summary": "Frontend-only validation of redesigned Customer Stock Dashboard (/customer-stock-dashboard) tiles. All required test-ids, urgency states, dates, font, no-ellipsis assertions, grid layout, interactions and responsive at 390 verified successfully.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_checks": [
+    "csd-summary strip renders with csd-low-stock-count (2 reorder), 18 customers, csd-groups-count (1 brand groups / 6 members), 17 ordering, 17 branded SKUs, 442 cr in hand, legend visible.",
+    "Brand Group tile group-tile-01c03819-7ace-455f-9a5e-972b5d40f328 shows 'Demo Franchise Group', 6 members, DFG chip, rose 'Short' pill (group-priority-badge).",
+    "KPI deck group-stats data-urgency='red'; group-next-order '19 Sep', group-expected-crates '54', group-stock-total '20' with '−34' pill visible in DOM/screenshot.",
+    "Shared SKU row group-sku-208de0cb-63df-406a-ab45-61c7e97b401c present with shared tag and 'Delhi · 20 cr' chip, 20 cr qty.",
+    "MEMBERS list has 6 rows (group-member-seed-csd-acct-0..5) with full names (no ellipsis), '+1 own' chips and last-order like '20 cr · 14 Sep', '—' for Seed F.",
+    "Footer group-last-orders '51 cr', group-last-order-date '18 Sep', group-history '169 cr · 17 orders'.",
+    "csd-grid: 2 columns at 1920 (790px 790px), each tile 790px wide (≥600). 18 customer tiles rendered. Group members (seed-csd-acct-0..5) NOT in csd-grid.",
+    "Seed G (customer-tile-seed-csd-acct-6): rose Short badge, next-order-date data-urgency=red, sr-only low-stock-badge present, stock-total data-shortfall=4, stock='10'.",
+    "Seed H (customer-tile-seed-csd-acct-7): rose Short badge, data-urgency=red, data-shortfall=5, in-hand shows '0' as required.",
+    "Bangalore Tech Park tile: 'No branded SKU' stock-none, In hand '0' (not '—').",
+    "Ellipsis assertion: 0 elements with computed text-overflow:ellipsis + overflow-hidden + scrollWidth>clientWidth under customer/group tiles.",
+    "All date testids match 'DD Mon' with no year.",
+    "Dashboard font-family: 'Helvetica Neue', Helvetica, Arimo, Arial, sans-serif.",
+    "Interactions: quick-find 'Seed G' -> 1 customer/0 group; 'Seed D' -> 0 customers/1 group (member match). Account filter option seed-csd-acct-7 -> 1 customer/0 group. Clear restored 18. csd-refresh works. csd-export-btn downloaded 'customer-stock-2026-09-19.xlsx'.",
+    "Responsive 390: single column, KPI deck stays 3-column (~95px each), no horizontal page overflow, no console errors."
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Group tile's stock-total does not expose data-shortfall attribute (only customer tiles do). The '−34' pill renders visually — not a bug, but consider adding data-shortfall on group-stock-total for symmetry/tests."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not-tested", "frontend": "100%"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (used successfully)",
+  "seed_data_creation": "None. Used existing demo data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Redesign of /customer-stock-dashboard tiles fully verified at 1920 and 390. All requested test-ids, urgency colors, dates, member expansion (no truncation), 2-col grid, interactions (quick find, account filter, refresh, xlsx export) work end-to-end. No console errors (401 on /api/auth/me ignored per spec)."
+}
