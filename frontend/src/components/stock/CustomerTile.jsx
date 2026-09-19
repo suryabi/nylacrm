@@ -22,7 +22,7 @@ export const CustomerTile = ({ tile }) => {
       </KpiDeck>
 
       <div className="flex-1">
-        <SkuTable skus={tile.child_skus} state={state} prefix="stock-sku" emptyText="No branded SKU" emptyTestId={`stock-none-${tile.account_id}`} />
+        <SkuTable skus={tile.child_skus} state={state} prefix="stock-sku" emptyText="No SKU ordered yet" emptyTestId={`stock-none-${tile.account_id}`} />
       </div>
 
       <Footer rows={[{ label: 'Last order', value: hasOrder ? (

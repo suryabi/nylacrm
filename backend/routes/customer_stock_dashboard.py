@@ -63,7 +63,7 @@ async def export_customer_stock_dashboard(
                f"Generated: {datetime.now(timezone.utc).strftime('%d %b %Y %H:%M UTC')}"])
     ws.append([])
     headers = ["Customer", "City", "Category", "Last Order (crates)", "Last Order Date", "Expected Next Order",
-               "Expected Crates", "Branded Child SKU", "Stock in Hand (crates)", "Stock in Hand (units)", "Low Stock", "Warehouses"]
+               "Expected Crates", "SKU (branded child / generic parent)", "Stock in Hand (crates)", "Stock in Hand (units)", "Low Stock", "Warehouses"]
     ws.append(headers)
     hdr_row = ws.max_row
     for cell in ws[hdr_row]:
@@ -77,10 +77,10 @@ async def export_customer_stock_dashboard(
                 t["last_order_crates"] if t["last_order_crates"] is not None else "—",
                 _fmt_date(t["last_order_date"]) or "—", _fmt_date(t.get("expected_next_order_date")) or "—",
                 t["expected_crates"] if t["expected_crates"] is not None else "—"]
-        skus = t["child_skus"] or [{"child_sku_name": "No branded SKU", "stock_in_hand": "—", "stock_crates": "—", "warehouses": []}]
+        skus = t["child_skus"] or [{"child_sku_name": "No SKU", "stock_in_hand": "—", "stock_crates": "—", "warehouses": []}]
         for i, s in enumerate(skus):
             row = (base if i == 0 else [""] * 7) + [
-                s["child_sku_name"], s["stock_crates"], s["stock_in_hand"], ("YES" if t["low_stock"] else "") if i == 0 else "",
+                f"{s['child_sku_name']} (generic)" if s.get("generic") else s["child_sku_name"], s["stock_crates"], s["stock_in_hand"], ("YES" if t["low_stock"] else "") if i == 0 else "",
                 " · ".join(f"{w['location_name']} {w['quantity']}" for w in s.get("warehouses") or [])]
             ws.append(row)
             if i == 0:
@@ -258,6 +258,43 @@ def _group_tiles(group_docs: list, tiles: list, child_rows: dict, sample: dict) 
     return out
 
 
+async def _generic_parent_rows(tenant_id: str, sku_ids: set, upc: dict) -> dict:
+    """Generic (no child SKU) stock per parent SKU, shaped like child rows.
+    Keyed (sku_id, distributor_id) for distributor-scoped stock and (sku_id, None) for all warehouses."""
+    if not sku_ids:
+        return {}
+    ids = list(sku_ids)
+    names = {m["id"]: m.get("sku_name") or m.get("name") async for m in db.master_skus.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "sku_name": 1, "name": 1})}
+    no_child = {"$in": [None, ""]}
+    breakdown, loc_names = defaultdict(int), {}
+    for coll, loc_field in ((db.distributor_stock, "distributor_location_id"), (db.factory_warehouse_stock, "warehouse_location_id")):
+        async for r in coll.find({"tenant_id": tenant_id, "sku_id": {"$in": ids}, "child_sku_id": no_child, "quantity": {"$gt": 0}},
+                                 {"_id": 0, "sku_id": 1, "quantity": 1, loc_field: 1, "distributor_id": 1, "location_name": 1, "warehouse_name": 1, "sku_name": 1}):
+            q = int(r.get("quantity") or 0)
+            lid = r.get(loc_field)
+            loc_names.setdefault(lid, r.get("location_name") or r.get("warehouse_name"))
+            breakdown[(r["sku_id"], r.get("distributor_id"), lid)] += q
+            names.setdefault(r["sku_id"], r.get("sku_name"))
+    unnamed = [l for l, n in loc_names.items() if not n and l]
+    if unnamed:
+        async for l in db.distributor_locations.find({"id": {"$in": unnamed}}, {"_id": 0, "id": 1, "location_name": 1}):
+            loc_names[l["id"]] = l.get("location_name")
+    scopes = {(s, d) for (s, d, _) in breakdown} | {(s, None) for s in ids}
+    rows = {}
+    for sid, did in scopes:
+        cu = upc.get(sid, 1)
+        whs = [{"location_id": lid, "location_name": loc_names.get(lid) or "Warehouse", "quantity": q}
+               for (s, d, lid), q in breakdown.items() if s == sid and (did is None or d == did)]
+        total = sum(w["quantity"] for w in whs)
+        rows[(sid, did)] = {
+            "child_sku_id": f"parent:{sid}:{did or 'all'}", "sku_id": sid, "child_sku_name": names.get(sid) or "Parent SKU", "child_sku_code": None,
+            "parent_sku_name": names.get(sid), "stock_in_hand": total, "shared": False, "generic": True, "scope": "distributor" if did else "all",
+            "brand_group_id": None, "brand_group_name": None, "units_per_crate": cu,
+            "stock_crates": round(total / cu, 1), "warehouses": sorted(whs, key=lambda w: -w["quantity"]),
+        }
+    return rows
+
+
 async def _units_per_crate(tenant_id: str, sku_ids: list) -> dict:
     upc = {}
     async for ms in db.master_skus.find({"id": {"$in": list(sku_ids)}}, {"_id": 0, "id": 1, "bottles_per_crate": 1, "packaging_config": 1}):
@@ -364,6 +401,18 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
         for aid in g.get("account_ids") or []:
             groups_by_acct[aid].append(g["id"])
 
+    # Fallback: customers without a branded child SKU show the parent SKUs they
+    # actually order, backed by generic (unbranded) stock.
+    parent_by_acct = defaultdict(set)
+    for aid, lst in sample.items():
+        if aid in children_by_acct:
+            continue
+        for d in lst:
+            for it in items_by_deliv.get(d["id"]) or []:
+                if it.get("sku_id"):
+                    parent_by_acct[aid].add(it["sku_id"])
+    parent_rows = await _generic_parent_rows(tenant_id, {s for v in parent_by_acct.values() for s in v}, upc)
+
     today = datetime.now(timezone.utc).date()
     distributors = await db.distributors.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "distributor_name": 1, "distributor_code": 1}).sort("distributor_name", 1).to_list(1000)
     dist_names = {d["id"]: d.get("distributor_name") for d in distributors}
@@ -380,6 +429,11 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
         dist_id = (lo or {}).get("distributor_id") or asg.get("distributor_id")
         dist_name = dist_names.get(dist_id) or (lo or {}).get("distributor_name") or asg.get("distributor_name")
         skus = sorted(children_by_acct.get(a["id"], []), key=lambda s: (s["child_sku_name"] or "").lower())
+        stock_kind = "branded" if skus else None
+        if not skus and parent_by_acct.get(a["id"]):
+            skus = sorted((parent_rows.get((s, dist_id)) or parent_rows[(s, None)] for s in parent_by_acct[a["id"]] if (s, None) in parent_rows),
+                          key=lambda s: (s["child_sku_name"] or "").lower())
+            stock_kind = "generic" if skus else None
         stock_units = sum(s["stock_in_hand"] for s in skus)
         stock_crates = round(sum(s["stock_crates"] for s in skus), 1)
         fc = _forecast([{"day": d["day"], "crates": d["crates"]} for d in hist], today)
@@ -395,6 +449,7 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
             "last_order_distributor": lo.get("distributor_name") if lo else None,
             "distributor_id": dist_id, "distributor_name": dist_name or "Unassigned",
             "child_skus": skus,
+            "stock_kind": stock_kind,
             "brand_group_ids": groups_by_acct.get(a["id"], []),
             "brand_group_names": [g.get("name") for g in group_docs if a["id"] in (g.get("account_ids") or [])],
             "stock_in_hand": stock_units,
@@ -420,7 +475,8 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
                     "priority": sum(1 for t in tiles if t["priority"]),
                     "stock_in_hand": sum(v["stock_in_hand"] for v in {s["child_sku_id"]: s for t in tiles for s in t["child_skus"]}.values()),
                     "stock_crates": round(sum(v["stock_crates"] for v in {s["child_sku_id"]: s for t in tiles for s in t["child_skus"]}.values()), 1),
-                    "branded_skus": sum(len(t["child_skus"]) for t in tiles)},
+                    "branded_skus": sum(len(t["child_skus"]) for t in tiles if t["stock_kind"] == "branded"),
+                    "generic_customers": sum(1 for t in tiles if t["stock_kind"] == "generic")},
         "filters": {
             "distributors": [{"id": d["id"], "name": d.get("distributor_name"), "code": d.get("distributor_code")} for d in distributors],
             "accounts": sorted([{"id": a["id"], "name": a.get("account_name") or "—", "city": a.get("city")} for a in all_accounts], key=lambda x: x["name"].lower()),

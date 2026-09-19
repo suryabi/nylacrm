@@ -70,6 +70,7 @@ export const SkuTable = ({ skus, state, prefix, emptyText, emptyTestId }) => (
           <p className="flex flex-wrap items-center gap-2 text-xs text-slate-800 [overflow-wrap:anywhere]">
             <span>{sk.child_sku_name}</span>
             {sk.shared && <span className="rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700" data-testid={`shared-tag-${sk.child_sku_id}`}>shared</span>}
+            {sk.generic && <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700" data-testid={`generic-tag-${sk.sku_id}`}>{sk.scope === 'distributor' ? 'generic · at distributor' : 'generic · all warehouses'}</span>}
           </p>
           {sk.warehouses?.length > 0 && (
             <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">

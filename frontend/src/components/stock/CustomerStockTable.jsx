@@ -7,7 +7,7 @@ const slug = (s) => (s || 'unassigned').toLowerCase().replace(/[^a-z0-9]+/g, '-'
 const statusOf = (t) => {
   if (t.low_stock) return { label: 'Short', cls: 'bg-rose-700 text-white' };
   if (t.next_order_urgency === 'green') return { label: 'Covered', cls: 'bg-emerald-100 text-emerald-800 border border-emerald-200' };
-  if (!t.child_skus.length) return { label: 'No branded SKU', cls: 'bg-slate-100 text-slate-500' };
+  if (!t.child_skus.length) return { label: 'No SKU yet', cls: 'bg-slate-100 text-slate-500' };
   return { label: 'No orders', cls: 'bg-slate-100 text-slate-500' };
 };
 const tone = (t) => (t.low_stock ? 'text-rose-700 font-semibold' : t.next_order_urgency === 'green' ? 'text-emerald-700' : 'text-slate-700');
@@ -52,11 +52,14 @@ const CustomerRow = ({ t, indent }) => {
         <div className="text-xs text-slate-400">{t.city || t.account_code || '\u00a0'}</div>
       </td>
       <td className="px-3 py-2.5 align-top">
-        {t.child_skus.length === 0 ? <span className="text-xs text-slate-400">No branded SKU</span> : (
+        {t.child_skus.length === 0 ? <span className="text-xs text-slate-400">No SKU ordered yet</span> : (
           <ul className="space-y-0.5">
             {t.child_skus.map((s) => (
               <li key={s.child_sku_id} className="flex items-center justify-between gap-3 text-xs [overflow-wrap:anywhere]">
-                <span className="text-slate-700">{s.child_sku_name}{s.shared && <span className="ml-1.5 rounded border border-violet-200 bg-violet-50 px-1 py-px text-[10px] font-medium text-violet-700">shared</span>}</span>
+                <span className="text-slate-700">{s.child_sku_name}
+                  {s.shared && <span className="ml-1.5 rounded border border-violet-200 bg-violet-50 px-1 py-px text-[10px] font-medium text-violet-700">shared</span>}
+                  {s.generic && <span className="ml-1.5 rounded border border-amber-200 bg-amber-50 px-1 py-px text-[10px] font-medium text-amber-700">generic</span>}
+                </span>
                 <span className={`shrink-0 tabular-nums ${s.stock_in_hand > 0 ? 'text-slate-800' : 'text-slate-400'}`}>{fmtCrates(s.stock_crates)} cr</span>
               </li>
             ))}
@@ -125,7 +128,7 @@ export const CustomerStockTable = ({ tiles }) => {
         <thead className="border-b border-slate-200 bg-white">
           <tr>
             <Th className="w-[30%]">Customer</Th>
-            <Th className="w-[26%]">Branded SKUs · in hand</Th>
+            <Th className="w-[26%]">SKUs · in hand</Th>
             <Th>Status</Th>
             <Th right>In hand</Th>
             <Th right>Expected</Th>

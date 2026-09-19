@@ -145,6 +145,7 @@ export default function CustomerStockDashboard() {
           {groups.length > 0 && <span data-testid="csd-groups-count"><span className="font-semibold text-slate-800">{fmt(groups.length)}</span> brand groups <span className="text-slate-400">({fmt(groups.reduce((n, g) => n + g.members.length, 0))} members)</span></span>}
           <span><span className="font-semibold text-slate-800">{fmt(data.summary.with_orders)}</span> ordering</span>
           <span><span className="font-semibold text-slate-800">{fmt(data.summary.branded_skus)}</span> branded SKUs</span>
+          {data.summary.generic_customers > 0 && <span data-testid="csd-generic-count"><span className="font-semibold text-slate-800">{fmt(data.summary.generic_customers)}</span> on generic stock</span>}
           <span className="inline-flex items-center gap-1.5"><Package className="h-3.5 w-3.5" /> <span className="font-semibold text-slate-800">{fmtCrates(data.summary.stock_crates)}</span> cr in hand</span>
           <span className="ml-auto hidden items-center gap-3 text-xs md:inline-flex" data-testid="csd-legend">
             <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-700" /> short</span>
