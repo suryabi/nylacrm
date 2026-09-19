@@ -28,14 +28,13 @@ export const BrandGroupTile = ({ group }) => {
           <span>Members</span>
           <span className="font-medium normal-case tracking-normal text-slate-400">last order</span>
         </div>
-        <ul className="mt-1.5 space-y-0.5" data-testid={`group-member-list-${group.group_id}`}>
+        <ul className="mt-1.5 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-100" data-testid={`group-member-list-${group.group_id}`}>
           {group.members.map((m) => (
-            <li key={m.account_id} className="-mx-2.5 flex items-center justify-between gap-3 rounded-lg px-2.5 py-1 text-xs transition-colors hover:bg-slate-50" data-testid={`group-member-${m.account_id}`}
+            <li key={m.account_id} className="flex items-center justify-between gap-3 px-2.5 py-1.5 text-xs transition-colors odd:bg-white even:bg-slate-50/70 hover:bg-violet-50/50" data-testid={`group-member-${m.account_id}`}
               title={`${m.account_name}${m.city ? ` · ${m.city}` : ''}${m.expected_next_order_date ? ` · next ${fmtDate(m.expected_next_order_date)} · ${fmtCrates(m.expected_crates)} cr` : ''}`}>
-              <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-slate-700 [overflow-wrap:anywhere]">
-                <span className={`h-2 w-2 shrink-0 rounded-full ${m.low_stock ? 'bg-rose-700' : m.expected_next_order_date ? 'bg-emerald-700' : 'bg-slate-300'}`} />
-                <span className={m.low_stock ? "text-rose-700" : ""}>{m.account_name}</span>
-                {m.own_skus > 0 && <span className="rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700" data-testid={`group-member-own-${m.account_id}`}>+{m.own_skus} own</span>}
+              <span className="flex min-w-0 flex-1 items-start gap-2 text-slate-700">
+                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${m.low_stock ? 'bg-rose-700' : m.expected_next_order_date ? 'bg-emerald-700' : 'bg-slate-300'}`} />
+                <span className={`min-w-0 [overflow-wrap:anywhere] ${m.low_stock ? 'text-rose-700' : ''}`}>{m.account_name}</span>
               </span>
               <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-slate-500" data-testid={`group-member-last-${m.account_id}`}>
                 {m.last_order_date ? <><span className="text-slate-700">{fmtCrates(m.last_order_crates)} cr</span><span className="mx-1 text-slate-300">/</span>{fmtDateFull(m.last_order_date)}</> : '\u2014'}
