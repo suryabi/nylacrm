@@ -1,15 +1,22 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Layers, Store } from 'lucide-react';
-import { fmtCrates, fmtDate } from './tileBits';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Clock, Layers, PackageOpen, Store } from 'lucide-react';
+import { fmtCrates, fmtDate, fmtDateFull } from './tileBits';
 
 const COLS = 7;
 const slug = (s) => (s || 'unassigned').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+// Symbolic status: icon only, label in tooltip + sr-only.
 const statusOf = (t) => {
-  if (t.low_stock) return { label: 'Short', cls: 'bg-rose-700 text-white' };
-  if (t.next_order_urgency === 'green') return { label: 'Covered', cls: 'bg-emerald-100 text-emerald-800 border border-emerald-200' };
-  if (!t.child_skus.length) return { label: 'No SKU yet', cls: 'bg-slate-100 text-slate-500' };
-  return { label: 'No orders', cls: 'bg-slate-100 text-slate-500' };
+  if (t.low_stock) return { label: 'Short', key: 'short', Icon: AlertTriangle, cls: 'bg-rose-700 text-white' };
+  if (t.next_order_urgency === 'green') return { label: 'Covered', key: 'covered', Icon: CheckCircle2, cls: 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200' };
+  if (!t.child_skus.length) return { label: 'No SKU yet', key: 'no-sku', Icon: PackageOpen, cls: 'bg-slate-100 text-slate-400' };
+  return { label: 'No orders', key: 'no-orders', Icon: Clock, cls: 'bg-slate-100 text-slate-400' };
 };
+export const STATUS_LEGEND = [
+  { key: 'short', label: 'Short', Icon: AlertTriangle, cls: 'bg-rose-700 text-white' },
+  { key: 'covered', label: 'Covered', Icon: CheckCircle2, cls: 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200' },
+  { key: 'no-orders', label: 'No orders', Icon: Clock, cls: 'bg-slate-100 text-slate-400' },
+  { key: 'no-sku', label: 'No SKU yet', Icon: PackageOpen, cls: 'bg-slate-100 text-slate-400' },
+];
 const tone = (t) => (t.low_stock ? 'text-rose-700 font-semibold' : t.next_order_urgency === 'green' ? 'text-emerald-700' : 'text-slate-700');
 const uniqueInHand = (rows) => [...new Map(rows.flatMap((r) => r.child_skus).map((s) => [s.child_sku_id, s])).values()].reduce((s, sk) => s + (sk.stock_crates || 0), 0);
 const expectedOf = (rows) => rows.reduce((s, r) => s + (r.expected_crates || 0), 0);
@@ -60,23 +67,25 @@ const CustomerRow = ({ t, indent }) => {
                   {s.shared && <span className="ml-1.5 rounded border border-violet-200 bg-violet-50 px-1 py-px text-[10px] font-medium text-violet-700">shared</span>}
                   {s.generic && <span className="ml-1.5 rounded border border-amber-200 bg-amber-50 px-1 py-px text-[10px] font-medium text-amber-700">generic</span>}
                 </span>
-                <span className={`shrink-0 tabular-nums ${s.stock_in_hand > 0 ? 'text-slate-800' : 'text-slate-400'}`}>{fmtCrates(s.stock_crates)} cr</span>
+                <span className={`shrink-0 text-sm tabular-nums ${s.stock_in_hand > 0 ? 'text-slate-800' : 'text-slate-400'}`}>{fmtCrates(s.stock_crates)} cr</span>
               </li>
             ))}
           </ul>
         )}
       </td>
-      <td className="px-3 py-2.5 align-top">
-        <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${st.cls}`} data-testid={`cst-status-${t.account_id}`}>{st.label}</span>
+      <td className="px-3 py-2.5 text-center align-top">
+        <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${st.cls}`} title={st.label} data-testid={`cst-status-${t.account_id}`} data-status={st.key}>
+          <st.Icon className="h-4 w-4" /><span className="sr-only">{st.label}</span>
+        </span>
       </td>
-      <td className={`whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums ${t.low_stock ? 'text-rose-700 font-semibold' : t.child_skus.length ? 'text-slate-900' : 'text-slate-400'}`} data-testid={`cst-inhand-${t.account_id}`}>
+      <td className={`whitespace-nowrap px-3 py-2.5 text-right align-top text-base tabular-nums ${t.low_stock ? 'text-rose-700 font-semibold' : t.child_skus.length ? 'text-slate-900' : 'text-slate-400'}`} data-testid={`cst-inhand-${t.account_id}`}>
         {t.child_skus.length ? fmtCrates(t.stock_crates) : '0'} <span className="text-xs font-normal text-slate-400">cr</span>
         {t.low_stock && <span className="ml-1.5 rounded bg-rose-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">−{fmtCrates(t.expected_crates - t.stock_crates)}</span>}
       </td>
-      <td className={`whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums ${tone(t)}`} data-testid={`cst-expected-${t.account_id}`}>{t.expected_crates != null ? <>{fmtCrates(t.expected_crates)} <span className="text-xs font-normal text-slate-400">cr</span></> : '—'}</td>
+      <td className={`whitespace-nowrap px-3 py-2.5 text-right align-top text-base tabular-nums ${tone(t)}`} data-testid={`cst-expected-${t.account_id}`}>{t.expected_crates != null ? <>{fmtCrates(t.expected_crates)} <span className="text-xs font-normal text-slate-400">cr</span></> : '—'}</td>
       <td className={`whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums ${tone(t)}`} data-testid={`cst-next-${t.account_id}`}>{fmtDate(t.expected_next_order_date)}</td>
       <td className="whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums text-slate-700" data-testid={`cst-last-${t.account_id}`}>
-        {t.last_order_date ? <><span className="font-medium">{fmtCrates(t.last_order_crates)} cr</span><span className="mx-1.5 text-slate-300">·</span>{fmtDate(t.last_order_date)}</> : '—'}
+        {t.last_order_date ? <><span className="text-base font-medium">{fmtCrates(t.last_order_crates)} cr</span><span className="mx-1.5 text-slate-300">/</span>{fmtDateFull(t.last_order_date)}</> : '—'}
       </td>
     </tr>
   );
@@ -124,12 +133,16 @@ export const CustomerStockTable = ({ tiles }) => {
   if (!blocks.length) return <div className="rounded-2xl border border-dashed border-slate-300 py-16 text-center text-sm text-slate-500" data-testid="cst-empty">No customers match the current filters.</div>;
   return (
     <div className="overflow-x-auto rounded-2xl border border-slate-200/90 bg-white shadow-sm" data-testid="cst-table-wrap">
+      <div className="flex flex-wrap items-center gap-4 border-b border-slate-100 px-4 py-2 text-xs text-slate-500" data-testid="cst-status-legend">
+        <span className="font-medium uppercase tracking-wider text-slate-400">Status</span>
+        {STATUS_LEGEND.map((l) => <span key={l.key} className="inline-flex items-center gap-1.5"><span className={`inline-flex h-5 w-5 items-center justify-center rounded-full ${l.cls}`}><l.Icon className="h-3 w-3" /></span>{l.label}</span>)}
+      </div>
       <table className="w-full min-w-[960px] text-left" data-testid="cst-table">
         <thead className="border-b border-slate-200 bg-white">
           <tr>
             <Th className="w-[30%]">Customer</Th>
             <Th className="w-[26%]">SKUs · in hand</Th>
-            <Th>Status</Th>
+            <Th className="text-center">Status</Th>
             <Th right>In hand</Th>
             <Th right>Expected</Th>
             <Th right>Next order</Th>

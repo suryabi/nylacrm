@@ -1,6 +1,6 @@
 import React from 'react';
 import { Layers } from 'lucide-react';
-import { TileShell, KpiDeck, Kpi, SkuTable, Footer, fmtCrates, fmtDate, stateOf, kpiTone } from './tileBits';
+import { TileShell, KpiDeck, Kpi, SkuTable, Footer, fmtCrates, fmtDate, fmtDateFull, stateOf, kpiTone } from './tileBits';
 
 export const BrandGroupTile = ({ group }) => {
   const critical = group.low_stock;
@@ -38,7 +38,7 @@ export const BrandGroupTile = ({ group }) => {
                 {m.own_skus > 0 && <span className="rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700" data-testid={`group-member-own-${m.account_id}`}>+{m.own_skus} own</span>}
               </span>
               <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-slate-500" data-testid={`group-member-last-${m.account_id}`}>
-                {m.last_order_date ? <><span className="text-slate-700">{fmtCrates(m.last_order_crates)} cr</span><span className="mx-1.5 text-slate-300">·</span>{fmtDate(m.last_order_date)}</> : '\u2014'}
+                {m.last_order_date ? <><span className="text-slate-700">{fmtCrates(m.last_order_crates)} cr</span><span className="mx-1 text-slate-300">/</span>{fmtDateFull(m.last_order_date)}</> : '\u2014'}
               </span>
             </li>
           ))}
@@ -47,7 +47,7 @@ export const BrandGroupTile = ({ group }) => {
 
       <Footer rows={[
         { label: 'Last orders', value: group.last_order_date
-          ? <><span data-testid={`group-last-orders-${group.group_id}`}>{fmtCrates(group.last_orders_crates)} cr</span><span className="mx-2 font-normal text-slate-300">·</span><span data-testid={`group-last-order-date-${group.group_id}`}>{fmtDate(group.last_order_date)}</span></>
+          ? <><span data-testid={`group-last-orders-${group.group_id}`}>{fmtCrates(group.last_orders_crates)} cr</span><span className="mx-1.5 font-normal text-slate-300">/</span><span data-testid={`group-last-order-date-${group.group_id}`}>{fmtDateFull(group.last_order_date)}</span></>
           : <span data-testid={`group-last-orders-${group.group_id}`}>{'\u2014'}</span> },
         { label: 'Recent history', value: <span data-testid={`group-history-${group.group_id}`}>{group.history_orders ? <>{fmtCrates(group.history_crates)} cr<span className="mx-2 font-normal text-slate-300">·</span>{group.history_orders} orders</> : '\u2014'}</span> },
       ]} />

@@ -10,6 +10,12 @@ export const fmtDate = (iso) => {
   const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
   return Number.isNaN(d.getTime()) ? iso : `${String(d.getDate()).padStart(2, '0')} ${MONTHS[d.getMonth()]}`;
 };
+// Last-order format: "18-Sep-2026".
+export const fmtDateFull = (iso) => {
+  if (!iso) return '\u2014';
+  const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
+  return Number.isNaN(d.getTime()) ? iso : `${String(d.getDate()).padStart(2, '0')}-${MONTHS[d.getMonth()]}-${d.getFullYear()}`;
+};
 
 // state: 'critical' | 'covered' | 'neutral'
 export const stateOf = (critical, urgency) => (critical ? 'critical' : urgency === 'green' ? 'covered' : 'neutral');

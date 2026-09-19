@@ -1,5 +1,5 @@
 import React from 'react';
-import { TileShell, KpiDeck, Kpi, SkuTable, Footer, fmtCrates, fmtDate, stateOf, kpiTone } from './tileBits';
+import { TileShell, KpiDeck, Kpi, SkuTable, Footer, fmtCrates, fmtDate, fmtDateFull, stateOf, kpiTone } from './tileBits';
 
 export const CustomerTile = ({ tile }) => {
   const hasOrder = tile.last_order_date != null;
@@ -26,7 +26,7 @@ export const CustomerTile = ({ tile }) => {
       </div>
 
       <Footer rows={[{ label: 'Last order', value: hasOrder ? (
-        <><span data-testid={`last-order-qty-${tile.account_id}`}>{fmtCrates(tile.last_order_crates)} cr</span><span className="mx-2 font-normal text-slate-300">·</span><span data-testid={`last-order-date-${tile.account_id}`}>{fmtDate(tile.last_order_date)}</span></>
+        <><span data-testid={`last-order-qty-${tile.account_id}`}>{fmtCrates(tile.last_order_crates)} cr</span><span className="mx-1.5 font-normal text-slate-300">/</span><span data-testid={`last-order-date-${tile.account_id}`}>{fmtDateFull(tile.last_order_date)}</span></>
       ) : <span data-testid={`last-order-qty-${tile.account_id}`}>{'\u2014'}</span> }]} />
     </TileShell>
   );
