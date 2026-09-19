@@ -129,7 +129,7 @@ export default function CustomerStockDashboard() {
       </div>
 
       {data && (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-500" data-testid="csd-summary">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-500 shadow-sm" data-testid="csd-summary">
           {data.summary.low_stock > 0 && <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-700 px-2.5 py-1 text-xs font-semibold text-white" data-testid="csd-low-stock-count"><AlertTriangle className="h-3.5 w-3.5" /> {fmt(data.summary.low_stock)} reorder</span>}
           <span><span className="font-semibold text-slate-800">{fmt(tiles.length)}</span> customers</span>
           {groups.length > 0 && <span data-testid="csd-groups-count"><span className="font-semibold text-slate-800">{fmt(groups.length)}</span> brand groups <span className="text-slate-400">({fmt(groups.reduce((n, g) => n + g.members.length, 0))} members)</span></span>}
@@ -146,7 +146,7 @@ export default function CustomerStockDashboard() {
       {groups.length > 0 && (
         <section className="space-y-3" data-testid="csd-groups-section">
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-violet-700"><Layers className="h-4 w-4" /> Brand Groups <span className="font-normal normal-case tracking-normal text-slate-400">· shared stock &amp; members&apos; orders</span></div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="csd-groups-grid">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2" data-testid="csd-groups-grid">
             {groups.map((g) => <BrandGroupTile key={g.group_id} group={g} />)}
           </div>
           {tiles.length > 0 && <div className="pt-2 text-xs font-medium uppercase tracking-wide text-slate-500">Customers</div>}
@@ -158,7 +158,7 @@ export default function CustomerStockDashboard() {
       ) : tiles.length === 0 && groups.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 py-16 text-center text-sm text-slate-500" data-testid="csd-empty">No customers match the current filters.</div>
       ) : tiles.length === 0 ? null : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="csd-grid">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2" data-testid="csd-grid">
           {tiles.map((t) => <CustomerTile key={t.account_id} tile={t} />)}
         </div>
       )}

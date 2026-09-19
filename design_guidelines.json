@@ -1,203 +1,182 @@
 {
   "theme": {
-    "archetype": "THE_PERFORMANCE_PRO_SWISS_HYBRID",
-    "mode": "light_first_with_dark_support",
+    "archetype": "SWISS_PRECISION_OPERATIONS",
+    "mode": "light_first_with_neutral_contrast",
     "color_palette": {
-      "page_background": "bg-slate-50/70 dark:bg-slate-950",
-      "surface_card": "bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm",
-      "primary_brand": {
-        "hex": "#002FA7",
-        "tailwind_bg": "bg-[#002FA7] hover:bg-[#00227A]",
-        "tailwind_text": "text-[#002FA7] dark:text-blue-400"
+      "page_background": "bg-slate-50/60 text-slate-900",
+      "surface_card": "bg-white border shadow-sm",
+      "brand_customer_accent": {
+        "primary": "#002FA7",
+        "avatar_bg": "bg-[#002FA7]/10 text-[#002FA7]",
+        "border_subtle": "border-slate-200/90"
       },
-      "kpi_accents": {
-        "all_equipment": {
-          "border": "border-slate-200 hover:border-slate-400 dark:border-slate-800",
-          "active_ring": "ring-2 ring-slate-900 bg-slate-50/80 dark:bg-slate-800/60 dark:ring-slate-300",
-          "icon_bg": "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-          "badge": "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+      "brand_group_accent": {
+        "primary": "#7C3AED",
+        "avatar_bg": "bg-violet-100 text-violet-700",
+        "border_subtle": "border-violet-200/80",
+        "badge_bg": "bg-violet-50 text-violet-700 border-violet-200"
+      },
+      "stock_status_conventions": {
+        "critical_short": {
+          "label": "Short / Cannot cover order",
+          "text_color": "text-rose-700",
+          "bg_surface": "bg-rose-50/80",
+          "border_color": "border-rose-300",
+          "dot": "bg-rose-700",
+          "pill_badge": "bg-rose-700 text-white shadow-xs font-semibold"
         },
-        "overdue": {
-          "border": "border-rose-200 hover:border-rose-400 dark:border-rose-900/50",
-          "active_ring": "ring-2 ring-rose-600 bg-rose-50/80 dark:bg-rose-950/40 dark:ring-rose-500",
-          "icon_bg": "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400",
-          "text": "text-rose-700 dark:text-rose-400",
-          "badge": "bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200"
+        "covered_ok": {
+          "label": "Covered / Sufficient stock",
+          "text_color": "text-emerald-700",
+          "bg_surface": "bg-emerald-50/50",
+          "border_color": "border-emerald-200",
+          "dot": "bg-emerald-700",
+          "pill_badge": "bg-emerald-100 text-emerald-800 border border-emerald-200"
         },
-        "due_soon": {
-          "border": "border-amber-200 hover:border-amber-400 dark:border-amber-900/50",
-          "active_ring": "ring-2 ring-amber-500 bg-amber-50/80 dark:bg-amber-950/40 dark:ring-amber-400",
-          "icon_bg": "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
-          "text": "text-amber-700 dark:text-amber-400",
-          "badge": "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
-        },
-        "order_now": {
-          "border": "border-orange-200 hover:border-orange-400 dark:border-orange-900/50",
-          "active_ring": "ring-2 ring-orange-600 bg-orange-50/80 dark:bg-orange-950/40 dark:ring-orange-500",
-          "icon_bg": "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400",
-          "text": "text-orange-700 dark:text-orange-400",
-          "badge": "bg-orange-100 text-orange-800 dark:bg-orange-900/60 dark:text-orange-200"
+        "neutral_nodata": {
+          "text_color": "text-slate-400",
+          "bg_surface": "bg-slate-50/80",
+          "border_color": "border-slate-200",
+          "dot": "bg-slate-300",
+          "placeholder_value": "0"
         }
-      },
-      "status_chips": {
-        "overdue": "bg-red-50 text-red-700 border border-red-200/80 font-medium dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50",
-        "soon": "bg-amber-50 text-amber-800 border border-amber-200/80 font-medium dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/50",
-        "ok": "bg-emerald-50 text-emerald-700 border border-emerald-200/80 font-medium dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900/50",
-        "assembly": "bg-indigo-50 text-indigo-700 border border-indigo-200/80 font-semibold dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-900/50"
       }
     },
     "typography": {
-      "brand_font": "Helvetica Neue, Helvetica, Arimo, Arial, sans-serif",
-      "h1_title": "text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white",
-      "subtitle": "text-sm text-slate-500 dark:text-slate-400",
-      "section_label": "text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400",
-      "table_header": "text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-sm",
-      "metric_number": "text-2xl sm:text-3xl font-bold tabular-nums tracking-tight",
-      "body_text": "text-sm text-slate-700 dark:text-slate-200",
-      "muted_meta": "text-xs text-slate-500 dark:text-slate-400"
+      "font_family": "Helvetica, 'Helvetica Neue', Arial, sans-serif",
+      "header_h1": "text-xl sm:text-2xl font-semibold tracking-tight text-slate-900",
+      "tile_title": "text-base font-bold text-slate-900 leading-snug",
+      "tile_subtitle": "text-xs font-medium text-slate-500 tracking-normal",
+      "kpi_label": "text-[11px] font-semibold uppercase tracking-wider text-slate-400",
+      "kpi_value_primary": "text-lg sm:text-xl font-bold tabular-nums tracking-tight",
+      "kpi_value_secondary": "text-sm font-semibold tabular-nums",
+      "data_row_text": "text-xs sm:text-sm text-slate-700 font-normal",
+      "meta_detail": "text-[11px] text-slate-400 font-normal",
+      "date_format": "dd MMM (e.g., '18 Sep', '04 Oct' - no year, no line wrap)"
     }
   },
-  "layout_and_components": {
-    "header_section": {
-      "container": "flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-200/70 dark:border-slate-800",
-      "title_group": "flex items-center gap-3.5",
-      "icon_wrapper": "p-2.5 rounded-xl bg-gradient-to-br from-indigo-50 to-blue-100 text-[#002FA7] dark:from-indigo-950/50 dark:to-blue-900/40 dark:text-blue-300 shadow-sm border border-blue-100/80 dark:border-blue-900/50",
-      "cta_group": "flex items-center gap-2.5",
-      "add_equipment_btn": "h-10 px-4 font-semibold text-sm rounded-lg bg-[#002FA7] hover:bg-[#00227A] text-white shadow-sm transition-transform active:scale-[0.98]"
-    },
-    "interactive_kpi_cards": {
-      "pattern": "Bento KPI Grid with Quick Filter Actionability",
-      "grid_classes": "grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4",
-      "card_interaction": "cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md rounded-xl p-4 sm:p-5 border relative overflow-hidden group",
-      "click_behavior": "Clicking a KPI card sets/toggles quick filter state (e.g. clicking 'Maintenance Overdue' filters table directly to overdue items with visual active badge and a Clear quick filter pill).",
-      "cards": [
-        {
-          "id": "all",
-          "label": "Total Equipment",
-          "icon": "Cog",
-          "tooltip": "All active equipment & assembly units"
+  "tile_redesign_blueprint": {
+    "user_feedback_addressed": [
+      "Wider cards layout: Shift from cramped 3-col 540px grid at 1920px to a comfortable 2-column grid on desktop (grid-cols-1 md:grid-cols-1 xl:grid-cols-2 2xl:grid-cols-2), giving each tile ~720px-880px width so all names, warehouse breakdowns, and member rows fit with zero awkward wrapping and zero ellipses.",
+      "Helvetica font throughout, reduced font clutter with distinct optical hierarchy.",
+      "Eliminated all Overdue info as requested, retaining strictly expected next order, expected crates, and crates in hand.",
+      "Global stock dashboard conventions respected: rose-700 for short / emerald-700 for covered.",
+      "Clear 0 display: When stock is unavailable, explicitly show '0 cr' instead of misleading dashes or blank spaces.",
+      "If stock is available, date stays clear/emerald; if stock is short, both expected date and in-hand deficit turn rose-700 with an explicit negative shortfall badge (-X cr).",
+      "No date wrapping: Dates formatted as '18 Sep' using whitespace-nowrap.",
+      "High density readable sections: 3-column structured forecast command deck inside each tile with light neutral dividers."
+    ],
+    "tile_layout_structure": {
+      "shell": "relative flex flex-col rounded-2xl border bg-white p-5 sm:p-6 shadow-xs hover:shadow-md transition-all duration-200 hover:-translate-y-0.5",
+      "critical_border": "border-rose-300 ring-1 ring-rose-200/80 bg-gradient-to-b from-rose-50/20 to-white",
+      "standard_border": "border-slate-200/90 hover:border-slate-300",
+      "group_border": "border-violet-200/90 hover:border-violet-300 bg-gradient-to-b from-violet-50/15 to-white",
+      "header_row": {
+        "avatar_size": "h-11 w-11 shrink-0 rounded-xl flex items-center justify-center font-bold text-sm tracking-wide",
+        "title_box": "min-w-0 flex-1 pr-2",
+        "account_name": "text-base font-bold text-slate-900 break-words line-clamp-2 leading-snug",
+        "account_meta": "flex items-center gap-2 mt-0.5 text-xs text-slate-500 font-medium",
+        "alert_badge": "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-700 text-white text-xs font-semibold shadow-xs shrink-0"
+      },
+      "forecast_metrics_block": {
+        "container": "mt-4 grid grid-cols-3 divide-x divide-slate-200/70 rounded-xl border p-3.5",
+        "critical_style": "bg-rose-50/70 border-rose-200 divide-rose-200/70",
+        "covered_style": "bg-emerald-50/40 border-emerald-200/70 divide-emerald-200/50",
+        "neutral_style": "bg-slate-50/80 border-slate-200/70 divide-slate-200/70",
+        "col_next_order": {
+          "label": "Next Order",
+          "value_style": "text-base sm:text-lg font-bold tabular-nums whitespace-nowrap",
+          "sub_text": "text-[11px] text-slate-400 whitespace-nowrap"
         },
-        {
-          "id": "overdue",
-          "label": "Maintenance Overdue",
-          "icon": "AlertTriangle",
-          "tooltip": "Requires immediate maintenance attention"
+        "col_expected": {
+          "label": "Expected Crates",
+          "value_style": "text-base sm:text-lg font-bold tabular-nums whitespace-nowrap",
+          "sub_text": "text-[11px] font-medium text-slate-400"
         },
-        {
-          "id": "due_soon",
-          "label": "Due in 30 Days",
-          "icon": "CalendarCheck",
-          "tooltip": "Upcoming scheduled preventive maintenance"
-        },
-        {
-          "id": "order_now",
-          "label": "Order Now (Lead Time)",
-          "icon": "ShoppingCart",
-          "tooltip": "Replacement due within vendor procurement lead time"
+        "col_in_hand": {
+          "label": "In Hand Stock",
+          "value_style": "text-base sm:text-lg font-bold tabular-nums whitespace-nowrap",
+          "shortfall_pill": "inline-flex items-center ml-1.5 px-1.5 py-0.5 rounded text-xs font-semibold bg-rose-700 text-white tabular-nums"
         }
-      ]
-    },
-    "filter_bar": {
-      "container": "bg-white dark:bg-slate-900 p-3 sm:p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3",
-      "search_input": "relative flex-1 min-w-[240px] max-w-md",
-      "search_icon": "absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400",
-      "search_field": "pl-9 pr-8 h-10 rounded-lg border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 focus:bg-white dark:focus:bg-slate-900 text-sm transition-colors",
-      "cascading_dropdowns_group": "flex flex-wrap items-center gap-2",
-      "select_style": "h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-[#002FA7]/20 focus:border-[#002FA7] transition-colors",
-      "active_filters_row": "flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500",
-      "clear_all_btn": "text-xs font-medium text-[#002FA7] hover:underline dark:text-blue-400 flex items-center gap-1"
-    },
-    "equipment_hierarchy_table": {
-      "container": "bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden",
-      "table_wrapper": "overflow-x-auto w-full divide-y divide-slate-200 dark:divide-slate-800",
-      "row_treatment": "hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors border-b border-slate-100 dark:border-slate-800/60 group",
-      "hierarchy_visuals": {
-        "tree_guideline": "Tree indent lines with subtle branch connector (└) and depth tint for parent vs nested child components",
-        "assembly_badge": "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800",
-        "overdue_rollup_badge": "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-rose-600 text-white shadow-sm animate-pulse"
       },
-      "columns_spec": [
-        { "key": "equipment", "title": "Equipment & Location", "width": "w-[30%]", "align": "text-left" },
-        { "key": "type", "title": "Type", "width": "w-[12%]", "align": "text-left" },
-        { "key": "make_model", "title": "Make / Model", "width": "w-[14%]", "align": "text-left" },
-        { "key": "vendor", "title": "Vendors", "width": "w-[14%]", "align": "text-left" },
-        { "key": "maintenance", "title": "Next Maintenance", "width": "w-[13%]", "align": "text-left" },
-        { "key": "replacement", "title": "Next Replacement / Lead", "width": "w-[13%]", "align": "text-left" },
-        { "key": "actions", "title": "Quick Actions", "width": "w-[120px]", "align": "text-right" }
-      ]
-    },
-    "actions_redesign_touch_targets": {
-      "core_complaint_fix": "Replaced 7 tiny 14px cramped icons with high-visibility 36-40px ergonomic touch targets. Top 2 primary workflows (Log Action & Documents) are exposed directly with badge count and tooltips, while Secondary actions (Maintenance Profile, Edit, Delete) are consolidated into a clean Radix Dropdown Kebab Menu.",
-      "primary_action_1_log": {
-        "component": "Button",
-        "size": "h-8 px-2.5 sm:px-3 text-xs font-medium rounded-lg",
-        "style": "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 flex items-center gap-1.5",
-        "label": "Log",
-        "icon": "CalendarCheck"
+      "sku_inventory_table": {
+        "container": "mt-4 rounded-xl border border-slate-100 bg-slate-50/40 p-3",
+        "row_item": "flex items-center justify-between gap-3 py-2 border-b border-slate-100 last:border-0",
+        "sku_title": "text-xs sm:text-sm font-medium text-slate-800 break-words min-w-0 flex-1",
+        "warehouse_tag_list": "flex flex-wrap items-center gap-1.5 mt-0.5 text-[11px] text-slate-500",
+        "warehouse_badge": "inline-flex items-center px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600 font-normal",
+        "quantity_badge": "shrink-0 text-right tabular-nums text-xs sm:text-sm font-semibold text-slate-900"
       },
-      "primary_action_2_docs": {
-        "component": "Button",
-        "size": "h-8 w-8 sm:w-auto sm:px-2.5 text-xs font-medium rounded-lg relative",
-        "style": "bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 flex items-center gap-1.5",
-        "badge": "absolute -top-1.5 -right-1.5 h-4 min-w-[16px] px-1 rounded-full bg-[#002FA7] text-white text-[10px] font-bold flex items-center justify-center shadow-sm",
-        "icon": "Paperclip"
+      "brand_group_members_list": {
+        "container": "mt-4 space-y-2 border-t border-slate-100 pt-3",
+        "header_label": "text-[11px] font-semibold uppercase tracking-wider text-violet-700 flex items-center justify-between",
+        "member_row": "flex items-center justify-between gap-3 py-1.5 px-2.5 rounded-lg hover:bg-slate-50 text-xs sm:text-sm transition-colors",
+        "member_info": "flex items-center gap-2 min-w-0 flex-1",
+        "status_dot": "h-2 w-2 rounded-full shrink-0",
+        "own_sku_chip": "px-1.5 py-0.5 text-[10px] font-medium rounded bg-violet-50 text-violet-700 border border-violet-200 shrink-0",
+        "member_last_order": "shrink-0 tabular-nums text-xs text-slate-500 whitespace-nowrap"
       },
-      "secondary_actions_dropdown": {
-        "trigger": "Button size='icon' variant='ghost' className='h-8 w-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'",
-        "icon": "MoreVertical / MoreHorizontal",
-        "menu_items": [
-          { "label": "Maintenance Profile & QR Sheet", "icon": "Wrench", "color": "text-blue-600" },
-          { "label": "Log Replacement Done", "icon": "Repeat", "color": "text-indigo-600" },
-          { "label": "Edit Equipment Details", "icon": "Pencil", "color": "text-slate-700" },
-          { "label": "Delete Equipment", "icon": "Trash2", "color": "text-rose-600", "separator_before": true }
-        ]
+      "footer_last_order": {
+        "container": "mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500",
+        "label": "font-medium text-slate-500",
+        "value": "tabular-nums font-semibold text-slate-700 whitespace-nowrap"
       }
     }
   },
+  "grid_and_responsive_spec": {
+    "dashboard_grid": "grid grid-cols-1 xl:grid-cols-2 gap-5 lg:gap-6",
+    "rationale": "Changing from 3 cols at 1920px (540px width) to 2 cols (850-920px width) gives 60% more horizontal runway. Account names, multi-warehouse splits, shared tags, and member rows fit comfortably on single lines without text ellipsis or truncated numbers.",
+    "summary_strip": "flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-white border border-slate-200/80 shadow-xs text-sm"
+  },
   "interactive_testing_attributes": {
-    "page": "data-testid='equipment-master-page'",
-    "kpi_total": "data-testid='eq-stat-total'",
-    "kpi_overdue": "data-testid='eq-stat-overdue'",
-    "kpi_duesoon": "data-testid='eq-stat-duesoon'",
-    "kpi_ordernow": "data-testid='eq-stat-ordernow'",
-    "new_eq_btn": "data-testid='eq-new-btn'",
-    "tab_equipment": "data-testid='eq-tab-equipment'",
-    "tab_types": "data-testid='eq-tab-types'",
-    "search": "data-testid='eq-search'",
-    "type_filter": "data-testid='eq-type-filter'",
-    "fac_filter": "data-testid='eq-facility-filter'",
-    "floor_filter": "data-testid='eq-floor-filter'",
-    "area_filter": "data-testid='eq-area-filter'",
-    "table": "data-testid='eq-table'",
-    "row_prefix": "data-testid='eq-row-[NAME]'",
-    "assembly_badge": "data-testid='eq-assembly-[NAME]'",
-    "child_overdue_badge": "data-testid='eq-child-overdue-[NAME]'",
-    "location_meta": "data-testid='eq-location-[NAME]'",
-    "maint_due": "data-testid='eq-maint-due-[NAME]'",
-    "repl_due": "data-testid='eq-repl-due-[NAME]'",
-    "order_now": "data-testid='eq-order-now-[NAME]'",
-    "docs_btn": "data-testid='eq-docs-[NAME]'",
-    "maint_profile_btn": "data-testid='eq-maint-profile-[NAME]'",
-    "log_maint_btn": "data-testid='eq-log-maint-[NAME]'",
-    "log_repl_btn": "data-testid='eq-log-repl-[NAME]'",
-    "edit_btn": "data-testid='eq-edit-[NAME]'",
-    "delete_btn": "data-testid='eq-delete-[NAME]'",
-    "dropdown_trigger": "data-testid='eq-more-actions-[NAME]'"
+    "dashboard": "customer-stock-dashboard",
+    "quick_find": "csd-quick-find",
+    "distributor_dropdown": "csd-distributor-trigger",
+    "account_dropdown": "csd-account-trigger",
+    "refresh_btn": "csd-refresh",
+    "export_btn": "csd-export-btn",
+    "summary_strip": "csd-summary",
+    "low_stock_counter": "csd-low-stock-count",
+    "groups_counter": "csd-groups-count",
+    "legend": "csd-legend",
+    "customer_tile": "customer-tile-{account_id}",
+    "customer_name": "customer-name-{account_id}",
+    "customer_priority_badge": "customer-priority-badge-{account_id}",
+    "customer_next_order": "next-order-date-{account_id}",
+    "customer_expected_crates": "expected-crates-{account_id}",
+    "customer_stock_total": "stock-total-{account_id}",
+    "customer_last_order_qty": "last-order-qty-{account_id}",
+    "customer_last_order_date": "last-order-date-{account_id}",
+    "group_tile": "group-tile-{group_id}",
+    "group_name": "group-name-{group_id}",
+    "group_members_count": "group-members-count-{group_id}",
+    "group_priority_badge": "group-priority-badge-{group_id}",
+    "group_next_order": "group-next-order-{group_id}",
+    "group_expected_crates": "group-expected-crates-{group_id}",
+    "group_stock_total": "group-stock-total-{group_id}",
+    "group_member_list": "group-member-list-{group_id}",
+    "group_member_row": "group-member-{account_id}",
+    "group_member_own_tag": "group-member-own-{account_id}",
+    "group_member_last": "group-member-last-{account_id}",
+    "group_last_orders": "group-last-orders-{group_id}",
+    "group_last_order_date": "group-last-order-date-{group_id}",
+    "group_history": "group-history-{group_id}"
   },
   "instructions_to_main_agent": [
-    "Retain 100% of all existing API endpoints, dialogs (Add/Edit Equipment modal, Types modal, Log Maintenance/Replacement dialog with camera support, Documents modal with photo/certification categories, MaintenanceProfile component).",
-    "Replace the cramped 7 icon buttons in each row with the modern high-ergonomics action bar: Primary 'Log' (Emerald pill) + 'Docs (N)' (Slate pill with count badge) + DropdownMenu (Radix Kebab) containing QR Profile, Replacement, Edit, and Delete.",
-    "Upgrade top 4 stat cards into interactive Quick-Filter KPI tiles: clicking 'Maintenance Overdue' applies overdue filter to the list; clicking 'Due in 30 Days' filters due soon; clicking 'Order Now' filters items within procurement lead time; clicking 'Total Equipment' or active card resets back to all.",
-    "Add an Active Filter Tag bar below search & dropdowns when any filter or KPI quick-filter is active, showing item count and a one-click 'Clear all' button.",
-    "Ensure hierarchy tree indentation is visually elegant with clean connecting lines (└) and clear assembly parent/child badges.",
-    "Ensure all existing data-testid attributes are strictly preserved for automated QA regression testing.",
-    "Ensure dark mode contrast meets APCA/WCAG standards with explicit hover and focus text colors."
+    "Retain 100% of the existing React state logic, Axios calls, export URL generator, and filter combinations.",
+    "Do NOT reintroduce Overdue metrics or tables; respect the user's explicit request to keep tiles focused strictly on Expected next order vs Branded stock in hand.",
+    "Use wider 2-column layout on wide screens (grid-cols-1 xl:grid-cols-2) instead of the narrow 3-column layout so customer names, warehouses, and SKU rows expand freely without ellipses.",
+    "All fonts MUST remain Helvetica/Helvetica Neue/Arial sans-serif.",
+    "Format all dates as 'DD MMM' without year (e.g., '18 Sep') using whitespace-nowrap so dates never break across lines.",
+    "If stock cannot cover next order (low_stock is true), apply rose-700 text to both Next Order date, Expected quantity, and display a negative shortfall badge (-X cr) in In Hand. If stock is covered, keep Next order date and status in emerald-700 or dark neutral.",
+    "When stock is unavailable or 0, display '0 cr' explicitly rather than blank or ambiguous symbols.",
+    "Brand Group tiles use violet-700 accent with Layers icon and display member rows with status dots (rose-700 if short, emerald-700 if covered, slate-300 if no next order).",
+    "Keep all exact data-testid attributes intact so automated tests continue to pass seamlessly."
   ],
   "UNIVERSAL GUIDELINES FOR MAIN AGENT": {
-    "spacing": "Generous spacing (p-6 to p-8 container, p-4 on cards, gap-4 on grids). Prevent text collisions with proper padding.",
-    "touch_targets": "Minimum 36px to 40px clickable targets for all buttons and interactive dropdown triggers.",
-    "contrast": "Always explicitly define hover colors (e.g. hover:bg-slate-100 hover:text-slate-900). Never rely on transparent header/dialog backdrops.",
-    "toast_notifications": "Use sonner toast for action feedback (toast.success, toast.error).",
-    "icons": "Use lucide-react icons exclusively. No emojis as icon substitutes."
+    "spacing": "Wider tiles with generous p-5 sm:p-6 internal padding. Use grid-cols-1 xl:grid-cols-2 for plenty of breathing room.",
+    "touch_targets": "Minimum 36px to 40px clickable targets for filters, buttons, and popovers.",
+    "contrast": "Strict APCA/WCAG compliant contrasts: rose-700 (#B91C1C) on rose-50, emerald-700 (#047857) on emerald-50, slate-900 (#0F172A) on white.",
+    "icons": "Use lucide-react exclusively (AlertTriangle, Layers, Store, Users, Search, RefreshCw, FileSpreadsheet, Package, Check, ChevronsUpDown, X)."
   }
 }
