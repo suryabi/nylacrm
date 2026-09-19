@@ -19,7 +19,7 @@ export const SearchCombobox = ({ options, value, onChange, placeholder = 'All', 
             <span className={`truncate ${current ? '' : 'text-slate-500'}`}>{current ? current.name : placeholder}</span>
           </span>
           <span className="flex shrink-0 items-center gap-1">
-            {current && <X className="h-3.5 w-3.5 text-slate-400 hover:text-rose-600" onClick={(e) => { e.stopPropagation(); onChange('all'); }} data-testid={`${testId}-clear`} />}
+            {current && <span role="button" aria-label="Clear" className="inline-flex" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onChange('all'); }} data-testid={`${testId}-clear`}><X className="h-3.5 w-3.5 text-slate-400 hover:text-rose-600" /></span>}
             <ChevronsUpDown className="h-4 w-4 opacity-50" />
           </span>
         </Button>

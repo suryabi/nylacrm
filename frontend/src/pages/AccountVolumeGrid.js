@@ -20,6 +20,7 @@ const DEFAULT_HIDDEN = ['order_count', 'onboarded_date', 'last_order_sku', 'acco
 
 const BASE_COLUMNS = [
   { key: 'account_name', label: 'Account Name', type: 'text' },
+  { key: 'distributor_name', label: 'Distributor', type: 'text', fromAccount: true },
   { key: 'onboarded_date', label: 'On-boarded Date', type: 'date', fromAccount: true },
   { key: 'print_request_created_date', label: 'Print Request Created Date', type: 'date', fromPR: true },
   { key: 'print_request_created_by', label: 'Print Request Created By', type: 'text', fromPR: true },
@@ -264,7 +265,10 @@ export default function AccountVolumeGrid() {
     ];
     if (!colOrder.length) return base;
     const known = colOrder.filter((k) => base.some((c) => c.key === k));
-    const ordered = [...known, ...base.map((c) => c.key).filter((k) => !known.includes(k))];
+    const unknown = base.map((c) => c.key).filter((k) => !known.includes(k));
+    // New built-in columns slot in right after Account Name for users with a saved order
+    const ordered = [...known.filter((k) => k === 'account_name'), ...unknown.filter((k) => k === 'distributor_name'),
+      ...known.filter((k) => k !== 'account_name'), ...unknown.filter((k) => k !== 'distributor_name')];
     const byKey = Object.fromEntries(base.map((c) => [c.key, c]));
     const cols = ordered.map((k) => byKey[k]);
     // Account Name stays frozen first

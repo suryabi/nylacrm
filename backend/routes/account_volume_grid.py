@@ -171,9 +171,22 @@ async def get_grid(
     deliveries = await db.distributor_deliveries.find(
         {"tenant_id": tenant_id, "status": {"$in": DONE_STATUSES}, "account_id": {"$in": acc_ids}},
         {"_id": 0, "id": 1, "account_id": 1, "delivered_at": 1, "delivery_date": 1,
-         "created_at": 1, "total_quantity": 1, "distributor_location_id": 1}
+         "created_at": 1, "total_quantity": 1, "distributor_location_id": 1, "distributor_id": 1, "distributor_name": 1}
     ).to_list(20000)
     loc_by_delivery = {d["id"]: d.get("distributor_location_id") for d in deliveries if d.get("id")}
+
+    # Distributor per account: latest delivery's distributor, else active assignment.
+    dist_name_by_id = {d["id"]: d.get("distributor_name") async for d in db.distributors.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "distributor_name": 1})}
+    latest_dist: Dict[str, tuple] = {}
+    for d in deliveries:
+        dt = _parse_dt(d.get("delivered_at") or d.get("delivery_date") or d.get("created_at"))
+        if dt and (d["account_id"] not in latest_dist or dt > latest_dist[d["account_id"]][0]):
+            latest_dist[d["account_id"]] = (dt, dist_name_by_id.get(d.get("distributor_id")) or d.get("distributor_name"))
+    assigned_dist: Dict[str, str] = {}
+    async for asg in db.account_distributor_assignments.find(
+            {"tenant_id": tenant_id, "account_id": {"$in": acc_ids}, "status": {"$ne": "inactive"}},
+            {"_id": 0, "account_id": 1, "distributor_id": 1, "distributor_name": 1, "is_primary": 1}).sort("is_primary", -1):
+        assigned_dist.setdefault(asg["account_id"], dist_name_by_id.get(asg.get("distributor_id")) or asg.get("distributor_name"))
 
     by_acc: Dict[str, list] = {}
     for d in deliveries:
@@ -382,6 +395,8 @@ async def get_grid(
             "account_code": a.get("account_id"),
             "account_name": a.get("account_name"),
             "territory": a.get("territory"), "state": a.get("state"), "city": a.get("city"),
+            "distributor_name": (latest_dist.get(a["id"]) or latest_dist.get(a.get("account_id")) or (None, None))[1]
+                                or assigned_dist.get(a["id"]) or assigned_dist.get(a.get("account_id")),
             "onboarded_date": (a.get("activated_at") or "")[:10] or None,
             "print_request_created_date": ((fpr.get("created_at") or "")[:10] or None) if fpr else None,
             "print_request_created_by": (fpr.get("created_by_name") or None) if fpr else None,
@@ -517,7 +532,7 @@ async def export_excel(
                 ctx[c["name"]] = (r.get("custom_values") or {}).get(c["id"])
         return ctx
 
-    headers = ["Account Name", "Territory", "State", "City", "On-boarded Date",
+    headers = ["Account Name", "Distributor", "Territory", "State", "City", "On-boarded Date",
                "Print Request Created Date", "Print Request Created By",
                "First Order Requested Date", "First Order Quantity (Crates)",
                "Account Age (Days)",
@@ -528,7 +543,7 @@ async def export_excel(
         + [c["name"] for c in custom_cols]
 
     def row_values(r):
-        base = [r.get("account_name") or "", r.get("territory") or "", r.get("state") or "",
+        base = [r.get("account_name") or "", r.get("distributor_name") or "", r.get("territory") or "", r.get("state") or "",
                 r.get("city") or "", r.get("onboarded_date") or "",
                 r.get("print_request_created_date") or "", r.get("print_request_created_by") or "",
                 r.get("first_order_requested_date") or "",
