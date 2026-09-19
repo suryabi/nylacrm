@@ -1,0 +1,22 @@
+{
+  "summary": "Full backend + frontend test of the new Brand Group feature. 14/14 pytest cases pass (CRUD, non-admin 403, child SKU creation with brand_group_id, list account_ids expansion, delete-in-use guard, dashboard shared:true tiles for both member accounts, summary.stock_crates counted ONCE across shared tiles (+10 not +20), stock-transfer batches-available scoped correctly — included for member, excluded for non-member). Frontend verified: Brand Groups button + dialog on SKU Management (edit form shows member accounts), 600 ml Silver child list shows violet group badge 'QA Franchise Group · 3' with correct title tooltip, Add Child SKU form exposes 'Branding for' select with both options; choosing 'Brand group' shows the Brand Group select ('QA Franchise Group · 3 accounts') AND hides the Customer Account picker; choosing 'One customer account' shows the picker again. Customer Stock Dashboard renders violet 'shared' tags on member tiles (Bangalore Tech Park, Seed B) for the shared child SKU.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_brand_groups.py",
+    "/app/test_reports/pytest/brand_groups.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "brand_groups.child_account_ids_map + account_child_filter cleanly encapsulate the owner-∪-group-members logic; no obvious concerns.",
+    "brand_groups.delete uses child_skus.count_documents without is_active filter — deactivated child SKUs also block deletion. Consider filtering by is_active if that's undesired (low priority)."
+  ],
+  "updated_files": ["/app/backend/tests/test_brand_groups.py"],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123; Non-admin creative.director@nylaairwater.earth / test123",
+  "seed_data_creation": "Test creates ephemeral 'QA Franchise Group', child SKU 'QA Franchise – 600 ml', and a distributor_stock row (batch_code QA-BG) — all cleaned up in test_99_cleanup and post-run script. allows_child_skus on parent 20d525e8-... was already true and left as-is.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend regression file at /app/backend/tests/test_brand_groups.py — re-run with `pytest backend/tests/test_brand_groups.py -v`. Uses REACT_APP_BACKEND_URL. Requires MONGO_URL + DB_NAME env. Seed accounts seed-csd-acct-1 (B) and seed-csd-acct-3 (D) must exist; a third seed account is auto-picked from /api/brand-groups/accounts.",
+  "rca of the issue": "N/A — no bugs found."
+}
