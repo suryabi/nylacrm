@@ -8,6 +8,9 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Input } from '../components/ui/input';
 import { BrandGroupTile } from '../components/stock/BrandGroupTile';
 import { CustomerTile } from '../components/stock/CustomerTile';
+import { CustomerStockTable } from '../components/stock/CustomerStockTable';
+import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { LayoutGrid, Table2 } from 'lucide-react';
 import { fmt, fmtCrates } from '../components/stock/tileBits';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -60,6 +63,8 @@ export default function CustomerStockDashboard() {
   const [accountId, setAccountId] = useState('');
   const [q, setQ] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [view, setView] = useState(() => localStorage.getItem('csd_view') || 'tiles');
+  const changeView = (v) => { setView(v); localStorage.setItem('csd_view', v); };
 
   const exportExcel = useCallback(async () => {
     setExporting(true);
@@ -108,6 +113,11 @@ export default function CustomerStockDashboard() {
     const list = (data?.tiles || []).filter((t) => !(t.brand_group_ids || []).some((id) => shown.has(id)));
     return needle ? list.filter((t) => (t.account_name || '').toLowerCase().includes(needle) || (t.city || '').toLowerCase().includes(needle)) : list;
   }, [data, needle]);
+  // Table view lists every customer (group members included) grouped by distributor.
+  const tableRows = useMemo(() => {
+    const list = data?.tiles || [];
+    return needle ? list.filter((t) => (t.account_name || '').toLowerCase().includes(needle) || (t.city || '').toLowerCase().includes(needle) || (t.distributor_name || '').toLowerCase().includes(needle)) : list;
+  }, [data, needle]);
 
   return (
     <div className="space-y-5" style={{ fontFamily: 'Helvetica, "Helvetica Neue", Arial, sans-serif' }} data-testid="customer-stock-dashboard">
@@ -143,7 +153,21 @@ export default function CustomerStockDashboard() {
         </div>
       )}
 
-      {groups.length > 0 && (
+      {data && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Tabs value={view} onValueChange={changeView}>
+            <TabsList className="h-9 rounded-xl bg-slate-100 p-1" data-testid="csd-view-tabs">
+              <TabsTrigger value="tiles" className="rounded-lg px-3 text-xs data-[state=active]:text-[#002FA7]" data-testid="csd-view-tiles"><LayoutGrid className="mr-1.5 h-3.5 w-3.5" /> Tiles</TabsTrigger>
+              <TabsTrigger value="table" className="rounded-lg px-3 text-xs data-[state=active]:text-[#002FA7]" data-testid="csd-view-table"><Table2 className="mr-1.5 h-3.5 w-3.5" /> Table by distributor</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {view === 'table' && <span className="text-xs text-slate-400" data-testid="csd-table-hint">{fmt(tableRows.length)} customers · grouped by distributor (latest delivery, else assignment)</span>}
+        </div>
+      )}
+
+      {view === 'table' && data && <CustomerStockTable tiles={tableRows} />}
+
+      {view === 'tiles' && groups.length > 0 && (
         <section className="space-y-3" data-testid="csd-groups-section">
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-violet-700"><Layers className="h-4 w-4" /> Brand Groups <span className="font-normal normal-case tracking-normal text-slate-400">· shared stock &amp; members&apos; orders</span></div>
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2" data-testid="csd-groups-grid">
@@ -155,7 +179,7 @@ export default function CustomerStockDashboard() {
 
       {loading && !data ? (
         <div className="flex items-center justify-center py-20 text-slate-500"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading customers…</div>
-      ) : tiles.length === 0 && groups.length === 0 ? (
+      ) : view !== 'tiles' ? null : tiles.length === 0 && groups.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 py-16 text-center text-sm text-slate-500" data-testid="csd-empty">No customers match the current filters.</div>
       ) : tiles.length === 0 ? null : (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2" data-testid="csd-grid">

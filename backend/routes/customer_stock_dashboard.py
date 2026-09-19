@@ -365,10 +365,20 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
             groups_by_acct[aid].append(g["id"])
 
     today = datetime.now(timezone.utc).date()
+    distributors = await db.distributors.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "distributor_name": 1, "distributor_code": 1}).sort("distributor_name", 1).to_list(1000)
+    dist_names = {d["id"]: d.get("distributor_name") for d in distributors}
+    assigned_dist = {}
+    async for asg in db.account_distributor_assignments.find(
+            {"tenant_id": tenant_id, "account_id": {"$in": acct_ids}, "status": {"$ne": "inactive"}},
+            {"_id": 0, "account_id": 1, "distributor_id": 1, "distributor_name": 1, "is_primary": 1}).sort("is_primary", -1):
+        assigned_dist.setdefault(asg["account_id"], asg)
     tiles = []
     for a in accounts:
         hist = sample.get(a["id"], [])
         lo = hist[-1] if hist else None
+        asg = assigned_dist.get(a["id"]) or {}
+        dist_id = (lo or {}).get("distributor_id") or asg.get("distributor_id")
+        dist_name = dist_names.get(dist_id) or (lo or {}).get("distributor_name") or asg.get("distributor_name")
         skus = sorted(children_by_acct.get(a["id"], []), key=lambda s: (s["child_sku_name"] or "").lower())
         stock_units = sum(s["stock_in_hand"] for s in skus)
         stock_crates = round(sum(s["stock_crates"] for s in skus), 1)
@@ -383,8 +393,10 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
             "last_order_date": lo["day"].isoformat() if lo else None,
             "last_order_number": lo.get("delivery_number") if lo else None,
             "last_order_distributor": lo.get("distributor_name") if lo else None,
+            "distributor_id": dist_id, "distributor_name": dist_name or "Unassigned",
             "child_skus": skus,
             "brand_group_ids": groups_by_acct.get(a["id"], []),
+            "brand_group_names": [g.get("name") for g in group_docs if a["id"] in (g.get("account_ids") or [])],
             "stock_in_hand": stock_units,
             "stock_crates": stock_crates,
             "tracks_stock": tracks_stock,
@@ -396,7 +408,6 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
     tiles.sort(key=lambda t: (not t["priority"], (t["account_name"] or "").lower()))
     groups = _group_tiles(group_docs, tiles, child_rows, sample)
 
-    distributors = await db.distributors.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "distributor_name": 1, "distributor_code": 1}).sort("distributor_name", 1).to_list(1000)
     all_accounts = accounts if not (distributor_id or account_id) else await db.accounts.find(
         {"tenant_id": tenant_id, "status": active}, {"_id": 0, "id": 1, "account_name": 1, "city": 1}).to_list(5000)
     return {
