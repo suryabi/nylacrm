@@ -12,7 +12,7 @@ export const CustomerTile = ({ tile }) => {
   return (
     <TileShell critical={critical} accent="border-slate-200" title={tile.account_name} subtitle={tile.city || tile.account_code} alertTitle="Cannot cover next order"
       testId={`customer-tile-${tile.account_id}`} extra={{ 'data-priority': tile.priority ? 'true' : 'false' }}
-      icon={<div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold ${critical ? 'bg-rose-700 text-white' : 'bg-[#002FA7]/10 text-[#002FA7]'}`}>{initials}</div>}>
+      icon={<div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-sm font-semibold ${critical ? 'bg-rose-700 text-white' : 'bg-[#002FA7]/10 text-[#002FA7]'}`}>{initials}</div>}>
       <StatsBlock critical={critical} urgency={tile.next_order_urgency} testId={`next-order-date-${tile.account_id}`} urgencyValue={tile.next_order_urgency} title={tile.forecast_basis}>
         <Row label="Next order" value={hasForecast ? fmtDate(tile.expected_next_order_date) : '\u2014'} tone={hasForecast ? tone : 'text-slate-300'} strong={critical} />
         <Row label="Expected" value={fmtCrates(tile.expected_crates)} sub={tile.expected_crates != null ? 'cr' : ''} tone={tile.expected_crates != null ? tone : 'text-slate-300'} strong={critical} testId={`expected-crates-${tile.account_id}`} />
