@@ -1,5 +1,4 @@
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const fmt = (v) => Number(v || 0).toLocaleString('en-IN');
@@ -37,11 +36,7 @@ export const TileShell = ({ state, group = false, title, subtitle, avatar, alert
         <h3 className="truncate text-sm font-medium leading-snug text-slate-900" title={typeof title === 'string' ? title : undefined} data-testid={testId.replace('-tile-', '-name-')}>{title}</h3>
         <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">{subtitle || '\u00a0'}</p>
       </div>
-      {state === 'critical' && (
-        <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-rose-700 px-2.5 py-1 text-[11px] font-medium text-white shadow-sm" data-testid={testId.replace(/^(\w+)-tile-/, '$1-priority-badge-')}>
-          <AlertTriangle className="h-3.5 w-3.5" /> {alertLabel}
-        </span>
-      )}
+      {state === 'critical' && <span className="sr-only" data-testid={testId.replace(/^(\w+)-tile-/, '$1-priority-badge-')}>{alertLabel}</span>}
     </div>
     {children}
   </div>
