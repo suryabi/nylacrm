@@ -1,0 +1,19 @@
+{
+  "summary": "Verified iteration 383: SKU Performance filters (backend account_scope + type-to-search comboboxes) and Customer Stock Dashboard redesign (wide Brand Group tile with member TABLE, no ellipsis, shared tileBits format). All 10 backend pytest cases pass; all frontend testids and behaviors verified via Playwright at 1920 and 390.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_sku_perf_filters.py",
+    "/app/test_reports/pytest/sku_perf_filters.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": ["/app/backend/tests/test_sku_perf_filters.py"],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100%"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (X-Tenant-ID: nyla-air-water)",
+  "seed_data_creation": "None (used existing demo Brand Group seed from iteration 382)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend: GET /api/reports/sku-performance returns total_achieved inside `summary` (not top-level). sku_options is at top level. Verified filters: territory=South India / city=Hyderabad / resource_id=<CEO uuid> / account_id=<Toopa uuid> all return >0; territory=West India, state=Goa, resource_id=nobody, account_id=bogus all return 0. Baseline total_achieved ≈ 64427.49. Frontend: SearchCombobox exposes -trigger, -input, -option-<id>, -option-all, -clear testids. State/City are not disabled when Territory='All'. Picking Telangana auto-sets Territory='South India'. Account combobox shows 'Toopa Ice-creamery TOOP-HYD-A26-001 · Hyderabad'. On /customer-stock-dashboard, csd-groups-count reads exactly '1 brand groups (2 members)'; group-tile ...328 renders a real <table data-testid=\"group-member-list-...\"> with headers MEMBER/LAST ORDER/NEXT ORDER/EXPECTED and rows for seed-csd-acct-1 and seed-csd-acct-3 with full names (no CSS text-overflow:ellipsis+overflow:hidden combo detected). Member tiles are hidden from csd-grid. Zero horizontal page overflow at 1920 and 390. Only 2 pre-login 401 console errors observed (non-critical, unrelated to these features).",
+  "rca of the issue": "N/A - all features working as spec'd"
+}
