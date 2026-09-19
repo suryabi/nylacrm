@@ -219,9 +219,15 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
     async for it in db.distributor_delivery_items.find({"tenant_id": tenant_id, "delivery_id": {"$in": sample_ids}},
                                                        {"_id": 0, "delivery_id": 1, "sku_id": 1, "quantity": 1}):
         items_by_deliv[it["delivery_id"]].append(it)
+    group_ids = await db.brand_groups.distinct("id", {"tenant_id": tenant_id, "account_ids": {"$in": acct_ids}, "is_active": {"$ne": False}})
     children = await db.child_skus.find(
-        {"tenant_id": tenant_id, "customer_account_id": {"$in": acct_ids}, "is_active": {"$ne": False}},
-        {"_id": 0, "id": 1, "customer_account_id": 1, "child_sku_name": 1, "child_sku_code": 1, "parent_sku_id": 1, "parent_sku_name": 1}).to_list(5000)
+        {"tenant_id": tenant_id, "is_active": {"$ne": False},
+         "$or": [{"customer_account_id": {"$in": acct_ids}}, {"brand_group_id": {"$in": group_ids}}]},
+        {"_id": 0, "id": 1, "customer_account_id": 1, "brand_group_id": 1, "brand_group_name": 1, "child_sku_name": 1,
+         "child_sku_code": 1, "parent_sku_id": 1, "parent_sku_name": 1}).to_list(5000)
+    from routes.brand_groups import child_account_ids_map
+    child_accts = await child_account_ids_map(tenant_id, children)
+    acct_set = set(acct_ids)
     upc = await _units_per_crate(tenant_id, {it["sku_id"] for its in items_by_deliv.values() for it in its}
                                  | {c.get("parent_sku_id") for c in children if c.get("parent_sku_id")})
     for lst in sample.values():
@@ -254,9 +260,11 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
     children_by_acct = defaultdict(list)
     for c in children:
         cu = upc.get(c.get("parent_sku_id"), 1)
-        children_by_acct[c["customer_account_id"]].append({
+        for aid in child_accts.get(c["id"], set()) & acct_set:
+            children_by_acct[aid].append({
             "child_sku_id": c["id"], "child_sku_name": c.get("child_sku_name"), "child_sku_code": c.get("child_sku_code"),
             "parent_sku_name": c.get("parent_sku_name"), "stock_in_hand": stock_by_child.get(c["id"], 0),
+            "shared": bool(c.get("brand_group_id")), "brand_group_name": c.get("brand_group_name"),
             "units_per_crate": cu, "stock_crates": round(stock_by_child.get(c["id"], 0) / cu, 1),
             "warehouses": sorted(wh_breakdown.get(c["id"], []), key=lambda w: -w["quantity"]) if child_ids else [],
         })
@@ -300,8 +308,8 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
                     "low_stock": sum(1 for t in tiles if t["low_stock"]),
                     "due_soon": sum(1 for t in tiles if t["next_order_in_days"] is not None and t["next_order_in_days"] <= 7),
                     "priority": sum(1 for t in tiles if t["priority"]),
-                    "stock_in_hand": sum(t["stock_in_hand"] for t in tiles),
-                    "stock_crates": round(sum(t["stock_crates"] for t in tiles), 1),
+                    "stock_in_hand": sum(v["stock_in_hand"] for v in {s["child_sku_id"]: s for t in tiles for s in t["child_skus"]}.values()),
+                    "stock_crates": round(sum(v["stock_crates"] for v in {s["child_sku_id"]: s for t in tiles for s in t["child_skus"]}.values()), 1),
                     "branded_skus": sum(len(t["child_skus"]) for t in tiles)},
         "filters": {
             "distributors": [{"id": d["id"], "name": d.get("distributor_name"), "code": d.get("distributor_code")} for d in distributors],

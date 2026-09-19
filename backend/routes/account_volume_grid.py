@@ -254,11 +254,14 @@ async def get_grid(
 
     # account-branded child SKU lookup: (customer_account_id, parent_sku_id) → child id
     acc_child: Dict[tuple, str] = {}
-    async for cs in db.child_skus.find(
-            {"tenant_id": tenant_id, "customer_account_id": {"$nin": [None, ""]}},
-            {"_id": 0, "id": 1, "customer_account_id": 1, "parent_sku_id": 1}):
-        if cs.get("parent_sku_id"):
-            acc_child.setdefault((cs["customer_account_id"], cs["parent_sku_id"]), cs["id"])
+    from routes.brand_groups import child_account_ids_map
+    _children = await db.child_skus.find(
+        {"tenant_id": tenant_id, "child_type": "customer", "parent_sku_id": {"$nin": [None, ""]}},
+        {"_id": 0, "id": 1, "customer_account_id": 1, "brand_group_id": 1, "parent_sku_id": 1}).to_list(5000)
+    _accts = await child_account_ids_map(tenant_id, _children)
+    for cs in _children:
+        for aid in _accts.get(cs["id"], set()):
+            acc_child.setdefault((aid, cs["parent_sku_id"]), cs["id"])
 
     rows = []
     for a in accounts:

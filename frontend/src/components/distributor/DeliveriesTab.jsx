@@ -150,7 +150,8 @@ export default function DeliveriesTab({
     // business code, or the source lead id (pre-conversion children).
     const acct = selectedDeliveryAccount || {};
     const refs = [acct.id, acct.account_id, acct.lead_id].filter(Boolean);
-    return refs.includes(meta.customer_account_id);
+    const owners = meta.account_ids || [meta.customer_account_id];
+    return owners.some((o) => refs.includes(o));
   };
 
   // Deletion history (audit) viewer

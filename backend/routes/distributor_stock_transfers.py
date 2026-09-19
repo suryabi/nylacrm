@@ -640,14 +640,16 @@ async def list_batches_available(
         acct_refs = await account_ref_set(tenant_id, account_id)
         child_docs = await db.child_skus.find(
             {"tenant_id": tenant_id, "parent_sku_id": sku_id},
-            {"_id": 0, "id": 1, "child_type": 1, "customer_account_id": 1},
+            {"_id": 0, "id": 1, "child_type": 1, "customer_account_id": 1, "brand_group_id": 1},
         ).to_list(2000)
+        from .brand_groups import child_account_ids_map
+        child_accts = await child_account_ids_map(tenant_id, child_docs)
         allowed_children = set()
         for c in child_docs:
             if c.get("child_type") != "customer":
                 # Generic-type children are deliverable to anyone.
                 allowed_children.add(c.get("id"))
-            elif c.get("customer_account_id") in acct_refs:
+            elif child_accts.get(c["id"], set()) & acct_refs:
                 allowed_children.add(c.get("id"))
         rows = [r for r in rows if (not r.get("child_sku_id")) or r.get("child_sku_id") in allowed_children]
 
@@ -694,9 +696,9 @@ async def list_batches_available(
     # fully reserved, or simply no stock row). Rendered as a hint in the UI.
     branded_hints = []
     if account_id:
+        from .brand_groups import account_child_filter
         acct_children = await db.child_skus.find(
-            {"tenant_id": tenant_id, "child_type": "customer",
-             "customer_account_id": {"$in": list(acct_refs)}},
+            {"tenant_id": tenant_id, "child_type": "customer", **(await account_child_filter(tenant_id, acct_refs))},
             {"_id": 0, "id": 1, "child_sku_name": 1, "parent_sku_id": 1},
         ).to_list(500)
         ch_ids = [c["id"] for c in acct_children]
@@ -831,12 +833,14 @@ async def get_location_stock(
         if child_ids:
             child_docs = await db.child_skus.find(
                 {"tenant_id": tenant_id, "id": {"$in": child_ids}},
-                {"_id": 0, "id": 1, "child_type": 1, "customer_account_id": 1},
+                {"_id": 0, "id": 1, "child_type": 1, "customer_account_id": 1, "brand_group_id": 1},
             ).to_list(len(child_ids))
+            from .brand_groups import child_account_ids_map
+            child_accts = await child_account_ids_map(tenant_id, child_docs)
             for c in child_docs:
                 if c.get("child_type") != "customer":
                     allowed.add(c.get("id"))
-                elif c.get("customer_account_id") in acct_refs:
+                elif child_accts.get(c["id"], set()) & acct_refs:
                     allowed.add(c.get("id"))
         rows = [r for r in rows if (not r.get("child_sku_id")) or r.get("child_sku_id") in allowed]
     # Aggregate per SKU (backward-compatible shape) + per (SKU, classification)

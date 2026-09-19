@@ -67,6 +67,8 @@ async def seed(db):
         acct_id = f'seed-csd-acct-{idx}'
         await db.accounts.insert_one({'id': acct_id, 'account_id': f'SEED-CSD-{idx:02d}', 'account_name': name, 'city': city,
                                       'state': 'Demo', 'category': 'Demo scenario', 'status': 'active', 'lead_type': 'B2B',
+                                      'lead_id': f'seed-csd-lead-{idx}', 'territory': 'Demo', 'company': name, 'contact_name': 'Demo Contact',
+                                      'phone': '', 'email': '', 'converted_at': now, 'sku_pricing': [],
                                       'tenant_id': T, 'seed_tag': TAG, 'created_at': now, 'updated_at': now})
         await db.account_distributor_assignments.insert_one({'id': str(uuid.uuid4()), 'tenant_id': T, 'account_id': acct_id, 'account_name': name,
                                                              'distributor_id': DIST['id'], 'distributor_name': DIST['name'],

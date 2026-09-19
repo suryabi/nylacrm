@@ -51,7 +51,9 @@ async def _resolve_customer_child(tenant_id: str, child_sku_id: str, sku_id: str
         raise HTTPException(400, f"Child SKU '{child.get('child_sku_name')}' is inactive.")
     if child.get("child_type") != "customer":
         raise HTTPException(400, "Only customer-specific child SKUs can be used for retrospective categorization.")
-    if account_id and child.get("customer_account_id") not in await account_ref_set(tenant_id, account_id):
+    from .brand_groups import child_account_ids_map
+    if account_id and not ((await child_account_ids_map(tenant_id, [child])).get(child["id"], set())
+                           & await account_ref_set(tenant_id, account_id)):
         raise HTTPException(
             400,
             f"Child SKU '{child.get('child_sku_name')}' is branded for a different customer than this delivery's account.",
@@ -194,11 +196,12 @@ async def eligible_children(
     q = {"tenant_id": tenant_id, "parent_sku_id": sku_id, "child_type": "customer",
          "is_active": {"$ne": False}}
     if account_id:
+        from .brand_groups import account_child_filter
         refs = await account_ref_set(tenant_id, account_id)
-        q["customer_account_id"] = {"$in": list(refs)}
+        q.update(await account_child_filter(tenant_id, refs))
     rows = await db.child_skus.find(
         q, {"_id": 0, "id": 1, "child_sku_name": 1, "child_sku_code": 1,
-            "customer_account_id": 1, "customer_account_name": 1},
+            "customer_account_id": 1, "customer_account_name": 1, "brand_group_id": 1, "brand_group_name": 1},
     ).to_list(500)
 
     # Enrich with the customer account's city (display only).
@@ -223,7 +226,9 @@ async def eligible_children(
             {"_id": 0, "account_id": 1},
         ).to_list(2000)
         assigned_ids = {a["account_id"] for a in assigned}
-        rows = [r for r in rows if r.get("customer_account_id") in assigned_ids]
+        from .brand_groups import child_account_ids_map
+        _m = await child_account_ids_map(tenant_id, rows)
+        rows = [r for r in rows if _m.get(r["id"], set()) & assigned_ids]
         filtered_by_distributor = True
         dist = await db.distributors.find_one(
             {"id": distributor_id, "tenant_id": tenant_id}, {"_id": 0, "distributor_name": 1})

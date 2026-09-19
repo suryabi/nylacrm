@@ -38,6 +38,7 @@ class ChildSkuCreate(BaseModel):
     child_sku_code: Optional[str] = None  # auto-generated from parent code + account code when omitted
     child_type: str  # 'generic' | 'customer'
     customer_account_id: Optional[str] = None
+    brand_group_id: Optional[str] = None  # shared branding (franchise group) instead of one account
     branding_type: Optional[str] = None
     label_version: Optional[str] = None
     is_active: bool = True
@@ -47,6 +48,7 @@ class ChildSkuUpdate(BaseModel):
     child_sku_name: Optional[str] = None
     child_sku_code: Optional[str] = None
     customer_account_id: Optional[str] = None
+    brand_group_id: Optional[str] = None
     branding_type: Optional[str] = None
     label_version: Optional[str] = None
     is_active: Optional[bool] = None
@@ -148,6 +150,11 @@ async def list_child_skus(
         pmap = {p["id"]: p.get("sku_name") for p in parents}
         for r in rows:
             r["parent_sku_name"] = pmap.get(r["parent_sku_id"], r.get("parent_sku_name"))
+    from routes.brand_groups import child_account_ids_map
+    from core.tenant import get_current_tenant_id
+    acct_map = await child_account_ids_map(get_current_tenant_id(), rows)
+    for r in rows:
+        r["account_ids"] = sorted(acct_map.get(r["id"], set()))
     return {"child_skus": rows}
 
 
@@ -174,11 +181,18 @@ async def create_child_sku(payload: ChildSkuCreate, current_user: dict = Depends
 
     customer_name = None
     account = None
+    group = None
     if payload.child_type == "customer":
-        if not payload.customer_account_id:
-            raise HTTPException(status_code=400, detail="A customer account is required for a customer-specific child SKU")
-        account = await _ensure_account_linked_to_parent(tdb, payload.customer_account_id, parent)
-        customer_name = account.get("account_name")
+        if payload.brand_group_id:
+            group = await tdb.brand_groups.find_one({"id": payload.brand_group_id}, {"_id": 0, "id": 1, "name": 1, "code": 1})
+            if not group:
+                raise HTTPException(status_code=404, detail="Brand group not found")
+            customer_name = group.get("name")
+        elif payload.customer_account_id:
+            account = await _ensure_account_linked_to_parent(tdb, payload.customer_account_id, parent)
+            customer_name = account.get("account_name")
+        else:
+            raise HTTPException(status_code=400, detail="A customer account or a brand group is required for a customer-specific child SKU")
     else:
         # Only one generic child per parent
         existing_generic = await tdb.child_skus.find_one({"parent_sku_id": payload.parent_sku_id, "child_type": "generic"})
@@ -194,7 +208,7 @@ async def create_child_sku(payload: ChildSkuCreate, current_user: dict = Depends
         if await tdb.child_skus.find_one({"child_sku_code": code}):
             raise HTTPException(status_code=400, detail=f"Child SKU code '{code}' is already in use")
     else:
-        code = await _generate_child_code(tdb, parent, account)
+        code = await _generate_child_code(tdb, parent, account or ({"account_id": group.get("code")} if group else None))
 
     doc = {
         "id": str(uuid.uuid4()),
@@ -205,6 +219,8 @@ async def create_child_sku(payload: ChildSkuCreate, current_user: dict = Depends
         "child_type": payload.child_type,
         "customer_account_id": (account.get("id") if account else None) if payload.child_type == "customer" else None,
         "customer_account_name": customer_name,
+        "brand_group_id": group.get("id") if group else None,
+        "brand_group_name": group.get("name") if group else None,
         "branding_type": payload.branding_type,
         "label_version": payload.label_version,
         "artwork_storage_path": None,
@@ -245,7 +261,17 @@ async def update_child_sku(child_id: str, payload: ChildSkuUpdate, current_user:
             raise HTTPException(status_code=400, detail=f"Child SKU '{name}' already exists under this parent")
         update["child_sku_name"] = name
 
-    if "customer_account_id" in update and update["customer_account_id"] != existing.get("customer_account_id"):
+    if "brand_group_id" in update and update["brand_group_id"] != existing.get("brand_group_id"):
+        if existing.get("child_type") != "customer":
+            raise HTTPException(status_code=400, detail="A generic child SKU cannot be linked to a brand group")
+        if await _has_transactions(child_id):
+            raise HTTPException(status_code=400, detail="This child SKU has transaction history — its branding owner cannot be changed. Use a rebranding process instead.")
+        group = await tdb.brand_groups.find_one({"id": update["brand_group_id"]}, {"_id": 0, "id": 1, "name": 1})
+        if not group:
+            raise HTTPException(status_code=404, detail="Brand group not found")
+        update.update({"brand_group_id": group["id"], "brand_group_name": group["name"],
+                       "customer_account_id": None, "customer_account_name": group["name"]})
+    elif "customer_account_id" in update and update["customer_account_id"] != existing.get("customer_account_id"):
         if existing.get("child_type") != "customer":
             raise HTTPException(status_code=400, detail="A generic child SKU cannot be linked to a customer")
         if await _has_transactions(child_id):
@@ -257,6 +283,8 @@ async def update_child_sku(child_id: str, payload: ChildSkuUpdate, current_user:
         account = await _ensure_account_linked_to_parent(tdb, update["customer_account_id"], parent)
         update["customer_account_id"] = account.get("id")
         update["customer_account_name"] = account.get("account_name")
+        update["brand_group_id"] = None
+        update["brand_group_name"] = None
 
     update["updated_at"] = _now_iso()
     await tdb.child_skus.update_one({"id": child_id}, {"$set": update})

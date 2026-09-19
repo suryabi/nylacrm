@@ -113,7 +113,10 @@ const CustomerTile = ({ tile }) => {
           <ul className="divide-y divide-slate-100">
             {tile.child_skus.map((sk) => (
               <li key={sk.child_sku_id} className="flex items-center justify-between gap-3 py-1.5" data-testid={`stock-sku-${sk.child_sku_id}`}>
-                <span className="min-w-0 truncate text-xs text-slate-600" title={`${sk.child_sku_name} · ${fmt(sk.stock_in_hand)} units${sk.warehouses.length ? ' · ' + sk.warehouses.map((w) => `${w.location_name} ${fmt(w.quantity)}`).join(', ') : ''}`}>{sk.child_sku_name}</span>
+                <span className="min-w-0 flex items-center gap-1.5 truncate text-xs text-slate-600" title={`${sk.child_sku_name}${sk.shared ? ` · shared via ${sk.brand_group_name}` : ''} · ${fmt(sk.stock_in_hand)} units${sk.warehouses.length ? ' · ' + sk.warehouses.map((w) => `${w.location_name} ${fmt(w.quantity)}`).join(', ') : ''}`}>
+                  <span className="truncate">{sk.child_sku_name}</span>
+                  {sk.shared && <span className="shrink-0 rounded bg-violet-100 px-1 py-px text-[9px] font-medium text-violet-700" data-testid={`shared-tag-${sk.child_sku_id}`}>shared</span>}
+                </span>
                 <span className={`shrink-0 whitespace-nowrap text-xs tabular-nums ${critical ? 'font-semibold text-rose-700' : sk.stock_in_hand > 0 ? 'text-slate-800' : 'text-slate-400'}`} data-testid={`stock-qty-${sk.child_sku_id}`}>{fmtCrates(sk.stock_crates)}<span className="ml-0.5 text-[10px] text-slate-400">cr</span></span>
               </li>
             ))}

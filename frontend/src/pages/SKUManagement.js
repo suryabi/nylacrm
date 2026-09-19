@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { skusAPI, childSkusAPI } from '../utils/api';
 import { ChildSkuManager } from '../components/ChildSkuManager';
+import { BrandGroupsDialog } from '../components/BrandGroupsDialog';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -13,8 +14,7 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { 
   Package, Plus, Pencil, Trash2, Loader2, Save, X, 
-  Search, Filter, ArrowUpDown, Check, RefreshCcw, Link2, GitBranch
-} from 'lucide-react';
+  Search, Filter, ArrowUpDown, Check, RefreshCcw, Link2, GitBranch, Layers } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -80,6 +80,7 @@ export default function SKUManagement() {
   const { user } = useAuth();
   const canHardDelete = ['CEO', 'Admin', 'System Admin'].includes(user?.role);
   const [skus, setSkus] = useState([]);
+  const [showBrandGroups, setShowBrandGroups] = useState(false);
   const bulk = useBulkSelect();
   const [categories, setCategories] = useState([]);
   const [packagingTypes, setPackagingTypes] = useState([]);
@@ -436,6 +437,16 @@ export default function SKUManagement() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowBrandGroups(true)}
+            data-testid="open-brand-groups-btn"
+            title="Shared branding used by several customer accounts (franchises)."
+            className="border-slate-200 dark:border-slate-700"
+          >
+            <Layers className="h-4 w-4 mr-2" />
+            Brand Groups
+          </Button>
           <Button
             variant="outline"
             onClick={() => navigate('/sku-management/relink')}
@@ -1078,6 +1089,7 @@ export default function SKUManagement() {
       </Dialog>
 
       {/* Child SKU manager */}
+      <BrandGroupsDialog open={showBrandGroups} onClose={() => setShowBrandGroups(false)} />
       <ChildSkuManager
         sku={childSkuTarget}
         open={!!childSkuTarget}

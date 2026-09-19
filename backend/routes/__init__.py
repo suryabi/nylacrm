@@ -289,6 +289,8 @@ routes_router.include_router(
     prefix="/child-skus",
     tags=["Child SKUs"],
 )
+from .brand_groups import router as brand_groups_router
+routes_router.include_router(brand_groups_router, prefix="/brand-groups", tags=["Brand Groups"])
 
 # Branding Entries (Phase 2 — reclassify Generic ↔ customer-branded stock, no approval)
 from .branding_entries import router as branding_entries_router

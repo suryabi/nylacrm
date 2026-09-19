@@ -1861,7 +1861,7 @@ export default function DistributorDetail() {
   const [retroTarget, setRetroTarget] = useState(null);
   const childrenForSku = (skuId, accountId) => Object.values(childSkuMeta).filter(c =>
     c.parent_sku_id === skuId && c.child_type === 'customer' && c.is_active !== false &&
-    (!accountId || c.customer_account_id === accountId));
+    (!accountId || (c.account_ids || [c.customer_account_id]).includes(accountId)));
 
   const submitShipmentRetro = async ({ itemKey, child_sku_id, quantity }) => {
     const res = await axios.post(`${API_URL}/api/retro-categorize/shipment-item`, {

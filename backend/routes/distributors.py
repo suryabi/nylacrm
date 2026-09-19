@@ -3896,12 +3896,14 @@ async def _build_branded_stock_sections(tenant_id: str, stock_rows: list,
     children = await db.child_skus.find(
         {"tenant_id": tenant_id, "parent_sku_id": {"$in": sku_ids}, "is_active": {"$ne": False}},
         {"_id": 0, "id": 1, "parent_sku_id": 1, "child_sku_name": 1, "child_sku_code": 1,
-         "child_type": 1, "customer_account_id": 1, "customer_account_name": 1},
+         "child_type": 1, "customer_account_id": 1, "customer_account_name": 1, "brand_group_id": 1, "brand_group_name": 1},
     ).to_list(5000)
     branded_parents = {c["parent_sku_id"] for c in children if c.get("child_type") == "customer"}
     if not branded_parents:
         return []
     child_by_id = {c["id"]: c for c in children}
+    from .brand_groups import child_account_ids_map
+    child_accts = await child_account_ids_map(tenant_id, children)
 
     # Tally live stock per (parent, classification) with location breakdown.
     tally: dict = {}
@@ -3994,12 +3996,13 @@ async def _build_branded_stock_sections(tenant_id: str, stock_rows: list,
                 continue
             q, locs = _rows_for(sid, c["id"])
             if (allowed_account_ids is not None and q == 0
-                    and c.get("customer_account_id") not in allowed_account_ids):
+                    and not (child_accts.get(c["id"], set()) & set(allowed_account_ids))):
                 continue
-            key = c.get("customer_account_id") or "__unknown__"
+            key = c.get("brand_group_id") or c.get("customer_account_id") or "__unknown__"
             bucket = cust_buckets.setdefault(key, {
                 "customer_account_id": c.get("customer_account_id"),
-                "customer_name": c.get("customer_account_name") or "Customer",
+                "brand_group_id": c.get("brand_group_id"),
+                "customer_name": c.get("customer_account_name") or c.get("brand_group_name") or "Customer",
                 "total_quantity": 0,
                 "children": [],
             })
@@ -5143,8 +5146,10 @@ async def create_delivery(
         children_map = {c["id"]: c for c in await db.child_skus.find(
             {"id": {"$in": child_ids}, "tenant_id": tenant_id},
             {"_id": 0, "id": 1, "parent_sku_id": 1, "child_sku_name": 1, "child_type": 1,
-             "customer_account_id": 1, "customer_account_name": 1, "is_active": 1},
+             "customer_account_id": 1, "customer_account_name": 1, "is_active": 1, "brand_group_id": 1},
         ).to_list(len(child_ids) + 1)}
+        from .brand_groups import child_account_ids_map
+        child_accts = await child_account_ids_map(tenant_id, list(children_map.values()))
         for item in data.items:
             if not item.child_sku_id:
                 continue
@@ -5161,7 +5166,7 @@ async def create_delivery(
             if c.get("child_type") == "customer":
                 from .branding_entries import account_ref_set
                 acct_refs = await account_ref_set(tenant_id, data.account_id)
-                if c.get("customer_account_id") not in acct_refs:
+                if not (child_accts.get(c["id"], set()) & acct_refs):
                     raise HTTPException(
                         status_code=400,
                         detail=(
