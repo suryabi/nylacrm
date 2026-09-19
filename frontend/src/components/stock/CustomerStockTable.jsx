@@ -120,23 +120,47 @@ const DistributorBlock = ({ name, rows, closed, toggle }) => {
 
 export const CustomerStockTable = ({ tiles }) => {
   const [closed, setClosed] = useState({});
+  const [statusFilter, setStatusFilter] = useState(null);
   const toggle = (k) => setClosed((c) => ({ ...c, [k]: !c[k] }));
+  const counts = useMemo(() => tiles.reduce((acc, t) => { const k = statusOf(t).key; acc[k] = (acc[k] || 0) + 1; return acc; }, {}), [tiles]);
+  const filtered = useMemo(() => (statusFilter ? tiles.filter((t) => statusOf(t).key === statusFilter) : tiles), [tiles, statusFilter]);
   const blocks = useMemo(() => {
     const by = new Map();
-    tiles.forEach((t) => {
+    filtered.forEach((t) => {
       const k = t.distributor_name || 'Unassigned';
       if (!by.has(k)) by.set(k, []);
       by.get(k).push(t);
     });
     return [...by.entries()].sort(([a], [b]) => (a === 'Unassigned') - (b === 'Unassigned') || a.localeCompare(b));
-  }, [tiles]);
-  if (!blocks.length) return <div className="rounded-2xl border border-dashed border-slate-300 py-16 text-center text-sm text-slate-500" data-testid="cst-empty">No customers match the current filters.</div>;
+  }, [filtered]);
+  const legend = (
+    <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2 text-xs text-slate-500" data-testid="cst-status-legend">
+      <span className="mr-1 font-medium uppercase tracking-wider text-slate-400">Status</span>
+      {STATUS_LEGEND.map((l) => {
+        const active = statusFilter === l.key;
+        return (
+          <button key={l.key} type="button" onClick={() => setStatusFilter(active ? null : l.key)} aria-pressed={active}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 transition-colors ${active ? 'border-[#002FA7] bg-[#002FA7]/5 font-semibold text-[#002FA7]' : 'border-transparent hover:bg-slate-50'} ${!counts[l.key] ? 'opacity-40' : ''}`}
+            title={active ? 'Click to clear filter' : `Show only ${l.label}`} data-testid={`cst-status-filter-${l.key}`} data-active={active ? 'true' : 'false'}>
+            <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full ${l.cls}`}><l.Icon className="h-3 w-3" /></span>
+            {l.label}<span className="tabular-nums text-slate-400" data-testid={`cst-status-count-${l.key}`}>{counts[l.key] || 0}</span>
+          </button>
+        );
+      })}
+      {statusFilter && <button type="button" onClick={() => setStatusFilter(null)} className="ml-1 text-[11px] font-medium text-slate-500 underline decoration-dotted underline-offset-2 hover:text-slate-800" data-testid="cst-status-filter-clear">Show all</button>}
+    </div>
+  );
+  if (!blocks.length) {
+    return (
+      <div className="rounded-2xl border border-slate-200/90 bg-white shadow-sm" data-testid="cst-table-wrap">
+        {legend}
+        <div className="py-16 text-center text-sm text-slate-500" data-testid="cst-empty">No customers match the current filters.</div>
+      </div>
+    );
+  }
   return (
     <div className="overflow-x-auto rounded-2xl border border-slate-200/90 bg-white shadow-sm" data-testid="cst-table-wrap">
-      <div className="flex flex-wrap items-center gap-4 border-b border-slate-100 px-4 py-2 text-xs text-slate-500" data-testid="cst-status-legend">
-        <span className="font-medium uppercase tracking-wider text-slate-400">Status</span>
-        {STATUS_LEGEND.map((l) => <span key={l.key} className="inline-flex items-center gap-1.5"><span className={`inline-flex h-5 w-5 items-center justify-center rounded-full ${l.cls}`}><l.Icon className="h-3 w-3" /></span>{l.label}</span>)}
-      </div>
+      {legend}
       <table className="w-full min-w-[960px] text-left" data-testid="cst-table">
         <thead className="border-b border-slate-200 bg-white">
           <tr>
