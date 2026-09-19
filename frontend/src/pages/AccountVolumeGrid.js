@@ -6,11 +6,10 @@ import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Checkbox } from '../components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Table2, RefreshCw, Columns3, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Sigma, Download, Truck, Info, AlertTriangle, HelpCircle } from 'lucide-react';
+import { Table2, RefreshCw, Columns3, Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Sigma, Download, Truck, Info, AlertTriangle, HelpCircle, Store } from 'lucide-react';
 import { VolumeGridHelp } from '../components/VolumeGridHelp';
 import { toast } from 'sonner';
-import { useMasterLocations } from '../hooks/useMasterLocations';
+import { SearchCombobox } from '../components/SearchCombobox';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
@@ -125,9 +124,8 @@ export default function AccountVolumeGrid() {
   const [customCols, setCustomCols] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [territoryFilter, setTerritoryFilter] = useState('all');
-  const [stateFilter, setStateFilter] = useState('all');
-  const [cityFilter, setCityFilter] = useState('all');
+  const [distributorFilter, setDistributorFilter] = useState('all');
+  const [distributors, setDistributors] = useState([]);
   const [attentionOnly, setAttentionOnly] = useState(false);
   const [newOnly, setNewOnly] = useState(false);
   const [recencyFilter, setRecencyFilter] = useState([]);
@@ -157,23 +155,20 @@ export default function AccountVolumeGrid() {
   const [truckCapacity, setTruckCapacity] = useState('');
   const [plan, setPlan] = useState(null);
   const [planLoading, setPlanLoading] = useState(false);
-  const { territories, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (search.trim()) params.set('search', search.trim());
-      if (territoryFilter !== 'all') params.set('territory', territoryFilter);
-      if (stateFilter !== 'all') params.set('state', stateFilter);
-      if (cityFilter !== 'all') params.set('city', cityFilter);
+      if (distributorFilter !== 'all') params.set('distributor_id', distributorFilter);
       const r = await fetch(`${API_URL}/api/account-volume-grid?${params}`, { headers: authHeaders() });
       const d = await r.json();
       setRows(d.rows || []);
       setCustomCols(d.custom_columns || []);
+      if (Array.isArray(d.distributors)) setDistributors(d.distributors.map((x) => ({ id: x.id, name: x.name, sub: x.code })));
     } catch { toast.error('Failed to load volume grid'); }
     setLoading(false);
-  }, [search, territoryFilter, stateFilter, cityFilter]);
+  }, [search, distributorFilter]);
   useEffect(() => { load(); }, [load]);
 
   // Per-user saved view preferences (server-side, survives logins/devices)
@@ -189,9 +184,7 @@ export default function AccountVolumeGrid() {
           if (d.widths && typeof d.widths === 'object') setColWidths(d.widths);
           if (Array.isArray(d.order)) setColOrder(d.order);
           if (d.filters && typeof d.filters === 'object') {
-            if (d.filters.territory) setTerritoryFilter(d.filters.territory);
-            if (d.filters.state) setStateFilter(d.filters.state);
-            if (d.filters.city) setCityFilter(d.filters.city);
+            if (d.filters.distributor_id) setDistributorFilter(d.filters.distributor_id);
           }
         }
       } catch { /* keep local defaults */ }
@@ -209,11 +202,11 @@ export default function AccountVolumeGrid() {
         method: 'PUT', headers: authHeaders(),
         body: JSON.stringify({
           hidden, widths: colWidths, order: colOrder,
-          filters: { territory: territoryFilter, state: stateFilter, city: cityFilter },
+          filters: { distributor_id: distributorFilter !== 'all' ? distributorFilter : null },
         }),
       }).catch(() => {});
     }, 800);
-  }, [hidden, colWidths, colOrder, territoryFilter, stateFilter, cityFilter]);
+  }, [hidden, colWidths, colOrder, distributorFilter]);
 
   // Freeze panes: measure header row height so the summary row can stick just below it
   const headerRowRef = useRef(null);
@@ -403,9 +396,7 @@ export default function AccountVolumeGrid() {
         method: 'POST', headers: authHeaders(),
         body: JSON.stringify({
           truck_capacity_crates: cap,
-          territory: territoryFilter !== 'all' ? territoryFilter : null,
-          state: stateFilter !== 'all' ? stateFilter : null,
-          city: cityFilter !== 'all' ? cityFilter : null,
+          distributor_id: distributorFilter !== 'all' ? distributorFilter : null,
           search: search.trim() || null,
         }),
       });
@@ -431,9 +422,6 @@ export default function AccountVolumeGrid() {
       toast.success('Consignment plan downloaded');
     } catch (e) { toast.error(e.message); }
   };
-
-  const availableStates = getStateNamesByTerritoryName ? getStateNamesByTerritoryName(territoryFilter === 'all' ? null : territoryFilter) : [];
-  const availableCities = getCityNamesByStateName ? getCityNamesByStateName(stateFilter === 'all' ? null : stateFilter) : [];
 
   const renderCell = (row, col) => {
     const isEditing = editCell && editCell.rowId === row.account_id && editCell.col.key === col.key;
@@ -553,9 +541,7 @@ export default function AccountVolumeGrid() {
             try {
               const params = new URLSearchParams();
               if (search.trim()) params.set('search', search.trim());
-              if (territoryFilter !== 'all') params.set('territory', territoryFilter);
-              if (stateFilter !== 'all') params.set('state', stateFilter);
-              if (cityFilter !== 'all') params.set('city', cityFilter);
+              if (distributorFilter !== 'all') params.set('distributor_id', distributorFilter);
               const r = await fetch(`${API_URL}/api/account-volume-grid/export/excel?${params}`, { headers: authHeaders() });
               if (!r.ok) throw new Error('Export failed');
               const blob = await r.blob();
@@ -619,33 +605,15 @@ export default function AccountVolumeGrid() {
         </div>
       </div>
 
-      {/* Filters — same State/Territory/Location model as Leads */}
+      {/* Filters — account search + distributor */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
           <Search className="h-4 w-4 absolute left-2.5 top-2.5 text-slate-400" />
           <Input className="h-9 pl-8 w-60 rounded-sm" placeholder="Search accounts…" value={search} onChange={(e) => setSearch(e.target.value)} data-testid="vg-search-input" />
         </div>
-        <Select value={territoryFilter} onValueChange={(v) => { setTerritoryFilter(v); setStateFilter('all'); setCityFilter('all'); }}>
-          <SelectTrigger className="h-9 w-44 rounded-sm" data-testid="vg-territory-filter"><SelectValue placeholder="Territory" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Territories</SelectItem>
-            {territories.map((t) => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={stateFilter} onValueChange={(v) => { setStateFilter(v); setCityFilter('all'); }}>
-          <SelectTrigger className="h-9 w-40 rounded-sm" data-testid="vg-state-filter"><SelectValue placeholder="State" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All States</SelectItem>
-            {availableStates.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={cityFilter} onValueChange={setCityFilter}>
-          <SelectTrigger className="h-9 w-40 rounded-sm" data-testid="vg-city-filter"><SelectValue placeholder="Location" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Locations</SelectItem>
-            {availableCities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <div className="w-56">
+          <SearchCombobox options={distributors} value={distributorFilter} onChange={setDistributorFilter} placeholder="All Distributors" allLabel="All Distributors" icon={Store} className="h-9 rounded-sm" testId="vg-distributor-filter" />
+        </div>
         <button
           type="button"
           onClick={() => setAttentionOnly((v) => !v)}

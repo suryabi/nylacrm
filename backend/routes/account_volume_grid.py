@@ -117,6 +117,7 @@ async def save_preferences(payload: PrefsIn, current_user: dict = Depends(get_cu
 async def get_grid(
     territory: Optional[str] = None, state: Optional[str] = None,
     city: Optional[str] = None, search: Optional[str] = None,
+    distributor_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
     await _require_view(current_user)
@@ -130,6 +131,13 @@ async def get_grid(
         q["city"] = city
     if search:
         q["account_name"] = {"$regex": re.escape(search), "$options": "i"}
+    if distributor_id:
+        # Accounts assigned to, or ever delivered by, this distributor.
+        assigned = await db.account_distributor_assignments.distinct(
+            "account_id", {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": {"$ne": "inactive"}})
+        served = await db.distributor_deliveries.distinct(
+            "account_id", {"tenant_id": tenant_id, "distributor_id": distributor_id})
+        q["id"] = {"$in": sorted(x for x in set(assigned) | set(served) if x)}
 
     accounts = await db.accounts.find(q, {
         "_id": 0, "id": 1, "account_id": 1, "account_name": 1, "territory": 1,
@@ -435,7 +443,9 @@ async def get_grid(
             "custom_values": m.get("custom_values") or {},
         })
 
-    return {"rows": rows, "custom_columns": config.get("columns") or [], "total": len(rows)}
+    distributors = await db.distributors.find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "distributor_name": 1, "distributor_code": 1}).sort("distributor_name", 1).to_list(1000)
+    return {"rows": rows, "custom_columns": config.get("columns") or [], "total": len(rows),
+            "distributors": [{"id": d["id"], "name": d.get("distributor_name"), "code": d.get("distributor_code")} for d in distributors]}
 
 
 _FORMULA_FNS = {
@@ -480,6 +490,7 @@ def _eval_formula(formula: str, ctx: dict):
 async def export_excel(
     territory: Optional[str] = None, state: Optional[str] = None,
     city: Optional[str] = None, search: Optional[str] = None,
+    distributor_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
     from io import BytesIO
@@ -488,7 +499,7 @@ async def export_excel(
     from fastapi.responses import StreamingResponse
     from utils.excel_branding import brand_workbook
 
-    data = await get_grid(territory=territory, state=state, city=city, search=search, current_user=current_user)
+    data = await get_grid(territory=territory, state=state, city=city, search=search, distributor_id=distributor_id, current_user=current_user)
     rows, custom_cols = data["rows"], data["custom_columns"]
 
     def ctx_for(r):
@@ -753,6 +764,7 @@ class PlanRequest(BaseModel):
     state: Optional[str] = None
     city: Optional[str] = None
     search: Optional[str] = None
+    distributor_id: Optional[str] = None
 
 
 @router.post("/consignment-plan")
@@ -763,7 +775,7 @@ async def consignment_plan(payload: PlanRequest, current_user: dict = Depends(ge
 
     capacity = payload.truck_capacity_crates
     data = await get_grid(territory=payload.territory, state=payload.state,
-                          city=payload.city, search=payload.search, current_user=current_user)
+                          city=payload.city, search=payload.search, distributor_id=payload.distributor_id, current_user=current_user)
     today = datetime.now(timezone.utc).replace(tzinfo=None, hour=0, minute=0, second=0, microsecond=0)
 
     profiles = []
@@ -865,7 +877,8 @@ async def consignment_plan(payload: PlanRequest, current_user: dict = Depends(ge
               "warehouse_stock_crates": stock_crates,
               "stock_remaining_after_plan": max(stock_remaining, 0),
               "filters": {"territory": payload.territory, "state": payload.state,
-                          "city": payload.city, "search": payload.search},
+                          "city": payload.city, "search": payload.search,
+                          "distributor": next((d["name"] for d in data.get("distributors", []) if d["id"] == payload.distributor_id), None) if payload.distributor_id else None},
               "rows": rows, "consignments": consignments, "ai_summary": None, "ai_notes": {}}
 
     if payload.ai_insights:

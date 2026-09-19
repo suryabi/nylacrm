@@ -76,6 +76,10 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-09-19 — 📦 Account Volume Tracking: Distributor filter replaces Territory/State/City ✅ DONE (self-tested: API + UI, Brian → 13 rows)
+- Backend `routes/account_volume_grid.py`: `distributor_id` param on GET grid, export/excel and PlanRequest (accounts assigned to OR delivered by the distributor); grid response includes `distributors` list; consignment plan filters carry distributor name.
+- Frontend `pages/AccountVolumeGrid.js`: removed Territory/State/City selects + useMasterLocations; added searchable `SearchCombobox` distributor filter (`vg-distributor-filter-*`), persisted in saved view prefs (`filters.distributor_id`). Account search unchanged. ⚠️ Redeploy for production.
+
 ### 2026-09-19 — 🧴 Customer Stock: parent-SKU (generic) fallback ✅ DONE (iteration_386: backend 10/10, frontend pass)
 - User choice "Fallback to parent": customers with no branded Child SKU show the Parent SKUs they actually order (from sampled delivery items) backed by **generic stock** (`child_sku_id` null/""), scoped to the customer's distributor when known (else all warehouses). Customers with a Child SKU are unchanged. Low-stock flag applies to generic stock too.
 - Backend: `_generic_parent_rows()` keyed `(sku_id, distributor_id)` + `(sku_id, None)`; row shape mirrors child rows with `generic: true`, `scope`, `sku_id`, `child_sku_id = "parent:<sku>:<dist|all>"`. Tile gets `stock_kind` (branded|generic|null); summary adds `generic_customers`; `branded_skus` counts branded only. Export header "SKU (branded child / generic parent)", "(generic)" suffix.
