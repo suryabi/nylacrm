@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { AlertTriangle, CalendarClock, Check, ChevronsUpDown, FileSpreadsheet, Loader2, Package, RefreshCw, Search, Store, Users, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronsUpDown, FileSpreadsheet, Layers, Loader2, Package, RefreshCw, Search, Store, Users, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../components/ui/command';
 import { Input } from '../components/ui/input';
+import { BrandGroupTile } from '../components/stock/BrandGroupTile';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -182,11 +183,17 @@ export default function CustomerStockDashboard() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const needle = q.trim().toLowerCase();
+  // Brand Group tiles roll up their members; members are hidden from the customer grid.
+  const groups = useMemo(() => {
+    const list = data?.groups || [];
+    return needle ? list.filter((g) => (g.name || '').toLowerCase().includes(needle) || g.members.some((m) => (m.account_name || '').toLowerCase().includes(needle))) : list;
+  }, [data, needle]);
   const tiles = useMemo(() => {
-    const list = data?.tiles || [];
-    const needle = q.trim().toLowerCase();
+    const shown = new Set((data?.groups || []).map((g) => g.group_id));
+    const list = (data?.tiles || []).filter((t) => !(t.brand_group_ids || []).some((id) => shown.has(id)));
     return needle ? list.filter((t) => (t.account_name || '').toLowerCase().includes(needle) || (t.city || '').toLowerCase().includes(needle)) : list;
-  }, [data, q]);
+  }, [data, needle]);
 
   return (
     <div className="space-y-4" style={{ fontFamily: 'Helvetica, "Helvetica Neue", Arial, sans-serif' }} data-testid="customer-stock-dashboard">
@@ -211,6 +218,7 @@ export default function CustomerStockDashboard() {
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-500" data-testid="csd-summary">
           {data.summary.low_stock > 0 && <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-700 px-2.5 py-1 text-xs font-semibold text-white" data-testid="csd-low-stock-count"><AlertTriangle className="h-3.5 w-3.5" /> {fmt(data.summary.low_stock)} reorder</span>}
           <span><span className="font-semibold text-slate-800">{fmt(tiles.length)}</span> customers</span>
+          {groups.length > 0 && <span data-testid="csd-groups-count"><span className="font-semibold text-slate-800">{fmt(groups.length)}</span> brand groups <span className="text-slate-400">({fmt(groups.reduce((n, g) => n + g.members.length, 0))} members)</span></span>}
           <span><span className="font-semibold text-slate-800">{fmt(data.summary.with_orders)}</span> ordering</span>
           <span><span className="font-semibold text-slate-800">{fmt(data.summary.branded_skus)}</span> branded SKUs</span>
           <span className="inline-flex items-center gap-1.5"><Package className="h-3.5 w-3.5" /> <span className="font-semibold text-slate-800">{fmtCrates(data.summary.stock_crates)}</span> cr in hand</span>
@@ -221,11 +229,21 @@ export default function CustomerStockDashboard() {
         </div>
       )}
 
+      {groups.length > 0 && (
+        <section className="space-y-2" data-testid="csd-groups-section">
+          <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-violet-700"><Layers className="h-3.5 w-3.5" /> Brand Groups <span className="font-normal normal-case tracking-normal text-slate-400">· shared stock &amp; members&apos; orders</span></div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5" data-testid="csd-groups-grid">
+            {groups.map((g) => <BrandGroupTile key={g.group_id} group={g} />)}
+          </div>
+          {tiles.length > 0 && <div className="pt-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">Customers</div>}
+        </section>
+      )}
+
       {loading && !data ? (
         <div className="flex items-center justify-center py-20 text-slate-500"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading customers…</div>
-      ) : tiles.length === 0 ? (
+      ) : tiles.length === 0 && groups.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 py-16 text-center text-sm text-slate-500" data-testid="csd-empty">No customers match the current filters.</div>
-      ) : (
+      ) : tiles.length === 0 ? null : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5" data-testid="csd-grid">
           {tiles.map((t) => <CustomerTile key={t.account_id} tile={t} />)}
         </div>
