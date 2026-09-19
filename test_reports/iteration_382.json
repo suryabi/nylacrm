@@ -1,0 +1,18 @@
+{
+  "summary": "Verified Brand Group tile end-to-end on Customer Stock Dashboard. Backend: 7/7 pytest cases pass covering group shape/values (code=DFG, stock_crates=20, stock_in_hand=240, last_orders 20 cr / 06 Sep, history 50 cr / 4 orders, expected 23 cr / 19 Sep, low_stock=true), members list (2), tile.brand_group_ids on members and [] on non-members, summary.groups=1 & grouped_customers=2, single-count of shared stock in summary, ?account_id filter (members length 1, total_members 2), distributor filter dropping the group when no members served, empty-shared-SKU group (stock_crates 0, low_stock false, urgency neutral/null), export xlsx 'Brand Groups' sheet with header + '2 of 2' + 20/240 + member '↳' rows. Frontend (1920 + 390): csd-groups-section renders ABOVE csd-grid, group-tile with all required data-testids and correct texts (Next order 19 Sep, Expected 23 cr, Shared in hand 20 cr with red -3 shortfall, Demo Franchise – 600 ml 20 cr, member rows with '+1 own' tags, footer Last orders 20cr·06Sep, Recent history 50 cr · 4 orders), member customer tiles seed-csd-acct-1 & -3 hidden from grid, csd-groups-count '1 brand groups (2 members)', csd-summary '22 customers'. Quick-find matches by group name and by member name; 'zzzzz' hides all → csd-empty. Account filter to seed-csd-acct-3 shows '1 of 2 members' and 0 customer tiles. Excel button downloads. No layout wrapping at 390. No feature-related console errors (two 401s were on /api/auth/me, unrelated to the group tile).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_brand_group_tile.py", "/app/test_reports/pytest/brand_group_tile.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "customer_stock_dashboard.py is ~418 lines and heavily branching; consider extracting the _build query pipelines into helpers as the file grows (not blocking).",
+    "_group_tiles.expected_crates rounds via round(sum) but individual member expected_crates may be int-coerced elsewhere; assertion tolerates both — fine."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water)",
+  "seed_data_creation": "Only ephemeral QA group 'QA Empty Group Tile' created inside test_group_without_shared_sku and deleted in the finally block. Demo Franchise Group / shared SKU / distributor_stock left intact as instructed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression file /app/backend/tests/test_brand_group_tile.py can be re-run any time (idempotent). Depends on seed_brand_group_demo.py output remaining in DB: group 01c03819-7ace-455f-9a5e-972b5d40f328 with shared child 208de0cb-63df-406a-ab45-61c7e97b401c and 240u distributor_stock batch DEMO-BG at Delhi (aa2eda05...). If seed changes, update expected values."
+}
