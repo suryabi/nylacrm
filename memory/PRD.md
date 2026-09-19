@@ -76,6 +76,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-09-19 — 🧩 Brand Groups dialog: inline member picker ✅ DONE (screenshot-verified)
+- `components/BrandGroupsDialog.js`: replaced the Popover/cmdk account dropdown (nested scroll inside a scrolling dialog) with an **inline** picker: search box (`brand-group-accounts-search`), fixed-height checkbox list (`brand-group-accounts-list`, options `brand-group-account-option-{id}`, selected pinned first, city on right), footer "N of M accounts · Clear all" (`brand-group-clear-members`); chips below unchanged. Also fixed list-view horizontal overflow (grid item min-width: `[&>*]:min-w-0` on DialogContent, `min-w-0 flex-1` row body) so the "New brand group" button and edit/delete icons are visible. ⚠️ Redeploy for production.
+
 ### 2026-09-19 — 🔧 Adjust branded quantity dialog: Reduce/Increase mode ✅ DONE (screenshot-verified)
 - `components/distributor/AdjustChildQtyDialog.jsx` (Stock Dashboard → Branded Stock → adjust icon): replaced "New branded quantity" input with a **− Reduce / + Increase** toggle (`adjust-qty-mode-decrease|increase`) + amount in bottles (`adjust-qty-input`), quick chips +12/+24/+48/+120 (`adjust-qty-quick-N`), "all N" chip (`adjust-qty-quick-all`), clear, live result "Branded: 360 → 336" (`adjust-qty-result`); decrease is capped at current stock. Save still posts a Branding Entry (to/from Generic). ⚠️ Redeploy for production.
 

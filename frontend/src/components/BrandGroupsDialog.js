@@ -1,15 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Check, ChevronDown, Layers, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, Layers, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -22,7 +20,7 @@ export function BrandGroupsDialog({ open, onClose, onChanged }) {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [q, setQ] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,7 +34,7 @@ export function BrandGroupsDialog({ open, onClose, onChanged }) {
     } catch (e) { toast.error('Failed to load brand groups'); } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { if (open) { load(); setEditing(null); setForm(null); } }, [open, load]);
+  useEffect(() => { if (open) { load(); setEditing(null); setForm(null); setQ(''); } }, [open, load]);
 
   const save = async () => {
     if (!form.name.trim()) { toast.error('Name is required'); return; }
@@ -60,10 +58,14 @@ export function BrandGroupsDialog({ open, onClose, onChanged }) {
 
   const toggleAccount = (id) => setForm((f) => ({ ...f, account_ids: f.account_ids.includes(id) ? f.account_ids.filter((x) => x !== id) : [...f.account_ids, id] }));
   const nameOf = (id) => accounts.find((a) => a.id === id)?.name || id;
+  const needle = q.trim().toLowerCase();
+  const visibleAccounts = accounts
+    .filter((a) => !needle || `${a.name} ${a.city || ''}`.toLowerCase().includes(needle))
+    .sort((a, b) => (form?.account_ids.includes(b.id) ? 1 : 0) - (form?.account_ids.includes(a.id) ? 1 : 0) || a.name.localeCompare(b.name));
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" data-testid="brand-groups-dialog">
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0" data-testid="brand-groups-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Layers className="h-5 w-5 text-[#002FA7]" /> Brand Groups</DialogTitle>
           <DialogDescription>A brand group is one shared branding used by several customer accounts (e.g. a franchisor and its franchisees). Point a customer child SKU at the group and every member can receive, hold and order that branded stock.</DialogDescription>
@@ -78,29 +80,33 @@ export function BrandGroupsDialog({ open, onClose, onChanged }) {
             <div className="space-y-1.5"><Label>Description</Label><Textarea rows={2} value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })} data-testid="brand-group-description-input" /></div>
             <div className="space-y-1.5">
               <Label>Member accounts * <span className="text-[10px] text-muted-foreground">({form.account_ids.length} selected)</span></Label>
-              <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" role="combobox" className="w-full justify-between font-normal" data-testid="brand-group-accounts-select">
-                    <span className="text-muted-foreground">Add / remove accounts…</span><ChevronDown className="h-4 w-4 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                  <Command filter={(v, s) => (v.toLowerCase().includes(s.toLowerCase()) ? 1 : 0)}>
-                    <CommandInput placeholder="Search accounts…" data-testid="brand-group-accounts-search" />
-                    <CommandList className="max-h-[260px]">
-                      <CommandEmpty>No accounts found.</CommandEmpty>
-                      <CommandGroup>
-                        {accounts.map((a) => (
-                          <CommandItem key={a.id} value={`${a.name} ${a.city || ''}`} onSelect={() => toggleAccount(a.id)} data-testid={`brand-group-account-option-${a.id}`}>
-                            <Check className={`mr-2 h-4 w-4 ${form.account_ids.includes(a.id) ? 'opacity-100 text-emerald-600' : 'opacity-0'}`} />
-                            <span className="truncate">{a.name}</span>{a.city && <span className="ml-auto pl-2 text-[10px] text-muted-foreground">{a.city}</span>}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <div className="rounded-lg border border-slate-200 bg-white" data-testid="brand-group-accounts-picker">
+                <div className="relative border-b border-slate-100">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search accounts by name or city…" autoComplete="off"
+                    className="h-10 w-full rounded-t-lg bg-transparent pl-9 pr-3 text-sm outline-none placeholder:text-slate-400" data-testid="brand-group-accounts-search" />
+                </div>
+                <ul className="max-h-56 overflow-y-auto py-1" data-testid="brand-group-accounts-list">
+                  {visibleAccounts.length === 0 && <li className="px-3 py-6 text-center text-sm text-slate-400">No accounts found.</li>}
+                  {visibleAccounts.map((a) => {
+                    const on = form.account_ids.includes(a.id);
+                    return (
+                      <li key={a.id}>
+                        <button type="button" onClick={() => toggleAccount(a.id)} aria-pressed={on} data-testid={`brand-group-account-option-${a.id}`}
+                          className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-sm transition-colors hover:bg-slate-50 ${on ? 'bg-emerald-50/60' : ''}`}>
+                          <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${on ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-white'}`}>{on && <Check className="h-3 w-3" />}</span>
+                          <span className="truncate">{a.name}</span>
+                          {a.city && <span className="ml-auto shrink-0 pl-2 text-[11px] text-slate-400">{a.city}</span>}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="flex items-center justify-between border-t border-slate-100 px-3 py-1.5 text-[11px] text-slate-500">
+                  <span>{visibleAccounts.length} of {accounts.length} accounts{q ? ' match' : ''} · selected shown first</span>
+                  {form.account_ids.length > 0 && <button type="button" onClick={() => setForm({ ...form, account_ids: [] })} className="text-rose-600 hover:underline" data-testid="brand-group-clear-members">Clear all</button>}
+                </div>
+              </div>
               <div className="flex flex-wrap gap-1.5 pt-1" data-testid="brand-group-members">
                 {form.account_ids.map((id) => (
                   <Badge key={id} variant="outline" className="gap-1 bg-slate-50 font-normal">{nameOf(id)}<button type="button" onClick={() => toggleAccount(id)} data-testid={`brand-group-remove-${id}`}><X className="h-3 w-3" /></button></Badge>
@@ -120,10 +126,10 @@ export function BrandGroupsDialog({ open, onClose, onChanged }) {
             {loading ? <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
               : groups.length === 0 ? <div className="rounded-lg border py-8 text-center text-sm text-muted-foreground" data-testid="no-brand-groups">No brand groups yet.</div>
                 : (
-                  <div className="divide-y rounded-lg border">
+                  <div className="min-w-0 divide-y overflow-hidden rounded-lg border">
                     {groups.map((g) => (
-                      <div key={g.id} className={`flex items-start justify-between gap-3 px-3 py-2.5 ${g.is_active === false ? 'opacity-50' : ''}`} data-testid={`brand-group-row-${g.id}`}>
-                        <div className="min-w-0">
+                      <div key={g.id} className={`flex items-start justify-between gap-3 px-3 py-2.5 min-w-0 ${g.is_active === false ? 'opacity-50' : ''}`} data-testid={`brand-group-row-${g.id}`}>
+                        <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-sm font-medium">{g.name}</span>
                             <span className="rounded border bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">{g.code}</span>
