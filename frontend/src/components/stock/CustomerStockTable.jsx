@@ -24,8 +24,8 @@ const expectedOf = (rows) => rows.reduce((s, r) => s + (r.expected_crates || 0),
 const Th = ({ children, right, className = '' }) => (
   <th className={`whitespace-nowrap px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 ${right ? 'text-right' : 'text-left'} ${className}`}>{children}</th>
 );
-const Crates = ({ v, testId, cls = 'text-slate-900', unitCls = 'text-slate-400' }) => (
-  <td className={`whitespace-nowrap px-3 py-2.5 text-right text-sm font-bold tabular-nums ${cls}`} data-testid={testId}>{fmtCrates(v)} <span className={`text-xs font-medium ${unitCls}`}>cr</span></td>
+const Crates = ({ v, testId, cls = 'text-slate-900' }) => (
+  <td className={`whitespace-nowrap px-3 py-2.5 text-right text-sm font-bold tabular-nums ${cls}`} data-testid={testId}>{fmtCrates(v)}</td>
 );
 
 // Collapsible header row (distributor or brand group) with roll-up totals.
@@ -43,9 +43,9 @@ const HeaderRow = ({ level, icon, name, rows, unit, open, onToggle, testKey, ext
           {top && !open && <span className="text-xs font-normal text-white/70">click to expand</span>}
         </span>
       </td>
-      <Crates v={uniqueInHand(rows)} testId={`${testKey}-inhand`} cls={top ? 'text-white' : 'text-slate-900'} unitCls={top ? 'text-white/60' : 'text-slate-400'} />
-      <Crates v={expectedOf(rows)} testId={`${testKey}-expected`} cls={top ? 'text-white' : 'text-slate-900'} unitCls={top ? 'text-white/60' : 'text-slate-400'} />
-      <td colSpan={COLS - 5} className={top ? 'text-right pr-4 text-xs text-white/70' : ''}>{top ? 'In hand · Expected' : ''}</td>
+      <Crates v={uniqueInHand(rows)} testId={`${testKey}-inhand`} cls={top ? 'text-white' : 'text-slate-900'} />
+      <Crates v={expectedOf(rows)} testId={`${testKey}-expected`} cls={top ? 'text-white' : 'text-slate-900'} />
+      <td colSpan={COLS - 5} className={top ? 'text-right pr-4 text-xs text-white/70' : ''}>{top ? 'In hand · Expected (crates)' : ''}</td>
     </tr>
   );
 };
@@ -55,7 +55,7 @@ const CustomerRow = ({ t, indent }) => {
   return (
     <tr className={`border-t border-slate-100 text-sm hover:bg-slate-50/60 ${t.low_stock ? 'bg-rose-50/40' : ''}`} data-testid={`cst-row-${t.account_id}`}>
       <td className={`px-3 py-2.5 align-top ${indent === 2 ? 'pl-[4.5rem]' : 'pl-10'}`}>
-        <div className="font-medium text-slate-900 [overflow-wrap:anywhere]">{t.account_name}</div>
+        <div className="max-w-[22rem] truncate font-medium text-slate-900" title={t.account_name}>{t.account_name}</div>
         <div className="text-xs text-slate-400">{t.city || t.account_code || '\u00a0'}</div>
       </td>
       <td className="px-3 py-2.5 align-top">
@@ -67,7 +67,7 @@ const CustomerRow = ({ t, indent }) => {
                   {s.shared && <span className="ml-1.5 rounded border border-violet-200 bg-violet-50 px-1 py-px text-[10px] font-medium text-violet-700">shared</span>}
                   {s.generic && <span className="ml-1.5 rounded border border-amber-200 bg-amber-50 px-1 py-px text-[10px] font-medium text-amber-700">generic</span>}
                 </span>
-                <span className={`shrink-0 text-sm tabular-nums ${s.stock_in_hand > 0 ? 'text-slate-800' : 'text-slate-400'}`}>{fmtCrates(s.stock_crates)} cr</span>
+                <span className={`shrink-0 text-sm tabular-nums ${s.stock_in_hand > 0 ? 'text-slate-800' : 'text-slate-400'}`}>{fmtCrates(s.stock_crates)}</span>
               </li>
             ))}
           </ul>
@@ -79,13 +79,13 @@ const CustomerRow = ({ t, indent }) => {
         </span>
       </td>
       <td className={`whitespace-nowrap px-3 py-2.5 text-right align-top text-base tabular-nums ${t.low_stock ? 'text-rose-700 font-semibold' : t.child_skus.length ? 'text-slate-900' : 'text-slate-400'}`} data-testid={`cst-inhand-${t.account_id}`}>
-        {t.child_skus.length ? fmtCrates(t.stock_crates) : '0'} <span className="text-xs font-normal text-slate-400">cr</span>
+        {t.child_skus.length ? fmtCrates(t.stock_crates) : '0'}
         {t.low_stock && <span className="ml-1.5 rounded bg-rose-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">−{fmtCrates(t.expected_crates - t.stock_crates)}</span>}
       </td>
-      <td className={`whitespace-nowrap px-3 py-2.5 text-right align-top text-base tabular-nums ${tone(t)}`} data-testid={`cst-expected-${t.account_id}`}>{t.expected_crates != null ? <>{fmtCrates(t.expected_crates)} <span className="text-xs font-normal text-slate-400">cr</span></> : '—'}</td>
+      <td className={`whitespace-nowrap px-3 py-2.5 text-right align-top text-base tabular-nums ${tone(t)}`} data-testid={`cst-expected-${t.account_id}`}>{t.expected_crates != null ? fmtCrates(t.expected_crates) : '—'}</td>
       <td className={`whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums ${tone(t)}`} data-testid={`cst-next-${t.account_id}`}>{fmtDate(t.expected_next_order_date)}</td>
       <td className="whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums text-slate-700" data-testid={`cst-last-${t.account_id}`}>
-        {t.last_order_date ? <><span className="text-base font-medium">{fmtCrates(t.last_order_crates)} cr</span><span className="mx-1.5 text-slate-300">/</span>{fmtDateFull(t.last_order_date)}</> : '—'}
+        {t.last_order_date ? <><span className="text-base font-medium">{fmtCrates(t.last_order_crates)}</span><span className="mx-1.5 text-slate-300">/</span>{fmtDateFull(t.last_order_date)}</> : '—'}
       </td>
     </tr>
   );
@@ -165,12 +165,12 @@ export const CustomerStockTable = ({ tiles }) => {
         <thead className="border-b border-slate-200 bg-white">
           <tr>
             <Th className="w-[30%]">Customer</Th>
-            <Th className="w-[26%]">SKUs · in hand</Th>
+            <Th className="w-[26%]">SKUs · in hand (crates)</Th>
             <Th className="text-center">Status</Th>
-            <Th right>In hand</Th>
-            <Th right>Expected</Th>
+            <Th right>In hand (crates)</Th>
+            <Th right>Expected (crates)</Th>
             <Th right>Next order</Th>
-            <Th right>Last order</Th>
+            <Th right>Last order (crates / date)</Th>
           </tr>
         </thead>
         <tbody>

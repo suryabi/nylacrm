@@ -15,8 +15,8 @@ export const CustomerTile = ({ tile }) => {
       avatar={<div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-medium tracking-wide ${critical ? 'bg-rose-700 text-white' : 'bg-[#002FA7]/10 text-[#002FA7]'}`}>{initials}</div>}>
       <KpiDeck state={state} testId={`next-order-date-${tile.account_id}`} urgencyValue={tile.next_order_urgency} title={tile.forecast_basis}>
         <Kpi label="Next order" value={hasForecast ? fmtDate(tile.expected_next_order_date) : '\u2014'} tone={kpiTone(state, hasForecast)} sub={tile.sample_orders ? `${tile.sample_orders} order${tile.sample_orders === 1 ? '' : 's'} sampled` : 'no orders yet'} />
-        <Kpi label="Expected" value={fmtCrates(tile.expected_crates)} unit={tile.expected_crates != null ? 'cr' : ''} tone={kpiTone(state, tile.expected_crates != null)} testId={`expected-crates-${tile.account_id}`} />
-        <Kpi label="In hand" value={noStock ? '0' : fmtCrates(tile.stock_crates)} unit="cr" tone={noStock ? 'text-slate-400' : critical ? 'text-rose-700' : 'text-slate-900'}
+        <Kpi label="Expected (crates)" value={fmtCrates(tile.expected_crates)} tone={kpiTone(state, tile.expected_crates != null)} testId={`expected-crates-${tile.account_id}`} />
+        <Kpi label="In hand (crates)" value={noStock ? '0' : fmtCrates(tile.stock_crates)} tone={noStock ? 'text-slate-400' : critical ? 'text-rose-700' : 'text-slate-900'}
           testId={`stock-total-${tile.account_id}`} extra={critical ? { 'data-shortfall': shortfall } : {}} pill={critical ? `\u2212${fmtCrates(shortfall)}` : null} />
         {critical && <span className="sr-only" data-testid={`low-stock-badge-${tile.account_id}`}>short by {fmtCrates(shortfall)} crates</span>}
       </KpiDeck>
@@ -26,7 +26,7 @@ export const CustomerTile = ({ tile }) => {
       </div>
 
       <Footer rows={[{ label: 'Last order', value: hasOrder ? (
-        <><span data-testid={`last-order-qty-${tile.account_id}`}>{fmtCrates(tile.last_order_crates)} cr</span><span className="mx-1.5 font-normal text-slate-300">/</span><span data-testid={`last-order-date-${tile.account_id}`}>{fmtDateFull(tile.last_order_date)}</span></>
+        <><span data-testid={`last-order-qty-${tile.account_id}`}>{fmtCrates(tile.last_order_crates)}</span><span className="mx-1.5 font-normal text-slate-300">/</span><span data-testid={`last-order-date-${tile.account_id}`}>{fmtDateFull(tile.last_order_date)}</span></>
       ) : <span data-testid={`last-order-qty-${tile.account_id}`}>{'\u2014'}</span> }]} />
     </TileShell>
   );

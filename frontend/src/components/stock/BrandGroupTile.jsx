@@ -16,8 +16,8 @@ export const BrandGroupTile = ({ group }) => {
 
       <KpiDeck state={state} testId={`group-stats-${group.group_id}`} urgencyValue={group.next_order_urgency}>
         <Kpi label="Next order" value={fmtDate(group.expected_next_order_date)} tone={kpiTone(state, !!group.expected_next_order_date)} testId={`group-next-order-${group.group_id}`} sub={`${group.members_ordering} of ${group.members.length} ordering`} />
-        <Kpi label="Expected (all)" value={fmtCrates(group.expected_crates)} unit={group.expected_crates != null ? 'cr' : ''} tone={kpiTone(state, group.expected_crates != null)} testId={`group-expected-crates-${group.group_id}`} />
-        <Kpi label="Shared in hand" value={noStock ? '0' : fmtCrates(group.stock_crates)} unit="cr" tone={noStock ? 'text-slate-400' : critical ? 'text-rose-700' : 'text-slate-900'}
+        <Kpi label="Expected all (crates)" value={fmtCrates(group.expected_crates)} tone={kpiTone(state, group.expected_crates != null)} testId={`group-expected-crates-${group.group_id}`} />
+        <Kpi label="Shared in hand (crates)" value={noStock ? '0' : fmtCrates(group.stock_crates)} tone={noStock ? 'text-slate-400' : critical ? 'text-rose-700' : 'text-slate-900'}
           testId={`group-stock-total-${group.group_id}`} pill={critical ? `\u2212${fmtCrates(shortfall)}` : null} />
       </KpiDeck>
 
@@ -32,12 +32,12 @@ export const BrandGroupTile = ({ group }) => {
           {group.members.map((m) => (
             <li key={m.account_id} className="flex items-center justify-between gap-3 px-2.5 py-1.5 text-xs transition-colors odd:bg-white even:bg-slate-50/70 hover:bg-violet-50/50" data-testid={`group-member-${m.account_id}`}
               title={`${m.account_name}${m.city ? ` · ${m.city}` : ''}${m.expected_next_order_date ? ` · next ${fmtDate(m.expected_next_order_date)} · ${fmtCrates(m.expected_crates)} cr` : ''}`}>
-              <span className="flex min-w-0 flex-1 items-start gap-2 text-slate-700">
-                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${m.low_stock ? 'bg-rose-700' : m.expected_next_order_date ? 'bg-emerald-700' : 'bg-slate-300'}`} />
-                <span className={`min-w-0 [overflow-wrap:anywhere] ${m.low_stock ? 'text-rose-700' : ''}`}>{m.account_name}</span>
+              <span className="flex min-w-0 flex-1 items-center gap-2 text-slate-700">
+                <span className={`h-2 w-2 shrink-0 rounded-full ${m.low_stock ? 'bg-rose-700' : m.expected_next_order_date ? 'bg-emerald-700' : 'bg-slate-300'}`} />
+                <span className={`min-w-0 truncate ${m.low_stock ? 'text-rose-700' : ''}`}>{m.account_name}</span>
               </span>
               <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-slate-500" data-testid={`group-member-last-${m.account_id}`}>
-                {m.last_order_date ? <><span className="text-slate-700">{fmtCrates(m.last_order_crates)} cr</span><span className="mx-1 text-slate-300">/</span>{fmtDateFull(m.last_order_date)}</> : '\u2014'}
+                {m.last_order_date ? <><span className="text-slate-700">{fmtCrates(m.last_order_crates)}</span><span className="mx-1 text-slate-300">/</span>{fmtDateFull(m.last_order_date)}</> : '\u2014'}
               </span>
             </li>
           ))}
@@ -46,9 +46,9 @@ export const BrandGroupTile = ({ group }) => {
 
       <Footer rows={[
         { label: 'Last orders', value: group.last_order_date
-          ? <><span data-testid={`group-last-orders-${group.group_id}`}>{fmtCrates(group.last_orders_crates)} cr</span><span className="mx-1.5 font-normal text-slate-300">/</span><span data-testid={`group-last-order-date-${group.group_id}`}>{fmtDateFull(group.last_order_date)}</span></>
+          ? <><span data-testid={`group-last-orders-${group.group_id}`}>{fmtCrates(group.last_orders_crates)}</span><span className="mx-1.5 font-normal text-slate-300">/</span><span data-testid={`group-last-order-date-${group.group_id}`}>{fmtDateFull(group.last_order_date)}</span></>
           : <span data-testid={`group-last-orders-${group.group_id}`}>{'\u2014'}</span> },
-        { label: 'Recent history', value: <span data-testid={`group-history-${group.group_id}`}>{group.history_orders ? <>{fmtCrates(group.history_crates)} cr<span className="mx-2 font-normal text-slate-300">·</span>{group.history_orders} orders</> : '\u2014'}</span> },
+        { label: 'Recent history', value: <span data-testid={`group-history-${group.group_id}`}>{group.history_orders ? <>{fmtCrates(group.history_crates)}<span className="mx-2 font-normal text-slate-300">·</span>{group.history_orders} orders</> : '\u2014'}</span> },
       ]} />
     </TileShell>
   );

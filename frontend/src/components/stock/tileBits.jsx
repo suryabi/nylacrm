@@ -34,7 +34,7 @@ export const TileShell = ({ state, group = false, title, subtitle, avatar, alert
     <div className="flex items-start gap-3.5">
       {avatar}
       <div className="min-w-0 flex-1 pr-2">
-        <h3 className="break-words text-sm font-medium leading-snug text-slate-900 [overflow-wrap:anywhere]" data-testid={testId.replace('-tile-', '-name-')}>{title}</h3>
+        <h3 className="truncate text-sm font-medium leading-snug text-slate-900" title={typeof title === 'string' ? title : undefined} data-testid={testId.replace('-tile-', '-name-')}>{title}</h3>
         <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">{subtitle || '\u00a0'}</p>
       </div>
       {state === 'critical' && (
@@ -80,12 +80,12 @@ export const SkuTable = ({ skus, state, prefix, emptyText, emptyTestId }) => (
           </p>
           {sk.warehouses?.length > 0 && (
             <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
-              {sk.warehouses.map((w) => <span key={w.location_id || w.location_name} className="inline-flex items-center rounded border border-slate-200 bg-white px-1.5 py-0.5 text-slate-600">{w.location_name} · {fmtCrates(w.quantity / (sk.units_per_crate || 1))} cr</span>)}
+              {sk.warehouses.map((w) => <span key={w.location_id || w.location_name} className="inline-flex items-center rounded border border-slate-200 bg-white px-1.5 py-0.5 text-slate-600">{w.location_name} · {fmtCrates(w.quantity / (sk.units_per_crate || 1))}</span>)}
             </p>
           )}
         </div>
         <span className={`shrink-0 whitespace-nowrap text-right text-xs font-medium tabular-nums ${state === 'critical' ? 'text-rose-700' : sk.stock_in_hand > 0 ? 'text-slate-900' : 'text-slate-400'}`} data-testid={`${prefix}-qty-${sk.child_sku_id}`}>
-          {fmtCrates(sk.stock_crates)} <span className="text-xs font-medium text-slate-400">cr</span>
+          {fmtCrates(sk.stock_crates)}
         </span>
       </div>
     ))}
