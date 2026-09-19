@@ -1,0 +1,33 @@
+{
+  "summary": "Backend + frontend validation of Customer Stock Dashboard 'generic fallback' behaviour. 10/10 pytest tests pass (structural, Empire distributor-scoped generic rows, Oceans all-warehouses generic, Demo Grand low-stock generic, summary counts generic_customers=7 & branded_skus=17, generic stock math cross-checked against Mongo, export header + '(generic)' suffix + 'No SKU'). Frontend tiles + table view + generic tags + distributor roll-up all match spec.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verified_checks": [
+    "GET /api/distributor/customer-stock-dashboard: every tile.stock_kind in {branded, generic, null}. Branded rows never have generic=true; child_sku_id is not synthetic.",
+    "Empire Restaurant tile: stock_kind=generic, 2 rows (Nyla 330ml + 600ml), each generic:true, scope='distributor', child_sku_id matches 'parent:<sku>:<Brian id>', tags 'generic · at distributor', in-hand 124.2 cr, not Short.",
+    "Oceans Fresh Seafood tile: distributor_id null, generic scope='all', synthetic id ends ':all', warehouses across all locations (Default master, Bangalore, Master, etc.).",
+    "Demo Grand Hotel (Low Stock): stock_kind=generic, low_stock=true, rose Short pill + shortfall '-2.5', 'generic · all warehouses' tag.",
+    "Empty-SKU tiles (customers with no orders AND no branded child SKU) show child_skus=[], stock_kind=null; 6 such 'No SKU yet' rows in table view.",
+    "summary.generic_customers == 7 (matches 7 tiles with stock_kind=generic); summary.branded_skus == 17 (only branded tiles' SKUs); summary.stock_crates dedupes by child_sku_id.",
+    "Generic stock math cross-check: Mongo sum of distributor_stock.quantity for tenant=nyla-air-water, sku_id=<parent>, child_sku_id in [null,''], quantity>0, distributor_id=<Brian> equals row.stock_in_hand; stock_crates = round(units/upc,1).",
+    "Export sheet header 'SKU (branded child / generic parent)' present; generic rows suffixed '(generic)'; empty-SKU customers show 'No SKU'.",
+    "Frontend csd-generic-count = '7 on generic stock'.",
+    "Table view cst-dist-brian-inhand = 226.2 cr correctly dedupes: 83 (Demo Franchise shared, once) + 10 (Seed G branded) + 0 (Seed H) + 9 (Seed I 600ml) + 118.5 (generic 600ml @Brian, ONCE despite 4 Brian customers showing it) + 5.7 (generic 330ml @Brian, ONCE) = 226.2.",
+    "16 amber 'generic' chips in table SKUs column; 6 'No SKU yet' status pills.",
+    "Regression: Brand Group tile still renders with 6 members hidden from grid; Seed G/H still Short; no console errors other than the ignored 401 on /api/auth/me."
+  ],
+  "test_report_links": ["/app/backend/tests/test_csd_generic_fallback.py", "/app/test_reports/pytest/csd_generic.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: _generic_parent_rows builds a scopes set that always includes (sid, None) even for SKUs that only have distributor-scoped stock. Harmless (rows are only materialised on demand) but creates unused 'all'-scope keys in memory.",
+    "Minor: uniqueInHand in CustomerStockTable.jsx dedupes by child_sku_id which correctly handles generic parent:<sku>:<dist> keys — good; the previously reported 202 vs 102 bug is resolved.",
+    "Minor: export SKU column suffix '(generic)' is only applied for full generic rows. If a tile ever mixes branded + generic (not possible today but conceivable if design changes), each generic child would need the suffix regardless of position."
+  ],
+  "updated_files": ["/app/backend/tests/test_csd_generic_fallback.py"],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100%"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (worked).",
+  "seed_data_creation": "None; used existing demo seed data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Generic-fallback CSD feature is stable end-to-end. Tests at /app/backend/tests/test_csd_generic_fallback.py exercise: stock_kind domain, Empire/Oceans/DemoGrand tiles, summary counts (generic_customers=7, branded_skus=17), Mongo cross-check for generic stock math, export header + '(generic)' suffix + 'No SKU'. Frontend: csd-generic-count, generic-tag-<sku_id> testids, amber tag in table."
+}
