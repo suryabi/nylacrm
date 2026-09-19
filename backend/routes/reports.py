@@ -179,6 +179,7 @@ async def get_sku_performance(
     city: Optional[str] = None,
     resource_id: Optional[str] = None,
     sku: Optional[str] = None,
+    account_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -213,10 +214,35 @@ async def get_sku_performance(
     target_query = {}
     if territory:
         target_query['territory'] = territory
+    if state:
+        target_query['state'] = state
     if city:
         target_query['city'] = city
     if resource_id:
         target_query['resource_id'] = resource_id
+
+    # Geography / sales-owner scope → set of accounts. Invoices carry no
+    # territory/state/city of their own, so they are scoped through the account.
+    account_scope = None
+    if territory or state or city or resource_id or account_id:
+        acct_q = {}
+        if account_id:
+            acct_q['id'] = account_id
+        if territory:
+            acct_q['territory'] = territory
+        if state:
+            acct_q['state'] = state
+        if city:
+            acct_q['city'] = city
+        if resource_id:
+            acct_q['$or'] = [{'sales_owner_id': resource_id}, {'assigned_to': resource_id}]
+        account_scope = set()
+        async for a in get_tdb().accounts.find(acct_q, {'_id': 0, 'id': 1, 'account_id': 1, 'account_name': 1}):
+            for k in ('id', 'account_id'):
+                if a.get(k):
+                    account_scope.add(str(a[k]))
+            if a.get('account_name'):
+                account_scope.add(a['account_name'].strip().lower())
     
     sku_targets = await db.sku_targets.find(target_query, {'_id': 0}).to_list(500)
 
@@ -266,10 +292,19 @@ async def get_sku_performance(
         start_str = start_date.date().isoformat() if hasattr(start_date, 'date') else start_date.isoformat()[:10]
         end_str = end_date.date().isoformat() if hasattr(end_date, 'date') else end_date.isoformat()[:10]
         invoice_query['invoice_date'] = {'$gte': start_str, '$lte': end_str}
-    if resource_id:
-        invoice_query['created_by'] = resource_id
+    if account_scope is not None:
+        if not account_scope:
+            invoice_query['id'] = {'$in': []}
+        else:
+            scope_list = sorted(account_scope)
+            invoice_query['$or'] = [{'account_uuid': {'$in': scope_list}}, {'account_id': {'$in': scope_list}},
+                                    {'account_id_from_mq': {'$in': scope_list}}]
 
     invoices = await get_tdb().invoices.find(invoice_query, {'_id': 0}).to_list(20000)
+    if account_scope:
+        invoices = [inv for inv in invoices if any(
+            str(v).strip().lower() in account_scope or str(v).strip() in account_scope
+            for v in (inv.get('account_uuid'), inv.get('account_id'), inv.get('account_id_from_mq'), inv.get('account_name')) if v)]
 
     def _parse_num(v):
         if v is None:
@@ -390,6 +425,7 @@ async def get_sku_performance(
     
     return {
         'skus': skus_data,
+        'sku_options': sorted(s for s in all_known_skus if s and str(s).strip()),
         'summary': {
             'total_target': total_target,
             'total_achieved': total_achieved,

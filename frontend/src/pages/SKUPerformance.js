@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import { Package, Filter, Loader2, TrendingUp, ShoppingBag, Boxes, Crown, ArrowUpRight, ChevronDown } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
+import { SearchCombobox } from '../components/SearchCombobox';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -20,16 +21,6 @@ const TIME_FILTERS = [
   { value: 'this_year', label: 'This Year' },
   { value: 'last_year', label: 'Last Year' },
   { value: 'lifetime', label: 'Lifetime' }
-];
-
-const SKU_OPTIONS = [
-  '660 ml / Silver / Nyla',
-  '660 ml / Gold / Nyla',
-  '330 ml / Silver / Nyla',
-  '330 ml / Gold / Nyla',
-  '660 ml / Sparkling',
-  '300 ml / Sparkling',
-  '24 Brand / 660 ml'
 ];
 
 function formatCurrency(value) {
@@ -52,11 +43,21 @@ export default function SKUPerformance() {
   const [cityFilter, setCityFilter] = useState('all');
   const [salesResource, setSalesResource] = useState('all');
   const [skuFilter, setSkuFilter] = useState('all');
+  const [skuOptions, setSkuOptions] = useState([]);
+  const [accountFilter, setAccountFilter] = useState('all');
+  const [accounts, setAccounts] = useState([]);
 
-  const { territories: masterTerritories, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
+  const { territories: masterTerritories, states: masterStates, cities: masterCities } = useMasterLocations();
 
-  useEffect(() => { fetchSalesTeam(); }, []);
-  useEffect(() => { fetchData(); }, [timeFilter, territoryFilter, stateFilter, cityFilter, salesResource, skuFilter]);
+  useEffect(() => { fetchSalesTeam(); fetchAccounts(); }, []);
+  useEffect(() => { fetchData(); }, [timeFilter, territoryFilter, stateFilter, cityFilter, salesResource, skuFilter, accountFilter]);
+
+  const fetchAccounts = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/brand-groups/accounts`, { withCredentials: true });
+      setAccounts((res.data.accounts || []).map((a) => ({ id: a.id, name: a.account_name, sub: [a.account_id, a.city].filter(Boolean).join(' · ') })));
+    } catch (error) { console.error('Failed to load accounts'); }
+  };
 
   const fetchSalesTeam = async () => {
     try {
@@ -75,22 +76,14 @@ export default function SKUPerformance() {
       if (cityFilter !== 'all') params.append('city', cityFilter);
       if (salesResource !== 'all') params.append('resource_id', salesResource);
       if (skuFilter !== 'all') params.append('sku', skuFilter);
+      if (accountFilter !== 'all') params.append('account_id', accountFilter);
       
       const res = await axios.get(`${API_URL}/reports/sku-performance?${params}`, { withCredentials: true });
       setData(res.data);
+      if (res.data?.sku_options?.length) setSkuOptions(res.data.sku_options);
     } catch (error) {
-      const mockData = {
-        skus: SKU_OPTIONS.map((sku) => ({
-          sku,
-          target_revenue: (Math.random() * 500000 + 100000),
-          achieved_revenue: (Math.random() * 400000 + 50000),
-          units_sold: Math.floor(Math.random() * 1000 + 100),
-          leads_count: Math.floor(Math.random() * 50 + 5),
-          achievement_pct: Math.floor(Math.random() * 100 + 20)
-        })),
-        summary: { total_target: 2500000, total_achieved: 1800000, total_units: 4500, avg_achievement: 72 }
-      };
-      setData(mockData);
+      toast.error(error.response?.data?.detail || 'Failed to load SKU performance');
+      setData({ skus: [], summary: {} });
     } finally { setLoading(false); }
   };
 
@@ -101,12 +94,37 @@ export default function SKUPerformance() {
     setCityFilter('all');
     setSalesResource('all');
     setSkuFilter('all');
+    setAccountFilter('all');
   };
 
-  const availableTerritories = user?.territory === 'All India' || ['CEO', 'Director', 'Vice President', 'System Admin'].includes(user?.role)
-    ? ['All Territories', ...masterTerritories.map(t => t.name)] : user?.territory ? ['All Territories', user.territory] : ['All Territories'];
-  const availableStates = territoryFilter !== 'all' && territoryFilter !== 'All Territories' ? ['All States', ...getStateNamesByTerritoryName(territoryFilter)] : ['All States'];
-  const availableCities = stateFilter !== 'all' && stateFilter !== 'All States' ? ['All Cities', ...getCityNamesByStateName(stateFilter)] : ['All Cities'];
+  // Territory → State → City are independent: each list narrows to the parents chosen (if any), never blocks.
+  const canSeeAll = user?.territory === 'All India' || ['CEO', 'Director', 'Vice President', 'System Admin'].includes(user?.role);
+  const territoryOpts = (canSeeAll ? masterTerritories : masterTerritories.filter((t) => t.name === user?.territory)).map((t) => ({ id: t.name, name: t.name }));
+  const territoryIds = new Set(masterTerritories.filter((t) => territoryFilter === 'all' ? territoryOpts.some((o) => o.id === t.name) : t.name === territoryFilter).map((t) => t.id));
+  const visibleStates = masterStates.filter((s) => territoryIds.has(s.territory_id));
+  const stateOpts = visibleStates.map((s) => ({ id: s.name, name: s.name, sub: masterTerritories.find((t) => t.id === s.territory_id)?.name }));
+  const stateIds = new Set(visibleStates.filter((s) => stateFilter === 'all' || s.name === stateFilter).map((s) => s.id));
+  const cityOpts = masterCities.filter((c) => stateIds.has(c.state_id)).map((c) => ({ id: c.name, name: c.name, sub: masterStates.find((s) => s.id === c.state_id)?.name }));
+  const onTerritory = (v) => { setTerritoryFilter(v); if (v !== 'all' && stateFilter !== 'all' && !masterStates.some((s) => s.name === stateFilter && masterTerritories.find((t) => t.id === s.territory_id)?.name === v)) { setStateFilter('all'); setCityFilter('all'); } };
+  const onState = (v) => {
+    setStateFilter(v);
+    if (v !== 'all') {
+      const st = masterStates.find((s) => s.name === v);
+      const terr = masterTerritories.find((t) => t.id === st?.territory_id);
+      if (terr && territoryFilter !== terr.name) setTerritoryFilter(terr.name);
+      if (cityFilter !== 'all' && !masterCities.some((c) => c.name === cityFilter && c.state_id === st?.id)) setCityFilter('all');
+    }
+  };
+  const onCity = (v) => {
+    setCityFilter(v);
+    if (v !== 'all') {
+      const ct = masterCities.find((c) => c.name === v);
+      const st = masterStates.find((s) => s.id === ct?.state_id);
+      const terr = masterTerritories.find((t) => t.id === st?.territory_id);
+      if (st && stateFilter !== st.name) setStateFilter(st.name);
+      if (terr && territoryFilter !== terr.name) setTerritoryFilter(terr.name);
+    }
+  };
 
   const skusSorted = [...(data.skus || [])].sort((a, b) => (b.achieved_revenue || 0) - (a.achieved_revenue || 0));
   const totalAchieved = data.summary?.total_achieved || skusSorted.reduce((s, r) => s + (r.achieved_revenue || 0), 0);
@@ -163,40 +181,24 @@ export default function SKUPerformance() {
             <Filter className="h-4 w-4 text-violet-500" />
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Filters</span>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
             {[
               { label: 'Time Period', el: (
                 <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className={filterSelectCls} data-testid="time-filter">
                   {TIME_FILTERS.map(tf => <option key={tf.value} value={tf.value}>{tf.label}</option>)}
                 </select>) },
-              { label: 'Territory', el: (
-                <select value={territoryFilter} onChange={(e) => { setTerritoryFilter(e.target.value); setStateFilter('all'); setCityFilter('all'); }} className={filterSelectCls} data-testid="territory-filter">
-                  {availableTerritories.map(t => <option key={t} value={t === 'All Territories' ? 'all' : t}>{t}</option>)}
-                </select>) },
-              { label: 'State', el: (
-                <select value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setCityFilter('all'); }} disabled={territoryFilter === 'all'} className={filterSelectCls} data-testid="state-filter">
-                  {availableStates.map(s => <option key={s} value={s === 'All States' ? 'all' : s}>{s}</option>)}
-                </select>) },
-              { label: 'City', el: (
-                <select value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} disabled={stateFilter === 'all'} className={filterSelectCls} data-testid="city-filter">
-                  {availableCities.map(c => <option key={c} value={c === 'All Cities' ? 'all' : c}>{c}</option>)}
-                </select>) },
-              { label: 'Sales Resource', el: (
-                <select value={salesResource} onChange={(e) => setSalesResource(e.target.value)} className={filterSelectCls} data-testid="resource-filter">
-                  <option value="all">All Resources</option>
-                  {salesTeam.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                </select>) },
-              { label: 'SKU', el: (
-                <select value={skuFilter} onChange={(e) => setSkuFilter(e.target.value)} className={filterSelectCls} data-testid="sku-filter">
-                  <option value="all">All SKUs</option>
-                  {SKU_OPTIONS.map(sku => <option key={sku} value={sku}>{sku}</option>)}
-                </select>) },
+              { label: 'Territory', el: <SearchCombobox options={territoryOpts} value={territoryFilter} onChange={onTerritory} placeholder="All Territories" allLabel="All Territories" testId="territory-filter" /> },
+              { label: 'State', el: <SearchCombobox options={stateOpts} value={stateFilter} onChange={onState} placeholder="All States" allLabel="All States" testId="state-filter" /> },
+              { label: 'City', el: <SearchCombobox options={cityOpts} value={cityFilter} onChange={onCity} placeholder="All Cities" allLabel="All Cities" testId="city-filter" /> },
+              { label: 'Account', el: <SearchCombobox options={accounts} value={accountFilter} onChange={setAccountFilter} placeholder="All Accounts" allLabel="All Accounts" testId="account-filter" /> },
+              { label: 'Sales Resource', el: <SearchCombobox options={salesTeam.map((m) => ({ id: m.id, name: m.name, sub: m.role }))} value={salesResource} onChange={setSalesResource} placeholder="All Resources" allLabel="All Resources" testId="resource-filter" /> },
+              { label: 'SKU', el: <SearchCombobox options={skuOptions.map((s) => ({ id: s, name: s }))} value={skuFilter} onChange={setSkuFilter} placeholder="All SKUs" allLabel="All SKUs" testId="sku-filter" /> },
             ].map((f) => (
               <div key={f.label} className="space-y-1.5">
                 <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{f.label}</label>
                 <div className="relative">
                   {f.el}
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  {f.label === 'Time Period' && <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />}
                 </div>
               </div>
             ))}
