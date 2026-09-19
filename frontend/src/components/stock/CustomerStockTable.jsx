@@ -17,26 +17,28 @@ const expectedOf = (rows) => rows.reduce((s, r) => s + (r.expected_crates || 0),
 const Th = ({ children, right, className = '' }) => (
   <th className={`whitespace-nowrap px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 ${right ? 'text-right' : 'text-left'} ${className}`}>{children}</th>
 );
-const Crates = ({ v, testId, cls = 'text-slate-900' }) => (
-  <td className={`whitespace-nowrap px-3 py-2.5 text-right text-sm font-bold tabular-nums ${cls}`} data-testid={testId}>{fmtCrates(v)} <span className="text-xs font-medium text-slate-400">cr</span></td>
+const Crates = ({ v, testId, cls = 'text-slate-900', unitCls = 'text-slate-400' }) => (
+  <td className={`whitespace-nowrap px-3 py-2.5 text-right text-sm font-bold tabular-nums ${cls}`} data-testid={testId}>{fmtCrates(v)} <span className={`text-xs font-medium ${unitCls}`}>cr</span></td>
 );
 
 // Collapsible header row (distributor or brand group) with roll-up totals.
 const HeaderRow = ({ level, icon, name, rows, unit, open, onToggle, testKey, extraCls = '' }) => {
   const short = rows.filter((r) => r.low_stock).length;
+  const top = level === 0;
   return (
     <tr className={`cursor-pointer select-none ${extraCls}`} onClick={onToggle} data-testid={`${testKey}`} data-open={open ? 'true' : 'false'}>
-      <td colSpan={3} className={`px-3 py-2.5 ${level === 1 ? 'pl-10' : ''}`}>
-        <span className={`inline-flex flex-wrap items-center gap-2 text-sm font-bold ${level === 1 ? 'text-violet-800' : 'text-slate-900'}`}>
-          {open ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+      <td colSpan={3} className={`px-3 ${top ? 'py-3' : 'py-2.5 pl-10'}`}>
+        <span className={`inline-flex flex-wrap items-center gap-2 ${top ? 'text-base font-semibold text-white' : 'text-sm font-bold text-violet-800'}`}>
+          <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md ${top ? 'bg-white/15' : ''}`}>{open ? <ChevronDown className={`h-4 w-4 ${top ? 'text-white' : 'text-slate-400'}`} /> : <ChevronRight className={`h-4 w-4 ${top ? 'text-white' : 'text-slate-400'}`} />}</span>
           {icon} {name}
-          <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200">{rows.length} {unit}{rows.length === 1 ? '' : 's'}</span>
-          {short > 0 && <span className="rounded-full bg-rose-700 px-2 py-0.5 text-[11px] font-semibold text-white" data-testid={`${testKey}-short`}>{short} short</span>}
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${top ? 'bg-white/15 text-white' : 'bg-white text-slate-500 ring-1 ring-slate-200'}`}>{rows.length} {unit}{rows.length === 1 ? '' : 's'}</span>
+          {short > 0 && <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${top ? 'bg-rose-500 text-white' : 'bg-rose-700 text-white'}`} data-testid={`${testKey}-short`}>{short} short</span>}
+          {top && !open && <span className="text-xs font-normal text-white/70">click to expand</span>}
         </span>
       </td>
-      <Crates v={uniqueInHand(rows)} testId={`${testKey}-inhand`} />
-      <Crates v={expectedOf(rows)} testId={`${testKey}-expected`} />
-      <td colSpan={COLS - 5} />
+      <Crates v={uniqueInHand(rows)} testId={`${testKey}-inhand`} cls={top ? 'text-white' : 'text-slate-900'} unitCls={top ? 'text-white/60' : 'text-slate-400'} />
+      <Crates v={expectedOf(rows)} testId={`${testKey}-expected`} cls={top ? 'text-white' : 'text-slate-900'} unitCls={top ? 'text-white/60' : 'text-slate-400'} />
+      <td colSpan={COLS - 5} className={top ? 'text-right pr-4 text-xs text-white/70' : ''}>{top ? 'In hand · Expected' : ''}</td>
     </tr>
   );
 };
@@ -88,7 +90,7 @@ const DistributorBlock = ({ name, rows, closed, toggle }) => {
   const open = !closed[dKey];
   return (
     <>
-      <HeaderRow level={0} icon={<Store className="h-4 w-4 text-[#002FA7]" />} name={name} rows={rows} unit="customer" open={open} onToggle={() => toggle(dKey)} testKey={dKey} extraCls="bg-slate-50/90 hover:bg-slate-100/80" />
+      <HeaderRow level={0} icon={<Store className="h-4 w-4 text-white" />} name={name} rows={rows} unit="customer" open={open} onToggle={() => toggle(dKey)} testKey={dKey} extraCls="bg-[#002FA7] hover:bg-[#00268a] border-t-4 border-white" />
       {open && [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([g, members]) => {
         const gKey = `${dKey}-group-${slug(g)}`;
         const gOpen = !closed[gKey];

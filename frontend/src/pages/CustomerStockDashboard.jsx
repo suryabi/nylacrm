@@ -170,7 +170,7 @@ export default function CustomerStockDashboard() {
       {view === 'tiles' && groups.length > 0 && (
         <section className="space-y-3" data-testid="csd-groups-section">
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-violet-700"><Layers className="h-4 w-4" /> Brand Groups <span className="font-normal normal-case tracking-normal text-slate-400">· shared stock &amp; members&apos; orders</span></div>
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2" data-testid="csd-groups-grid">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-testid="csd-groups-grid">
             {groups.map((g) => <BrandGroupTile key={g.group_id} group={g} />)}
           </div>
           {tiles.length > 0 && <div className="pt-2 text-xs font-medium uppercase tracking-wide text-slate-500">Customers</div>}
@@ -182,7 +182,7 @@ export default function CustomerStockDashboard() {
       ) : view !== 'tiles' ? null : tiles.length === 0 && groups.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 py-16 text-center text-sm text-slate-500" data-testid="csd-empty">No customers match the current filters.</div>
       ) : tiles.length === 0 ? null : (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2" data-testid="csd-grid">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-testid="csd-grid">
           {tiles.map((t) => <CustomerTile key={t.account_id} tile={t} />)}
         </div>
       )}

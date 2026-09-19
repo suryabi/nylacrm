@@ -21,18 +21,18 @@ const DECK = {
 const VALUE = { critical: 'text-rose-700', covered: 'text-emerald-700', neutral: 'text-slate-900' };
 
 export const TileShell = ({ state, group = false, title, subtitle, avatar, alertLabel, testId, extra, children }) => (
-  <div className={`relative flex flex-col rounded-2xl border bg-white p-5 shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-6 ${
+  <div className={`relative flex flex-col rounded-2xl border bg-white p-4 shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-md ${
     state === 'critical' ? 'border-rose-300 ring-1 ring-rose-200/80 bg-gradient-to-b from-rose-50/30 to-white'
       : group ? 'border-violet-200/90 hover:border-violet-300 bg-gradient-to-b from-violet-50/25 to-white'
         : 'border-slate-200/90 hover:border-slate-300'}`} data-testid={testId} {...extra}>
     <div className="flex items-start gap-3.5">
       {avatar}
       <div className="min-w-0 flex-1 pr-2">
-        <h3 className="break-words text-base font-bold leading-snug text-slate-900 [overflow-wrap:anywhere]" data-testid={testId.replace('-tile-', '-name-')}>{title}</h3>
-        <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">{subtitle || '\u00a0'}</p>
+        <h3 className="break-words text-sm font-medium leading-snug text-slate-900 [overflow-wrap:anywhere]" data-testid={testId.replace('-tile-', '-name-')}>{title}</h3>
+        <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">{subtitle || '\u00a0'}</p>
       </div>
       {state === 'critical' && (
-        <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-rose-700 px-2.5 py-1 text-xs font-semibold text-white shadow-sm" data-testid={testId.replace(/^(\w+)-tile-/, '$1-priority-badge-')}>
+        <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-rose-700 px-2.5 py-1 text-[11px] font-medium text-white shadow-sm" data-testid={testId.replace(/^(\w+)-tile-/, '$1-priority-badge-')}>
           <AlertTriangle className="h-3.5 w-3.5" /> {alertLabel}
         </span>
       )}
@@ -43,31 +43,31 @@ export const TileShell = ({ state, group = false, title, subtitle, avatar, alert
 
 export const Kpi = ({ label, value, unit, tone, testId, extra, pill, sub }) => (
   <div className="min-w-0 px-3 first:pl-0 last:pr-0">
-    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+    <p className="text-[10px] uppercase tracking-wider text-slate-400">{label}</p>
     <p className="mt-1 flex items-baseline gap-1 whitespace-nowrap">
-      <span className={`text-lg font-bold tabular-nums tracking-tight sm:text-xl ${tone}`} data-testid={testId} {...extra}>{value}</span>
+      <span className={`text-base font-medium tabular-nums ${tone}`} data-testid={testId} {...extra}>{value}</span>
       {unit && <span className="text-xs font-medium text-slate-400">{unit}</span>}
-      {pill && <span className="ml-1.5 inline-flex items-center rounded bg-rose-700 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-white">{pill}</span>}
+      {pill && <span className="ml-1.5 inline-flex items-center rounded bg-rose-700 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white">{pill}</span>}
     </p>
     {sub && <p className="mt-0.5 whitespace-nowrap text-[11px] text-slate-400">{sub}</p>}
   </div>
 );
 
 export const KpiDeck = ({ state, testId, urgencyValue, title, children }) => (
-  <div className={`mt-4 grid grid-cols-3 divide-x rounded-xl border p-3.5 ${DECK[state]}`} data-testid={testId} data-urgency={urgencyValue || ''} title={title || ''}>
+  <div className={`mt-3 grid grid-cols-3 divide-x rounded-xl border p-3 ${DECK[state]}`} data-testid={testId} data-urgency={urgencyValue || ''} title={title || ''}>
     {children}
   </div>
 );
 export const kpiTone = (state, hasValue) => (hasValue ? VALUE[state] : 'text-slate-300');
 
 export const SkuTable = ({ skus, state, prefix, emptyText, emptyTestId }) => (
-  <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/40 px-3.5 py-1">
+  <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/40 px-3 py-0.5">
     {skus.length === 0 ? (
       <p className="py-2 text-xs text-slate-400" data-testid={emptyTestId}>{emptyText}</p>
     ) : skus.map((sk) => (
-      <div key={sk.child_sku_id} className="flex items-center justify-between gap-3 border-b border-slate-100 py-2.5 last:border-0" data-testid={`${prefix}-${sk.child_sku_id}`}>
+      <div key={sk.child_sku_id} className="flex items-center justify-between gap-3 border-b border-slate-100 py-2 last:border-0" data-testid={`${prefix}-${sk.child_sku_id}`}>
         <div className="min-w-0 flex-1">
-          <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-800 [overflow-wrap:anywhere]">
+          <p className="flex flex-wrap items-center gap-2 text-xs text-slate-800 [overflow-wrap:anywhere]">
             <span>{sk.child_sku_name}</span>
             {sk.shared && <span className="rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700" data-testid={`shared-tag-${sk.child_sku_id}`}>shared</span>}
           </p>
@@ -77,7 +77,7 @@ export const SkuTable = ({ skus, state, prefix, emptyText, emptyTestId }) => (
             </p>
           )}
         </div>
-        <span className={`shrink-0 whitespace-nowrap text-right text-sm font-semibold tabular-nums ${state === 'critical' ? 'text-rose-700' : sk.stock_in_hand > 0 ? 'text-slate-900' : 'text-slate-400'}`} data-testid={`${prefix}-qty-${sk.child_sku_id}`}>
+        <span className={`shrink-0 whitespace-nowrap text-right text-xs font-medium tabular-nums ${state === 'critical' ? 'text-rose-700' : sk.stock_in_hand > 0 ? 'text-slate-900' : 'text-slate-400'}`} data-testid={`${prefix}-qty-${sk.child_sku_id}`}>
           {fmtCrates(sk.stock_crates)} <span className="text-xs font-medium text-slate-400">cr</span>
         </span>
       </div>
@@ -86,11 +86,11 @@ export const SkuTable = ({ skus, state, prefix, emptyText, emptyTestId }) => (
 );
 
 export const Footer = ({ rows }) => (
-  <div className="mt-4 space-y-1.5 border-t border-slate-100 pt-3 text-xs text-slate-500">
+  <div className="mt-3 space-y-1 border-t border-slate-100 pt-2.5 text-xs text-slate-500">
     {rows.map((r) => (
       <div key={r.label} className="flex items-center justify-between gap-3 whitespace-nowrap">
-        <span className="font-medium">{r.label}</span>
-        <span className="font-semibold tabular-nums text-slate-700">{r.value}</span>
+        <span>{r.label}</span>
+        <span className="tabular-nums text-slate-700">{r.value}</span>
       </div>
     ))}
   </div>

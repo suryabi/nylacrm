@@ -12,7 +12,7 @@ export const CustomerTile = ({ tile }) => {
   return (
     <TileShell state={state} title={tile.account_name} subtitle={tile.city || tile.account_code} alertLabel="Short"
       testId={`customer-tile-${tile.account_id}`} extra={{ 'data-priority': tile.priority ? 'true' : 'false' }}
-      avatar={<div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-bold tracking-wide ${critical ? 'bg-rose-700 text-white' : 'bg-[#002FA7]/10 text-[#002FA7]'}`}>{initials}</div>}>
+      avatar={<div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-medium tracking-wide ${critical ? 'bg-rose-700 text-white' : 'bg-[#002FA7]/10 text-[#002FA7]'}`}>{initials}</div>}>
       <KpiDeck state={state} testId={`next-order-date-${tile.account_id}`} urgencyValue={tile.next_order_urgency} title={tile.forecast_basis}>
         <Kpi label="Next order" value={hasForecast ? fmtDate(tile.expected_next_order_date) : '\u2014'} tone={kpiTone(state, hasForecast)} sub={tile.sample_orders ? `${tile.sample_orders} order${tile.sample_orders === 1 ? '' : 's'} sampled` : 'no orders yet'} />
         <Kpi label="Expected" value={fmtCrates(tile.expected_crates)} unit={tile.expected_crates != null ? 'cr' : ''} tone={kpiTone(state, tile.expected_crates != null)} testId={`expected-crates-${tile.account_id}`} />
