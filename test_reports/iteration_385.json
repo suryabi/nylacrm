@@ -1,0 +1,48 @@
+{
+  "summary": "Tested Customer Stock Dashboard new 'Table by distributor' view (backend + frontend). Backend endpoint now correctly returns distributor_id, distributor_name ('Brian' for seed accounts, 'Unassigned' otherwise) and brand_group_names per tile. Frontend tabs (csd-view-tabs / csd-view-tiles / csd-view-table) work, default = Tiles, table hides tiles & groups sections and shows cst-table with all 24 customers grouped by distributor. Interactions, quick find, account filter, localStorage persistence, responsive at 390 all pass. One bug: cst-dist-inhand-brian double-counts shared SKUs.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "CustomerStockTable / DistributorBlock", "issue": "cst-dist-inhand-{key} sums row.stock_crates naively so shared SKUs are counted once per group member. Brian shows 202 cr but spec requires shared SKU counted ONCE (expected 102 cr = 202 − 5×20). cst-dist-expected-brian likely affected too if group expected is duplicated. Fix requires deduping shared child_sku_id contributions across rows before summing.", "selector": "[data-testid='cst-dist-inhand-brian']", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_checks": [
+    "Backend: 3/3 pytest passing — distributor_id/distributor_name/brand_group_names present; seed-csd-acct-* distributor_name=='Brian'; ?account_id filter returns 1 tile; all tiles have non-empty distributor_name.",
+    "Default view = Tiles (csd-grid visible, cst-table absent). No prior localStorage.",
+    "Switch to Table: csd-view-table active → cst-table + cst-table-wrap render; csd-grid and csd-groups-section removed from DOM.",
+    "csd-table-hint text: '24 customers · grouped by distributor (latest delivery, else assignment)'.",
+    "Headers exact match: Customer, Brand group, Branded SKUs · in hand, Status, In hand, Expected, Next order, Last order, Last order via.",
+    "Total rows = 24 (group members included, unlike tiles view).",
+    "Brian block: cst-dist-short-brian='2 short'; Seed G (seed-csd-acct-6) & Seed H (seed-csd-acct-7) are the FIRST two rows within Brian (rose-tinted).",
+    "cst-status-seed-csd-acct-6='Short', cst-inhand shows '10 cr −4'; cst-status-seed-csd-acct-7='Short', cst-inhand shows '0 cr −5'.",
+    "Seed B (seed-csd-acct-1): row contains 'Demo Franchise Group' chip and 'shared' tag; status 'Covered'; cst-next='19 Sep'; cst-last='12 cr · 19 Aug'.",
+    "Seed F (seed-csd-acct-5): status 'No orders'; expected/next/last = '—'.",
+    "Unassigned block present (1 header) after other distributors, sort order verified.",
+    "Collapse: clicking cst-dist-brian toggles data-open true→false and hides all 9 Brian rows; clicking again re-expands.",
+    "Quick find: 'Seed G' → 1 row, only Brian block (other 4 blocks have 0 rows but header still shown per current impl — 5 dist blocks visible but rows=1). 'brian' filter keeps 13 Brian rows. Clear restores 24.",
+    "Account filter option seed-csd-acct-7 → single row cst-row-seed-csd-acct-7. Clear restores.",
+    "View persistence: localStorage 'csd_view' updates on click (tiles/table). After reload with csd_view='table', table view restored.",
+    "Responsive 390px: csd-view-tabs still visible, cst-table min-width=1100px, cst-table-wrap scrolls horizontally, no document overflow.",
+    "Dates all in 'DD Mon' with no year.",
+    "No console errors other than /api/auth/me 401 (ignored per spec)."
+  ],
+  "test_report_links": ["/app/backend/tests/test_csd_table_view.py", "/app/test_reports/pytest/csd_table.xml"],
+  "action_items": [
+    "In CustomerStockTable.jsx DistributorBlock, dedupe shared child SKUs when computing inHand/expected totals. Approach: iterate rows and reduce over a Map keyed by child_sku_id, taking each shared SKU's stock/expected exactly once. Backend tile already lists child_skus[].shared and stock_crates per SKU, so aggregate at SKU-level rather than account-level for group members sharing the same SKU."
+  ],
+  "critical_code_review_comments": [
+    "Quick find in table view: filter narrows rows but distributor header rows still render even when zero children remain in that block (e.g., 'Seed G' shows 5 distributor headers, only 1 has a matching row). Consider hiding empty blocks or showing zero-count state.",
+    "DistributorBlock header uses colSpan={4} for the name cell but table has 9 columns and header only aligns 6 subcells (inhand/expected + colSpan=3). Works but is brittle.",
+    "Backend `_build()` distributor resolution correctly prefers latest delivery, then assignment, then 'Unassigned' — good.",
+    "No data-testid on the row-level city/account_code subtext (minor)."
+  ],
+  "updated_files": ["/app/backend/tests/test_csd_table_view.py"],
+  "success_rate": {"backend": "100%", "frontend": "~95% (1 bug)"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (worked); redirects to /home after login (not /dashboard).",
+  "seed_data_creation": "None; used existing demo seed-csd-acct-* data.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "New view switcher on /customer-stock-dashboard fully wired. Remaining fix: dedupe shared SKU crates in distributor totals so cst-dist-inhand-brian == 102 cr (not 202). Backend tiles carry child_skus[].shared and stock_crates per SKU that can be used to aggregate at SKU level."
+}
