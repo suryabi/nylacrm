@@ -76,6 +76,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-09-19 — 🔧 Adjust branded quantity dialog: Reduce/Increase mode ✅ DONE (screenshot-verified)
+- `components/distributor/AdjustChildQtyDialog.jsx` (Stock Dashboard → Branded Stock → adjust icon): replaced "New branded quantity" input with a **− Reduce / + Increase** toggle (`adjust-qty-mode-decrease|increase`) + amount in bottles (`adjust-qty-input`), quick chips +12/+24/+48/+120 (`adjust-qty-quick-N`), "all N" chip (`adjust-qty-quick-all`), clear, live result "Branded: 360 → 336" (`adjust-qty-result`); decrease is capped at current stock. Save still posts a Branding Entry (to/from Generic). ⚠️ Redeploy for production.
+
 ### 2026-09-19 — 📦 Account Volume Tracking: Distributor filter replaces Territory/State/City ✅ DONE (self-tested: API + UI, Brian → 13 rows)
 - Backend `routes/account_volume_grid.py`: `distributor_id` param on GET grid, export/excel and PlanRequest (accounts assigned to OR delivered by the distributor); grid response includes `distributors` list; consignment plan filters carry distributor name.
 - **Distributor column** (same day): grid rows carry `distributor_name` (latest delivery's distributor → else primary active assignment → "—"); frontend BASE_COLUMNS gains `distributor_name` (purple "fromAccount" header) slotted right after Account Name even for users with a saved column order; Excel export adds "Distributor" column. Also fixed latent bug: the clear "X" inside `SearchCombobox` / CSD `AutoComplete` never worked because shadcn Button applies `[&_svg]:pointer-events-none` — X is now wrapped in a `<span role="button">` with pointerdown/click stopPropagation.

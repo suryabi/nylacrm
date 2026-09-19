@@ -25,7 +25,8 @@ export default function AdjustChildQtyDialog({ skuId, skuName, entry, onClose, o
   const locations = entry.locations || [];
   const [locId, setLocId] = useState(locations.length === 1 ? locations[0].location_id : '');
   const [breakdown, setBreakdown] = useState(null);
-  const [newQty, setNewQty] = useState('');
+  const [mode, setMode] = useState('increase');
+  const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -42,13 +43,14 @@ export default function AdjustChildQtyDialog({ skuId, skuName, entry, onClose, o
       .then(r => {
         const rows = r.data.breakdown || [];
         setBreakdown(rows);
-        setNewQty(String(rows.find(b => b.child_sku_id === entry.child_sku_id)?.quantity || 0));
+        setAmount('');
       })
       .catch(() => toast.error('Failed to load stock at this location'))
       .finally(() => setLoading(false));
   }, [locId, skuId, entry.child_sku_id]);
 
-  const target = newQty === '' ? null : Math.max(0, parseInt(newQty, 10) || 0);
+  const amt = amount === '' ? null : Math.max(0, parseInt(amount, 10) || 0);
+  const target = (amt === null || currentQty === null) ? null : Math.max(0, currentQty + (mode === 'increase' ? amt : -amt));
   const delta = (target !== null && currentQty !== null) ? target - currentQty : 0;
   const overGeneric = delta > 0 && genericQty !== null && delta > genericQty;
 
@@ -116,11 +118,40 @@ export default function AdjustChildQtyDialog({ skuId, skuName, entry, onClose, o
                 </div>
               </div>
 
-              <div>
-                <Label className="text-xs">New branded quantity (bottles)</Label>
-                <Input type="number" min="0" value={newQty}
-                  onChange={e => setNewQty(e.target.value)}
-                  data-testid="adjust-qty-input" />
+              <div className="space-y-2">
+                <Label className="text-xs">Adjust branded stock</Label>
+                <div className="flex gap-2">
+                  <div className="inline-flex rounded-md border border-slate-200 p-0.5" role="group">
+                    <button type="button" onClick={() => setMode('decrease')} data-testid="adjust-qty-mode-decrease" aria-pressed={mode === 'decrease'}
+                      className={`h-9 rounded px-3 text-sm font-medium transition-colors ${mode === 'decrease' ? 'bg-rose-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>− Reduce</button>
+                    <button type="button" onClick={() => setMode('increase')} data-testid="adjust-qty-mode-increase" aria-pressed={mode === 'increase'}
+                      className={`h-9 rounded px-3 text-sm font-medium transition-colors ${mode === 'increase' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>+ Increase</button>
+                  </div>
+                  <Input type="number" min="0" value={amount} placeholder="Bottles" autoFocus
+                    onChange={e => setAmount(e.target.value)}
+                    className="flex-1" data-testid="adjust-qty-input" />
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                  {[12, 24, 48, 120].map(n => (
+                    <button key={n} type="button" onClick={() => setAmount(String((amt || 0) + n))} data-testid={`adjust-qty-quick-${n}`}
+                      className="rounded-full border border-slate-200 px-2 py-0.5 text-slate-600 hover:border-slate-400 hover:bg-slate-50">+{n}</button>
+                  ))}
+                  {mode === 'decrease' && currentQty > 0 && (
+                    <button type="button" onClick={() => setAmount(String(currentQty))} data-testid="adjust-qty-quick-all"
+                      className="rounded-full border border-rose-200 px-2 py-0.5 text-rose-700 hover:bg-rose-50">all {fmt(currentQty)}</button>
+                  )}
+                  {mode === 'increase' && genericQty > 0 && (
+                    <button type="button" onClick={() => setAmount(String(genericQty))} data-testid="adjust-qty-quick-all"
+                      className="rounded-full border border-emerald-200 px-2 py-0.5 text-emerald-700 hover:bg-emerald-50">all generic {fmt(genericQty)}</button>
+                  )}
+                  {amount !== '' && <button type="button" onClick={() => setAmount('')} className="ml-auto text-slate-400 hover:text-slate-700" data-testid="adjust-qty-clear">clear</button>}
+                </div>
+                {target !== null && (
+                  <p className="text-xs text-slate-600 tabular-nums" data-testid="adjust-qty-result">
+                    Branded: <b>{fmt(currentQty)}</b> → <b className={delta < 0 ? 'text-rose-700' : delta > 0 ? 'text-emerald-700' : ''}>{fmt(target)}</b> bottles
+                    {mode === 'decrease' && amt > currentQty && <span className="ml-2 text-amber-600">(capped at current stock)</span>}
+                  </p>
+                )}
               </div>
 
               {delta !== 0 && !overGeneric && (
