@@ -26,14 +26,15 @@ export const BrandGroupTile = ({ group }) => {
       <SkuTable skus={group.shared_skus} state={state} prefix="group-sku" emptyText="No shared SKU" emptyTestId={`group-stock-none-${group.group_id}`} />
 
       <div className="mt-3 flex-1 border-t border-slate-100 pt-2.5">
-        <div className="grid grid-cols-[minmax(0,1fr)_7.5rem_7.5rem] gap-3 px-2.5 text-[10px] uppercase tracking-wider text-violet-700">
+        <div className="grid grid-cols-[minmax(0,1fr)_7.5rem_4.5rem_7.5rem] gap-3 px-2.5 text-[10px] uppercase tracking-wider text-violet-700">
           <span>Members</span>
           <span className="text-right font-medium normal-case tracking-normal text-slate-400">last order</span>
+          <span className="text-right font-medium normal-case tracking-normal text-slate-400" title="Typical days between orders (whole history)">every</span>
           <span className="text-right font-medium normal-case tracking-normal text-slate-400">next order</span>
         </div>
         <ul className="mt-1.5 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-100" data-testid={`group-member-list-${group.group_id}`}>
           {members.map((m) => (
-            <li key={m.account_id} className="grid grid-cols-[minmax(0,1fr)_7.5rem_7.5rem] items-center gap-3 px-2.5 py-1.5 text-xs transition-colors odd:bg-white even:bg-slate-50/70 hover:bg-violet-50/50" data-testid={`group-member-${m.account_id}`}
+            <li key={m.account_id} className="grid grid-cols-[minmax(0,1fr)_7.5rem_4.5rem_7.5rem] items-center gap-3 px-2.5 py-1.5 text-xs transition-colors odd:bg-white even:bg-slate-50/70 hover:bg-violet-50/50" data-testid={`group-member-${m.account_id}`}
               title={`${m.account_name}${m.city ? ` · ${m.city}` : ''}`}>
               <span className="flex min-w-0 items-center gap-2 text-slate-700">
                 <span className={`h-2 w-2 shrink-0 rounded-full ${m.low_stock ? 'bg-rose-700' : m.expected_next_order_date ? 'bg-emerald-700' : 'bg-slate-300'}`} />
@@ -41,6 +42,9 @@ export const BrandGroupTile = ({ group }) => {
               </span>
               <span className="whitespace-nowrap text-right tabular-nums text-slate-500" data-testid={`group-member-last-${m.account_id}`}>
                 {m.last_order_date ? <><span className="text-slate-700">{fmtCrates(m.last_order_crates)}</span><span className="mx-1 text-slate-300">/</span>{fmtDateFull(m.last_order_date)}</> : '\u2014'}
+              </span>
+              <span className="whitespace-nowrap text-right tabular-nums text-slate-600" title={m.frequency_basis || ''} data-testid={`group-member-freq-${m.account_id}`}>
+                {m.order_frequency_days != null ? <>{m.order_frequency_days}<span className="ml-0.5 text-[10px] text-slate-400">d</span></> : '\u2014'}
               </span>
               <span className={`whitespace-nowrap text-right tabular-nums ${m.low_stock ? 'font-medium text-rose-700' : m.expected_next_order_date ? 'text-emerald-700' : 'text-slate-400'}`} data-testid={`group-member-next-${m.account_id}`}>
                 {m.expected_next_order_date ? <><span>{fmtCrates(m.expected_crates)}</span><span className={`mx-1 ${m.low_stock ? 'text-rose-300' : 'text-emerald-300'}`}>/</span>{fmtDateFull(m.expected_next_order_date)}</> : '\u2014'}

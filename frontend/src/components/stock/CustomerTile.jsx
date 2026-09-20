@@ -25,7 +25,8 @@ export const CustomerTile = ({ tile }) => {
         <SkuTable skus={tile.child_skus} state={state} prefix="stock-sku" emptyText="No SKU ordered yet" emptyTestId={`stock-none-${tile.account_id}`} />
       </div>
 
-      <Footer rows={[{ label: 'Last order', value: hasOrder ? (
+      <Footer rows={[{ label: 'Order frequency', value: <span title={tile.frequency_basis || ''} data-testid={`order-frequency-${tile.account_id}`}>{tile.order_frequency_days != null ? `every ${tile.order_frequency_days} days` : '\u2014'}</span> },
+        { label: 'Last order', value: hasOrder ? (
         <><span data-testid={`last-order-qty-${tile.account_id}`}>{fmtCrates(tile.last_order_crates)}</span><span className="mx-1.5 font-normal text-slate-300">/</span><span data-testid={`last-order-date-${tile.account_id}`}>{fmtDateFull(tile.last_order_date)}</span></>
       ) : <span data-testid={`last-order-qty-${tile.account_id}`}>{'\u2014'}</span> }]} />
     </TileShell>

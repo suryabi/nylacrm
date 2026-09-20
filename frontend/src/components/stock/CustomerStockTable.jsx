@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Clock, Layers, PackageOpen, Store } from 'lucide-react';
 import { fmtCrates, fmtDate, fmtDateFull } from './tileBits';
 
-const COLS = 7;
+const COLS = 8;
 const slug = (s) => (s || 'unassigned').toLowerCase().replace(/[^a-z0-9]+/g, '-');
 // Symbolic status: icon only, label in tooltip + sr-only.
 const statusOf = (t) => {
@@ -83,6 +83,7 @@ const CustomerRow = ({ t, indent }) => {
         {t.low_stock && <span className="ml-1.5 rounded bg-rose-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">−{fmtCrates(t.expected_crates - t.stock_crates)}</span>}
       </td>
       <td className={`whitespace-nowrap px-3 py-2.5 text-right align-top text-base tabular-nums ${tone(t)}`} data-testid={`cst-expected-${t.account_id}`}>{t.expected_crates != null ? fmtCrates(t.expected_crates) : '—'}</td>
+      <td className="whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums text-slate-600" title={t.frequency_basis || ''} data-testid={`cst-freq-${t.account_id}`}>{t.order_frequency_days != null ? t.order_frequency_days : '—'}</td>
       <td className={`whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums ${tone(t)}`} data-testid={`cst-next-${t.account_id}`}>{fmtDate(t.expected_next_order_date)}</td>
       <td className="whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums text-slate-700" data-testid={`cst-last-${t.account_id}`}>
         {t.last_order_date ? <><span className="text-base font-medium">{fmtCrates(t.last_order_crates)}</span><span className="mx-1.5 text-slate-300">/</span>{fmtDateFull(t.last_order_date)}</> : '—'}
@@ -169,6 +170,7 @@ export const CustomerStockTable = ({ tiles }) => {
             <Th className="text-center">Status</Th>
             <Th right>In hand (crates)</Th>
             <Th right>Expected (crates)</Th>
+            <Th right>Every (days)</Th>
             <Th right>Next order</Th>
             <Th right>Last order (crates / date)</Th>
           </tr>

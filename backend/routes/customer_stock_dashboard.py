@@ -62,7 +62,7 @@ async def export_customer_stock_dashboard(
     ws.append([f"Distributor: {dist_name or 'All'}", f"Account: {acct_name or 'All'}",
                f"Generated: {datetime.now(timezone.utc).strftime('%d %b %Y %H:%M UTC')}"])
     ws.append([])
-    headers = ["Customer", "City", "Category", "Last Order (crates)", "Last Order Date", "Expected Next Order",
+    headers = ["Customer", "City", "Category", "Last Order (crates)", "Last Order Date", "Order Frequency (days)", "Expected Next Order",
                "Expected Crates", "SKU (branded child / generic parent)", "Stock in Hand (crates)", "Stock in Hand (units)", "Low Stock", "Warehouses"]
     ws.append(headers)
     hdr_row = ws.max_row
@@ -75,11 +75,12 @@ async def export_customer_stock_dashboard(
     for t in data["tiles"]:
         base = [t["account_name"], t.get("city") or "", t.get("category") or "",
                 t["last_order_crates"] if t["last_order_crates"] is not None else "—",
-                _fmt_date(t["last_order_date"]) or "—", _fmt_date(t.get("expected_next_order_date")) or "—",
+                _fmt_date(t["last_order_date"]) or "—", t.get("order_frequency_days") if t.get("order_frequency_days") is not None else "—",
+                _fmt_date(t.get("expected_next_order_date")) or "—",
                 t["expected_crates"] if t["expected_crates"] is not None else "—"]
         skus = t["child_skus"] or [{"child_sku_name": "No SKU", "stock_in_hand": "—", "stock_crates": "—", "warehouses": []}]
         for i, s in enumerate(skus):
-            row = (base if i == 0 else [""] * 7) + [
+            row = (base if i == 0 else [""] * 8) + [
                 f"{s['child_sku_name']} (generic)" if s.get("generic") else s["child_sku_name"], s["stock_crates"], s["stock_in_hand"], ("YES" if t["low_stock"] else "") if i == 0 else "",
                 " · ".join(f"{w['location_name']} {w['quantity']}" for w in s.get("warehouses") or [])]
             ws.append(row)
@@ -94,7 +95,7 @@ async def export_customer_stock_dashboard(
                 if t["low_stock"]:
                     ws.cell(row=ws.max_row, column=11).font = Font(bold=True, color="BE123C")
         if len(skus) > 1:
-            ws.append([""] * 7 + ["Total", t["stock_crates"], t["stock_in_hand"], "", ""])
+            ws.append([""] * 8 + ["Total", t["stock_crates"], t["stock_in_hand"], "", ""])
             for col in (8, 9, 10):
                 ws.cell(row=ws.max_row, column=col).font = Font(bold=True)
 
@@ -105,7 +106,7 @@ async def export_customer_stock_dashboard(
         cell.font = Font(bold=True, size=12)
         cell.fill = PatternFill(start_color="C7D2FE", end_color="C7D2FE", fill_type="solid")
 
-    for i, wd in enumerate([32, 16, 16, 18, 16, 20, 16, 34, 18, 18, 10, 40], start=1):
+    for i, wd in enumerate([32, 16, 16, 18, 16, 14, 20, 16, 34, 18, 18, 10, 40], start=1):
         ws.column_dimensions[ws.cell(row=hdr_row, column=i).column_letter].width = wd
     ws.freeze_panes = ws.cell(row=hdr_row + 1, column=1)
 
@@ -214,6 +215,22 @@ def _forecast(orders: list, today) -> dict:
             "forecast_basis": f"{qty_basis} · {date_basis} · ~{monthly_volume} crates/month", "sample_orders": len(orders)}
 
 
+def _order_frequency(all_days: list) -> dict:
+    """Typical days between orders from the customer's whole delivery history.
+    Same-day deliveries count as one order; the median gap is used (robust to one-off
+    rush orders). If the last 3 gaps clearly differ from the long-run median (>40%),
+    the recent cadence wins so a customer who sped up / slowed down is reflected."""
+    days = sorted(set(all_days))
+    gaps = [(b - a).days for a, b in zip(days, days[1:]) if (b - a).days > 0]
+    if not gaps:
+        return {"order_frequency_days": None, "frequency_basis": None, "total_orders": len(days)}
+    overall = median(gaps)
+    recent = median(gaps[-3:]) if len(gaps) >= 4 else overall
+    freq = recent if abs(recent - overall) / overall > 0.4 else overall
+    basis = f"every ~{int(round(freq))} days · {len(days)} orders" + (" · recent pace" if freq != overall else "")
+    return {"order_frequency_days": int(round(freq)), "frequency_basis": basis, "total_orders": len(days)}
+
+
 def _group_tiles(group_docs: list, tiles: list, child_rows: dict, sample: dict) -> list:
     """One roll-up per Brand Group with members in view: shared stock (each shared
     child SKU counted once) + members' orders combined."""
@@ -241,6 +258,7 @@ def _group_tiles(group_docs: list, tiles: list, child_rows: dict, sample: dict) 
                 "account_id": m["account_id"], "account_name": m["account_name"], "city": m.get("city"),
                 "last_order_crates": m["last_order_crates"], "last_order_date": m["last_order_date"],
                 "expected_crates": m["expected_crates"], "expected_next_order_date": m["expected_next_order_date"],
+                "order_frequency_days": m["order_frequency_days"], "frequency_basis": m["frequency_basis"], "total_orders": m["total_orders"],
                 "low_stock": m["low_stock"], "own_skus": sum(1 for s in m["child_skus"] if not s["shared"]),
             } for m in members], key=lambda m: (m["account_name"] or "").lower()),
             "shared_skus": shared,
@@ -333,10 +351,11 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
         day = _parse_day(d.get("delivery_date") or d.get("delivered_at"))
         if day:
             by_acct[d["account_id"]].append({**d, "day": day})
-    sample = {}
+    sample, freq = {}, {}
     for aid, lst in by_acct.items():
         lst.sort(key=lambda x: (x["day"], x.get("delivered_at") or ""))
         sample[aid] = lst[-SAMPLE_ORDERS:]
+        freq[aid] = _order_frequency([d["day"] for d in lst])
     sample_ids = [d["id"] for lst in sample.values() for d in lst]
     items_by_deliv = defaultdict(list)
     async for it in db.distributor_delivery_items.find({"tenant_id": tenant_id, "delivery_id": {"$in": sample_ids}},
@@ -447,6 +466,7 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
             "last_order_date": lo["day"].isoformat() if lo else None,
             "last_order_number": lo.get("delivery_number") if lo else None,
             "last_order_distributor": lo.get("distributor_name") if lo else None,
+            **freq.get(a["id"], {"order_frequency_days": None, "frequency_basis": None, "total_orders": 0}),
             "distributor_id": dist_id, "distributor_name": dist_name or "Unassigned",
             "child_skus": skus,
             "stock_kind": stock_kind,
