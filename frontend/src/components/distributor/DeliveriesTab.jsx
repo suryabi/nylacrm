@@ -11,7 +11,7 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Checkbox } from '../ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
-import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, AlertCircle, Factory, ExternalLink, Check, Pencil, RotateCcw, History } from 'lucide-react';
+import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, AlertCircle, Factory, ExternalLink, Check, Pencil, RotateCcw, History, Tag } from 'lucide-react';
 import PromoDispatchSection from './PromoDispatchSection';
 import { groupByDateDesc } from '../../utils/dateGrouping';
 import { dualQty } from '../../utils/packaging';
@@ -1486,6 +1486,28 @@ export default function DeliveriesTab({
                                   )}
                                 </div>
 
+                                {(() => {
+                                  const brandedUnits = sorted.filter(b => b.child_sku_id).reduce((n, b) => n + (b.quantity || 0), 0);
+                                  const hints = brandedHintsBySku[item.sku_id] || [];
+                                  if (!selectedDeliveryAccount || (!brandedUnits && !hints.length)) return null;
+                                  return (
+                                    <div className={`mb-2 rounded-lg border px-3 py-2 space-y-1 ${brandedUnits ? 'border-violet-200 bg-violet-50/60' : 'border-amber-200 bg-amber-50/70'}`} data-testid={`delivery-branded-hints-${item.id}`}>
+                                      {brandedUnits > 0 && (
+                                        <div className="flex items-center gap-2 text-xs text-violet-800" data-testid={`delivery-branded-summary-${item.id}`}>
+                                          <Tag className="h-3.5 w-3.5 flex-shrink-0 text-violet-600" />
+                                          <span><span className="font-semibold">{brandedUnits.toLocaleString('en-IN')} units branded for {selectedDeliveryAccount.account_name}</span> at this warehouse — shown as the violet-tagged batch cards below.</span>
+                                        </div>
+                                      )}
+                                      {hints.map((h, hi) => (
+                                        <div key={hi} className="flex items-start gap-2 text-xs text-amber-800">
+                                          <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-amber-600" />
+                                          <span><span className="font-semibold">Branded stock:</span> {h.message}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  );
+                                })()}
+
                                 {sorted.length === 0 ? (
                                   <div className="rounded-lg border border-red-200 bg-red-50/70 px-3 py-2.5 text-xs text-red-700 flex items-center gap-2" data-testid={`delivery-no-batch-${item.id}`}>
                                     <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
@@ -1582,16 +1604,6 @@ export default function DeliveriesTab({
                                         </button>
                                       );
                                     })}
-                                  </div>
-                                )}
-                                {(brandedHintsBySku[item.sku_id] || []).length > 0 && (
-                                  <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 space-y-1" data-testid={`delivery-branded-hints-${item.id}`}>
-                                    {(brandedHintsBySku[item.sku_id] || []).map((h, hi) => (
-                                      <div key={hi} className="flex items-start gap-2 text-xs text-amber-800">
-                                        <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-amber-600" />
-                                        <span><span className="font-semibold">Branded stock:</span> {h.message}</span>
-                                      </div>
-                                    ))}
                                   </div>
                                 )}
                               </div>

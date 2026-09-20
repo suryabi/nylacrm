@@ -647,6 +647,9 @@ export default function DistributorDetail() {
         setChildSkuMeta(meta);
       }).catch(() => {});
   }, [showDeliveryDialog, showShipmentDetail, showDeliveryDetail]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // Batch availability is account-scoped (branded rows) — drop the per-SKU cache
+  // whenever the account or source location changes so it is refetched.
+  useEffect(() => { setDeliveryBatchesBySku({}); setDeliveryBrandedHintsBySku({}); }, [deliveryForm.account_id, deliveryForm.distributor_location_id]);
   useEffect(() => {
     if (!sourceDistributorTracksBatches || !deliveryForm.distributor_location_id) {
       setDeliveryBatchesBySku({});
