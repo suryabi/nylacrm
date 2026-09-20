@@ -172,7 +172,7 @@ export default function CustomerStockDashboard() {
         <section className="space-y-3" data-testid="csd-groups-section">
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-violet-700"><Layers className="h-4 w-4" /> Brand Groups <span className="font-normal normal-case tracking-normal text-slate-400">· shared stock &amp; members&apos; orders</span></div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-testid="csd-groups-grid">
-            {groups.map((g) => <BrandGroupTile key={g.group_id} group={g} />)}
+            {groups.map((g) => <div key={g.group_id} className="md:col-span-2"><BrandGroupTile group={g} /></div>)}
           </div>
           {tiles.length > 0 && <div className="pt-2 text-xs font-medium uppercase tracking-wide text-slate-500">Customers</div>}
         </section>
