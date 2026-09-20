@@ -1,0 +1,24 @@
+{
+  "summary": "Full backend + frontend testing of Brand Group 'Consolidate SKUs' feature. Backend: 12/12 pytest tests passed covering preview (CEO + non-admin 403), consolidate happy path (batch-aware FIFO — 90 units of Child B moved into Child A across 2 batches QA-CONS-B2/60 + QA-CONS-B3/30, preserving batch lineage; child A total 210, child B rows drained; 1 branding entry BRD-2026-* with 2 moves; group.consolidations[] appended; child A now group-owned, child B deactivated with consolidated_into_child_sku_id), idempotency (second call returns ok:true with moved=[] deactivated=[]), keep-not-in-group→400, unknown-group→404, non-admin→403, and dashboard shared:true for both member accounts. Frontend: CEO logged in → SKU Management → Brand Groups → Consolidate SKUs button → panel opened with parent block, both keep options visible, suggested keep pre-selected on higher-stock child, run→confirm accepted→result shown with 'Shared SKU', 'Moved 40 bottles… BRD-2026-0010', 'Retired…', success toast; Back returned to list showing '1 child SKUs'; re-opening the panel shows 'Already one shared SKU' tag and no Consolidate button (idempotent UI state). All QA data cleaned up (leftover counts: 0 for brand_groups/child_skus/distributor_stock/branding_entries/accounts).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_brand_group_consolidate.py",
+    "/app/test_reports/pytest/iteration_387_consolidate.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "brand_groups.py consolidate() writes brand_groups.consolidations[] but errors that block deactivation are not retried — if any location fails, the source child stays active and requires manual intervention (acceptable, but worth documenting in UI when errors[] non-empty).",
+    "BrandGroupsDialog.js line 14: HEAD() reads localStorage.getItem('token') while login stores 'session_token'; BrandGroupConsolidatePanel.js uses axios withCredentials only (relies on httpOnly cookie). Mixed auth strategy works today because both cookie + token session middleware are accepted, but future auth-only-cookie refactor could break the Dialog. Consider aligning both files to withCredentials.",
+    "In consolidate() the response 'ok' is 'not errors' — for a fully-idempotent second call where children list contains only the shared child, moved=[] and deactivated=[] correctly returns ok:true. Good.",
+    "The 'keep not in group' 400 path also fires for a deactivated ex-member child (child B after first consolidation) — appropriate but the error message 'must belong to a member of this group (or already be shared by it)' could hint at 'deactivated' too."
+  ],
+  "updated_files": ["/app/backend/tests/test_brand_group_consolidate.py"],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (all UI checks passed)"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water); non-admin creative.director@nylaairwater.earth / test123",
+  "seed_data_creation": "All QA test data (accounts prefixed 'QA-CONS ' and 'QA-UI ', brand groups, child SKUs, distributor_stock rows, branding entries) was created and fully cleaned up during tests; leftover counts verified 0.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_brand_group_consolidate.py inserts QA accounts directly into Mongo with sku_pricing pre-linked to the 600ml parent (required by _ensure_account_linked_to_parent). Batch lineage assertions rely on 3 distributor_stock rows (batches QA-CONS-B1/B2/B3). The customer-stock-dashboard tile schema uses account_id + child_skus[] with a shared boolean.",
+  "rca of the issue": "None — feature works as specified."
+}

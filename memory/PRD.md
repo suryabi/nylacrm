@@ -76,6 +76,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-09-20 — 🔀 Brand Group "Consolidate SKUs" (individual child SKUs → one shared) ✅ DONE (iteration_387: backend 12/12, frontend pass, QA cleanup 0)
+- User choices: promote one existing member child SKU to the group (stock stays), move other members' stock into it, deactivate emptied children, log every move as a Branding Entry (child→child, batch-aware FIFO), permission CEO/Admin/System Admin.
+- Backend `routes/brand_groups.py`: `GET /api/brand-groups/{id}/consolidation-preview` (per parent SKU: member children w/ stock per location, `suggested_keep`, `needs_consolidation`), `POST /api/brand-groups/{id}/consolidate {parent_sku_id, keep_child_sku_id, notes?}` → sets `brand_group_id` on keeper (records `promoted_from_account_*`), calls `create_branding_entry` per (child, location), deactivates children with `consolidated_into_child_sku_id`, appends `brand_groups.consolidations[]`; idempotent; 400/403/404 guards.
+- Frontend: `components/BrandGroupConsolidatePanel.js` (+ "Consolidate SKUs" button per row in `BrandGroupsDialog.js`): per-parent block with radio "keep → becomes shared", stock per warehouse, confirm, result log (moved / retired / errors), "Already one shared SKU" state. ⚠️ Redeploy for production.
+
 ### 2026-09-19 — 🧩 Brand Groups dialog: inline member picker ✅ DONE (screenshot-verified)
 - `components/BrandGroupsDialog.js`: replaced the Popover/cmdk account dropdown (nested scroll inside a scrolling dialog) with an **inline** picker: search box (`brand-group-accounts-search`), fixed-height checkbox list (`brand-group-accounts-list`, options `brand-group-account-option-{id}`, selected pinned first, city on right), footer "N of M accounts · Clear all" (`brand-group-clear-members`); chips below unchanged. Also fixed list-view horizontal overflow (grid item min-width: `[&>*]:min-w-0` on DialogContent, `min-w-0 flex-1` row body) so the "New brand group" button and edit/delete icons are visible. ⚠️ Redeploy for production.
 
