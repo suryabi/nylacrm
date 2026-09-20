@@ -1487,17 +1487,10 @@ export default function DeliveriesTab({
                                 </div>
 
                                 {(() => {
-                                  const brandedUnits = sorted.filter(b => b.child_sku_id).reduce((n, b) => n + (b.quantity || 0), 0);
                                   const hints = brandedHintsBySku[item.sku_id] || [];
-                                  if (!selectedDeliveryAccount || (!brandedUnits && !hints.length)) return null;
+                                  if (!selectedDeliveryAccount || !hints.length) return null;
                                   return (
-                                    <div className={`mb-2 rounded-lg border px-3 py-2 space-y-1 ${brandedUnits ? 'border-violet-200 bg-violet-50/60' : 'border-amber-200 bg-amber-50/70'}`} data-testid={`delivery-branded-hints-${item.id}`}>
-                                      {brandedUnits > 0 && (
-                                        <div className="flex items-center gap-2 text-xs text-violet-800" data-testid={`delivery-branded-summary-${item.id}`}>
-                                          <Tag className="h-3.5 w-3.5 flex-shrink-0 text-violet-600" />
-                                          <span><span className="font-semibold">{brandedUnits.toLocaleString('en-IN')} units branded for {selectedDeliveryAccount.account_name}</span> at this warehouse — shown as the violet-tagged batch cards below.</span>
-                                        </div>
-                                      )}
+                                    <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 space-y-1" data-testid={`delivery-branded-hints-${item.id}`}>
                                       {hints.map((h, hi) => (
                                         <div key={hi} className="flex items-start gap-2 text-xs text-amber-800">
                                           <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-amber-600" />
@@ -1508,14 +1501,13 @@ export default function DeliveriesTab({
                                   );
                                 })()}
 
-                                {sorted.length === 0 ? (
-                                  <div className="rounded-lg border border-red-200 bg-red-50/70 px-3 py-2.5 text-xs text-red-700 flex items-center gap-2" data-testid={`delivery-no-batch-${item.id}`}>
-                                    <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-                                    <span>No batches available for this SKU at the source warehouse.</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-wrap gap-2" data-testid={`delivery-batch-cards-${item.id}`}>
-                                    {sorted.map((b, bi) => {
+                                {(() => {
+                                  const isCustomerChild = (cid) => cid && (childSkuMeta[cid]?.child_type ?? 'customer') === 'customer';
+                                  const brandedCards = sorted.filter(b => isCustomerChild(b.child_sku_id));
+                                  const parentCards = sorted.filter(b => !isCustomerChild(b.child_sku_id));
+                                  const brandedNames = [...new Set(brandedCards.map(b => b.child_sku_name).filter(Boolean))];
+                                  const parentSelected = item.batch_id && !isCustomerChild(item.child_sku_id) && parentCards.some(b => b.batch_id === item.batch_id);
+                                  const renderCard = (b, bi) => {
                                       const selected = item.batch_id === b.batch_id && (item.child_sku_id || '') === (b.child_sku_id || '');
                                       const days = ageDays(ageKey(b));
                                       const chip = ageChip(days);
@@ -1530,6 +1522,7 @@ export default function DeliveriesTab({
                                             updateDeliveryItem(item.id, 'batch_code', b.batch_code);
                                             updateDeliveryItem(item.id, 'child_sku_id', b.child_sku_id || '');
                                             updateDeliveryItem(item.id, 'child_sku_name', b.child_sku_name || '');
+                                            if (!isCustomerChild(b.child_sku_id)) toast.warning('Stock chosen from the Parent SKU (generic / unbranded), not customer-branded stock.', { id: `parent-pick-${item.id}` });
                                           }}
                                           data-testid={`delivery-batch-card-${item.id}-${bi}`}
                                           className={[
@@ -1603,9 +1596,44 @@ export default function DeliveriesTab({
                                           )}
                                         </button>
                                       );
-                                    })}
-                                  </div>
-                                )}
+                                  };
+                                  return (
+                                    <div className="space-y-3">
+                                      <section className="rounded-xl border border-violet-200 bg-violet-50/30 p-3" data-testid={`delivery-branded-section-${item.id}`}>
+                                        <h4 className="mb-2 flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-wider text-violet-800">
+                                          <Tag className="h-3.5 w-3.5" /> Branded stock
+                                          {brandedNames.length > 0 && <span className="rounded bg-violet-700 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-white">{brandedNames.join(' · ')}</span>}
+                                          {brandedCards.length > 0 && <span className="ml-auto text-[10px] font-normal normal-case tracking-normal text-violet-700/80">{brandedCards.length} batch{brandedCards.length === 1 ? '' : 'es'} · {brandedCards.reduce((n, b) => n + (b.quantity || 0), 0).toLocaleString('en-IN')} units</span>}
+                                        </h4>
+                                        {brandedCards.length === 0 ? (
+                                          <p className="text-sm font-bold text-rose-700" data-testid={`delivery-no-branded-${item.id}`}>
+                                            No customer-specific branded stock{selectedDeliveryAccount ? ` for ${selectedDeliveryAccount.account_name}` : ''} at this warehouse.
+                                          </p>
+                                        ) : (
+                                          <div className="flex flex-wrap gap-2" data-testid={`delivery-batch-cards-${item.id}`}>{brandedCards.map((b) => renderCard(b, sorted.indexOf(b)))}</div>
+                                        )}
+                                      </section>
+                                      <section className="rounded-xl border border-slate-200 bg-slate-50/50 p-3" data-testid={`delivery-parent-section-${item.id}`}>
+                                        <h4 className="mb-2 flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-700">
+                                          <Package className="h-3.5 w-3.5" /> Parent SKU stock
+                                          <span className="rounded bg-slate-700 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-white">{selectedSku?.sku_name || selectedSku?.name || item.sku_name || 'Parent SKU'}</span>
+                                          {parentCards.length > 0 && <span className="ml-auto text-[10px] font-normal normal-case tracking-normal text-slate-500">{parentCards.length} batch{parentCards.length === 1 ? '' : 'es'} · {parentCards.reduce((n, b) => n + (b.quantity || 0), 0).toLocaleString('en-IN')} units · generic / unbranded</span>}
+                                        </h4>
+                                        {parentCards.length === 0 ? (
+                                          <p className="text-xs text-slate-500" data-testid={`delivery-no-batch-${item.id}`}>No parent SKU batches available at this warehouse.</p>
+                                        ) : (
+                                          <div className="flex flex-wrap gap-2" data-testid={`delivery-parent-cards-${item.id}`}>{parentCards.map((b) => renderCard(b, sorted.indexOf(b)))}</div>
+                                        )}
+                                        {parentSelected && (
+                                          <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="alert" data-testid={`delivery-parent-selected-alert-${item.id}`}>
+                                            <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-600" />
+                                            <span><span className="font-bold">Stock chosen from the Parent SKU (generic / unbranded)</span>{brandedCards.length > 0 ? ` — branded stock for ${selectedDeliveryAccount?.account_name || 'this customer'} is available above.` : ' — this customer has no branded stock here, so unbranded bottles will be delivered.'}</span>
+                                          </div>
+                                        )}
+                                      </section>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             );
                           })()}

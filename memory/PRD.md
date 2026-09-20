@@ -76,6 +76,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-09-20 — 🚚 Stock Out batch picker: Branded vs Parent SKU sections ✅ DONE (screenshot-verified)
+- `components/distributor/DeliveriesTab.jsx`: batch cards split into two headed sections — **BRANDED STOCK** (violet, child SKU name chip, batches/units; bold rose "No customer-specific branded stock for {account} at this warehouse." when none; `delivery-branded-section-*`, `delivery-no-branded-*`) and **PARENT SKU STOCK** (parent name chip, generic/unbranded batches; `delivery-parent-section-*`, `delivery-parent-cards-*`). Picking a parent batch shows an inline amber alert `delivery-parent-selected-alert-*` + `toast.warning` "Stock chosen from the Parent SKU (generic / unbranded)…". Branded-stock diagnosis hints moved ABOVE the cards. Generic-type children count as parent stock.
+- `pages/DistributorDetail.js`: batch cache (`deliveryBatchesBySku`) now resets when account or source location changes (was stale → branded rows could be missing after switching account).
+- Order-frequency column (see 📅 entry) also finished: `_order_frequency()` in `customer_stock_dashboard.py` (median gap over whole history, recent-pace override >40%), tile footer, group member "every" column, table "Every (days)", Excel column. ⚠️ Redeploy for production.
+
 ### 2026-09-20 — 📅 Group tile: per-member "next order" column + sort ✅ DONE (screenshot-verified)
 - `BrandGroupTile.jsx` member list is now a 3-column grid: Member | last order (`crates / dd-Mon-yyyy`) | **next order** (`expected crates / dd-Mon-yyyy`, emerald; rose when member is short; `group-member-next-{acct}`). Members sorted by expected_next_order_date ASC, no-forecast members last A–Z. Brand-group tiles span 2 grid columns (`md:col-span-2`) so names aren't over-truncated. ⚠️ Redeploy for production.
 
