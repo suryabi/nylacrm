@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Check, Layers, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { Check, Layers, Loader2, Merge, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { BrandGroupConsolidatePanel } from './BrandGroupConsolidatePanel';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
@@ -21,6 +22,7 @@ export function BrandGroupsDialog({ open, onClose, onChanged }) {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [q, setQ] = useState('');
+  const [consolidating, setConsolidating] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,7 +36,7 @@ export function BrandGroupsDialog({ open, onClose, onChanged }) {
     } catch (e) { toast.error('Failed to load brand groups'); } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { if (open) { load(); setEditing(null); setForm(null); setQ(''); } }, [open, load]);
+  useEffect(() => { if (open) { load(); setEditing(null); setForm(null); setQ(''); setConsolidating(null); } }, [open, load]);
 
   const save = async () => {
     if (!form.name.trim()) { toast.error('Name is required'); return; }
@@ -71,7 +73,9 @@ export function BrandGroupsDialog({ open, onClose, onChanged }) {
           <DialogDescription>A brand group is one shared branding used by several customer accounts (e.g. a franchisor and its franchisees). Point a customer child SKU at the group and every member can receive, hold and order that branded stock.</DialogDescription>
         </DialogHeader>
 
-        {form ? (
+        {consolidating ? (
+          <BrandGroupConsolidatePanel group={consolidating} onBack={() => setConsolidating(null)} onChanged={() => { load(); onChanged?.(); }} />
+        ) : form ? (
           <div className="space-y-4" data-testid="brand-group-form">
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2 space-y-1.5"><Label>Name *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Chai Point Franchise" data-testid="brand-group-name-input" /></div>
@@ -139,6 +143,7 @@ export function BrandGroupsDialog({ open, onClose, onChanged }) {
                           <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{(g.accounts || []).map((a) => a.account_name).join(', ')}</p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
+                          <Button size="sm" variant="outline" className="h-7 px-2 text-[11px] text-violet-700 border-violet-200 hover:bg-violet-50" onClick={() => setConsolidating(g)} title="Merge members' individual child SKUs into one shared SKU" data-testid={`consolidate-brand-group-${g.id}`}><Merge className="h-3.5 w-3.5 mr-1" /> Consolidate SKUs</Button>
                           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditing(g); setForm({ name: g.name, code: g.code || '', description: g.description || '', account_ids: g.account_ids || [], is_active: g.is_active !== false }); }} data-testid={`edit-brand-group-${g.id}`}><Pencil className="h-3.5 w-3.5" /></Button>
                           <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => remove(g)} data-testid={`delete-brand-group-${g.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
                         </div>

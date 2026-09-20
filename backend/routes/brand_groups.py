@@ -6,6 +6,7 @@ receive / hold / order that branded stock.
 Mounted at /api/brand-groups.
 """
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -171,3 +172,125 @@ async def account_child_filter(tenant_id: str, acct_refs: set) -> dict:
     if group_ids:
         ors.append({"brand_group_id": {"$in": group_ids}})
     return {"$or": ors}
+
+
+# ── Consolidate members' individual child SKUs into one shared child ─────────
+class ConsolidateIn(BaseModel):
+    parent_sku_id: str
+    keep_child_sku_id: str
+    notes: Optional[str] = None
+
+
+async def _member_children(tdb, group: dict, parent_sku_id: Optional[str] = None) -> list:
+    """Active customer child SKUs owned individually by a group member, plus the group's shared ones."""
+    from routes.branding_entries import account_ref_set
+    from core.tenant import get_current_tenant_id
+    tenant_id = get_current_tenant_id()
+    refs = set()
+    for aid in group.get("account_ids") or []:
+        refs |= await account_ref_set(tenant_id, aid)
+    q = {"child_type": "customer", "is_active": {"$ne": False},
+         "$or": [{"customer_account_id": {"$in": sorted(refs)}}, {"brand_group_id": group["id"]}]}
+    if parent_sku_id:
+        q["parent_sku_id"] = parent_sku_id
+    return await tdb.child_skus.find(q, {"_id": 0}).to_list(1000)
+
+
+async def _stock_by_location(tenant_id: str, child_ids: list) -> dict:
+    """{child_sku_id: [{location_id, location_name, quantity}]} across distributor + factory stock."""
+    out = {cid: [] for cid in child_ids}
+    for coll, loc_field in ((db.distributor_stock, "distributor_location_id"), (db.factory_warehouse_stock, "warehouse_location_id")):
+        agg = defaultdict(int)
+        async for r in coll.find({"tenant_id": tenant_id, "child_sku_id": {"$in": child_ids}, "quantity": {"$gt": 0}},
+                                 {"_id": 0, "child_sku_id": 1, loc_field: 1, "quantity": 1}):
+            agg[(r["child_sku_id"], r.get(loc_field))] += int(r.get("quantity") or 0)
+        loc_ids = [l for (_, l) in agg if l]
+        names = {l["id"]: l.get("location_name") async for l in db.distributor_locations.find({"id": {"$in": loc_ids}}, {"_id": 0, "id": 1, "location_name": 1})}
+        for (cid, lid), q in agg.items():
+            out[cid].append({"location_id": lid, "location_name": names.get(lid) or "Warehouse", "quantity": q})
+    return out
+
+
+@router.get("/{group_id}/consolidation-preview")
+async def consolidation_preview(group_id: str, current_user: dict = Depends(get_current_user)):
+    _require_manage(current_user)
+    from core.tenant import get_current_tenant_id
+    tdb = get_tenant_db()
+    group = await tdb.brand_groups.find_one({"id": group_id}, {"_id": 0})
+    if not group:
+        raise HTTPException(404, "Brand group not found")
+    children = await _member_children(tdb, group)
+    stock = await _stock_by_location(get_current_tenant_id(), [c["id"] for c in children])
+    by_parent = defaultdict(list)
+    for c in children:
+        by_parent[c["parent_sku_id"]].append({
+            "child_sku_id": c["id"], "child_sku_name": c.get("child_sku_name"), "child_sku_code": c.get("child_sku_code"),
+            "customer_account_id": c.get("customer_account_id"), "customer_account_name": c.get("customer_account_name"),
+            "shared": bool(c.get("brand_group_id")), "stock": stock.get(c["id"], []),
+            "stock_total": sum(s["quantity"] for s in stock.get(c["id"], [])),
+        })
+    parents = {p["id"]: p.get("sku_name") async for p in db.master_skus.find({"id": {"$in": list(by_parent)}}, {"_id": 0, "id": 1, "sku_name": 1})}
+    out = []
+    for pid, kids in by_parent.items():
+        kids.sort(key=lambda k: (not k["shared"], -k["stock_total"], (k["child_sku_name"] or "").lower()))
+        shared = [k for k in kids if k["shared"]]
+        out.append({"parent_sku_id": pid, "parent_sku_name": parents.get(pid), "children": kids,
+                    "suggested_keep": (shared[0] if shared else kids[0])["child_sku_id"],
+                    "needs_consolidation": any(not k["shared"] for k in kids)})
+    out.sort(key=lambda p: (p["parent_sku_name"] or "").lower())
+    return {"group": {"id": group["id"], "name": group.get("name"), "code": group.get("code")}, "parents": out}
+
+
+@router.post("/{group_id}/consolidate")
+async def consolidate(group_id: str, payload: ConsolidateIn, current_user: dict = Depends(get_current_user)):
+    """Promote `keep_child_sku_id` to the group's shared child; move every other member child's stock
+    into it (Branding Entry per warehouse, batch-aware FIFO) and deactivate the emptied children."""
+    _require_manage(current_user)
+    from core.tenant import get_current_tenant_id
+    from routes.branding_entries import BrandingEntryCreate, create_branding_entry
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    group = await tdb.brand_groups.find_one({"id": group_id}, {"_id": 0})
+    if not group:
+        raise HTTPException(404, "Brand group not found")
+    children = await _member_children(tdb, group, payload.parent_sku_id)
+    keep = next((c for c in children if c["id"] == payload.keep_child_sku_id), None)
+    if not keep:
+        raise HTTPException(400, "The child SKU to keep must belong to a member of this group (or already be shared by it).")
+    others = [c for c in children if c["id"] != keep["id"]]
+    now = _now()
+    keep_note = None
+    if keep.get("brand_group_id") != group["id"]:
+        keep_note = keep.get("customer_account_name")
+        await tdb.child_skus.update_one({"id": keep["id"]}, {"$set": {
+            "brand_group_id": group["id"], "brand_group_name": group.get("name"),
+            "customer_account_id": None, "customer_account_name": group.get("name"),
+            "promoted_from_account_id": keep.get("customer_account_id"), "promoted_from_account_name": keep.get("customer_account_name"),
+            "updated_at": now}})
+    stock = await _stock_by_location(tenant_id, [c["id"] for c in others])
+    moved, deactivated, errors = [], [], []
+    for c in others:
+        ok = True
+        for s in stock.get(c["id"], []):
+            try:
+                entry = await create_branding_entry(BrandingEntryCreate(
+                    warehouse_location_id=s["location_id"], sku_id=payload.parent_sku_id,
+                    from_child_sku_id=c["id"], to_child_sku_id=keep["id"], quantity=s["quantity"],
+                    notes=f"Consolidated into shared SKU '{keep.get('child_sku_name')}' for brand group {group.get('name')}" + (f" — {payload.notes}" if payload.notes else "")),
+                    current_user)
+                moved.append({"child_sku_id": c["id"], "child_sku_name": c.get("child_sku_name"), "location_id": s["location_id"],
+                              "location_name": s["location_name"], "quantity": s["quantity"], "entry_number": entry.get("entry_number")})
+            except HTTPException as e:
+                ok = False
+                errors.append({"child_sku_id": c["id"], "child_sku_name": c.get("child_sku_name"), "location_name": s["location_name"], "detail": e.detail})
+        if ok:
+            await tdb.child_skus.update_one({"id": c["id"]}, {"$set": {
+                "is_active": False, "consolidated_into_child_sku_id": keep["id"], "consolidated_into_child_sku_name": keep.get("child_sku_name"),
+                "consolidated_at": now, "consolidated_by": current_user.get("id"), "updated_at": now}})
+            deactivated.append({"child_sku_id": c["id"], "child_sku_name": c.get("child_sku_name"), "customer_account_name": c.get("customer_account_name")})
+    await tdb.brand_groups.update_one({"id": group_id}, {"$push": {"consolidations": {
+        "parent_sku_id": payload.parent_sku_id, "keep_child_sku_id": keep["id"], "keep_child_sku_name": keep.get("child_sku_name"),
+        "promoted_from": keep_note, "moved": moved, "deactivated": [d["child_sku_id"] for d in deactivated], "errors": errors,
+        "by": current_user.get("id"), "at": now}}, "$set": {"updated_at": now}})
+    return {"ok": not errors, "keep": {"child_sku_id": keep["id"], "child_sku_name": keep.get("child_sku_name"), "promoted_from": keep_note},
+            "moved": moved, "moved_units": sum(m["quantity"] for m in moved), "deactivated": deactivated, "errors": errors}
