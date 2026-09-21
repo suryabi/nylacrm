@@ -17,7 +17,8 @@ export const CustomerTile = ({ tile }) => {
         <Kpi label="Next order" value={hasForecast ? fmtDate(tile.expected_next_order_date) : '\u2014'} tone={kpiTone(state, hasForecast)} sub={tile.sample_orders ? `${tile.sample_orders} order${tile.sample_orders === 1 ? '' : 's'} sampled` : 'no orders yet'} />
         <Kpi label="Expected (crates)" value={fmtCrates(tile.expected_crates)} tone={kpiTone(state, tile.expected_crates != null)} testId={`expected-crates-${tile.account_id}`} />
         <Kpi label="In hand (crates)" value={noStock ? '0' : fmtCrates(tile.stock_crates)} tone={noStock ? 'text-slate-400' : critical ? 'text-rose-700' : 'text-slate-900'}
-          testId={`stock-total-${tile.account_id}`} extra={critical ? { 'data-shortfall': shortfall } : {}} pill={critical ? `\u2212${fmtCrates(shortfall)}` : null} />
+          testId={`stock-total-${tile.account_id}`} extra={critical ? { 'data-shortfall': shortfall } : {}} pill={critical ? `\u2212${fmtCrates(shortfall)}` : null}
+          sub={tile.reserved_crates > 0 ? `${fmtCrates(tile.reserved_crates)} reserved · ${fmtCrates(tile.stock_crates - tile.reserved_crates)} free` : null} />
         {critical && <span className="sr-only" data-testid={`low-stock-badge-${tile.account_id}`}>short by {fmtCrates(shortfall)} crates</span>}
       </KpiDeck>
 

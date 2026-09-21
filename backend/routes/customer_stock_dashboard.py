@@ -112,10 +112,10 @@ async def export_customer_stock_dashboard(
 
     if data["groups"]:
         gs = wb.create_sheet("Brand Groups")
-        gs.append(["Brand Groups — shared stock & members' orders"])
+        gs.append(["Brand Groups — branded stock (shared + members' own child SKUs, generic excluded) & members' orders"])
         gs["A1"].font = Font(bold=True, size=14)
         gs.append([])
-        gh = ["Brand Group", "Members", "Shared Child SKU", "Shared Stock (crates)", "Shared Stock (units)",
+        gh = ["Brand Group", "Members", "Child SKU (shared / own)", "Stock in Hand (crates)", "Stock in Hand (units)",
               "Members' Last Orders (crates)", "Latest Order Date", f"Last {SAMPLE_ORDERS} Orders / Member (crates)", "Orders Sampled",
               "Expected Next Order", "Expected Crates (all)", "Low Stock"]
         gs.append(gh)
@@ -127,12 +127,13 @@ async def export_customer_stock_dashboard(
         grp_fill = PatternFill(start_color="F5F3FF", end_color="F5F3FF", fill_type="solid")
         for g in data["groups"]:
             base = [g["name"], f"{len(g['members'])} of {g['total_members']}"]
-            skus = g["shared_skus"] or [{"child_sku_name": "No shared SKU", "stock_crates": "—", "stock_in_hand": "—"}]
+            skus = g["shared_skus"] or [{"child_sku_name": "No branded SKU", "stock_crates": "—", "stock_in_hand": "—"}]
             for i, s in enumerate(skus):
                 tail = [g["last_orders_crates"] if g["last_orders_crates"] is not None else "—", _fmt_date(g["last_order_date"]) or "—",
                         g["history_crates"], g["history_orders"], _fmt_date(g.get("expected_next_order_date")) or "—",
                         g["expected_crates"] if g["expected_crates"] is not None else "—", "YES" if g["low_stock"] else ""] if i == 0 else [""] * 7
-                gs.append((base if i == 0 else ["", ""]) + [s["child_sku_name"], s["stock_crates"], s["stock_in_hand"]] + tail)
+                label = f"{s['child_sku_name']} (shared)" if s.get("shared") else f"{s['child_sku_name']} (own · {s.get('owner_name') or 'member'})" if s.get("child_sku_id") else s["child_sku_name"]
+                gs.append((base if i == 0 else ["", ""]) + [label, s["stock_crates"], s["stock_in_hand"]] + tail)
                 if i == 0:
                     for cell in gs[gs.max_row]:
                         cell.fill = grp_fill
@@ -140,6 +141,10 @@ async def export_customer_stock_dashboard(
                     if g["low_stock"]:
                         for col in (10, 11, 12):
                             gs.cell(row=gs.max_row, column=col).font = Font(bold=True, color="BE123C")
+            if len(skus) > 1:
+                gs.append(["", "", "Total in hand", g["stock_crates"], g["stock_in_hand"]])
+                for col in (3, 4, 5):
+                    gs.cell(row=gs.max_row, column=col).font = Font(bold=True)
             for m in g["members"]:
                 gs.append(["", f"↳ {m['account_name']}", f"{m['own_skus']} own SKU(s)" if m["own_skus"] else "", "", "",
                            m["last_order_crates"] if m["last_order_crates"] is not None else "—", _fmt_date(m["last_order_date"]) or "—", "", "",
@@ -232,25 +237,28 @@ def _order_frequency(all_days: list) -> dict:
 
 
 def _group_tiles(group_docs: list, tiles: list, child_rows: dict, sample: dict) -> list:
-    """One roll-up per Brand Group with members in view: shared stock (each shared
-    child SKU counted once) + members' orders combined."""
+    """One roll-up per Brand Group with members in view: branded stock every member
+    can draw from (shared child SKUs + members' own child SKUs, each counted once —
+    generic parent stock excluded) + members' orders combined."""
     tile_by_acct = {t["account_id"]: t for t in tiles}
     out = []
     for g in group_docs:
         members = [tile_by_acct[a] for a in g.get("account_ids") or [] if a in tile_by_acct]
         if not members:
             continue
-        shared = sorted((r for r in child_rows.values() if r.get("brand_group_id") == g["id"]), key=lambda s: (s["child_sku_name"] or "").lower())
+        shared = [r for r in child_rows.values() if r.get("brand_group_id") == g["id"]]
+        own = {s["child_sku_id"]: s for m in members for s in m["child_skus"] if not s["shared"] and not s.get("generic")}
+        skus = sorted(shared, key=lambda s: (s["child_sku_name"] or "").lower()) + sorted(own.values(), key=lambda s: ((s.get("owner_name") or "").lower(), (s["child_sku_name"] or "").lower()))
         last_crates = [m["last_order_crates"] for m in members if m["last_order_crates"] is not None]
         last_dates = [m["last_order_date"] for m in members if m["last_order_date"]]
         hist = [d for m in members for d in sample.get(m["account_id"], [])]
         expected = [m["expected_crates"] for m in members if m["expected_crates"] is not None]
         exp_dates = [m["expected_next_order_date"] for m in members if m["expected_next_order_date"]]
-        stock_crates = round(sum(s["stock_crates"] for s in shared), 1)
+        stock_crates = round(sum(s["stock_crates"] for s in skus), 1)
         exp_total = round(sum(expected), 1) if expected else None
         if exp_total is not None and float(exp_total).is_integer():
             exp_total = int(exp_total)
-        low = bool(shared) and exp_total is not None and stock_crates < exp_total
+        low = bool(skus) and exp_total is not None and stock_crates < exp_total
         out.append({
             "group_id": g["id"], "name": g.get("name"), "code": g.get("code"),
             "total_members": len(g.get("account_ids") or []),
@@ -259,10 +267,12 @@ def _group_tiles(group_docs: list, tiles: list, child_rows: dict, sample: dict) 
                 "last_order_crates": m["last_order_crates"], "last_order_date": m["last_order_date"],
                 "expected_crates": m["expected_crates"], "expected_next_order_date": m["expected_next_order_date"],
                 "order_frequency_days": m["order_frequency_days"], "frequency_basis": m["frequency_basis"], "total_orders": m["total_orders"],
-                "low_stock": m["low_stock"], "own_skus": sum(1 for s in m["child_skus"] if not s["shared"]),
+                "low_stock": m["low_stock"], "own_skus": sum(1 for s in m["child_skus"] if not s["shared"] and not s.get("generic")),
             } for m in members], key=lambda m: (m["account_name"] or "").lower()),
-            "shared_skus": shared,
-            "stock_in_hand": sum(s["stock_in_hand"] for s in shared), "stock_crates": stock_crates,
+            "shared_skus": skus,
+            "shared_count": len(shared), "own_count": len(own),
+            "stock_in_hand": sum(s["stock_in_hand"] for s in skus), "stock_crates": stock_crates,
+            "reserved_crates": round(sum(s.get("reserved_crates") or 0 for s in skus), 1),
             "last_orders_crates": round(sum(last_crates), 1) if last_crates else None,
             "last_order_date": max(last_dates) if last_dates else None,
             "members_ordering": len(last_dates),
@@ -270,7 +280,7 @@ def _group_tiles(group_docs: list, tiles: list, child_rows: dict, sample: dict) 
             "expected_crates": exp_total,
             "expected_next_order_date": min(exp_dates) if exp_dates else None,
             "low_stock": low, "priority": low,
-            "next_order_urgency": (None if not exp_dates else "red" if low else "green" if shared else "neutral"),
+            "next_order_urgency": (None if not exp_dates else "red" if low else "green" if skus else "neutral"),
         })
     out.sort(key=lambda g: (not g["priority"], (g["name"] or "").lower()))
     return out
@@ -314,16 +324,44 @@ async def _generic_parent_rows(tenant_id: str, sku_ids: set, upc: dict) -> dict:
 
 
 async def _units_per_crate(tenant_id: str, sku_ids: list) -> dict:
+    """Bottles per crate, resolved exactly like the Global Stock Dashboard:
+    factory stock row bottles_per_crate first, then master SKU (default production pack)."""
+    ids = [s for s in sku_ids if s]
     upc = {}
-    async for ms in db.master_skus.find({"id": {"$in": list(sku_ids)}}, {"_id": 0, "id": 1, "bottles_per_crate": 1, "packaging_config": 1}):
+
+    def learn(sid, b):
+        try:
+            b = int(b or 0)
+        except (TypeError, ValueError):
+            return
+        if sid and b > 0 and sid not in upc:
+            upc[sid] = b
+    async for r in db.factory_warehouse_stock.find({"tenant_id": tenant_id, "sku_id": {"$in": ids}}, {"_id": 0, "sku_id": 1, "bottles_per_crate": 1}):
+        learn(r.get("sku_id"), r.get("bottles_per_crate"))
+    async for ms in db.master_skus.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "bottles_per_crate": 1, "packaging_config": 1}):
         b = ms.get("bottles_per_crate")
         if not b:
-            for pc in (ms.get("packaging_config") or {}).get("production") or []:
-                if pc.get("units_per_package"):
-                    b = pc["units_per_package"]
-                    break
-        upc[ms["id"]] = int(b) if b else 1
-    return upc
+            pc = (ms.get("packaging_config") or {}).get("production") or []
+            default = next((p for p in pc if p.get("is_default")), None)
+            if default:
+                b = default.get("units") or default.get("units_per_package")
+        learn(ms["id"], b)
+    return {s: upc.get(s, 1) for s in ids}
+
+
+async def _reserved_by_child(tenant_id: str, child_ids: list) -> dict:
+    """Bottles committed to OPEN Stock-Outs per child SKU (same rule as Global Stock Dashboard)."""
+    if not child_ids:
+        return {}
+    from routes.global_stock_dashboard import RESERVED_STATUSES, _item_units
+    open_ids = await db.distributor_deliveries.distinct("id", {"tenant_id": tenant_id, "status": {"$in": list(RESERVED_STATUSES)}})
+    out = defaultdict(int)
+    if open_ids:
+        async for it in db.distributor_delivery_items.find(
+                {"tenant_id": tenant_id, "delivery_id": {"$in": open_ids}, "child_sku_id": {"$in": child_ids}},
+                {"_id": 0, "child_sku_id": 1, "quantity": 1, "packaging_units": 1, "packages": 1}):
+            out[it["child_sku_id"]] += _item_units(it)
+    return out
 
 
 async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Optional[str]) -> dict:
@@ -402,6 +440,8 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
         wh_breakdown = defaultdict(list)
         for (cid, lid), qs in breakdown.items():
             wh_breakdown[cid].append({"location_id": lid, "location_name": loc_names.get(lid) or "Warehouse", "quantity": sum(qs)})
+    reserved_by_child = await _reserved_by_child(tenant_id, child_ids)
+    acct_names = {a["id"]: a.get("account_name") for a in accounts}
     children_by_acct = defaultdict(list)
     child_rows = {}
     for c in children:
@@ -410,7 +450,9 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
             "child_sku_id": c["id"], "child_sku_name": c.get("child_sku_name"), "child_sku_code": c.get("child_sku_code"),
             "parent_sku_name": c.get("parent_sku_name"), "stock_in_hand": stock_by_child.get(c["id"], 0),
             "shared": bool(c.get("brand_group_id")), "brand_group_id": c.get("brand_group_id"), "brand_group_name": c.get("brand_group_name"),
+            "owner_account_id": c.get("customer_account_id"), "owner_name": acct_names.get(c.get("customer_account_id")),
             "units_per_crate": cu, "stock_crates": round(stock_by_child.get(c["id"], 0) / cu, 1),
+            "reserved_in_hand": reserved_by_child.get(c["id"], 0), "reserved_crates": round(reserved_by_child.get(c["id"], 0) / cu, 1),
             "warehouses": sorted(wh_breakdown.get(c["id"], []), key=lambda w: -w["quantity"]) if child_ids else [],
         }
         for aid in child_accts.get(c["id"], set()) & acct_set:
@@ -455,6 +497,7 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
             stock_kind = "generic" if skus else None
         stock_units = sum(s["stock_in_hand"] for s in skus)
         stock_crates = round(sum(s["stock_crates"] for s in skus), 1)
+        reserved_crates = round(sum(s.get("reserved_crates") or 0 for s in skus), 1)
         fc = _forecast([{"day": d["day"], "crates": d["crates"]} for d in hist], today)
         tracks_stock = bool(skus)
         low_stock = tracks_stock and fc["expected_crates"] is not None and stock_crates < fc["expected_crates"]
@@ -474,6 +517,7 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
             "brand_group_names": [g.get("name") for g in group_docs if a["id"] in (g.get("account_ids") or [])],
             "stock_in_hand": stock_units,
             "stock_crates": stock_crates,
+            "reserved_crates": reserved_crates,
             "tracks_stock": tracks_stock,
             "low_stock": low_stock,
             **fc,

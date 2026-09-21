@@ -18,7 +18,8 @@ export const STATUS_LEGEND = [
   { key: 'no-sku', label: 'No SKU yet', Icon: PackageOpen, cls: 'bg-slate-100 text-slate-400' },
 ];
 const tone = (t) => (t.low_stock ? 'text-rose-700 font-semibold' : t.next_order_urgency === 'green' ? 'text-emerald-700' : 'text-slate-700');
-const uniqueInHand = (rows) => [...new Map(rows.flatMap((r) => r.child_skus).map((s) => [s.child_sku_id, s])).values()].reduce((s, sk) => s + (sk.stock_crates || 0), 0);
+// Group roll-up: branded stock only (shared + own), generic parent stock excluded; each SKU counted once.
+const uniqueInHand = (rows, brandedOnly = false) => [...new Map(rows.flatMap((r) => r.child_skus).filter((s) => !brandedOnly || !s.generic).map((s) => [s.child_sku_id, s])).values()].reduce((s, sk) => s + (sk.stock_crates || 0), 0);
 const expectedOf = (rows) => rows.reduce((s, r) => s + (r.expected_crates || 0), 0);
 
 const Th = ({ children, right, className = '' }) => (
@@ -43,7 +44,7 @@ const HeaderRow = ({ level, icon, name, rows, unit, open, onToggle, testKey, ext
           {top && !open && <span className="text-xs font-normal text-white/70">click to expand</span>}
         </span>
       </td>
-      <Crates v={uniqueInHand(rows)} testId={`${testKey}-inhand`} cls={top ? 'text-white' : 'text-slate-900'} />
+      <Crates v={uniqueInHand(rows, !top)} testId={`${testKey}-inhand`} cls={top ? 'text-white' : 'text-slate-900'} />
       <Crates v={expectedOf(rows)} testId={`${testKey}-expected`} cls={top ? 'text-white' : 'text-slate-900'} />
       <td colSpan={COLS - 5} className={top ? 'text-right pr-4 text-xs text-white/70' : ''}>{top ? 'In hand · Expected (crates)' : ''}</td>
     </tr>
@@ -81,6 +82,7 @@ const CustomerRow = ({ t, indent }) => {
       <td className={`whitespace-nowrap px-3 py-2.5 text-right align-top text-base tabular-nums ${t.low_stock ? 'text-rose-700 font-semibold' : t.child_skus.length ? 'text-slate-900' : 'text-slate-400'}`} data-testid={`cst-inhand-${t.account_id}`}>
         {t.child_skus.length ? fmtCrates(t.stock_crates) : '0'}
         {t.low_stock && <span className="ml-1.5 rounded bg-rose-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">−{fmtCrates(t.expected_crates - t.stock_crates)}</span>}
+        {t.reserved_crates > 0 && <div className="text-[11px] font-normal text-slate-400" title="Committed to open Stock-Out orders" data-testid={`cst-reserved-${t.account_id}`}>{fmtCrates(t.reserved_crates)} reserved</div>}
       </td>
       <td className={`whitespace-nowrap px-3 py-2.5 text-right align-top text-base tabular-nums ${tone(t)}`} data-testid={`cst-expected-${t.account_id}`}>{t.expected_crates != null ? fmtCrates(t.expected_crates) : '—'}</td>
       <td className="whitespace-nowrap px-3 py-2.5 text-right align-top tabular-nums text-slate-600" title={t.frequency_basis || ''} data-testid={`cst-freq-${t.account_id}`}>{t.order_frequency_days != null ? t.order_frequency_days : '—'}</td>

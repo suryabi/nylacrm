@@ -61,7 +61,7 @@ export const KpiDeck = ({ state, testId, urgencyValue, title, children }) => (
 );
 export const kpiTone = (state, hasValue) => (hasValue ? VALUE[state] : 'text-slate-300');
 
-export const SkuTable = ({ skus, state, prefix, emptyText, emptyTestId }) => (
+export const SkuTable = ({ skus, state, prefix, emptyText, emptyTestId, showOwner = false }) => (
   <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/40 px-3 py-0.5">
     {skus.length === 0 ? (
       <p className="py-2 text-xs text-slate-400" data-testid={emptyTestId}>{emptyText}</p>
@@ -71,7 +71,9 @@ export const SkuTable = ({ skus, state, prefix, emptyText, emptyTestId }) => (
           <p className="flex flex-wrap items-center gap-2 text-xs text-slate-800 [overflow-wrap:anywhere]">
             <span>{sk.child_sku_name}</span>
             {sk.shared && <span className="rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700" data-testid={`shared-tag-${sk.child_sku_id}`}>shared</span>}
+            {!sk.shared && !sk.generic && sk.owner_name && showOwner && <span className="rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700" data-testid={`own-tag-${sk.child_sku_id}`}>own · {sk.owner_name}</span>}
             {sk.generic && <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700" data-testid={`generic-tag-${sk.sku_id}`}>{sk.scope === 'distributor' ? 'generic · at distributor' : 'generic · all warehouses'}</span>}
+            {sk.reserved_crates > 0 && <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-500" title="Committed to open Stock-Out orders" data-testid={`reserved-tag-${sk.child_sku_id}`}>{fmtCrates(sk.reserved_crates)} reserved</span>}
           </p>
           {sk.warehouses?.length > 0 && (
             <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">

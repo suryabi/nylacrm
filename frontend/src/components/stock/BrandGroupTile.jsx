@@ -7,6 +7,8 @@ export const BrandGroupTile = ({ group }) => {
   const state = stateOf(critical, group.next_order_urgency);
   const noStock = group.shared_skus.length === 0;
   const shortfall = critical ? group.expected_crates - group.stock_crates : 0;
+  const mix = [group.shared_count ? `${group.shared_count} shared` : null, group.own_count ? `${group.own_count} own` : null].filter(Boolean).join(' · ');
+  const stockSub = group.reserved_crates > 0 ? `${fmtCrates(group.reserved_crates)} reserved · ${fmtCrates(group.stock_crates - group.reserved_crates)} free` : mix || null;
   // Soonest expected order first; members without a forecast last (A–Z).
   const members = [...group.members].sort((a, b) => (a.expected_next_order_date ? 0 : 1) - (b.expected_next_order_date ? 0 : 1) || (a.expected_next_order_date || '').localeCompare(b.expected_next_order_date || '') || (a.account_name || '').localeCompare(b.account_name || ''));
   const membersLabel = group.members.length === group.total_members ? `${group.total_members} members` : `${group.members.length} of ${group.total_members} members`;
@@ -19,11 +21,11 @@ export const BrandGroupTile = ({ group }) => {
       <KpiDeck state={state} testId={`group-stats-${group.group_id}`} urgencyValue={group.next_order_urgency}>
         <Kpi label="Next order" value={fmtDate(group.expected_next_order_date)} tone={kpiTone(state, !!group.expected_next_order_date)} testId={`group-next-order-${group.group_id}`} sub={`${group.members_ordering} of ${group.members.length} ordering`} />
         <Kpi label="Expected all (crates)" value={fmtCrates(group.expected_crates)} tone={kpiTone(state, group.expected_crates != null)} testId={`group-expected-crates-${group.group_id}`} />
-        <Kpi label="Shared in hand (crates)" value={noStock ? '0' : fmtCrates(group.stock_crates)} tone={noStock ? 'text-slate-400' : critical ? 'text-rose-700' : 'text-slate-900'}
-          testId={`group-stock-total-${group.group_id}`} pill={critical ? `\u2212${fmtCrates(shortfall)}` : null} />
+        <Kpi label="In hand (crates)" value={noStock ? '0' : fmtCrates(group.stock_crates)} tone={noStock ? 'text-slate-400' : critical ? 'text-rose-700' : 'text-slate-900'}
+          testId={`group-stock-total-${group.group_id}`} pill={critical ? `\u2212${fmtCrates(shortfall)}` : null} sub={stockSub} />
       </KpiDeck>
 
-      <SkuTable skus={group.shared_skus} state={state} prefix="group-sku" emptyText="No shared SKU" emptyTestId={`group-stock-none-${group.group_id}`} />
+      <SkuTable skus={group.shared_skus} state={state} prefix="group-sku" showOwner emptyText="No branded Child SKU for this group or its members" emptyTestId={`group-stock-none-${group.group_id}`} />
 
       <div className="mt-3 flex-1 border-t border-slate-100 pt-2.5">
         <div className="grid grid-cols-[minmax(0,1fr)_7.5rem_4.5rem_7.5rem] gap-3 px-2.5 text-[10px] uppercase tracking-wider text-violet-700">
