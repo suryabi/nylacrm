@@ -10,7 +10,7 @@ import {
 } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import {
-  BookOpen, Upload, FileText, Globe, Trash2, Plus, Loader2, FileType, Calendar, User,
+  BookOpen, Upload, FileText, Globe, Trash2, Plus, Loader2, FileType, Calendar, User, Download,
   AlertCircle, Sparkles,
 } from 'lucide-react';
 
@@ -38,6 +38,8 @@ function fmtSize(chars) {
   if (chars < 1000) return `${chars} chars`;
   return `${Math.round(chars / 1000)}k chars`;
 }
+const fmtBytes = (b) => (b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`);
+
 
 export default function KnowledgeBase() {
   const { user } = useAuth();
@@ -132,6 +134,26 @@ export default function KnowledgeBase() {
       toast.error(e?.response?.data?.detail || 'Could not index URL');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const [downloadingId, setDownloadingId] = useState(null);
+  const handleDownload = async (d) => {
+    setDownloadingId(d.id);
+    try {
+      const res = await axios.get(`${API}/kb/documents/${d.id}/download`, { withCredentials: true, responseType: 'blob' });
+      const cd = res.headers['content-disposition'] || '';
+      const m = cd.match(/filename\*=UTF-8''([^;]+)/);
+      const name = m ? decodeURIComponent(m[1]) : (d.filename || `${d.title}.txt`);
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      if (res.headers['x-kb-original'] === '0') toast.info('Original file not stored — downloaded the indexed text instead. Re-upload to keep the original.');
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Could not download');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -290,10 +312,22 @@ export default function KnowledgeBase() {
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-[11px] text-slate-500">
                       <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {fmtDate(d.created_at)}</span>
                       {d.uploaded_by_name && <span className="flex items-center gap-1"><User className="h-3 w-3" /> {d.uploaded_by_name}</span>}
-                      <span>{fmtSize(d.content_length)}</span>
+                      <span>{d.file_size ? fmtBytes(d.file_size) : fmtSize(d.content_length)}</span>
+                      {d.source_type === 'file' && !d.storage_path && <span className="text-amber-600" title="Uploaded before originals were kept — download gives the indexed text">text only</span>}
                       {d.url && <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate max-w-xs">{d.url}</a>}
                     </div>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDownload(d)}
+                    disabled={downloadingId === d.id}
+                    className="text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                    title={d.storage_path ? `Download ${d.filename}` : 'Download indexed text (.txt)'}
+                    data-testid={`kb-doc-download-${d.id}`}
+                  >
+                    {downloadingId === d.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  </Button>
                   {isAdmin && (
                     <Button
                       variant="ghost"

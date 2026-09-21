@@ -18,7 +18,10 @@ from typing import Optional, List, Dict, Any
 import httpx
 from bs4 import BeautifulSoup
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi.responses import Response
 from pydantic import BaseModel
+from urllib.parse import quote
+from services.object_storage import build_path, guess_content_type, put_object, get_object, delete_object
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -197,12 +200,23 @@ async def upload_document(
     if len(text) > MAX_DOC_CHARS:
         text = text[:MAX_DOC_CHARS]
 
+    storage_path = build_path(tenant_id, "kb", file.filename or "doc")
+    content_type = file.content_type or guess_content_type(file.filename or "")
+    try:
+        await put_object(storage_path, raw, content_type)
+    except Exception:
+        logger.exception("KB original file upload to object storage failed")
+        raise HTTPException(status_code=502, detail="Could not store the original file, please retry")
+
     doc = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
         "title": file.filename,
         "source_type": "file",
         "filename": file.filename,
+        "storage_path": storage_path,
+        "content_type": content_type,
+        "file_size": len(raw),
         "content": text,
         "content_length": len(text),
         "uploaded_by_id": current_user.get("id"),
@@ -285,14 +299,45 @@ async def add_url_document(
     return doc
 
 
+@router.get("/kb/documents/{doc_id}/download")
+async def download_document(doc_id: str, current_user: dict = Depends(get_current_user)):
+    """Original file when stored; otherwise the indexed text as .txt (legacy files, notes, URLs)."""
+    tenant_id = get_current_tenant_id()
+    doc = await db.kb_documents.find_one({"tenant_id": tenant_id, "id": doc_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc.get("storage_path"):
+        try:
+            data, ctype = await get_object(doc["storage_path"])
+        except Exception:
+            logger.exception("KB original file fetch failed")
+            raise HTTPException(status_code=502, detail="Original file is temporarily unavailable")
+        fname = doc.get("filename") or doc.get("title") or "document"
+        ctype = doc.get("content_type") or ctype or "application/octet-stream"
+    else:
+        data = (doc.get("content") or "").encode("utf-8")
+        base = os.path.splitext(doc.get("filename") or doc.get("title") or "document")[0]
+        fname = f"{base}.txt"
+        ctype = "text/plain; charset=utf-8"
+    safe = quote(fname)
+    return Response(content=data, media_type=ctype,
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe}", "X-KB-Original": "1" if doc.get("storage_path") else "0"})
+
+
 @router.delete("/kb/documents/{doc_id}")
 async def delete_document(doc_id: str, current_user: dict = Depends(get_current_user)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Only CEO or System Admin can delete knowledge base documents")
     tenant_id = get_current_tenant_id()
+    doc = await db.kb_documents.find_one({"tenant_id": tenant_id, "id": doc_id}, {"_id": 0, "storage_path": 1})
     res = await db.kb_documents.delete_one({"tenant_id": tenant_id, "id": doc_id})
     if not res.deleted_count:
         raise HTTPException(status_code=404, detail="Document not found")
+    if doc and doc.get("storage_path"):
+        try:
+            await delete_object(doc["storage_path"])
+        except Exception:
+            logger.warning("KB object delete failed for %s", doc["storage_path"])
     return {"deleted": True, "id": doc_id}
 
 
