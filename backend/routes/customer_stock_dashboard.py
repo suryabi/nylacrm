@@ -254,7 +254,7 @@ def _group_tiles(group_docs: list, tiles: list, child_rows: dict, sample: dict) 
         hist = [d for m in members for d in sample.get(m["account_id"], [])]
         expected = [m["expected_crates"] for m in members if m["expected_crates"] is not None]
         exp_dates = [m["expected_next_order_date"] for m in members if m["expected_next_order_date"]]
-        stock_crates = round(sum(s["stock_crates"] for s in skus), 1)
+        stock_crates = round(sum(s["stock_crates"] for s in skus), 2)
         exp_total = round(sum(expected), 1) if expected else None
         if exp_total is not None and float(exp_total).is_integer():
             exp_total = int(exp_total)
@@ -272,7 +272,7 @@ def _group_tiles(group_docs: list, tiles: list, child_rows: dict, sample: dict) 
             "shared_skus": skus,
             "shared_count": len(shared), "own_count": len(own),
             "stock_in_hand": sum(s["stock_in_hand"] for s in skus), "stock_crates": stock_crates,
-            "reserved_crates": round(sum(s.get("reserved_crates") or 0 for s in skus), 1),
+            "reserved_crates": round(sum(s.get("reserved_crates") or 0 for s in skus), 2),
             "last_orders_crates": round(sum(last_crates), 1) if last_crates else None,
             "last_order_date": max(last_dates) if last_dates else None,
             "members_ordering": len(last_dates),
@@ -318,7 +318,7 @@ async def _generic_parent_rows(tenant_id: str, sku_ids: set, upc: dict) -> dict:
             "child_sku_id": f"parent:{sid}:{did or 'all'}", "sku_id": sid, "child_sku_name": names.get(sid) or "Parent SKU", "child_sku_code": None,
             "parent_sku_name": names.get(sid), "stock_in_hand": total, "shared": False, "generic": True, "scope": "distributor" if did else "all",
             "brand_group_id": None, "brand_group_name": None, "units_per_crate": cu,
-            "stock_crates": round(total / cu, 1), "warehouses": sorted(whs, key=lambda w: -w["quantity"]),
+            "stock_crates": round(total / cu, 2), "warehouses": sorted(whs, key=lambda w: -w["quantity"]),
         }
     return rows
 
@@ -451,8 +451,8 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
             "parent_sku_name": c.get("parent_sku_name"), "stock_in_hand": stock_by_child.get(c["id"], 0),
             "shared": bool(c.get("brand_group_id")), "brand_group_id": c.get("brand_group_id"), "brand_group_name": c.get("brand_group_name"),
             "owner_account_id": c.get("customer_account_id"), "owner_name": acct_names.get(c.get("customer_account_id")),
-            "units_per_crate": cu, "stock_crates": round(stock_by_child.get(c["id"], 0) / cu, 1),
-            "reserved_in_hand": reserved_by_child.get(c["id"], 0), "reserved_crates": round(reserved_by_child.get(c["id"], 0) / cu, 1),
+            "units_per_crate": cu, "stock_crates": round(stock_by_child.get(c["id"], 0) / cu, 2),
+            "reserved_in_hand": reserved_by_child.get(c["id"], 0), "reserved_crates": round(reserved_by_child.get(c["id"], 0) / cu, 2),
             "warehouses": sorted(wh_breakdown.get(c["id"], []), key=lambda w: -w["quantity"]) if child_ids else [],
         }
         for aid in child_accts.get(c["id"], set()) & acct_set:
@@ -496,8 +496,8 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
                           key=lambda s: (s["child_sku_name"] or "").lower())
             stock_kind = "generic" if skus else None
         stock_units = sum(s["stock_in_hand"] for s in skus)
-        stock_crates = round(sum(s["stock_crates"] for s in skus), 1)
-        reserved_crates = round(sum(s.get("reserved_crates") or 0 for s in skus), 1)
+        stock_crates = round(sum(s["stock_crates"] for s in skus), 2)
+        reserved_crates = round(sum(s.get("reserved_crates") or 0 for s in skus), 2)
         fc = _forecast([{"day": d["day"], "crates": d["crates"]} for d in hist], today)
         tracks_stock = bool(skus)
         low_stock = tracks_stock and fc["expected_crates"] is not None and stock_crates < fc["expected_crates"]
@@ -538,7 +538,7 @@ async def _build(tenant_id: str, distributor_id: Optional[str], account_id: Opti
                     "due_soon": sum(1 for t in tiles if t["next_order_in_days"] is not None and t["next_order_in_days"] <= 7),
                     "priority": sum(1 for t in tiles if t["priority"]),
                     "stock_in_hand": sum(v["stock_in_hand"] for v in {s["child_sku_id"]: s for t in tiles for s in t["child_skus"]}.values()),
-                    "stock_crates": round(sum(v["stock_crates"] for v in {s["child_sku_id"]: s for t in tiles for s in t["child_skus"]}.values()), 1),
+                    "stock_crates": round(sum(v["stock_crates"] for v in {s["child_sku_id"]: s for t in tiles for s in t["child_skus"]}.values()), 2),
                     "branded_skus": sum(len(t["child_skus"]) for t in tiles if t["stock_kind"] == "branded"),
                     "generic_customers": sum(1 for t in tiles if t["stock_kind"] == "generic")},
         "filters": {
