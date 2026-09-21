@@ -320,8 +320,9 @@ async def download_document(doc_id: str, current_user: dict = Depends(get_curren
         fname = f"{base}.txt"
         ctype = "text/plain; charset=utf-8"
     safe = quote(fname)
+    ascii_name = fname.encode("ascii", "ignore").decode() or "document"
     return Response(content=data, media_type=ctype,
-                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe}", "X-KB-Original": "1" if doc.get("storage_path") else "0"})
+                    headers={"Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{safe}", "X-KB-Original": "1" if doc.get("storage_path") else "0"})
 
 
 @router.delete("/kb/documents/{doc_id}")

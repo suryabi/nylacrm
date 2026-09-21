@@ -1,0 +1,24 @@
+{
+  "summary": "Tested Knowledge Base document download feature end-to-end. Backend: 6/6 pytest cases pass covering file upload+original-byte download (SHA-verified), text-note fallback (.txt with X-KB-Original:0), URL doc download, non-admin download allowed + upload forbidden (403), unauthenticated 401 / unknown-id 404, and delete flow removing subsequent download (404). Frontend (Playwright at REACT_APP_BACKEND_URL): admin login → /knowledge-base loaded, uploaded a .txt via hidden input, new row appeared with kb-doc-download-<id> button; expect_download captured browser download with suggested filename equal to original filename and bytes byte-identical to source (800/800). Text note flow saved via kb-add-text-btn/kb-text-save then download produced <title>.txt with matching body AND toast 'Original file not stored — downloaded the indexed text instead...' appeared. Size labels (KB/MB) rendered. Legacy PDF row shows amber 'text only' hint. Cleanup succeeded via delete buttons. Ask Nyla widget renders; no console errors on KB page (only pre-login 401s from /auth/me — expected).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_kb_download.py",
+    "/app/test_reports/pytest/kb_download.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "download_document uses only 'attachment; filename*=UTF-8''<url-encoded>' — no ASCII 'filename=' fallback. Modern browsers all support filename*=, but very old clients may not; low priority.",
+    "delete_document logs a warning on object-storage delete failure but still returns success — acceptable, but the storage object could linger orphaned.",
+    "services/object_storage.py MIME_TYPES map only covers a handful of formats; docx/pptx/xlsx uploads without a client-provided content_type fall back to application/octet-stream. In practice UploadFile.content_type is populated by browsers, so it works; consider extending the map for robustness.",
+    "Non-admin RBAC for KB is auth-only (any authenticated tenant user can list & download all KB docs). Matches request intent but worth confirming against the 'knowledge_base' module access-control used elsewhere."
+  ],
+  "updated_files": ["/app/backend/tests/test_kb_download.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO admin); creative.director@nylaairwater.earth / test123 (non-admin).",
+  "seed_data_creation": "All QA docs prefixed with TEST_ and deleted at end of each backend test and UI run. No residue.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login response returns 'session_token' and sets httpOnly cookie; Bearer header works. Post-login redirect is /home. Tenant defaults to nyla-air-water via DEFAULT_TENANT_ID. Download endpoint uses RFC 5987 'filename*=UTF-8''...' only; frontend handleDownload regex-matches it. Object storage init requires EMERGENT_LLM_KEY (already configured).",
+  "rca of the issue": "N/A — feature implemented correctly; all acceptance criteria met."
+}
