@@ -1,0 +1,21 @@
+{
+  "summary": "Verified stock transfer share (email) prefill for ST-2026-0010. Backend GET /api/share/recipients?document_type=stock_transfer_doc returns correct default_subject ('Delivery Challan INV-QA-1 · Stock Transfer ST-2026-0010 → Delhi') and default_message with both item lines including child SKU 'Aparna Cinemas – 600 ml (branded)', '5 × Crate', '60 bottles', 'Batch B-QA-01', total line 'Total: 11 packages · 96 bottles · 2 SKUs', and sender 'Surya Yadavalli' — with NO occurrences of rate/price/amount/value/₹/Rs. Frontend Compose email dialog on /distributor/stock-transfers loads Subject input prefilled and rich editor showing all required content; 3 recipient chips populated; body is editable. Cancel closes dialog. No Send performed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_stock_transfer_share.py",
+    "/app/test_reports/pytest/stock_transfer_share.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Stock transfer route is /distributor/stock-transfers (no top-level /stock-transfers). No issue, just documenting."
+  ],
+  "updated_files": ["/app/backend/tests/test_stock_transfer_share.py"],
+  "success_rate": {"backend": "100% (1 passed, 1 skipped - no unsynced transfer available)", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water)",
+  "seed_data_creation": "None. Used existing QA transfer ID from /tmp/tid (ST-2026-0010).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Share dialog testids: share-subject-input, rich-email-editor, share-to-chip-N, share-cancel-btn, share-send-btn. Trigger flow: click [data-testid=transfer-actions-btn-<id>] then [data-testid=share-btn-transfer-<id>]. Route is /distributor/stock-transfers.",
+  "rca of the issue": "N/A - feature working as designed."
+}
