@@ -127,6 +127,7 @@ async def _resolve_stock_transfer_doc(tenant_id: str, document_id: str, context:
         "filename": f"{number}.pdf",
         "fetch_pdf": _fetch,
         "suggested_recipients": recipients,
+        "show_link": False,
         "extra_html": _transfer_table_html(transfer),
         "extra_attachments": [{
             "filename": _transfer_xlsx_name(transfer),
@@ -304,6 +305,7 @@ async def _rcpt_stock_transfer_doc(tenant_id, document_id, context, current_user
         out["extra_html"] = _transfer_table_html(transfer)
         out["extra_html_label"] = "Stock details table (added to the email automatically)"
         out["extra_attachments"] = [{"filename": _transfer_xlsx_name(transfer), "label": "Stock details spreadsheet"}]
+        out["show_link"] = False
     return out
 
 

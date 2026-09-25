@@ -186,6 +186,7 @@ export const ShareDialog = ({ documentType, documentId, leadId, testIdBase, onCl
   const [extraHtml, setExtraHtml] = useState('');
   const [extraHtmlLabel, setExtraHtmlLabel] = useState('');
   const [extraAttachments, setExtraAttachments] = useState([]);
+  const [showLink, setShowLink] = useState(true);
 
   // Lead documents multi-attach (only when leadId is provided)
   const [proposal, setProposal] = useState(null);
@@ -221,6 +222,7 @@ export const ShareDialog = ({ documentType, documentId, leadId, testIdBase, onCl
           setExtraHtml(data.extra_html || '');
           setExtraHtmlLabel(data.extra_html_label || 'Included in the email automatically');
           setExtraAttachments(data.extra_attachments || []);
+          setShowLink(data.show_link !== false);
           setTo((data.to || []).filter((r) => r.email));
           const ccList = (data.cc || []).filter((r) => r.email);
           setCc(ccList);
@@ -490,7 +492,7 @@ export const ShareDialog = ({ documentType, documentId, leadId, testIdBase, onCl
                     <Paperclip className="h-4 w-4 text-slate-500" />
                     <div>
                       <p className="text-sm font-medium text-slate-700">Attach document to email</p>
-                      <p className="text-xs text-slate-400">A secure download link is always included.</p>
+                      <p className="text-xs text-slate-400">{showLink ? 'A secure download link is always included.' : 'Sent as an attachment (no download link in the email).'}</p>
                     </div>
                   </div>
                   <Switch checked={attachPdf} onCheckedChange={setAttachPdf} data-testid="share-attach-toggle" />

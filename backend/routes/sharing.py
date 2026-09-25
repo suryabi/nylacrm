@@ -150,6 +150,7 @@ async def share_document(req: ShareRequest, current_user: dict = Depends(get_cur
         content_type=content_type,
         extra_html=resolved.get("extra_html") or "",
         extra_attachments=resolved.get("extra_attachments") or [],
+        show_link=resolved.get("show_link", True),
     )
 
     await share_service.log_share_event(
