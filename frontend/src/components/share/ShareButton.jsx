@@ -3,7 +3,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import {
   Share2, Mail, Loader2, MessageCircle, X, Plus, ChevronDown,
-  FileText, Paperclip, Sparkles, Check, Presentation,
+  FileText, Paperclip, Sparkles, Check, Presentation, FileSpreadsheet,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -183,6 +183,9 @@ export const ShareDialog = ({ documentType, documentId, leadId, testIdBase, onCl
   const [attachPdf, setAttachPdf] = useState(true);
   const [templates, setTemplates] = useState([]);
   const [appliedTemplate, setAppliedTemplate] = useState(null);
+  const [extraHtml, setExtraHtml] = useState('');
+  const [extraHtmlLabel, setExtraHtmlLabel] = useState('');
+  const [extraAttachments, setExtraAttachments] = useState([]);
 
   // Lead documents multi-attach (only when leadId is provided)
   const [proposal, setProposal] = useState(null);
@@ -215,6 +218,9 @@ export const ShareDialog = ({ documentType, documentId, leadId, testIdBase, onCl
           setTitle(data.title || (leadId ? 'Lead documents' : 'Document'));
           setSubject(data.default_subject || data.title || 'Document');
           setMessage(textToHtml(data.default_message || ''));
+          setExtraHtml(data.extra_html || '');
+          setExtraHtmlLabel(data.extra_html_label || 'Included in the email automatically');
+          setExtraAttachments(data.extra_attachments || []);
           setTo((data.to || []).filter((r) => r.email));
           const ccList = (data.cc || []).filter((r) => r.email);
           setCc(ccList);
@@ -424,6 +430,14 @@ export const ShareDialog = ({ documentType, documentId, leadId, testIdBase, onCl
               <RichEmailEditor value={message} onChange={setMessage} autoGrow placeholder="Write your message… use the toolbar to format." />
             </div>
 
+            {extraHtml && (
+              <div className="space-y-1.5" data-testid="share-extra-table">
+                <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{extraHtmlLabel}</Label>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 overflow-x-auto [&_table]:w-full"
+                  dangerouslySetInnerHTML={{ __html: extraHtml }} />
+              </div>
+            )}
+
             {/* Attachments */}
             {leadId ? (
               <div className="space-y-2">
@@ -470,15 +484,26 @@ export const ShareDialog = ({ documentType, documentId, leadId, testIdBase, onCl
                 </Button>
               </div>
             ) : (
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-                <div className="flex items-center gap-2.5">
-                  <Paperclip className="h-4 w-4 text-slate-500" />
-                  <div>
-                    <p className="text-sm font-medium text-slate-700">Attach document to email</p>
-                    <p className="text-xs text-slate-400">A secure download link is always included.</p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <Paperclip className="h-4 w-4 text-slate-500" />
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">Attach document to email</p>
+                      <p className="text-xs text-slate-400">A secure download link is always included.</p>
+                    </div>
                   </div>
+                  <Switch checked={attachPdf} onCheckedChange={setAttachPdf} data-testid="share-attach-toggle" />
                 </div>
-                <Switch checked={attachPdf} onCheckedChange={setAttachPdf} data-testid="share-attach-toggle" />
+                {extraAttachments.map((a) => (
+                  <div key={a.filename} className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/50 px-4 py-3" data-testid={`share-extra-attachment-${a.filename}`}>
+                    <FileSpreadsheet className="h-4 w-4 text-emerald-700 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-700 truncate">{a.filename}</p>
+                      <p className="text-xs text-slate-500">{a.label || 'Attached automatically'}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

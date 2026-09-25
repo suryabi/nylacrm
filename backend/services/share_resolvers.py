@@ -127,6 +127,12 @@ async def _resolve_stock_transfer_doc(tenant_id: str, document_id: str, context:
         "filename": f"{number}.pdf",
         "fetch_pdf": _fetch,
         "suggested_recipients": recipients,
+        "extra_html": _transfer_table_html(transfer),
+        "extra_attachments": [{
+            "filename": _transfer_xlsx_name(transfer),
+            "content": _transfer_xlsx(transfer),
+            "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }],
     }
 
 
@@ -181,31 +187,91 @@ def _esc(s) -> str:
     return str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _transfer_rows(transfer: dict) -> list:
+    """Spreadsheet-style rows: Customer SKU, Brand, Crates, Bottles per crate (no pricing)."""
+    rows = []
+    for it in transfer.get("items") or []:
+        rows.append({
+            "customer_sku": it.get("child_sku_name") or "Generic (unbranded)",
+            "brand": it.get("sku_name") or "",
+            "crates": int(it.get("quantity") or 0),
+            "bottles_per_crate": int(it.get("units_per_package") or 0) or None,
+            "batch": it.get("batch_code") or "",
+        })
+    return rows
+
+
+def _transfer_table_html(transfer: dict) -> str:
+    rows = _transfer_rows(transfer)
+    th = 'style="padding:8px 10px;border:1px solid #cbd5e1;background:#0f172a;color:#fff;font-size:12px;text-align:left;white-space:nowrap;"'
+    td = 'style="padding:7px 10px;border:1px solid #e2e8f0;font-size:13px;color:#0f172a;"'
+    tdn = 'style="padding:7px 10px;border:1px solid #e2e8f0;font-size:13px;color:#0f172a;text-align:right;white-space:nowrap;"'
+    body = "".join(
+        f"<tr style=\"background:{'#f8fafc' if i % 2 else '#fff'};\"><td {td}>{_esc(r['customer_sku'])}</td><td {td}>{_esc(r['brand'])}</td>"
+        f"<td {tdn}>{r['crates']}</td><td {tdn}>{r['bottles_per_crate'] or '—'}</td></tr>"
+        for i, r in enumerate(rows)
+    ) or f'<tr><td colspan="4" {td}>No items</td></tr>'
+    total_crates = sum(r["crates"] for r in rows)
+    total_bottles = sum(r["crates"] * (r["bottles_per_crate"] or 0) for r in rows)
+    tf = 'style="padding:8px 10px;border:1px solid #cbd5e1;background:#f1f5f9;font-size:13px;font-weight:700;color:#0f172a;"'
+    tfn = tf.replace('color:#0f172a;', 'color:#0f172a;text-align:right;white-space:nowrap;')
+    return (
+        '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;max-width:560px;margin:4px 0 12px;">'
+        f"<thead><tr><th {th}>Customer SKU</th><th {th}>Brand</th><th {th} align=\"right\">Crates</th><th {th} align=\"right\">Bottles per crate</th></tr></thead>"
+        f"<tbody>{body}</tbody>"
+        f"<tfoot><tr><td {tf}>Total</td><td {tf}>{len(rows)} SKU{'' if len(rows) == 1 else 's'}</td><td {tfn}>{total_crates}</td><td {tfn}>{total_bottles} bottles</td></tr></tfoot>"
+        "</table>"
+    )
+
+
+def _transfer_xlsx(transfer: dict) -> bytes:
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from utils.excel_branding import brand_workbook
+    rows = _transfer_rows(transfer)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Stock Transfer"
+    number = transfer.get("zoho_invoice_number") or transfer.get("transfer_number") or ""
+    ws.append([f"Stock Transfer {transfer.get('transfer_number') or ''}", "", "", ""])
+    ws["A1"].font = Font(bold=True, size=14)
+    ws.append([f"Document: {number}", f"Date: {_fmt_day(transfer.get('transfer_date'))}"])
+    ws.append([f"From: {transfer.get('source_location_name') or ''} · {transfer.get('source_distributor_name') or ''}",
+               f"To: {transfer.get('dest_location_name') or ''} · {transfer.get('dest_distributor_name') or ''}"])
+    ws.append([])
+    ws.append(["Customer SKU", "Brand", "Crates", "Bottles Per Crate"])
+    hdr = ws.max_row
+    for cell in ws[hdr]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="0F172A", end_color="0F172A", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    for r in rows:
+        ws.append([r["customer_sku"], r["brand"], r["crates"], r["bottles_per_crate"] or ""])
+    ws.append(["Total", f"{len(rows)} SKU(s)", sum(r["crates"] for r in rows),
+               f"{sum(r['crates'] * (r['bottles_per_crate'] or 0) for r in rows)} bottles"])
+    for cell in ws[ws.max_row]:
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    for col, wd in zip("ABCD", (36, 34, 12, 18)):
+        ws.column_dimensions[col].width = wd
+    ws.freeze_panes = ws.cell(row=hdr + 1, column=1)
+    brand_workbook(wb)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def _transfer_message(transfer: dict, current_user: dict) -> tuple[str, str]:
-    """Default subject + HTML body listing every line (SKU / child SKU, packages, bottles, batch) — no pricing."""
+    """Default subject + HTML body. The stock table is appended server-side at send time
+    (see extra_html) so it always renders as a real table in the recipient's mailbox."""
     number = transfer.get("zoho_invoice_number") or transfer.get("transfer_number") or ""
     doc_label = "Delivery Challan" if transfer.get("zoho_doc_type") == "delivery_challan" else "Invoice"
     tnum = transfer.get("transfer_number") or ""
     src = " · ".join(x for x in (transfer.get("source_location_name"), transfer.get("source_distributor_name")) if x)
     dst = " · ".join(x for x in (transfer.get("dest_location_name"), transfer.get("dest_distributor_name")) if x)
-    lines, total_pkgs, total_units = [], 0, 0
-    for it in transfer.get("items") or []:
-        pkgs = int(it.get("quantity") or 0)
-        upp = int(it.get("units_per_package") or 0)
-        units = int(it.get("quantity_units") or (pkgs * upp))
-        total_pkgs += pkgs
-        total_units += units
-        pkg_label = it.get("packaging_type_name") or ("Crate" if upp else "Package")
-        name = it.get("sku_name") or "SKU"
-        if it.get("child_sku_name"):
-            name = f"{name} — <b>{_esc(it['child_sku_name'])}</b> (branded)"
-        else:
-            name = _esc(name)
-        qty = f"{pkgs} × {_esc(pkg_label)}"
-        if units:
-            qty += f" · {units} bottles" + (f" ({upp}/pack)" if upp else "")
-        batch = f" · Batch {_esc(it['batch_code'])}" if it.get("batch_code") else ""
-        lines.append(f"<li>{name}: {qty}{batch}</li>")
+    rows = _transfer_rows(transfer)
+    total_crates = sum(r["crates"] for r in rows)
     u = current_user or {}
     subject = f"{doc_label} {number} · Stock Transfer {tnum} → {transfer.get('dest_location_name') or ''}".strip(" ·→")
     body = (
@@ -214,9 +280,7 @@ def _transfer_message(transfer: dict, current_user: dict) -> tuple[str, str]:
         f"{' dated ' + _fmt_day(transfer.get('transfer_date')) if transfer.get('transfer_date') else ''}.</p>"
         f"<p>From: {_esc(src) or '—'}<br>To: {_esc(dst) or '—'}"
         f"{'<br>Vehicle: ' + _esc(transfer['vehicle_number']) if transfer.get('vehicle_number') else ''}</p>"
-        f"<p><b>Items transferred</b></p><ul>{''.join(lines) or '<li>No items</li>'}</ul>"
-        f"<p><b>Total: {total_pkgs} package{'' if total_pkgs == 1 else 's'}"
-        f"{' · ' + str(total_units) + ' bottles' if total_units else ''} · {len(lines)} SKU{'' if len(lines) == 1 else 's'}</b></p>"
+        f"<p>Stock details ({total_crates} crates · {len(rows)} SKU{'' if len(rows) == 1 else 's'}) are tabled below and attached as a spreadsheet.</p>"
         f"{'<p>Notes: ' + _esc(transfer['notes']) + '</p>' if transfer.get('notes') else ''}"
         f"<p>Kindly acknowledge receipt and report any discrepancy on arrival.</p>"
         f"<p>Regards,<br>{_esc(u.get('name'))}"
@@ -226,6 +290,10 @@ def _transfer_message(transfer: dict, current_user: dict) -> tuple[str, str]:
     return subject, body
 
 
+def _transfer_xlsx_name(transfer: dict) -> str:
+    return f"{transfer.get('transfer_number') or 'stock-transfer'}-stock-details.xlsx"
+
+
 async def _rcpt_stock_transfer_doc(tenant_id, document_id, context, current_user):
     transfer = await db.distributor_stock_transfers.find_one(
         {"id": document_id, "tenant_id": tenant_id}, {"_id": 0})
@@ -233,6 +301,9 @@ async def _rcpt_stock_transfer_doc(tenant_id, document_id, context, current_user
     out = {"to": to, "cc": [], "candidates": to}
     if transfer:
         out["default_subject"], out["default_message"] = _transfer_message(transfer, current_user)
+        out["extra_html"] = _transfer_table_html(transfer)
+        out["extra_html_label"] = "Stock details table (added to the email automatically)"
+        out["extra_attachments"] = [{"filename": _transfer_xlsx_name(transfer), "label": "Stock details spreadsheet"}]
     return out
 
 
