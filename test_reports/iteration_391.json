@@ -1,0 +1,30 @@
+{
+  "summary": "Frontend-only verification of Share/Compose email dialog for stock transfer ST-2026-0010 on /distributor/stock-transfers. All assertions from the review request passed: extra table preview rendered with correct headers/rows/Total, xlsx attachment chip present with correct filename+label, subject prefilled, and message body mentions 'tabled below and attached as a spreadsheet'. No React/console errors (only benign a11y warnings). Dialog cancelled without sending.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Compose email dialog", "issues": ["Radix DialogContent missing Description/aria-describedby (a11y warning, non-blocking)"]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123",
+  "seed_data_creation": "None; used existing ST-2026-0010 seeded/synced by main agent",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login flow: root page shows marketing site; click 'Sign in' link, then fill [data-testid=login-form] first input with email and [data-testid=login-password-input] with password; submit. Share dialog for stock transfer is opened via kebab (last button in row) -> 'Share via email...'. Verified data-testids: share-extra-table, share-extra-attachment-<filename>, share-subject-input, rich-email-editor, share-cancel-btn, share-send-btn. NEVER click Send (real Resend emails).",
+  "verification_evidence": {
+    "extra_table_headers": ["Customer SKU","Brand","Crates","Bottles per crate"],
+    "extra_table_rows": [["Generic (unbranded)","Nyla – 600 ml / Silver","6","6"],["Aparna Cinemas – 600 ml","Nyla – 600 ml / Silver","5","12"],["Total","2 SKUs","11","96 bottles"]],
+    "chip_testid": "share-extra-attachment-ST-2026-0010-stock-details.xlsx",
+    "chip_text": "ST-2026-0010-stock-details.xlsx / Stock details spreadsheet",
+    "subject": "Delivery Challan INV-QA-1 · Stock Transfer ST-2026-0010 → Delhi",
+    "editor_contains": "tabled below and attached as a spreadsheet"
+  },
+  "regression_note": "Skipped cross-document-type regression (other Share dialogs) per 'skip if not reachable within reason'; iteration_390 already exercised prior bullet-list variant on same route with no errors."
+}
