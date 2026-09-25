@@ -169,11 +169,71 @@ async def _rcpt_delivery_invoice(tenant_id, document_id, context, current_user):
     return {"to": to, "cc": [], "candidates": to}
 
 
+def _fmt_day(iso):
+    try:
+        from datetime import datetime as _dt
+        return _dt.fromisoformat((iso or "")[:10]).strftime("%d %b %Y")
+    except ValueError:
+        return iso or ""
+
+
+def _esc(s) -> str:
+    return str(s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _transfer_message(transfer: dict, current_user: dict) -> tuple[str, str]:
+    """Default subject + HTML body listing every line (SKU / child SKU, packages, bottles, batch) — no pricing."""
+    number = transfer.get("zoho_invoice_number") or transfer.get("transfer_number") or ""
+    doc_label = "Delivery Challan" if transfer.get("zoho_doc_type") == "delivery_challan" else "Invoice"
+    tnum = transfer.get("transfer_number") or ""
+    src = " · ".join(x for x in (transfer.get("source_location_name"), transfer.get("source_distributor_name")) if x)
+    dst = " · ".join(x for x in (transfer.get("dest_location_name"), transfer.get("dest_distributor_name")) if x)
+    lines, total_pkgs, total_units = [], 0, 0
+    for it in transfer.get("items") or []:
+        pkgs = int(it.get("quantity") or 0)
+        upp = int(it.get("units_per_package") or 0)
+        units = int(it.get("quantity_units") or (pkgs * upp))
+        total_pkgs += pkgs
+        total_units += units
+        pkg_label = it.get("packaging_type_name") or ("Crate" if upp else "Package")
+        name = it.get("sku_name") or "SKU"
+        if it.get("child_sku_name"):
+            name = f"{name} — <b>{_esc(it['child_sku_name'])}</b> (branded)"
+        else:
+            name = _esc(name)
+        qty = f"{pkgs} × {_esc(pkg_label)}"
+        if units:
+            qty += f" · {units} bottles" + (f" ({upp}/pack)" if upp else "")
+        batch = f" · Batch {_esc(it['batch_code'])}" if it.get("batch_code") else ""
+        lines.append(f"<li>{name}: {qty}{batch}</li>")
+    u = current_user or {}
+    subject = f"{doc_label} {number} · Stock Transfer {tnum} → {transfer.get('dest_location_name') or ''}".strip(" ·→")
+    body = (
+        f"<p>Dear Team,</p>"
+        f"<p>Please find attached {doc_label} <b>{_esc(number)}</b> for stock transfer <b>{_esc(tnum)}</b>"
+        f"{' dated ' + _fmt_day(transfer.get('transfer_date')) if transfer.get('transfer_date') else ''}.</p>"
+        f"<p>From: {_esc(src) or '—'}<br>To: {_esc(dst) or '—'}"
+        f"{'<br>Vehicle: ' + _esc(transfer['vehicle_number']) if transfer.get('vehicle_number') else ''}</p>"
+        f"<p><b>Items transferred</b></p><ul>{''.join(lines) or '<li>No items</li>'}</ul>"
+        f"<p><b>Total: {total_pkgs} package{'' if total_pkgs == 1 else 's'}"
+        f"{' · ' + str(total_units) + ' bottles' if total_units else ''} · {len(lines)} SKU{'' if len(lines) == 1 else 's'}</b></p>"
+        f"{'<p>Notes: ' + _esc(transfer['notes']) + '</p>' if transfer.get('notes') else ''}"
+        f"<p>Kindly acknowledge receipt and report any discrepancy on arrival.</p>"
+        f"<p>Regards,<br>{_esc(u.get('name'))}"
+        f"{'<br>' + _esc(u.get('phone') or u.get('mobile')) if (u.get('phone') or u.get('mobile')) else ''}"
+        f"{'<br>' + _esc(u.get('email')) if u.get('email') else ''}</p>"
+    )
+    return subject, body
+
+
 async def _rcpt_stock_transfer_doc(tenant_id, document_id, context, current_user):
     transfer = await db.distributor_stock_transfers.find_one(
-        {"id": document_id, "tenant_id": tenant_id}, {"_id": 0, "dest_distributor_id": 1})
+        {"id": document_id, "tenant_id": tenant_id}, {"_id": 0})
     to = await rp.distributor_contacts(tenant_id, (transfer or {}).get("dest_distributor_id")) if transfer else []
-    return {"to": to, "cc": [], "candidates": to}
+    out = {"to": to, "cc": [], "candidates": to}
+    if transfer:
+        out["default_subject"], out["default_message"] = _transfer_message(transfer, current_user)
+    return out
 
 
 async def _rcpt_lead_proposal(tenant_id, document_id, context, current_user):
