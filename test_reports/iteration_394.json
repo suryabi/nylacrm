@@ -1,0 +1,22 @@
+{
+  "summary": "Frontend-only verification that the CRA runtime-error overlay ('Uncaught runtime errors: ResizeObserver loop completed with undelivered notifications') no longer appears on /customer-invoice-overview and other data-heavy pages. Logged in as admin, exercised heavy interactions: multiple viewport resizes (1920->1280->1440->1920 etc.), opened distributor combobox, opened customers multi-select and typed 'Brian', scrolled table horizontally, and briefly visited /sku-performance and /account-volume-grid with resizes. At every checkpoint: iframe#webpack-dev-server-client-overlay = not present, 'Uncaught runtime errors' text = 0, page.on('pageerror') ResizeObserver entries = 0, console 'ResizeObserver loop' entries = 0. Only console errors observed were unrelated 401/400 resource loads (auth-guarded endpoints during initial nav), no uncaught JS errors. index.js swallow logic verified in place (capturing 'error' + 'unhandledrejection' listeners filter ResizeObserver loop).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "index.js filter uses capturing listener with stopImmediatePropagation+preventDefault only for messages containing 'ResizeObserver loop' — narrow and safe. Good pattern; no changes recommended."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "CRA overlay for ResizeObserver loop is fully suppressed. If new page-errors appear later that are NOT ResizeObserver loop, they will still surface (filter is narrow by design).",
+  "rca of the issue": "Original overlay was benign ResizeObserver loop notice fired by browser when a ResizeObserver callback triggers another layout in the same frame. Fix: index.js registers a capturing window 'error' listener that calls stopImmediatePropagation+preventDefault when message contains 'ResizeObserver loop', preventing CRA's webpack-dev-server overlay from receiving it; also handles unhandledrejection for the same. Combined with sm:w-64 / sm:w-96 fixed widths on CIO filter bar reducing layout feedback. Verified end-to-end: 0 overlay occurrences after heavy stress."
+}
