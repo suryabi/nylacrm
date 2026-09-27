@@ -1,0 +1,18 @@
+{
+  "summary": "Tested Customer Invoice Overview redesign (backend + frontend). All 5 pytest backend contracts pass: admin default_distributor_id=Main (Hyderabad match); prev_month + mom_change consistency (rows and totals); Toopa Ice-creamery prev=59351.5 months=[0,3576,0,0,0,0]; non-matching-city user → default=null; export xlsx header ends with 'Change vs last month' (no '6-mo Total' column) and Total row includes mom_change_total. Frontend: /customer-invoice-overview loads with distributor combobox showing 'Main' pre-selected and [data-testid=cio-default-badge] reading 'Defaulted to Main (your city)'; row count 2 of 24. Clearing distributor → badge disappears, 24 of 24 rows. Table header has 6 month cells + [data-testid=cio-delta-head] 'Δ vs last month'; no [data-testid^=cio-total-] cells. Customer cell is exactly 240px wide, contains a single <p> in text-primary with no code sub-line. Data row height ~29px (compact, ≤34). Toopa row: Apr cell red ArrowDown (data-trend='down'), May green ArrowUp (data-trend='up'), Jun red ArrowDown, Jul–Sep no arrow (data-trend='flat'). Δ column shows '0' with data-sign='zero' for every row and footer cio-delta-total ('0'). Alternate row banding is visible in the rendered UI (screenshot shows striped rows). Excel export downloads a workbook whose header ends with 'Change vs last month'. No error overlays / console errors relevant to the page.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_cio_iter395.py", "/app/test_reports/pytest/iter395_cio.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: Amount component treats `v === prev` as 'flat' but renders data-trend='flat' when dir is null — consistent behavior, no action needed.",
+    "Minor: `defaulted` state initializes to false and flips to true after first load; if the user manually switches to another distributor and hits refresh, default_distributor_id is not re-applied — that seems intentional but consider persisting via URL param."
+  ],
+  "updated_files": ["/app/backend/tests/test_cio_iter395.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (Hyderabad admin); creative.director@nylaairwater.earth / test123 (fallback).",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend contract endpoint: GET /api/reports/customer-invoice-overview returns default_distributor_id, rows[].prev_month, rows[].mom_change, month_totals[6], prev_month_total, mom_change_total. Toopa Ice-creamery is the reference row with non-trivial trends (prev 59351.5, months [0,3576,0,0,0,0]). Frontend testids: cio-default-badge, cio-delta-head, cio-delta-<accountId>, cio-delta-total, cio-cell-<accountId>-<YYYY-MM>, cio-name-<accountId>, cio-row-<accountId>, cio-row-count, cio-distributor-trigger. Frontend runs behind REACT_APP_BACKEND_URL from /app/frontend/.env."
+}
