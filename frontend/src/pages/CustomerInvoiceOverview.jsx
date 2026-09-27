@@ -106,7 +106,7 @@ export default function CustomerInvoiceOverview() {
           <SearchCombobox options={data?.filters?.distributors || []} value={distributor} onChange={(v) => { setDistributor(v); setCustomers([]); }}
             placeholder="All distributors" allLabel="All distributors" icon={Store} testId="cio-distributor" />
         </div>
-        <div className="flex-1 sm:max-w-md">
+        <div className="sm:w-96">
           <MultiSearchCombobox options={customerOptions} values={customers} onChange={setCustomers} placeholder="All customers" icon={Users} testId="cio-customers" />
         </div>
         {activeFilters > 0 && (

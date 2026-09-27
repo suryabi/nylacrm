@@ -4,6 +4,15 @@ import "@/index.css";
 import App from "@/App";
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
+
+// Benign Chrome notice (layout settled a frame late); never actionable, keep it out of the error overlay.
+const isRoLoop = (m) => typeof m === "string" && m.includes("ResizeObserver loop");
+window.addEventListener("error", (e) => {
+  if (isRoLoop(e.message)) { e.stopImmediatePropagation(); e.preventDefault(); }
+}, true);
+window.addEventListener("unhandledrejection", (e) => {
+  if (isRoLoop(e.reason?.message)) e.preventDefault();
+});
 root.render(
   <React.StrictMode>
     <App />
