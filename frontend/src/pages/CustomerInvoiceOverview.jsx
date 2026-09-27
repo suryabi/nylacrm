@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { FileSpreadsheet, Loader2, Receipt, RefreshCw, Search, X } from 'lucide-react';
+import { FileSpreadsheet, Loader2, Receipt, RefreshCw, Search, Store, Users, X } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { SearchCombobox } from '../components/SearchCombobox';
+import { MultiSearchCombobox } from '../components/MultiSearchCombobox';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -21,6 +23,8 @@ export default function CustomerInvoiceOverview() {
   const [exporting, setExporting] = useState(false);
   const [q, setQ] = useState('');
   const [hideZero, setHideZero] = useState(false);
+  const [distributor, setDistributor] = useState('all');
+  const [customers, setCustomers] = useState([]);
 
   const load = async () => {
     setLoading(true);
@@ -38,8 +42,15 @@ export default function CustomerInvoiceOverview() {
   const rows = useMemo(() => {
     if (!data) return [];
     const s = q.trim().toLowerCase();
-    return data.rows.filter((r) => (!hideZero || r.total > 0) && (!s || [r.account_name, r.account_code, r.city].some((x) => (x || '').toLowerCase().includes(s))));
-  }, [data, q, hideZero]);
+    return data.rows.filter((r) => (!hideZero || r.total > 0)
+      && (distributor === 'all' || (distributor === 'unassigned' ? !r.distributor_id : r.distributor_id === distributor))
+      && (!customers.length || customers.includes(r.account_id))
+      && (!s || [r.account_name, r.account_code, r.city, r.distributor_name].some((x) => (x || '').toLowerCase().includes(s))));
+  }, [data, q, hideZero, distributor, customers]);
+  const customerOptions = useMemo(() => (data ? data.rows
+    .filter((r) => distributor === 'all' || (distributor === 'unassigned' ? !r.distributor_id : r.distributor_id === distributor))
+    .map((r) => ({ id: r.account_id, name: r.account_name, sub: [r.account_code, r.city].filter(Boolean).join(' · ') })) : []), [data, distributor]);
+  const activeFilters = (distributor !== 'all') + (customers.length > 0) + (!!q.trim()) + hideZero;
   const filteredTotals = useMemo(() => (data ? data.months.map((_, i) => rows.reduce((a, r) => a + r.months[i], 0)) : []), [rows, data]);
 
   const exportExcel = async () => {
@@ -90,6 +101,21 @@ export default function CustomerInvoiceOverview() {
         </div>
       )}
 
+      <div className="flex flex-col gap-2 rounded-2xl border border-slate-200/90 bg-white p-3 shadow-sm sm:flex-row sm:items-center" data-testid="cio-filters">
+        <div className="sm:w-64">
+          <SearchCombobox options={data?.filters?.distributors || []} value={distributor} onChange={(v) => { setDistributor(v); setCustomers([]); }}
+            placeholder="All distributors" allLabel="All distributors" icon={Store} testId="cio-distributor" />
+        </div>
+        <div className="flex-1 sm:max-w-md">
+          <MultiSearchCombobox options={customerOptions} values={customers} onChange={setCustomers} placeholder="All customers" icon={Users} testId="cio-customers" />
+        </div>
+        {activeFilters > 0 && (
+          <button type="button" onClick={() => { setDistributor('all'); setCustomers([]); setQ(''); setHideZero(false); }}
+            className="text-xs font-medium text-slate-500 underline decoration-dotted underline-offset-2 hover:text-slate-800" data-testid="cio-clear-filters">Clear filters</button>
+        )}
+        <span className="ml-auto text-xs text-slate-400" data-testid="cio-row-count">{rows.length} of {data?.rows.length || 0} customers</span>
+      </div>
+
       <div className="overflow-x-auto rounded-2xl border border-slate-200/90 bg-white shadow-sm">
         {loading && !data ? (
           <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
@@ -111,7 +137,7 @@ export default function CustomerInvoiceOverview() {
                 <tr key={r.account_id} className="border-t border-slate-100 hover:bg-slate-50/70" data-testid={`cio-row-${r.account_id}`}>
                   <td className="sticky left-0 z-10 bg-white px-4 py-2.5">
                     <div className="max-w-[20rem] truncate font-semibold text-slate-900" title={r.account_name} data-testid={`cio-name-${r.account_id}`}>{r.account_name}</div>
-                    <div className="text-[11px] text-slate-400">{[r.account_code, r.city].filter(Boolean).join(' · ') || '\u00a0'}</div>
+                    <div className="text-[11px] text-slate-400">{[r.account_code, r.city, r.distributor_name !== 'Unassigned' ? r.distributor_name : null].filter(Boolean).join(' · ') || '\u00a0'}</div>
                   </td>
                   {r.months.map((v, i) => <Amount key={i} v={v} testId={`cio-cell-${r.account_id}-${data.months[i].key}`} />)}
                   <Amount v={r.total} bold testId={`cio-total-${r.account_id}`} />

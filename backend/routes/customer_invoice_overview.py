@@ -39,6 +39,27 @@ def _gross(inv) -> float:
         return 0.0
 
 
+async def _account_distributors(tdb, acct_ids: list) -> dict:
+    """account_id → {id, name}: latest delivered Stock-Out's distributor, else primary active assignment."""
+    out = {}
+    names = {d["id"]: d.get("distributor_name") async for d in tdb.distributors.find({}, {"_id": 0, "id": 1, "distributor_name": 1})}
+    async for asg in tdb.account_distributor_assignments.find(
+            {"account_id": {"$in": acct_ids}, "status": {"$ne": "inactive"}},
+            {"_id": 0, "account_id": 1, "distributor_id": 1, "distributor_name": 1, "is_primary": 1}).sort("is_primary", -1):
+        out.setdefault(asg["account_id"], {"id": asg.get("distributor_id"), "name": names.get(asg.get("distributor_id")) or asg.get("distributor_name")})
+    latest = {}
+    async for d in tdb.distributor_deliveries.find(
+            {"account_id": {"$in": acct_ids}, "status": {"$in": ["delivered", "complete", "completed"]}},
+            {"_id": 0, "account_id": 1, "distributor_id": 1, "distributor_name": 1, "delivery_date": 1, "delivered_at": 1}):
+        day = d.get("delivery_date") or d.get("delivered_at") or ""
+        if day > (latest.get(d["account_id"]) or {}).get("day", ""):
+            latest[d["account_id"]] = {"day": day, "id": d.get("distributor_id"), "name": names.get(d.get("distributor_id")) or d.get("distributor_name")}
+    for aid, l in latest.items():
+        if l.get("id"):
+            out[aid] = {"id": l["id"], "name": l["name"]}
+    return out
+
+
 async def _build() -> dict:
     tdb = get_tenant_db()
     today = datetime.now(timezone.utc).date()
@@ -71,19 +92,24 @@ async def _build() -> dict:
             counts[acc["id"]] += 1
 
     rows = []
+    dist_by_acct = await _account_distributors(tdb, [a["id"] for a in accounts])
     for a in accounts:
         vals = [round(totals[a["id"]].get(k, 0.0), 2) for k in keys]
+        d = dist_by_acct.get(a["id"]) or {}
         rows.append({
             "account_id": a["id"], "account_code": a.get("account_id"), "account_name": a.get("account_name") or "—",
-            "city": a.get("city"), "months": vals, "total": round(sum(vals), 2), "invoice_count": counts.get(a["id"], 0),
+            "city": a.get("city"), "distributor_id": d.get("id"), "distributor_name": d.get("name") or "Unassigned",
+            "months": vals, "total": round(sum(vals), 2), "invoice_count": counts.get(a["id"], 0),
         })
     rows.sort(key=lambda r: (r["account_name"] or "").lower())
     month_totals = [round(sum(r["months"][i] for r in rows), 2) for i in range(MONTHS)]
+    distributors = sorted({(r["distributor_id"], r["distributor_name"]) for r in rows if r["distributor_id"]}, key=lambda x: x[1].lower())
     return {
         "months": [{"key": k, "label": l, "current": k == keys[-1]} for k, l in zip(keys, labels)],
         "rows": rows,
         "month_totals": month_totals,
         "grand_total": round(sum(month_totals), 2),
+        "filters": {"distributors": [{"id": i, "name": n} for i, n in distributors] + ([{"id": "unassigned", "name": "Unassigned"}] if any(not r["distributor_id"] for r in rows) else [])},
         "summary": {"customers": len(rows), "invoiced_customers": sum(1 for r in rows if r["total"] > 0),
                     "invoices": sum(counts.values())},
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -105,22 +131,22 @@ async def export_customer_invoice_overview(current_user: dict = Depends(get_curr
     ws["A1"].font = Font(bold=True, size=14)
     ws.append([f"Generated: {datetime.now(timezone.utc).strftime('%d %b %Y %H:%M UTC')}"])
     ws.append([])
-    ws.append(["Customer", "Code", "City"] + [m["label"] for m in data["months"]] + ["Total"])
+    ws.append(["Customer", "Code", "City", "Distributor"] + [m["label"] for m in data["months"]] + ["Total"])
     hdr = ws.max_row
     for c in ws[hdr]:
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = PatternFill(start_color="0F172A", end_color="0F172A", fill_type="solid")
         c.alignment = Alignment(horizontal="center", vertical="center")
     for r in data["rows"]:
-        ws.append([r["account_name"], r.get("account_code") or "", r.get("city") or ""] + r["months"] + [r["total"]])
-    ws.append(["Total", "", ""] + data["month_totals"] + [data["grand_total"]])
+        ws.append([r["account_name"], r.get("account_code") or "", r.get("city") or "", r.get("distributor_name") or ""] + r["months"] + [r["total"]])
+    ws.append(["Total", "", "", ""] + data["month_totals"] + [data["grand_total"]])
     for c in ws[ws.max_row]:
         c.font = Font(bold=True)
         c.fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
-    for row in ws.iter_rows(min_row=hdr + 1, min_col=4, max_col=4 + MONTHS):
+    for row in ws.iter_rows(min_row=hdr + 1, min_col=5, max_col=5 + MONTHS):
         for c in row:
             c.number_format = "#,##0.00"
-    for i, wd in enumerate([34, 20, 16] + [14] * MONTHS + [16], start=1):
+    for i, wd in enumerate([34, 20, 16, 22] + [14] * MONTHS + [16], start=1):
         ws.column_dimensions[ws.cell(row=hdr, column=i).column_letter].width = wd
     ws.freeze_panes = ws.cell(row=hdr + 1, column=2)
     brand_workbook(wb)

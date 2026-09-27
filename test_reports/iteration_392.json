@@ -1,0 +1,20 @@
+{
+  "summary": "Full backend + frontend testing of new 'Customer Invoice Overview' report (Sales → Dashboard). Backend pytest suite (5 tests) all pass: response schema, chronological months Apr–Sep 2026 with Sep marked current, labels 'Mon YYYY', 24 alphabetically sorted rows, month_totals/grand_total consistency, summary counts, Toopa Ice-creamery = 3576 in May 2026, xlsx export (Content-Type + PK zip magic), and 401 on unauthenticated overview/export. Frontend UI verified end-to-end on the public URL: page renders, table has sticky Customer column with bold names + code/city subline, all six month headers with 'current' badge on Sep 2026, footer totals present, search filters to Toopa, 'Hide customers with no invoices' collapses to 1 row (Toopa Ice-creamery) with grand total ₹3,576, Excel button triggers a download (customer-invoice-overview.xlsx). No React errors; only a benign unrelated 400 on some other resource in console.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_customer_invoice_overview.py", "/app/test_reports/pytest/cio_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend query filter {'status': {'$in': ['active', None]}} correctly includes accounts without an explicit status; verified 24 accounts returned matching Accounts list.",
+    "Month window computed via UTC today; a customer onboarded mid-window is still included with zeros — matches spec ('0 where no invoices / not onboarded').",
+    "Frontend uses localStorage 'token' for Bearer; consistent with rest of app.",
+    "Grand-total in footer recomputes client-side from filtered rows — behaviour matches spec (footer totals recompute for the filtered set)."
+  ],
+  "updated_files": ["/app/backend/tests/test_customer_invoice_overview.py"],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water)",
+  "seed_data_creation": "None — used existing seeded data (Toopa Ice-creamery May-2026 invoice of ₹3,576).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Report endpoint: GET /api/reports/customer-invoice-overview + /export. Route file /app/backend/routes/customer_invoice_overview.py. Page /customer-invoice-overview reachable via Sales module → Dashboard submenu item 'Customer Invoice Overview'. Key data-testids: customer-invoice-overview-page, cio-table, cio-month-<YYYY-MM>, cio-row-<accountId>, cio-name-<accountId>, cio-cell-<accountId>-<YYYY-MM>, cio-total-<accountId>, cio-footer, cio-month-total-<YYYY-MM>, cio-grand-total, cio-search, cio-search-clear, cio-hide-zero, cio-refresh, cio-export-btn, cio-summary, cio-subtitle. In Preview, only Toopa Ice-creamery has invoices (₹3576 in May 2026); 24 total customers."
+}
