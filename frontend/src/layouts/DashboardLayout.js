@@ -34,6 +34,7 @@ const dashboardSubmenu = [
   { name: 'SKU Performance', href: '/sku-performance', moduleKey: 'report_sku_performance', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
   { name: 'Resource Performance', href: '/resource-performance', moduleKey: 'report_resource_performance', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
   { name: 'Account Performance', href: '/account-performance', moduleKey: 'report_account_performance', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
+  { name: 'Customer Invoice Overview', href: '/customer-invoice-overview', moduleKey: 'report_account_performance', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
 ];
 
 // Sales Context Navigation
@@ -567,7 +568,7 @@ export default function DashboardLayout({ children }) {
   const isDashboardActive = location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
     location.pathname === '/target-sku' || location.pathname === '/target-resource' ||
     location.pathname === '/sku-performance' || location.pathname === '/resource-performance' ||
-    location.pathname === '/account-performance';
+    location.pathname === '/account-performance' || location.pathname === '/customer-invoice-overview';
 
   // Check if user is platform admin — server-verified via /platform-admin/me (state above)
 

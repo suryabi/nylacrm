@@ -88,6 +88,7 @@ const DriverSchedules = lazy(() => import('./pages/driver/DriverApp').then(m => 
 const DriverScheduleDetail = lazy(() => import('./pages/driver/DriverApp').then(m => ({ default: m.DriverScheduleDetail })));
 const AccountDetail = lazy(() => import('./pages/AccountDetail'));
 const AccountPerformance = lazy(() => import('./pages/AccountPerformance'));
+const CustomerInvoiceOverview = lazy(() => import('./pages/CustomerInvoiceOverview'));
 const RevenueAnalytics = lazy(() => import('./pages/RevenueAnalytics'));
 const AccountingMasters = lazy(() => import('./pages/AccountingMasters'));
 const VendorTypes = lazy(() => import('./pages/VendorTypes'));
@@ -465,6 +466,7 @@ function AppRouter() {
           <Route path="/invoices" element={<ProtectedRoute moduleKey="invoices"><InvoicesList /></ProtectedRoute>} />
           <Route path="/customer-returns" element={<ProtectedRoute moduleKey="customer_returns"><CustomerReturnsList /></ProtectedRoute>} />
           <Route path="/account-performance" element={<ProtectedRoute moduleKey="report_account_performance"><AccountPerformance /></ProtectedRoute>} />
+          <Route path="/customer-invoice-overview" element={<ProtectedRoute moduleKey="report_account_performance"><CustomerInvoiceOverview /></ProtectedRoute>} />
           <Route path="/transportation-calculator" element={<ProtectedRoute moduleKey="transport_calculator"><TransportationCostCalculator /></ProtectedRoute>} />
           <Route path="/sku-management" element={<ProtectedRoute moduleKey="sku_management"><SKUManagement /></ProtectedRoute>} />
           <Route path="/sku-management/relink" element={<ProtectedRoute moduleKey="sku_management"><SkuRelinkTool /></ProtectedRoute>} />

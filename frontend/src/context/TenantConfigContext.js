@@ -196,7 +196,7 @@ export const MODULE_ROUTE_MAP = {
   report_revenue: ['/sales-revenue'],
   report_sku_performance: ['/sku-performance'],
   report_resource_performance: ['/resource-performance'],
-  report_account_performance: ['/account-performance'],
+  report_account_performance: ['/account-performance', '/customer-invoice-overview'],
   
   // Lead & Sales Operations
   lead_discovery: ['/lead-discovery'],
