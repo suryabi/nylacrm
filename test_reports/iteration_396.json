@@ -1,0 +1,39 @@
+{
+  "summary": "Frontend-only verification of Customer Invoice Overview (/customer-invoice-overview) redesign. Logged in as admin (surya.yadavalli@nylaairwater.earth) at 1920x1080 and 1366x768. Layout, colgroup widths, sticky column, zebra, sortable headers (Customer / months / Δ), distributor default 'Main' + default badge, clear filters (24 rows), hide-zero (1 row), search, Excel export button, trend arrows on Toopa row and Δ '0' muted styling all verified. No console errors, no error overlay.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_checks": {
+    "columns": "Exactly 8 headers: Customer, Apr–Sep 2026, Δ vs last month (no trailing empty column)",
+    "table_width": "tableW=1598px vs container clientWidth=1598px at 1920 (max-w-[1600px] cap as expected); 1060px at 1366",
+    "customer_col_ratio": "30.00% of table width",
+    "name_overflow": "0 of visible names overflow (scrollWidth <= clientWidth); Toopa Ice-creamery and Seed rows fully visible at 1920",
+    "row_height": "49px (>=44px py-3.5)",
+    "zebra": "data-band alternates even/odd on tbody rows",
+    "sticky_first_col": "th and td both have sticky left-0, border-r border-slate-200/80, shadow, bg; thead sticky top-0",
+    "customer_default_sort": "asc, alphabetical",
+    "customer_click_toggle": "asc -> desc reverses order",
+    "month_sort": "cio-sort-2026-05 first click => desc with Toopa Ice-creamery first (3576); second click => asc",
+    "delta_sort": "cio-sort-delta toggles desc -> asc",
+    "distributor_default": "Main preselected, cio-default-badge present, 2 of 24 customers",
+    "clear_filters": "24 rows",
+    "hide_zero": "1 row (Toopa)",
+    "excel_button": "present",
+    "trend_arrows_toopa": "Apr red down, May green up (3576), Jun red down (icons rendered, 9 svg trend icons on row)",
+    "delta_muted_zero": "class contains text-slate-300 for '0' deltas",
+    "footer_totals": "tfoot present and unaffected by sort",
+    "console_errors": "none (only pre-login 401 which is expected)"
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "CIO page redesign fully verified. Distributor 'Main' default shows 2 customers; clearing shows 24; hide-zero yields 1 (Toopa Ice-creamery is the only customer with invoices in Apr–Sep 2026 window, value 3,576 in May). Table capped at 1600px by DashboardLayout max-w-[1600px]. All data-testid selectors used: cio-table, cio-name-*, cio-sort-customer, cio-sort-2026-{MM}, cio-sort-delta, cio-default-badge."
+}
