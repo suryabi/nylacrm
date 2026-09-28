@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only test of new column-resize feature on /customer-invoice-overview. Verified drag-to-resize on Customer, month, and Δ columns; header-sort not toggled by drag; data-resizing toggles true/false; min-width clamp works (m2 clamped to 84); persistence via localStorage 'cio-col-widths-v1' verified after reload; Reset column widths link appears/disappears and restores 30% share for Customer; header sort click still toggles asc/desc; horizontal scroll works at 1366×768 when widths overflow container; no console errors. One minor hit-test bug found on the Δ column resize handle.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "CustomerInvoiceOverview / ResizeHandle (delta column only)",
+        "issue": "The resize handle for the Δ column has only ~4px of hittable area instead of 8px. The handle span uses `-mr-1` (margin-right:-4px) so it extends 4px past its parent <th>. For inner columns this is fine, but for the last (delta) column that 4px overshoot lies outside the table wrapper (overflow-x:auto clips it). elementFromPoint at the visual center (x=1888) returns <main>, not the handle. Only x=1884-1887 fires mousedown → users who click on/near the visible right edge miss and don't get a resize. Verified: mousedown at handle.boundingBox center → data-resizing stays false, width unchanged, localStorage not written. Mousedown at (handleX+1) → resize works normally and Δ width grows from 160→240 after +80px drag.",
+        "selector": "[data-testid=cio-resize-delta]",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix Δ-column resize handle hit area: for the last column, remove the `-mr-1` overshoot (or apply `-ml-1` instead) so the entire 8px handle stays inside the table wrapper's clip region. Alternatively, widen the handle to w-3 and keep it flush with the th right edge."
+  ],
+  "critical_code_review_comments": [
+    "ResizeHandle uses `absolute right-0 -mr-1 w-2` — the -4px overshoot is clipped by the ancestor overflow-x:auto for the last column, halving its hit target. Consider making the handle side-aware or padding the wrapper by 4px right.",
+    "startResize's setWidths((w) => ({ ...w, [col]: ... })) inside stop() reads state at closure time; safe here because move() also updates via functional form, but if widths is null on first drag (before useEffect fills defaults), spreading null gives {} and only the dragged column is persisted. Consider guarding startResize when widths is null.",
+    "The `Reset column widths` link visibility check depends on `localStorage.getItem(WIDTH_KEY)` which is read on every render — fine, but this couples render to localStorage; would be cleaner to derive from a `hasCustomWidths` state."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "95%"},
+  "test_credentials": "Admin: surya.yadavalli@nylaairwater.earth / test123",
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Feature works end-to-end. Only remaining issue is hit-target width on the LAST column's resize handle (Δ) — the -mr-1 overshoot is clipped by wrapper overflow. Reproduce: on 1920 viewport, get boundingBox of [data-testid=cio-resize-delta] (x≈1884, w=8), call elementFromPoint(handleCenterX,y) → returns MAIN, not the handle span. Fix and re-verify by dragging at the handle's true center.",
+  "rca of the issue": "ResizeHandle span has classes `absolute inset-y-0 right-0 w-2 -mr-1`. The -mr-1 margin-right:-4px shifts the visible/hit area 4px past the parent <th>'s right edge. For non-terminal columns this overlays harmlessly on the neighbor th. For the terminal Δ column, the 4px overshoot lies past the table's right edge, which is inside a wrapper with overflow-x:auto. That overflow clips the overshoot from hit-testing, so only the inner 4px of the 8px handle receives pointer events. Users clicking on the visible right edge of Δ miss the handle. Mitigation: drop `-mr-1` for the last column (or apply `-ml-1` there) so the full 8px sits inside the th."
+}

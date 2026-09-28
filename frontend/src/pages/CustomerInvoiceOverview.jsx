@@ -19,8 +19,8 @@ const SHARES = { customer: 0.3, month: 0.1, delta: 0.1 };
 const ResizeHandle = ({ onStart, testId }) => (
   <span role="separator" aria-orientation="vertical" data-testid={testId}
     onMouseDown={onStart} onTouchStart={onStart} onClick={(e) => e.stopPropagation()}
-    className="absolute right-0 top-0 z-40 h-full w-2 -mr-1 cursor-col-resize select-none touch-none group/rh">
-    <span className="absolute right-1 top-1/4 h-1/2 w-px bg-slate-300 opacity-0 transition-opacity group-hover/rh:opacity-100" />
+    className="absolute right-0 top-0 z-40 h-full w-3 cursor-col-resize select-none touch-none group/rh">
+    <span className="absolute right-0 top-1/4 h-1/2 w-px bg-slate-300 opacity-0 transition-opacity group-hover/rh:opacity-100" />
   </span>
 );
 
@@ -84,6 +84,7 @@ export default function CustomerInvoiceOverview() {
 
   const startResize = useCallback((col) => (e) => {
     e.preventDefault(); e.stopPropagation();
+    if (!widths) return;
     const startX = e.touches ? e.touches[0].clientX : e.clientX;
     const startW = widths?.[col] || 120;
     const min = col === 'customer' ? MIN_W.customer : col === 'delta' ? MIN_W.delta : MIN_W.month;
