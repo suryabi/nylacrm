@@ -101,6 +101,7 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Frontend `pages/AccountVolumeGrid.js`: removed Territory/State/City selects + useMasterLocations; added searchable `SearchCombobox` distributor filter (`vg-distributor-filter-*`), persisted in saved view prefs (`filters.distributor_id`). Account search unchanged. ⚠️ Redeploy for production.
 
 ### 2026-09-21 — 🔍 SKU Performance: Accounts drill-down popup ✅ DONE (iteration_399 backend 4/4, frontend pass)
+- Preview seed: `python3 backend/tests/seed_sku_performance_demo.py` (`--clean`; `seed_tag: SEED-SKUP`) → 47 invoices across 24 accounts for current + previous month, 5 SKUs (B660/A330/A660/S330/B330) so the Accounts popup (9–13 accounts per SKU, This Month) and Customer Invoice Overview (Aug/Sep values, Δ) have data.
 - `GET /api/reports/sku-performance` skus[] now carry `accounts: [{key, account_uuid, name, city, units, units_pct, revenue, invoices}]` (units desc; same filters as the report; names/cities resolved from `accounts` by code/uuid). Frontend Accounts count is a button (`sku-accounts-btn-<idx>` / `-mobile-`) opening `components/SkuAccountsDialog.jsx` (`sku-accounts-dialog`: title SKU, subtitle N accounts · units · ₹ · period, ranked table with volume bar/city/share/revenue/invoices, search when >6, empty state). ⚠️ Redeploy for production.
 
 
