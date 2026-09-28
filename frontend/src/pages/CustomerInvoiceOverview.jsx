@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { ArrowDown, ArrowUp, ArrowUpDown, FileSpreadsheet, Loader2, Receipt, RefreshCw, Search, Store, Users, X } from 'lucide-react';
@@ -11,6 +11,18 @@ const API_URL = process.env.REACT_APP_BACKEND_URL;
 const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 const inr = (v) => Number(v || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 const STICKY = 'sticky left-0 border-r border-slate-200/80 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]';
+const WIDTH_KEY = 'cio-col-widths-v1';
+const MIN_W = { customer: 160, month: 84, delta: 110 };
+const SHARES = { customer: 0.3, month: 0.1, delta: 0.1 };
+
+// Drag handle on a header's right edge; widths persist per browser.
+const ResizeHandle = ({ onStart, testId }) => (
+  <span role="separator" aria-orientation="vertical" data-testid={testId}
+    onMouseDown={onStart} onTouchStart={onStart} onClick={(e) => e.stopPropagation()}
+    className="absolute right-0 top-0 z-40 h-full w-2 -mr-1 cursor-col-resize select-none touch-none group/rh">
+    <span className="absolute right-1 top-1/4 h-1/2 w-px bg-slate-300 opacity-0 transition-opacity group-hover/rh:opacity-100" />
+  </span>
+);
 
 // Month cell: value + red ▼ / dark-green ▲ against the previous month (prev === null → no indicator).
 const Amount = ({ v, prev = null, bold = false, testId }) => {
@@ -33,11 +45,12 @@ const Delta = ({ v, testId }) => (
   </td>
 );
 
-const SortHead = ({ id, label, sort, onSort, align = 'right', className = '', children, testId }) => {
+const SortHead = ({ id, label, sort, onSort, align = 'right', className = '', children, testId, onResize }) => {
   const active = sort.column === id;
   const Icon = !active ? ArrowUpDown : sort.direction === 'asc' ? ArrowUp : ArrowDown;
   return (
-    <th className={`py-3.5 ${align === 'left' ? 'text-left' : 'text-right'} ${className}`} aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+    <th className={`relative py-3.5 ${align === 'left' ? 'text-left' : 'text-right'} ${className}`} aria-sort={active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      {onResize && <ResizeHandle onStart={onResize} testId={`cio-resize-${id}`} />}
       <button type="button" onClick={() => onSort(id)} data-testid={testId} data-sort={active ? sort.direction : 'none'}
         className={`group inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider transition-colors focus:outline-none ${active ? 'text-slate-900' : 'text-slate-500 hover:text-slate-900'} ${align === 'left' ? '' : 'flex-row-reverse'}`}>
         <Icon className={`h-3.5 w-3.5 transition-colors ${active ? 'text-[#002FA7]' : 'text-slate-300 group-hover:text-slate-500'}`} strokeWidth={active ? 2.5 : 2} />
@@ -57,6 +70,40 @@ export default function CustomerInvoiceOverview() {
   const [customers, setCustomers] = useState([]);
   const [defaulted, setDefaulted] = useState(false);
   const [sort, setSort] = useState({ column: 'customer', direction: 'asc' });
+  const wrapRef = useRef(null);
+  const [widths, setWidths] = useState(() => { try { return JSON.parse(localStorage.getItem(WIDTH_KEY)) || null; } catch { return null; } });
+  const [resizing, setResizing] = useState(false);
+
+  // First visit: distribute the container width 30% / 6×10% / 10%; afterwards the user's px widths win.
+  useEffect(() => {
+    if (widths || !data || !wrapRef.current) return;
+    const total = Math.max(wrapRef.current.clientWidth, 1050);
+    const cols = ['customer', ...data.months.map((_, i) => `m${i}`), 'delta'];
+    setWidths(Object.fromEntries(cols.map((c) => [c, Math.round(total * (c === 'customer' ? SHARES.customer : c === 'delta' ? SHARES.delta : SHARES.month))])));
+  }, [data, widths]);
+
+  const startResize = useCallback((col) => (e) => {
+    e.preventDefault(); e.stopPropagation();
+    const startX = e.touches ? e.touches[0].clientX : e.clientX;
+    const startW = widths?.[col] || 120;
+    const min = col === 'customer' ? MIN_W.customer : col === 'delta' ? MIN_W.delta : MIN_W.month;
+    setResizing(true);
+    const move = (ev) => {
+      const x = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      setWidths((w) => ({ ...w, [col]: Math.max(min, startW + x - startX) }));
+    };
+    const stop = () => {
+      setResizing(false);
+      setWidths((w) => { try { localStorage.setItem(WIDTH_KEY, JSON.stringify(w)); } catch { /* ignore */ } return w; });
+      window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', stop);
+      window.removeEventListener('touchmove', move); window.removeEventListener('touchend', stop);
+    };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', stop);
+    window.addEventListener('touchmove', move, { passive: false }); window.addEventListener('touchend', stop);
+  }, [widths]);
+  const resetWidths = () => { try { localStorage.removeItem(WIDTH_KEY); } catch { /* ignore */ } setWidths(null); };
+  const colW = (c) => widths?.[c];
+  const tableW = widths ? Object.values(widths).reduce((a, b) => a + b, 0) : null;
 
   const load = async () => {
     setLoading(true);
@@ -162,29 +209,30 @@ export default function CustomerInvoiceOverview() {
           <span><b className="font-semibold text-slate-900">{data.summary.invoiced_customers}</b> invoiced in period</span>
           <span><b className="font-semibold text-slate-900">{data.summary.invoices}</b> invoices</span>
           <span>Total <b className="font-semibold text-slate-900">₹{inr(data.grand_total)}</b></span>
-          <span className="inline-flex items-center gap-1 text-slate-400"><ArrowUp className="h-3.5 w-3.5 text-emerald-700" strokeWidth={2.5} /> up / <ArrowDown className="h-3.5 w-3.5 text-red-600" strokeWidth={2.5} /> down vs previous month · click any header to sort</span>
+          <span className="inline-flex items-center gap-1 text-slate-400"><ArrowUp className="h-3.5 w-3.5 text-emerald-700" strokeWidth={2.5} /> up / <ArrowDown className="h-3.5 w-3.5 text-red-600" strokeWidth={2.5} /> down vs previous month · click any header to sort · drag header edges to resize</span>
+          {widths && localStorage.getItem(WIDTH_KEY) && <button type="button" onClick={resetWidths} className="ml-auto text-xs font-semibold text-[#002FA7] underline decoration-dotted underline-offset-4 hover:text-[#00268a]" data-testid="cio-reset-widths">Reset column widths</button>}
         </div>
       )}
 
-      <div className="w-full overflow-x-auto rounded-2xl border border-slate-200/90 bg-white shadow-sm">
+      <div ref={wrapRef} className={`w-full overflow-x-auto rounded-2xl border border-slate-200/90 bg-white shadow-sm ${resizing ? 'cursor-col-resize select-none' : ''}`}>
         {loading && !data ? (
           <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
         ) : (
-          <table className="w-full min-w-[1050px] table-fixed border-collapse text-sm" data-testid="cio-table">
+          <table className="min-w-full table-fixed border-collapse text-sm" style={tableW ? { width: tableW } : undefined} data-testid="cio-table" data-resizing={resizing ? 'true' : 'false'}>
             <colgroup>
-              <col style={{ width: '30%' }} />
-              {data?.months.map((m) => <col key={m.key} style={{ width: '10%' }} />)}
-              <col style={{ width: '10%' }} />
+              <col style={{ width: colW('customer') || '30%' }} />
+              {data?.months.map((m, i) => <col key={m.key} style={{ width: colW(`m${i}`) || '10%' }} />)}
+              <col style={{ width: colW('delta') || '10%' }} />
             </colgroup>
             <thead className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur">
               <tr className="border-b border-slate-200">
-                <SortHead id="customer" label="Customer" sort={sort} onSort={onSort} align="left" className={`${STICKY} z-30 bg-slate-50/95 px-4`} testId="cio-sort-customer" />
+                <SortHead id="customer" label="Customer" sort={sort} onSort={onSort} align="left" className={`${STICKY} z-30 bg-slate-50/95 px-4`} testId="cio-sort-customer" onResize={startResize('customer')} />
                 {data?.months.map((m, i) => (
-                  <SortHead key={m.key} id={`m${i}`} label={m.label} sort={sort} onSort={onSort} className={`px-3 ${m.current ? '[&_button]:text-[#002FA7]' : ''}`} testId={`cio-sort-${m.key}`}>
+                  <SortHead key={m.key} id={`m${i}`} label={m.label} sort={sort} onSort={onSort} className={`px-3 ${m.current ? '[&_button]:text-[#002FA7]' : ''}`} testId={`cio-sort-${m.key}`} onResize={startResize(`m${i}`)}>
                     {m.current && <span className="ml-1.5 inline-flex items-center rounded-md bg-[#002FA7]/10 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-[#002FA7]">current</span>}
                   </SortHead>
                 ))}
-                <SortHead id="delta" label="Δ vs last month" sort={sort} onSort={onSort} className="bg-slate-100/70 px-4" testId="cio-sort-delta" />
+                <SortHead id="delta" label="Δ vs last month" sort={sort} onSort={onSort} className="bg-slate-100/70 px-4" testId="cio-sort-delta" onResize={startResize('delta')} />
               </tr>
             </thead>
             <tbody>
