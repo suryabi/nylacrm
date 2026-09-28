@@ -343,6 +343,7 @@ async def get_sku_performance(
     sku_invoice_revenue = {}
     sku_invoice_units = {}
     sku_invoice_accounts = {}  # SKU → set of account identifiers
+    sku_account_rows = {}      # SKU → {acc_key: {name, city, revenue, units, invoices}}
     for inv in invoices:
         items = inv.get('items') or inv.get('line_items') or []
         # Stable account identifier (prefer human code → uuid → name)
@@ -350,14 +351,39 @@ async def get_sku_performance(
                    or inv.get('account_id_from_mq')
                    or (inv.get('account_name') or '').strip().lower()
                    or None)
+        touched = set()
         for item in items:
             name = _resolve_sku_name(item)
             if not name:
                 continue
-            sku_invoice_revenue[name] = sku_invoice_revenue.get(name, 0) + _line_value(item)
-            sku_invoice_units[name] = sku_invoice_units.get(name, 0) + _parse_num(item.get('quantity'))
+            val, qty = _line_value(item), _parse_num(item.get('quantity'))
+            sku_invoice_revenue[name] = sku_invoice_revenue.get(name, 0) + val
+            sku_invoice_units[name] = sku_invoice_units.get(name, 0) + qty
             if inv_acc:
                 sku_invoice_accounts.setdefault(name, set()).add(inv_acc)
+                row = sku_account_rows.setdefault(name, {}).setdefault(inv_acc, {
+                    'key': inv_acc, 'name': (inv.get('account_name') or inv.get('customer_name') or '').strip() or None,
+                    'city': None, 'revenue': 0.0, 'units': 0.0, 'invoices': 0})
+                row['revenue'] += val
+                row['units'] += qty
+                if name not in touched:
+                    row['invoices'] += 1
+                    touched.add(name)
+
+    # Resolve account display names / cities for the per-SKU breakdown
+    acc_keys = {k for rows in sku_account_rows.values() for k in rows}
+    if acc_keys:
+        key_list = sorted(acc_keys)
+        async for a in get_tdb().accounts.find(
+                {'$or': [{'id': {'$in': key_list}}, {'account_id': {'$in': key_list}}]},
+                {'_id': 0, 'id': 1, 'account_id': 1, 'account_name': 1, 'city': 1}):
+            for k in (a.get('id'), a.get('account_id')):
+                if k in acc_keys:
+                    for rows in sku_account_rows.values():
+                        if k in rows:
+                            rows[k]['name'] = a.get('account_name') or rows[k]['name']
+                            rows[k]['city'] = a.get('city')
+                            rows[k]['account_uuid'] = a.get('id')
     
     # Count leads per SKU
     sku_leads_count = {}
@@ -408,6 +434,9 @@ async def get_sku_performance(
             'units_sold': int(units),
             'units_pct': 0,  # filled in after total is known
             'accounts_count': accounts_count,
+            'accounts': sorted(({**r, 'name': r['name'] or r['key'], 'revenue': round(r['revenue'], 2), 'units': int(r['units']),
+                                 'units_pct': round(r['units'] / sku_invoice_units[sku_name] * 100, 1) if sku_invoice_units.get(sku_name) else 0}
+                                for r in sku_account_rows.get(sku_name, {}).values()), key=lambda r: (-r['units'], -r['revenue'])),
             'leads_count': sku_leads_count.get(sku_name, 0),  # kept for backwards compatibility
             'achievement_pct': min(achievement_pct, 200)
         })

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Package, Filter, Loader2, TrendingUp, ShoppingBag, Boxes, Crown, ArrowUpRight, ChevronDown } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 import { SearchCombobox } from '../components/SearchCombobox';
+import { SkuAccountsDialog } from '../components/SkuAccountsDialog';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -46,6 +47,7 @@ export default function SKUPerformance() {
   const [skuOptions, setSkuOptions] = useState([]);
   const [accountFilter, setAccountFilter] = useState('all');
   const [accounts, setAccounts] = useState([]);
+  const [accountsSku, setAccountsSku] = useState(null);
 
   const { territories: masterTerritories, states: masterStates, cities: masterCities } = useMasterLocations();
 
@@ -306,7 +308,9 @@ export default function SKUPerformance() {
                         </div>
                         <div className="text-right w-24">
                           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Accounts</p>
-                          <p className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{row.accounts_count ?? row.leads_count ?? 0}</p>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); setAccountsSku(row); }}
+                            className="font-semibold tabular-nums text-violet-700 underline decoration-dotted underline-offset-4 hover:text-violet-900 dark:text-violet-300 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+                            title="Show accounts and volume for this SKU" data-testid={`sku-accounts-btn-${idx}`}>{row.accounts_count ?? row.leads_count ?? 0}</button>
                         </div>
                       </div>
 
@@ -317,7 +321,7 @@ export default function SKUPerformance() {
                     <div className="md:hidden mt-3 grid grid-cols-3 gap-2 pl-13">
                       <div><p className="text-[10px] uppercase text-muted-foreground">Achieved</p><p className="font-bold text-emerald-600 dark:text-emerald-400 text-sm tabular-nums">{formatCurrency(row.achieved_revenue)}</p></div>
                       <div><p className="text-[10px] uppercase text-muted-foreground">Units</p><p className="font-semibold text-slate-700 dark:text-slate-200 text-sm tabular-nums">{(row.units_sold || 0).toLocaleString('en-IN')}</p></div>
-                      <div><p className="text-[10px] uppercase text-muted-foreground">Accounts</p><p className="font-semibold text-slate-700 dark:text-slate-200 text-sm tabular-nums">{row.accounts_count ?? row.leads_count ?? 0}</p></div>
+                      <div><p className="text-[10px] uppercase text-muted-foreground">Accounts</p><button type="button" onClick={(e) => { e.stopPropagation(); setAccountsSku(row); }} className="font-semibold text-sm tabular-nums text-violet-700 underline decoration-dotted underline-offset-4" data-testid={`sku-accounts-btn-mobile-${idx}`}>{row.accounts_count ?? row.leads_count ?? 0}</button></div>
                     </div>
                   </div>
                 );
@@ -326,7 +330,9 @@ export default function SKUPerformance() {
           )}
         </div>
       </div>
+
+      <SkuAccountsDialog open={!!accountsSku} onClose={() => setAccountsSku(null)} sku={accountsSku?.sku}
+        accounts={accountsSku?.accounts || []} periodLabel={TIME_FILTERS.find(t => t.value === timeFilter)?.label} />
     </div>
   );
 }
-
