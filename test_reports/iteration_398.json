@@ -1,0 +1,16 @@
+{
+  "summary": "Retested Customer Invoice Overview column resize handles (frontend only). Δ handle fix verified: w=12px, elementFromPoint at handle center returns the handle itself (isSelfOrChild=true) for customer, m0, and delta. Mouse drag from center of [data-testid=cio-resize-delta] +80px widened Δ column by exactly 80px (160→240). data-resizing attribute observed 'true' mid-drag. localStorage 'cio-col-widths-v1' written on release with all 8 columns. Customer drag +100 gained exactly 100px. Sort click on customer header toggled to desc. Reset column widths cleared localStorage. All acceptance criteria met.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123",
+  "seed_data_creation": "",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Δ column resize handle fix confirmed working. Handle hit-area is 12px, no clipping issues, drag delta matches pixel-perfect. localStorage 'cio-col-widths-v1' persistence and reset both work.",
+  "rca of the issue": "Prior iter_397 handle had -mr-1 negative margin clipped by overflow wrapper leaving ~4px hit area. Fix: w-3 flush inside th (no negative margin) + guard in startResize that returns early if widths not yet computed. Verified elementFromPoint at all three handle centers returns the handle."
+}
