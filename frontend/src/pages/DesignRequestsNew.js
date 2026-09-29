@@ -17,10 +17,12 @@ import {
   LayoutList, Tag, User, Users, Calendar, Loader2, Truck, GitBranch, Download, Hourglass,
   ChevronsUpDown, ArrowUp, ArrowDown, LayoutGrid, Flame, Filter, Check, Inbox, SlidersHorizontal,
   ArrowLeftRight, CheckCircle2, MapPin, ChevronDown,
+  Images,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import RequestKanbanNew from '../components/marketing/RequestKanbanNew';
+import PhysicalSampleLogoView from '../components/marketing/PhysicalSampleLogoView';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HEAD = () => {
@@ -226,7 +228,7 @@ function AdvancedFilters({ types, depts, users, requestTypeId, deptId, requested
   );
 }
 
-// ── View toggle (list / kanban) ──────────────────────────────────────────────
+// ── View toggle (list / kanban / physical-sample logos) ──────────────────────
 function ViewToggle({ view, setView }) {
   return (
     <div className="inline-flex rounded-lg border border-zinc-200 bg-white p-0.5" data-testid="view-toggle-list-kanban">
@@ -245,6 +247,14 @@ function ViewToggle({ view, setView }) {
         data-testid="mr-view-list"
       >
         <LayoutList className="h-3.5 w-3.5" strokeWidth={1.75} /> List
+      </button>
+      <button
+        type="button"
+        onClick={() => setView('logos')}
+        className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${view === 'logos' ? 'bg-emerald-600 text-white' : 'text-zinc-600 hover:bg-zinc-50'}`}
+        data-testid="mr-view-logos"
+      >
+        <Images className="h-3.5 w-3.5" strokeWidth={1.75} /> Logo Sheet
       </button>
     </div>
   );
@@ -633,7 +643,8 @@ export default function DesignRequestsNew() {
   const [deptId, setDeptId] = useState(sp.get('dept') || '');
   const [requestedBy, setRequestedBy] = useState(sp.get('by') || '');
   const [sort, setSort] = useState(sp.get('sort') || '-created_at');
-  const [view, setView] = useState(sp.get('view') === 'list' ? 'list' : 'kanban');
+  const requestedView = sp.get('view');
+  const [view, setView] = useState(['list', 'logos'].includes(requestedView) ? requestedView : 'kanban');
   const [page, setPage] = useState(parseInt(sp.get('p') || '1'));
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({ items: [], total: 0, pages: 0 });
@@ -646,11 +657,12 @@ export default function DesignRequestsNew() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ queue, page: String(page) });
-      if (view === 'kanban') params.set('no_limit', 'true');
+      if (view === 'kanban' || view === 'logos') params.set('no_limit', 'true');
       else params.set('limit', '200');
+      if (view === 'logos') params.set('physical_sample_only', 'true');
       if (search) params.set('search', search);
       if (stateKey) params.set('state_key', stateKey);
-      if (requestTypeId) params.set('request_type_id', requestTypeId);
+      if (requestTypeId && view !== 'logos') params.set('request_type_id', requestTypeId);
       if (deptId) params.set('assigned_department_id', deptId);
       if (requestedBy) params.set('created_by', requestedBy);
       if (sort) params.set('sort', sort);
@@ -704,12 +716,17 @@ export default function DesignRequestsNew() {
     if (deptId) next.set('dept', deptId);
     if (requestedBy) next.set('by', requestedBy);
     if (sort && sort !== '-created_at') next.set('sort', sort);
-    if (view === 'list') next.set('view', 'list');
+    if (view !== 'kanban') next.set('view', view);
     if (page > 1) next.set('p', String(page));
     setSp(next, { replace: true });
   }, [queue, stateKey, search, requestTypeId, deptId, requestedBy, page, sort, view]); // eslint-disable-line
 
   const switchQueue = (next) => { setQueue(next); setPage(1); };
+  const switchView = (next) => {
+    if (next === 'logos') setRequestTypeId('');
+    setView(next);
+    setPage(1);
+  };
   const switchState = (key) => { setStateKey(key); setPage(1); };
   const onSearch = (v) => { setSearch(v); setPage(1); };
   const setTypeFilter = (v) => { setRequestTypeId(v); setPage(1); };
@@ -739,6 +756,27 @@ export default function DesignRequestsNew() {
       URL.revokeObjectURL(url);
       toast.success('Export ready');
     } catch (e) { toast.error(e.response?.data?.detail || 'Export failed'); }
+    finally { setExporting(false); }
+  };
+
+  const exportLogoPdf = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({ queue });
+      if (search) params.set('search', search);
+      if (stateKey) params.set('state_key', stateKey);
+      if (deptId) params.set('assigned_department_id', deptId);
+      if (requestedBy) params.set('created_by', requestedBy);
+      if (sort) params.set('sort', sort);
+      const response = await axios.get(`${API}/design-requests-new/physical-sample-logos.pdf?${params}`, { headers: HEAD(), responseType: 'blob' });
+      const url = URL.createObjectURL(response.data);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `physical-sample-logos-${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Physical sample logo PDF ready');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Logo PDF export failed'); }
     finally { setExporting(false); }
   };
 
@@ -775,16 +813,22 @@ export default function DesignRequestsNew() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <ViewToggle view={view} setView={setView} />
+          <ViewToggle view={view} setView={switchView} />
           {isAdmin && (
             <Button variant="outline" onClick={() => setMigrateOpen(true)} data-testid="open-migration-btn" title="Migrate Marketing Requests into this module">
               <ArrowLeftRight className="mr-2 h-4 w-4" strokeWidth={1.75} />
               <span className="hidden sm:inline">Migrate</span>
             </Button>
           )}
-          <Button variant="outline" onClick={exportCsv} disabled={exporting || data.total === 0} data-testid="mr-export-btn">
+          <Button
+            variant="outline"
+            onClick={view === 'logos' ? exportLogoPdf : exportCsv}
+            disabled={exporting || data.total === 0}
+            data-testid={view === 'logos' ? 'mr-logo-pdf-btn' : 'mr-export-btn'}
+            aria-label={view === 'logos' ? 'Download physical sample logos PDF' : 'Export design requests CSV'}
+          >
             {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" strokeWidth={1.75} />}
-            <span className="hidden sm:inline">Export CSV</span>
+            <span className="hidden sm:inline">{view === 'logos' ? 'Download PDF' : 'Export CSV'}</span>
           </Button>
           <Button onClick={() => navigate('/design-requests-new/new')} className="bg-emerald-700 hover:bg-emerald-800" data-testid="new-marketing-request-btn">
             <Plus className="mr-2 h-4 w-4" strokeWidth={2} /> New Request
@@ -832,6 +876,8 @@ export default function DesignRequestsNew() {
           : <ListSkeleton />
       ) : view === 'kanban' ? (
         <RequestKanbanNew rows={items} states={states} navigate={navigate} />
+      ) : view === 'logos' ? (
+        <PhysicalSampleLogoView rows={items} navigate={navigate} />
       ) : (
         <>
           <RequestTable rows={items} navigate={navigate} sort={sort} onSort={onSort} onSortChange={onSortChange} states={states} />

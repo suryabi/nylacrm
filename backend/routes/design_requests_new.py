@@ -61,6 +61,7 @@ from models.marketing_request import (
 )
 from routes.slack import post_event_message as slack_post_event
 from utils.notify import notify_users
+from services.design_request_logo_sheet import build_physical_sample_logo_pdf, thumbnail_for_file
 import os
 
 logger = logging.getLogger(__name__)
@@ -1003,11 +1004,13 @@ async def set_request_urgent(request_id: str, payload: UrgentUpdate, current_use
         {"id": request_id, "tenant_id": tenant_id}, {"_id": 0}
     )
     return doc
-def _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by, lead_id=None):
+def _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by, lead_id=None, physical_sample_only=False):
     """Shared Mongo query builder for the list + export endpoints."""
     q: dict = {"tenant_id": tenant_id}
     if lead_id:
         q["lead_id"] = lead_id
+    if physical_sample_only:
+        q["request_type_name"] = {"$regex": f"^{re.escape(BOTTLE_SAMPLE_TYPE)}$", "$options": "i"}
     if queue == "my_raised":
         q["created_by"] = current_user.get("id")
     elif queue == "my_assigned":
@@ -1057,13 +1060,18 @@ async def list_requests(
     page: int = 1,
     limit: int = 20,
     no_limit: bool = False,
+    physical_sample_only: bool = False,
     sort: str = "-created_at",
     current_user: dict = Depends(get_current_user),
 ):
     tenant_id = get_current_tenant_id()
     page = max(page, 1)
 
-    q = _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by, lead_id=lead_id)
+    q = _build_requests_query(
+        tenant_id, current_user, queue, search, state_key, request_type_id,
+        assigned_department_id, created_by, lead_id=lead_id,
+        physical_sample_only=physical_sample_only,
+    )
 
     total = await db.design_requests_new.count_documents(q)
     sort_field = sort.lstrip("-+")
@@ -1148,6 +1156,76 @@ async def export_requests(
         content=buf.getvalue(),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/physical-sample-logos/{request_id}/thumbnail")
+async def physical_sample_logo_thumbnail(request_id: str, current_user: dict = Depends(get_current_user)):
+    """Render the original physical-sample logo file as a browser-friendly PNG."""
+    tenant_id = get_current_tenant_id()
+    request_doc = await db.design_requests_new.find_one(
+        {
+            "id": request_id,
+            "tenant_id": tenant_id,
+            "request_type_name": {"$regex": f"^{re.escape(BOTTLE_SAMPLE_TYPE)}$", "$options": "i"},
+        },
+        {"_id": 0, "logo": 1},
+    )
+    if not request_doc:
+        raise HTTPException(404, "Physical sample request not found")
+    logo = request_doc.get("logo") or {}
+    if not logo.get("id"):
+        raise HTTPException(404, "No original logo is attached")
+    file_row = await _get_file(tenant_id, logo["id"])
+    if not file_row:
+        raise HTTPException(404, "Logo file not found")
+    try:
+        png = await thumbnail_for_file(file_row)
+    except Exception as exc:
+        logger.exception("Physical sample logo thumbnail failed for %s", request_id)
+        raise HTTPException(502, f"Logo preview failed: {exc}")
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=300", "Content-Disposition": 'inline; filename="logo-thumbnail.png"'},
+    )
+
+
+@router.get("/physical-sample-logos.pdf")
+async def export_physical_sample_logos_pdf(
+    queue: str = "all",
+    search: Optional[str] = None,
+    state_key: Optional[str] = None,
+    assigned_department_id: Optional[str] = None,
+    created_by: Optional[str] = None,
+    sort: str = "-created_at",
+    current_user: dict = Depends(get_current_user),
+):
+    """Download the filtered physical-sample requests as a printable logo sheet."""
+    tenant_id = get_current_tenant_id()
+    q = _build_requests_query(
+        tenant_id, current_user, queue, search, state_key, None,
+        assigned_department_id, created_by, physical_sample_only=True,
+    )
+    sort_field = sort.lstrip("-+")
+    sort_dir = -1 if sort.startswith("-") else 1
+    rows = await db.design_requests_new.find(q, {"_id": 0}).sort(sort_field, sort_dir).to_list(5000)
+    file_ids = list({(row.get("logo") or {}).get("id") for row in rows if (row.get("logo") or {}).get("id")})
+    file_rows = {}
+    if file_ids:
+        stored = await db.design_requests_new_files.find(
+            {"tenant_id": tenant_id, "id": {"$in": file_ids}}, {"_id": 0}
+        ).to_list(len(file_ids))
+        file_rows = {row["id"]: row for row in stored}
+    pdf = await build_physical_sample_logo_pdf(rows, file_rows)
+    filename = f"physical-sample-logos-{datetime.now(timezone.utc).strftime('%Y%m%d')}.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Logo-Request-Count": str(len(rows)),
+        },
     )
 
 
