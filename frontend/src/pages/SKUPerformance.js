@@ -1,338 +1,147 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { ArrowDown, ArrowUp, Banknote, Boxes, Filter, Loader2, Package, RefreshCw, ShoppingBag, TrendingUp, Users } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
-import { Package, Filter, Loader2, TrendingUp, ShoppingBag, Boxes, Crown, ArrowUpRight, ChevronDown } from 'lucide-react';
-import { useMasterLocations } from '../hooks/useMasterLocations';
 import { SearchCombobox } from '../components/SearchCombobox';
 import { SkuAccountsDialog } from '../components/SkuAccountsDialog';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+const API_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const currency = (value) => `₹${Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+const quantity = (value) => Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 1 });
 
-const TIME_FILTERS = [
-  { value: 'this_week', label: 'This Week' },
-  { value: 'last_week', label: 'Last Week' },
-  { value: 'this_month', label: 'This Month' },
-  { value: 'last_month', label: 'Last Month' },
-  { value: 'this_quarter', label: 'This Quarter' },
-  { value: 'last_quarter', label: 'Last Quarter' },
-  { value: 'last_3_months', label: 'Last 3 Months' },
-  { value: 'last_6_months', label: 'Last 6 Months' },
-  { value: 'this_year', label: 'This Year' },
-  { value: 'last_year', label: 'Last Year' },
-  { value: 'lifetime', label: 'Lifetime' }
-];
+const MetricTile = ({ id, label, value, sub, Icon, tone = 'slate', delay = 0 }) => {
+  const tones = {
+    emerald: 'border-emerald-200/70 bg-emerald-50/70 text-emerald-700',
+    blue: 'border-blue-200/70 bg-blue-50/70 text-blue-700',
+    amber: 'border-amber-200/70 bg-amber-50/70 text-amber-700',
+    violet: 'border-violet-200/70 bg-violet-50/70 text-violet-700',
+    rose: 'border-rose-200/70 bg-rose-50/70 text-rose-700',
+    slate: 'border-slate-200/80 bg-slate-50/80 text-slate-700',
+  };
+  return (
+    <div className={`sku-rise rounded-xl border p-4 ${tones[tone]}`} style={{ animationDelay: `${delay}ms` }} data-testid={id}>
+      <div className="flex items-center gap-2"><Icon className="h-4 w-4" /><span className="text-[10px] font-semibold uppercase tracking-wider">{label}</span></div>
+      <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900" data-testid={`${id}-value`}>{value}</p>
+      <p className="mt-0.5 truncate text-[11px] text-slate-500" title={sub}>{sub}</p>
+    </div>
+  );
+};
 
-function formatCurrency(value) {
-  if (!value) return '₹0';
-  const num = Math.round(value);
-  if (num >= 10000000) return '₹' + (num / 10000000).toFixed(2) + ' Cr';
-  if (num >= 100000) return '₹' + (num / 100000).toFixed(2) + ' L';
-  return '₹' + num.toLocaleString('en-IN');
-}
+const MonthValue = ({ month, sku, rowIndex }) => (
+  <td className="min-w-[112px] px-3 py-3 text-right" data-testid={`sku-month-${rowIndex}-${month.key}`}>
+    <p className="font-semibold tabular-nums text-slate-800">{Number(month.units || 0).toLocaleString('en-IN')}</p>
+    <p className="mt-0.5 text-[11px] tabular-nums text-emerald-700">{currency(month.revenue)}</p>
+    <span className="sr-only">{sku} {month.label}</span>
+  </td>
+);
 
 export default function SKUPerformance() {
-  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState({ skus: [], summary: {} });
+  const [data, setData] = useState({ months: [], skus: [], summary: {}, filters: { distributors: [], accounts: [] } });
   const [salesTeam, setSalesTeam] = useState([]);
-  
-  const [timeFilter, setTimeFilter] = useState('this_week');
-  const [territoryFilter, setTerritoryFilter] = useState('all');
-  const [stateFilter, setStateFilter] = useState('all');
-  const [cityFilter, setCityFilter] = useState('all');
+  const [distributor, setDistributor] = useState('all');
+  const [defaulted, setDefaulted] = useState(false);
   const [salesResource, setSalesResource] = useState('all');
   const [skuFilter, setSkuFilter] = useState('all');
-  const [skuOptions, setSkuOptions] = useState([]);
   const [accountFilter, setAccountFilter] = useState('all');
-  const [accounts, setAccounts] = useState([]);
   const [accountsSku, setAccountsSku] = useState(null);
 
-  const { territories: masterTerritories, states: masterStates, cities: masterCities } = useMasterLocations();
-
-  useEffect(() => { fetchSalesTeam(); fetchAccounts(); }, []);
-  useEffect(() => { fetchData(); }, [timeFilter, territoryFilter, stateFilter, cityFilter, salesResource, skuFilter, accountFilter]);
-
-  const fetchAccounts = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/brand-groups/accounts`, { withCredentials: true });
-      setAccounts((res.data.accounts || []).map((a) => ({ id: a.id, name: a.account_name, sub: [a.account_id, a.city].filter(Boolean).join(' · ') })));
-    } catch (error) { console.error('Failed to load accounts'); }
-  };
-
-  const fetchSalesTeam = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/users`, { withCredentials: true });
-      setSalesTeam(response.data.filter(u => ['Head of Business', 'Regional Sales Manager', 'National Sales Head', 'Partner - Sales'].includes(u.role) && u.is_active));
-    } catch (error) { console.error('Failed to load team'); }
-  };
+  useEffect(() => {
+    axios.get(`${API_URL}/users`, { withCredentials: true }).then((response) => {
+      setSalesTeam(response.data.filter((user) => ['Head of Business', 'Regional Sales Manager', 'National Sales Head', 'Partner - Sales'].includes(user.role) && user.is_active));
+    }).catch(() => {});
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      params.append('time_filter', timeFilter);
-      if (territoryFilter !== 'all') params.append('territory', territoryFilter);
-      if (stateFilter !== 'all') params.append('state', stateFilter);
-      if (cityFilter !== 'all') params.append('city', cityFilter);
-      if (salesResource !== 'all') params.append('resource_id', salesResource);
-      if (skuFilter !== 'all') params.append('sku', skuFilter);
-      if (accountFilter !== 'all') params.append('account_id', accountFilter);
-      
-      const res = await axios.get(`${API_URL}/reports/sku-performance?${params}`, { withCredentials: true });
-      setData(res.data);
-      if (res.data?.sku_options?.length) setSkuOptions(res.data.sku_options);
+      if (distributor !== 'all') params.set('distributor_id', distributor);
+      if (salesResource !== 'all') params.set('resource_id', salesResource);
+      if (skuFilter !== 'all') params.set('sku', skuFilter);
+      if (accountFilter !== 'all') params.set('account_id', accountFilter);
+      const response = await axios.get(`${API_URL}/reports/sku-performance-six-month?${params}`, { withCredentials: true });
+      setData(response.data);
+      if (!defaulted) {
+        setDefaulted(true);
+        if (response.data.default_distributor_id) setDistributor(response.data.default_distributor_id);
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to load SKU performance');
-      setData({ skus: [], summary: {} });
+      setData({ months: [], skus: [], summary: {}, filters: { distributors: [], accounts: [] } });
     } finally { setLoading(false); }
   };
+  useEffect(() => { fetchData(); }, [distributor, salesResource, skuFilter, accountFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleResetFilters = () => {
-    setTimeFilter('this_month');
-    setTerritoryFilter('all');
-    setStateFilter('all');
-    setCityFilter('all');
-    setSalesResource('all');
-    setSkuFilter('all');
-    setAccountFilter('all');
+  const resetFilters = () => {
+    setDistributor('all'); setSalesResource('all'); setSkuFilter('all'); setAccountFilter('all');
   };
-
-  // Territory → State → City are independent: each list narrows to the parents chosen (if any), never blocks.
-  const canSeeAll = user?.territory === 'All India' || ['CEO', 'Director', 'Vice President', 'System Admin'].includes(user?.role);
-  const territoryOpts = (canSeeAll ? masterTerritories : masterTerritories.filter((t) => t.name === user?.territory)).map((t) => ({ id: t.name, name: t.name }));
-  const territoryIds = new Set(masterTerritories.filter((t) => territoryFilter === 'all' ? territoryOpts.some((o) => o.id === t.name) : t.name === territoryFilter).map((t) => t.id));
-  const visibleStates = masterStates.filter((s) => territoryIds.has(s.territory_id));
-  const stateOpts = visibleStates.map((s) => ({ id: s.name, name: s.name, sub: masterTerritories.find((t) => t.id === s.territory_id)?.name }));
-  const stateIds = new Set(visibleStates.filter((s) => stateFilter === 'all' || s.name === stateFilter).map((s) => s.id));
-  const cityOpts = masterCities.filter((c) => stateIds.has(c.state_id)).map((c) => ({ id: c.name, name: c.name, sub: masterStates.find((s) => s.id === c.state_id)?.name }));
-  const onTerritory = (v) => { setTerritoryFilter(v); if (v !== 'all' && stateFilter !== 'all' && !masterStates.some((s) => s.name === stateFilter && masterTerritories.find((t) => t.id === s.territory_id)?.name === v)) { setStateFilter('all'); setCityFilter('all'); } };
-  const onState = (v) => {
-    setStateFilter(v);
-    if (v !== 'all') {
-      const st = masterStates.find((s) => s.name === v);
-      const terr = masterTerritories.find((t) => t.id === st?.territory_id);
-      if (terr && territoryFilter !== terr.name) setTerritoryFilter(terr.name);
-      if (cityFilter !== 'all' && !masterCities.some((c) => c.name === cityFilter && c.state_id === st?.id)) setCityFilter('all');
-    }
-  };
-  const onCity = (v) => {
-    setCityFilter(v);
-    if (v !== 'all') {
-      const ct = masterCities.find((c) => c.name === v);
-      const st = masterStates.find((s) => s.id === ct?.state_id);
-      const terr = masterTerritories.find((t) => t.id === st?.territory_id);
-      if (st && stateFilter !== st.name) setStateFilter(st.name);
-      if (terr && territoryFilter !== terr.name) setTerritoryFilter(terr.name);
-    }
-  };
-
-  const skusSorted = [...(data.skus || [])].sort((a, b) => (b.achieved_revenue || 0) - (a.achieved_revenue || 0));
-  const totalAchieved = data.summary?.total_achieved || skusSorted.reduce((s, r) => s + (r.achieved_revenue || 0), 0);
-  const totalUnits = data.summary?.total_units || skusSorted.reduce((s, r) => s + (r.units_sold || 0), 0);
-  const maxAchieved = Math.max(1, ...skusSorted.map(r => r.achieved_revenue || 0));
-  const topSku = skusSorted[0];
-
-  const variantOf = (name = '') => {
-    const n = name.toLowerCase();
-    if (n.includes('gold')) return { label: 'Gold', dot: 'bg-amber-400', chip: 'bg-amber-50 text-amber-700 border-amber-200/70 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/50', bar: 'from-amber-400 to-orange-500', ring: 'ring-amber-200 dark:ring-amber-900/50' };
-    if (n.includes('silver')) return { label: 'Silver', dot: 'bg-slate-400', chip: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700', bar: 'from-slate-400 to-slate-500', ring: 'ring-slate-200 dark:ring-slate-700' };
-    if (n.includes('sparkling')) return { label: 'Sparkling', dot: 'bg-sky-400', chip: 'bg-sky-50 text-sky-700 border-sky-200/70 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800/50', bar: 'from-sky-400 to-cyan-500', ring: 'ring-sky-200 dark:ring-sky-900/50' };
-    return { label: null, dot: 'bg-violet-400', chip: 'bg-violet-50 text-violet-700 border-violet-200/70 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800/50', bar: 'from-violet-500 to-fuchsia-500', ring: 'ring-violet-200 dark:ring-violet-900/50' };
-  };
-  const rankStyle = (idx) => [
-    'bg-gradient-to-br from-amber-300 to-amber-500 text-white shadow-amber-500/30',
-    'bg-gradient-to-br from-slate-300 to-slate-400 text-white shadow-slate-400/30',
-    'bg-gradient-to-br from-orange-300 to-orange-500 text-white shadow-orange-500/30',
-  ][idx] || 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400';
-
-  const filterSelectCls = "w-full appearance-none pl-3.5 pr-9 py-2.5 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800/80 text-sm font-medium text-slate-700 dark:text-slate-200 shadow-sm hover:border-violet-300 dark:hover:border-violet-700 focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+  const rows = useMemo(() => [...(data.skus || [])].sort((a, b) => (b.achieved_revenue || 0) - (a.achieved_revenue || 0)), [data.skus]);
+  const summary = data.summary || {};
+  const topRevenue = Math.max(1, ...rows.map((row) => row.achieved_revenue || 0));
+  const momUnits = summary.mom_units_change || 0;
+  const momRevenue = summary.mom_revenue_change || 0;
+  const MoMIcon = momUnits >= 0 ? ArrowUp : ArrowDown;
+  const defaultName = data.filters?.distributors?.find((item) => item.id === data.default_distributor_id)?.name;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-violet-50/40 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="sku-performance-dashboard">
-      <style>{`
-        @keyframes skuRise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes barGrow { from { width: 0; } }
-        .sku-rise { animation: skuRise .5s cubic-bezier(.16,1,.3,1) both; }
-        .bar-grow { animation: barGrow .9s cubic-bezier(.16,1,.3,1) both; }
-      `}</style>
-      <div className="absolute inset-0 bg-[radial-gradient(#c4b5fd_1px,transparent_1px)] [background-size:22px_22px] opacity-[0.15] dark:opacity-[0.06] pointer-events-none" />
-
-      <div className="relative p-6 lg:p-8 max-w-[1600px] mx-auto">
-        {/* Header */}
-        <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="relative p-3 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-lg shadow-violet-500/30">
-              <Package className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl lg:text-4xl font-bold tracking-tight text-slate-900 dark:text-white">SKU Performance</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">Track revenue &amp; volume contribution by product SKU</p>
-            </div>
+    <div className="min-h-screen min-w-0 w-full overflow-x-hidden bg-gradient-to-br from-slate-50 via-white to-blue-50/40" data-testid="sku-performance-dashboard">
+      <style>{`@keyframes skuRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }.sku-rise { animation: skuRise .45s cubic-bezier(.16,1,.3,1) both; }`}</style>
+      <div className="mx-auto min-w-0 w-full max-w-[1800px] space-y-6 p-4 sm:p-6 lg:p-8">
+        <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#002FA7] text-white shadow-sm"><Package className="h-5 w-5" /></div>
+            <div><h1 className="text-3xl font-bold text-slate-900">SKU Performance</h1><p className="mt-0.5 text-sm text-slate-500" data-testid="sku-period-label">Six-month bottles and revenue by SKU · {data.period_label || 'rolling six months'}</p></div>
           </div>
-          <div className="hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/70 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-700/60 backdrop-blur-sm">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-300">{TIME_FILTERS.find(t => t.value === timeFilter)?.label || 'Live'}</span>
-          </div>
+          <Button variant="outline" size="sm" onClick={fetchData} disabled={loading} data-testid="sku-refresh-button" aria-label="Refresh SKU performance"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></Button>
         </header>
 
-        {/* Filters */}
-        <div className="mb-6 rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl shadow-sm p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Filter className="h-4 w-4 text-violet-500" />
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Filters</span>
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" data-testid="sku-filters">
+          <div className="mb-3 flex items-center gap-2"><Filter className="h-4 w-4 text-[#002FA7]" /><h2 className="text-sm font-semibold text-slate-700">Filters</h2></div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="space-y-1.5"><label className="text-[11px] font-semibold uppercase text-slate-500">Distributor</label><SearchCombobox options={data.filters?.distributors || []} value={distributor} onChange={(value) => { setDistributor(value); setAccountFilter('all'); }} placeholder="All distributors" allLabel="All distributors" testId="distributor-filter" /></div>
+            <div className="space-y-1.5"><label className="text-[11px] font-semibold uppercase text-slate-500">Account</label><SearchCombobox options={data.filters?.accounts || []} value={accountFilter} onChange={setAccountFilter} placeholder="All accounts" allLabel="All accounts" testId="account-filter" /></div>
+            <div className="space-y-1.5"><label className="text-[11px] font-semibold uppercase text-slate-500">Sales resource</label><SearchCombobox options={salesTeam.map((member) => ({ id: member.id, name: member.name, sub: member.role }))} value={salesResource} onChange={(value) => { setSalesResource(value); setAccountFilter('all'); }} placeholder="All resources" allLabel="All resources" testId="resource-filter" /></div>
+            <div className="space-y-1.5"><label className="text-[11px] font-semibold uppercase text-slate-500">SKU</label><SearchCombobox options={(data.sku_options || []).map((name) => ({ id: name, name }))} value={skuFilter} onChange={setSkuFilter} placeholder="All SKUs" allLabel="All SKUs" testId="sku-filter" /></div>
+            <div className="flex items-end"><Button variant="outline" onClick={resetFilters} className="h-[42px] w-full rounded-xl" data-testid="reset-filters-btn">Reset filters</Button></div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-            {[
-              { label: 'Time Period', el: (
-                <select value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)} className={filterSelectCls} data-testid="time-filter">
-                  {TIME_FILTERS.map(tf => <option key={tf.value} value={tf.value}>{tf.label}</option>)}
-                </select>) },
-              { label: 'Territory', el: <SearchCombobox options={territoryOpts} value={territoryFilter} onChange={onTerritory} placeholder="All Territories" allLabel="All Territories" testId="territory-filter" /> },
-              { label: 'State', el: <SearchCombobox options={stateOpts} value={stateFilter} onChange={onState} placeholder="All States" allLabel="All States" testId="state-filter" /> },
-              { label: 'City', el: <SearchCombobox options={cityOpts} value={cityFilter} onChange={onCity} placeholder="All Cities" allLabel="All Cities" testId="city-filter" /> },
-              { label: 'Account', el: <SearchCombobox options={accounts} value={accountFilter} onChange={setAccountFilter} placeholder="All Accounts" allLabel="All Accounts" testId="account-filter" /> },
-              { label: 'Sales Resource', el: <SearchCombobox options={salesTeam.map((m) => ({ id: m.id, name: m.name, sub: m.role }))} value={salesResource} onChange={setSalesResource} placeholder="All Resources" allLabel="All Resources" testId="resource-filter" /> },
-              { label: 'SKU', el: <SearchCombobox options={skuOptions.map((s) => ({ id: s, name: s }))} value={skuFilter} onChange={setSkuFilter} placeholder="All SKUs" allLabel="All SKUs" testId="sku-filter" /> },
-            ].map((f) => (
-              <div key={f.label} className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{f.label}</label>
-                <div className="relative">
-                  {f.el}
-                  {f.label === 'Time Period' && <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />}
-                </div>
-              </div>
-            ))}
-            <div className="flex items-end">
-              <Button variant="outline" onClick={handleResetFilters} className="w-full h-[42px] rounded-xl border-slate-200 dark:border-slate-700 hover:bg-violet-50 hover:text-violet-700 hover:border-violet-200 dark:hover:bg-violet-900/30 transition-colors" data-testid="reset-filters-btn">Reset</Button>
-            </div>
-          </div>
-        </div>
+          {defaultName && distributor === data.default_distributor_id && <p className="mt-2 text-[11px] text-[#002FA7]" data-testid="sku-default-distributor">Defaulted to {defaultName} for your city</p>}
+        </section>
 
-        {/* Summary Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="sku-rise relative overflow-hidden rounded-2xl border border-emerald-200/60 dark:border-emerald-900/40 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-950/40 dark:to-slate-900 p-5" data-testid="stat-total-achieved">
-            <div className="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-emerald-400/20 blur-2xl" />
-            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400"><div className="h-9 w-9 rounded-xl bg-emerald-500/15 flex items-center justify-center"><TrendingUp className="h-4.5 w-4.5" /></div><span className="text-[11px] font-semibold uppercase tracking-wider">Total Achieved</span></div>
-            <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">{formatCurrency(totalAchieved)}</p>
-            <p className="text-xs text-muted-foreground mt-1">across {skusSorted.length} {skusSorted.length === 1 ? 'SKU' : 'SKUs'}</p>
-          </div>
+        <section className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6" data-testid="sku-metric-tiles">
+          <MetricTile id="stat-six-month-bottles" label="6M Bottles" value={quantity(summary.total_units)} sub="invoice line units" Icon={ShoppingBag} tone="blue" />
+          <MetricTile id="stat-six-month-crates" label="6M Crates" value={quantity(summary.total_crates)} sub="from line packaging" Icon={Boxes} tone="amber" delay={40} />
+          <MetricTile id="stat-six-month-revenue" label="6M Revenue" value={currency(summary.total_revenue)} sub="SKU line revenue" Icon={Banknote} tone="emerald" delay={80} />
+          <MetricTile id="stat-active-skus" label="Active SKUs" value={summary.active_skus || 0} sub="sold in this period" Icon={Package} tone="violet" delay={120} />
+          <MetricTile id="stat-six-month-accounts" label="Accounts" value={summary.total_accounts || 0} sub="distinct invoiced accounts" Icon={Users} tone="slate" delay={160} />
+          <MetricTile id="stat-mom-change" label="MoM Bottles" value={`${momUnits > 0 ? '+' : momUnits < 0 ? '−' : ''}${quantity(Math.abs(momUnits))}`} sub={`${momRevenue > 0 ? '+' : momRevenue < 0 ? '−' : ''}${currency(Math.abs(momRevenue))} revenue`} Icon={MoMIcon} tone={momUnits >= 0 ? 'emerald' : 'rose'} delay={200} />
+        </section>
 
-          <div className="sku-rise relative overflow-hidden rounded-2xl border border-indigo-200/60 dark:border-indigo-900/40 bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-950/40 dark:to-slate-900 p-5" style={{ animationDelay: '60ms' }} data-testid="stat-units-sold">
-            <div className="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-indigo-400/20 blur-2xl" />
-            <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400"><div className="h-9 w-9 rounded-xl bg-indigo-500/15 flex items-center justify-center"><ShoppingBag className="h-4.5 w-4.5" /></div><span className="text-[11px] font-semibold uppercase tracking-wider">Units Sold</span></div>
-            <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">{totalUnits.toLocaleString('en-IN')}</p>
-            <p className="text-xs text-muted-foreground mt-1">total volume in period</p>
-          </div>
-
-          <div className="sku-rise relative overflow-hidden rounded-2xl border border-violet-200/60 dark:border-violet-900/40 bg-gradient-to-br from-violet-50 to-white dark:from-violet-950/40 dark:to-slate-900 p-5" style={{ animationDelay: '120ms' }} data-testid="stat-sku-count">
-            <div className="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-violet-400/20 blur-2xl" />
-            <div className="flex items-center gap-2 text-violet-700 dark:text-violet-400"><div className="h-9 w-9 rounded-xl bg-violet-500/15 flex items-center justify-center"><Boxes className="h-4.5 w-4.5" /></div><span className="text-[11px] font-semibold uppercase tracking-wider">Active SKUs</span></div>
-            <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">{skusSorted.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">contributing to revenue</p>
-          </div>
-
-          <div className="sku-rise relative overflow-hidden rounded-2xl border border-amber-200/60 dark:border-amber-900/40 bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/40 dark:to-slate-900 p-5" style={{ animationDelay: '180ms' }} data-testid="stat-top-sku">
-            <div className="absolute -top-6 -right-6 h-24 w-24 rounded-full bg-amber-400/20 blur-2xl" />
-            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400"><div className="h-9 w-9 rounded-xl bg-amber-500/15 flex items-center justify-center"><Crown className="h-4.5 w-4.5" /></div><span className="text-[11px] font-semibold uppercase tracking-wider">Top SKU</span></div>
-            <p className="mt-3 text-lg font-bold tracking-tight text-slate-900 dark:text-white truncate" title={topSku?.sku}>{topSku?.sku || '—'}</p>
-            <p className="text-xs text-muted-foreground mt-1">{topSku ? `${formatCurrency(topSku.achieved_revenue)} · ${totalAchieved > 0 ? Math.round((topSku.achieved_revenue / totalAchieved) * 100) : 0}% of revenue` : 'No data'}</p>
-          </div>
-        </div>
-
-        {/* SKU Leaderboard */}
-        <div className="rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-white/80 dark:bg-slate-900/70 backdrop-blur-xl shadow-lg shadow-slate-200/40 dark:shadow-slate-950/40 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-            <h2 className="text-base font-semibold text-slate-800 dark:text-white">SKU Leaderboard</h2>
-            <span className="text-xs text-muted-foreground">Ranked by revenue contribution</span>
-          </div>
-
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-20">
-              <div className="relative"><div className="absolute inset-0 rounded-full bg-violet-500/20 animate-ping" /><Loader2 className="h-10 w-10 animate-spin text-violet-500 relative z-10" /></div>
-              <p className="text-muted-foreground text-sm mt-4 animate-pulse">Loading SKU performance…</p>
-            </div>
-          ) : skusSorted.length === 0 ? (
-            <div className="text-center py-20">
-              <div className="h-16 w-16 mx-auto mb-4 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center"><Package className="h-8 w-8 text-slate-300 dark:text-slate-600" /></div>
-              <p className="text-lg font-medium text-slate-600 dark:text-slate-400">No SKU data found</p>
-              <p className="text-muted-foreground text-sm">Try adjusting your filters</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {skusSorted.map((row, idx) => {
-                const v = variantOf(row.sku);
-                const share = totalAchieved > 0 ? (row.achieved_revenue / totalAchieved) * 100 : 0;
-                const barPct = maxAchieved > 0 ? (row.achieved_revenue / maxAchieved) * 100 : 0;
-                return (
-                  <div
-                    key={idx}
-                    className="sku-rise group px-5 py-4 hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
-                    style={{ animationDelay: `${Math.min(idx * 45, 400)}ms` }}
-                    data-testid={`sku-row-${idx}`}
-                  >
-                    <div className="flex items-center gap-4">
-                      {/* Rank */}
-                      <div className={`shrink-0 h-9 w-9 rounded-xl flex items-center justify-center text-sm font-bold shadow-md ${rankStyle(idx)}`}>
-                        {idx < 3 ? <Crown className="h-4 w-4" /> : idx + 1}
-                      </div>
-
-                      {/* Name + variant + progress */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-slate-800 dark:text-white truncate">{row.sku}</span>
-                          {v.label && (
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${v.chip}`}>
-                              <span className={`h-1.5 w-1.5 rounded-full ${v.dot}`} />{v.label}
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-2 flex items-center gap-3">
-                          <div className="relative h-2 flex-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                            <div className={`bar-grow absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${v.bar}`} style={{ width: `${barPct}%` }} />
-                          </div>
-                          <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 tabular-nums w-12 text-right">{share.toFixed(1)}%</span>
-                        </div>
-                      </div>
-
-                      {/* Metrics */}
-                      <div className="hidden md:flex items-center gap-6 shrink-0">
-                        <div className="text-right w-24">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Achieved</p>
-                          <p className="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{formatCurrency(row.achieved_revenue)}</p>
-                        </div>
-                        <div className="text-right w-20">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Units</p>
-                          <p className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{(row.units_sold || 0).toLocaleString('en-IN')}</p>
-                        </div>
-                        <div className="text-right w-24">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Accounts</p>
-                          <button type="button" onClick={(e) => { e.stopPropagation(); setAccountsSku(row); }}
-                            className="font-semibold tabular-nums text-violet-700 underline decoration-dotted underline-offset-4 hover:text-violet-900 dark:text-violet-300 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
-                            title="Show accounts and volume for this SKU" data-testid={`sku-accounts-btn-${idx}`}>{row.accounts_count ?? row.leads_count ?? 0}</button>
-                        </div>
-                      </div>
-
-                      <ArrowUpRight className="h-4 w-4 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 group-hover:text-violet-500 transition-all shrink-0" />
-                    </div>
-
-                    {/* Mobile metrics */}
-                    <div className="md:hidden mt-3 grid grid-cols-3 gap-2 pl-13">
-                      <div><p className="text-[10px] uppercase text-muted-foreground">Achieved</p><p className="font-bold text-emerald-600 dark:text-emerald-400 text-sm tabular-nums">{formatCurrency(row.achieved_revenue)}</p></div>
-                      <div><p className="text-[10px] uppercase text-muted-foreground">Units</p><p className="font-semibold text-slate-700 dark:text-slate-200 text-sm tabular-nums">{(row.units_sold || 0).toLocaleString('en-IN')}</p></div>
-                      <div><p className="text-[10px] uppercase text-muted-foreground">Accounts</p><button type="button" onClick={(e) => { e.stopPropagation(); setAccountsSku(row); }} className="font-semibold text-sm tabular-nums text-violet-700 underline decoration-dotted underline-offset-4" data-testid={`sku-accounts-btn-mobile-${idx}`}>{row.accounts_count ?? row.leads_count ?? 0}</button></div>
-                    </div>
-                  </div>
-                );
-              })}
+        <section className="min-w-0 max-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3"><h2 className="text-base font-semibold text-slate-800">SKU six-month performance</h2><span className="text-xs text-slate-500">Bottles · revenue below</span></div>
+          {loading ? <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-[#002FA7]" /></div> : rows.length === 0 ? <div className="py-20 text-center text-sm text-slate-500" data-testid="sku-empty-state">No SKU data matches the filters.</div> : (
+            <div className="min-w-0 max-w-full w-full overflow-x-auto overscroll-x-contain" style={{ contain: 'layout paint' }} data-testid="sku-table-scroll">
+              <table className="min-w-[1250px] w-full border-collapse text-sm" data-testid="sku-six-month-table">
+                <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr>
+                  <th className="sticky left-0 z-20 min-w-[260px] border-r border-slate-200 bg-slate-50 px-4 py-3 text-left">SKU</th>
+                  {data.months.map((month) => <th key={month.key} className={`min-w-[112px] px-3 py-3 text-right ${month.current ? 'text-[#002FA7]' : ''}`} data-testid={`sku-month-header-${month.key}`}>{month.label}{month.current && <span className="ml-1 normal-case">current</span>}</th>)}
+                  <th className="min-w-[130px] bg-slate-100 px-3 py-3 text-right">6M total</th><th className="min-w-[88px] px-4 py-3 text-right">Accounts</th>
+                </tr></thead>
+                <tbody>{rows.map((row, index) => {
+                  const share = summary.total_revenue > 0 ? row.achieved_revenue / summary.total_revenue * 100 : 0;
+                  return <tr key={row.sku} className="border-t border-slate-100 hover:bg-blue-50/30" data-testid={`sku-row-${index}`}>
+                    <td className="sticky left-0 z-10 border-r border-slate-200 bg-white px-4 py-3"><div className="flex items-center gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-100 text-xs font-bold text-slate-500">{index + 1}</span><div className="min-w-0 flex-1"><p className="truncate font-semibold text-slate-800" title={row.sku}>{row.sku}</p><div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-[#002FA7]" style={{ width: `${Math.max(0, Math.min(100, row.achieved_revenue / topRevenue * 100))}%` }} /></div><p className="mt-1 text-[10px] text-slate-400">{share.toFixed(1)}% of revenue</p></div></div></td>
+                    {row.months.map((month) => <MonthValue key={month.key} month={month} sku={row.sku} rowIndex={index} />)}
+                    <td className="bg-slate-50/70 px-3 py-3 text-right" data-testid={`sku-total-${index}`}><p className="font-bold tabular-nums text-slate-900">{quantity(row.units_sold)}</p><p className="mt-0.5 text-[11px] tabular-nums text-emerald-700">{currency(row.achieved_revenue)}</p><p className="mt-0.5 text-[10px] text-slate-400">{quantity(row.crates_sold)} crates</p></td>
+                    <td className="px-4 py-3 text-right"><button type="button" onClick={() => setAccountsSku(row)} className="font-semibold text-[#002FA7] underline decoration-dotted underline-offset-4" title="Show six-month account totals" data-testid={`sku-accounts-btn-${index}`}>{row.accounts_count || 0}</button></td>
+                  </tr>;
+                })}</tbody>
+              </table>
             </div>
           )}
-        </div>
+        </section>
       </div>
-
-      <SkuAccountsDialog open={!!accountsSku} onClose={() => setAccountsSku(null)} sku={accountsSku?.sku}
-        accounts={accountsSku?.accounts || []} periodLabel={TIME_FILTERS.find(t => t.value === timeFilter)?.label} />
+      <SkuAccountsDialog open={Boolean(accountsSku)} onClose={() => setAccountsSku(null)} sku={accountsSku?.sku} accounts={accountsSku?.accounts || []} periodLabel={data.period_label || 'Last 6 months'} />
     </div>
   );
 }

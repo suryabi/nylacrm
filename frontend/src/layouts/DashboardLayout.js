@@ -863,8 +863,8 @@ export default function DashboardLayout({ children }) {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 lg:p-6 overflow-auto bg-background">
-          <div className="max-w-[1600px] mx-auto">
+        <main className="flex-1 min-w-0 max-w-full p-4 lg:p-6 overflow-auto bg-background">
+          <div className="min-w-0 w-full max-w-[1600px] mx-auto">
             {children}
           </div>
         </main>

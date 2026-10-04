@@ -463,6 +463,25 @@ async def get_sku_performance(
         }
     }
 
+
+@router.get("/reports/sku-performance-six-month")
+async def get_sku_performance_six_month(
+    distributor_id: Optional[str] = None,
+    resource_id: Optional[str] = None,
+    sku: Optional[str] = None,
+    account_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Rolling six calendar months with bottles + revenue per SKU/month."""
+    from services.sku_performance_six_month import build_sku_performance_six_month
+    return await build_sku_performance_six_month(
+        current_user=current_user,
+        distributor_id=distributor_id,
+        resource_id=resource_id,
+        sku=sku,
+        account_id=account_id,
+    )
+
 @router.get("/reports/resource-performance")
 async def get_resource_performance(
     time_filter: str = 'this_month',
