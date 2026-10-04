@@ -350,7 +350,7 @@ export default function Login() {
                         Select Organization (Testing Mode)
                       </Label>
                       <Select value={selectedTenant} onValueChange={handleTenantChange}>
-                        <SelectTrigger className="bg-white">
+                        <SelectTrigger className="bg-white" data-testid="login-tenant-select">
                           <SelectValue placeholder="Select organization" />
                         </SelectTrigger>
                         <SelectContent>
@@ -373,6 +373,7 @@ export default function Login() {
                       placeholder="you@company.com"
                       required
                       className="h-12 rounded-xl bg-white border-[#D2D2D7] text-base"
+                      data-testid="login-email-input"
                     />
                   </div>
                   <div>
@@ -404,12 +405,13 @@ export default function Login() {
                       id="remember-me" 
                       checked={rememberMe}
                       onCheckedChange={setRememberMe}
+                      data-testid="login-remember-me-checkbox"
                     />
                     <Label htmlFor="remember-me" className="text-sm font-normal cursor-pointer">
                       Remember me
                     </Label>
                   </div>
-                  <Button type="submit" disabled={loading} className="w-full h-12 rounded-full bg-[#1D1D1F] hover:bg-black text-white text-sm font-medium">
+                  <Button type="submit" disabled={loading} className="w-full h-12 rounded-full bg-[#1D1D1F] hover:bg-black text-white text-sm font-medium" data-testid="login-submit-button">
                     {loading ? 'Signing in...' : 'Sign In'}
                   </Button>
                   {authConfig.face_id_enabled !== false && authConfig.face_id_available && (
