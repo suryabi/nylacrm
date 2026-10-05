@@ -464,6 +464,11 @@ export default function Login() {
           ) : (
             <RegisterForm onBack={() => setShowRegister(false)} />
           )}
+          <footer className="border-t border-black/10 pt-5 text-center text-xs text-[#86868B]" data-testid="login-public-footer">
+            <Link to="/environmental-sustainability-policy" className="transition-colors hover:text-[#1D1D1F]" data-testid="login-environmental-policy-link">
+              Environmental Sustainability Policy
+            </Link>
+          </footer>
         </motion.div>
       </div>
     </div>

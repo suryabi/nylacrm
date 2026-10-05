@@ -16,6 +16,7 @@ import PaymentSuccess from './pages/PaymentSuccess';
 import PaymentCancel from './pages/PaymentCancel';
 import AuthCallback from './components/AuthCallback';
 import GoogleAuthCallback from './pages/GoogleAuthCallback';
+const EnvironmentalSustainabilityPolicy = lazy(() => import('./pages/EnvironmentalSustainabilityPolicy'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const HomeDashboard = lazy(() => import('./pages/HomeDashboard'));
 const DistributorHome = lazy(() => import('./pages/DistributorHome'));
@@ -392,6 +393,7 @@ function AppRouter() {
       <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/environmental-sustainability-policy" element={<EnvironmentalSustainabilityPolicy />} />
           <Route path="/maintenance-scan/:token" element={<MaintenanceScan />} />
           <Route path="/equipment-scan/:equipmentId" element={<EquipmentScan />} />
           <Route path="/area-scan/:areaId" element={<AreaScan />} />

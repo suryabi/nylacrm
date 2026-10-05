@@ -214,6 +214,9 @@ export default function Landing() {
             <span>© {new Date().getFullYear()} Nyla Air Water. All rights reserved.</span>
             <div className="flex items-center gap-6">
               <span>Where Nature Meets Purity</span>
+              <Link to="/environmental-sustainability-policy" className="hover:text-[#1D1D1F] transition-colors" data-testid="footer-environmental-policy">
+                Environmental Sustainability Policy
+              </Link>
               <Link to="/login" className="inline-flex items-center gap-1.5 hover:text-[#1D1D1F] transition-colors" data-testid="footer-team-login">
                 <Lock className="w-3.5 h-3.5" /> Team Login
               </Link>
