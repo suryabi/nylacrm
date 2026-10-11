@@ -18,5 +18,6 @@ export default function CustomerInvoiceOverview() {
     mode: 'invoice',
     customerHeader: 'Customer',
     searchPlaceholder: 'Search customer, code, city',
+    supportsPayments: true,
   }} />;
 }
