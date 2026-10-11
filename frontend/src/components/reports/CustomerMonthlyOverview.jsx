@@ -12,8 +12,8 @@ const API_URL = process.env.REACT_APP_BACKEND_URL;
 const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 const number = (value) => Number(value || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 const STICKY = 'sticky left-0 border-r border-slate-200/80 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]';
-const MIN_W = { customer: 190, month: 84, delta: 110 };
-const SHARES = { customer: 0.3, month: 0.1, delta: 0.1 };
+const MIN_W = { customer: 190, metric: 108, month: 84, delta: 110 };
+const SHARES = { customer: 0.3, metric: 0.12, month: 0.1, delta: 0.1 };
 
 const ResizeHandle = ({ onStart, testId }) => (
   <span role="separator" aria-orientation="vertical" data-testid={testId} onMouseDown={onStart} onTouchStart={onStart}
@@ -42,6 +42,27 @@ const DeltaCell = ({ value, testId, format }) => (
     {value > 0 ? `+${format(value)}` : value < 0 ? `−${format(Math.abs(value))}` : '0'}
   </td>
 );
+
+const CustomerGroupCell = ({ row, rowSpan, odd, prefix }) => {
+  const meta = [row.account_code, row.city, row.distributor_name].filter(Boolean);
+  return (
+    <td rowSpan={rowSpan} className={`${STICKY} z-20 align-middle px-4 py-4 ${odd ? 'bg-slate-50' : 'bg-white'}`} data-testid={`${prefix}-customer-group-${row.account_id}`}>
+      <p className="truncate text-sm font-semibold tracking-tight text-slate-900" title={row.account_name} data-testid={`${prefix}-name-${row.account_id}`}>{row.account_name}</p>
+      {meta.length > 0 && <p className="mt-1 truncate text-[11px] font-medium text-slate-500" title={meta.join(' · ')} data-testid={`${prefix}-customer-meta-${row.account_id}`}>{meta.join(' · ')}</p>}
+    </td>
+  );
+};
+
+const MetricLabelCell = ({ type, row, prefix }) => {
+  const payment = type === 'payment';
+  return (
+    <td className={`border-r px-3 py-3 ${payment ? 'border-emerald-100 bg-emerald-50/60' : 'border-slate-100 bg-white'}`} data-testid={`${prefix}-${payment ? 'payment' : 'invoice'}-metric-${row.account_id}`}>
+      <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${payment ? 'bg-emerald-100/80 text-emerald-800' : 'bg-slate-100 text-slate-600'}`} data-testid={`${prefix}-${payment ? 'payment-name' : 'invoice-label'}-${row.account_id}`}>
+        {payment ? 'Payment received' : 'Invoice value'}
+      </span>
+    </td>
+  );
+};
 
 const SortHead = ({ id, label, sort, onSort, align = 'right', className = '', children, testId, onResize, prefix }) => {
   const active = sort.column === id;
@@ -72,23 +93,31 @@ export const CustomerMonthlyOverview = ({ config }) => {
   const [defaulted, setDefaulted] = useState(false);
   const [sort, setSort] = useState({ column: 'customer', direction: 'asc' });
   const wrapRef = useRef(null);
-  const [widths, setWidths] = useState(() => { try { return JSON.parse(localStorage.getItem(widthKey)) || null; } catch { return null; } });
+  const [widths, setWidths] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(widthKey)) || null;
+      return supportsPayments && saved && !saved.metric ? null : saved;
+    } catch { return null; }
+  });
   const [resizing, setResizing] = useState(false);
   const format = mode === 'invoice' ? (value) => number(value) : number;
 
   useEffect(() => {
     if (widths || !data || !wrapRef.current) return;
     const total = Math.max(wrapRef.current.clientWidth, 1050);
-    const columns = ['customer', ...data.months.map((_, index) => `m${index}`), 'delta'];
-    setWidths(Object.fromEntries(columns.map((column) => [column, Math.round(total * (column === 'customer' ? SHARES.customer : column === 'delta' ? SHARES.delta : SHARES.month))])));
-  }, [data, widths]);
+    const columns = ['customer', ...(supportsPayments ? ['metric'] : []), ...data.months.map((_, index) => `m${index}`), 'delta'];
+    const shares = supportsPayments
+      ? { customer: 0.24, metric: 0.12, month: 0.09, delta: 0.1 }
+      : SHARES;
+    setWidths(Object.fromEntries(columns.map((column) => [column, Math.round(total * (column === 'customer' ? shares.customer : column === 'metric' ? shares.metric : column === 'delta' ? shares.delta : shares.month))])));
+  }, [data, widths, supportsPayments]);
 
   const startResize = useCallback((column) => (event) => {
     event.preventDefault(); event.stopPropagation();
     if (!widths) return;
     const startX = event.touches ? event.touches[0].clientX : event.clientX;
     const startWidth = widths[column] || 120;
-    const minimum = column === 'customer' ? MIN_W.customer : column === 'delta' ? MIN_W.delta : MIN_W.month;
+    const minimum = column === 'customer' ? MIN_W.customer : column === 'metric' ? MIN_W.metric : column === 'delta' ? MIN_W.delta : MIN_W.month;
     setResizing(true);
     const move = (nextEvent) => {
       const x = nextEvent.touches ? nextEvent.touches[0].clientX : nextEvent.clientX;
@@ -207,32 +236,33 @@ export const CustomerMonthlyOverview = ({ config }) => {
       <div ref={wrapRef} className={`w-full overflow-x-auto rounded-2xl border border-slate-200/90 bg-white shadow-sm ${resizing ? 'cursor-col-resize select-none' : ''}`}>
         {loading && !data ? <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /></div> : (
           <table className="min-w-full table-fixed border-collapse text-sm" style={tableWidth ? { width: tableWidth } : undefined} data-testid={`${prefix}-table`} data-resizing={resizing ? 'true' : 'false'}>
-            <colgroup><col style={{ width: columnWidth('customer') || '30%' }} />{data?.months.map((month, index) => <col key={month.key} style={{ width: columnWidth(`m${index}`) || '10%' }} />)}<col style={{ width: columnWidth('delta') || '10%' }} /></colgroup>
+            <colgroup><col style={{ width: columnWidth('customer') || (supportsPayments ? '24%' : '30%') }} />{supportsPayments && <col style={{ width: columnWidth('metric') || '12%' }} />}{data?.months.map((month, index) => <col key={month.key} style={{ width: columnWidth(`m${index}`) || (supportsPayments ? '9%' : '10%') }} />)}<col style={{ width: columnWidth('delta') || '10%' }} /></colgroup>
             <thead className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur"><tr className="border-b border-slate-200">
               <SortHead id="customer" label={customerHeader} sort={sort} onSort={onSort} align="left" className={`${STICKY} z-30 bg-slate-50/95 px-4`} testId={`${prefix}-sort-customer`} onResize={startResize('customer')} prefix={prefix} />
+              {supportsPayments && <th className="relative border-r border-slate-200 bg-slate-50/95 px-3 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500" data-testid={`${prefix}-metric-header`}><ResizeHandle onStart={startResize('metric')} testId={`${prefix}-resize-metric`} />Metric</th>}
               {data?.months.map((month, index) => <SortHead key={month.key} id={`m${index}`} label={month.label} sort={sort} onSort={onSort} className={`px-3 ${month.current ? '[&_button]:text-[#002FA7]' : ''}`} testId={`${prefix}-sort-${month.key}`} onResize={startResize(`m${index}`)} prefix={prefix}>{month.current && <span className="ml-1.5 inline-flex items-center rounded-md bg-[#002FA7]/10 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-[#002FA7]">current</span>}</SortHead>)}
               <SortHead id="delta" label="Δ vs last month" sort={sort} onSort={onSort} className="bg-slate-100/70 px-4" testId={`${prefix}-sort-delta`} onResize={startResize('delta')} prefix={prefix} />
             </tr></thead>
             <tbody>{rows.map((row, index) => { const odd = index % 2 === 1; return (
               <React.Fragment key={row.account_id}>
-                <tr className={`border-t border-slate-100 transition-colors duration-150 ${odd ? 'bg-slate-50/75' : 'bg-white'} hover:bg-[#002FA7]/[0.035]`} data-testid={`${prefix}-row-${row.account_id}`} data-band={odd ? 'odd' : 'even'} data-row-type="invoice">
-                  <td className={`${STICKY} z-20 px-4 py-3.5 ${odd ? 'bg-[#f8fafc]' : 'bg-white'}`}><p className="truncate text-sm font-medium text-primary transition-colors hover:text-primary/90 hover:underline" title={[row.account_name, row.city, row.distributor_name].filter(Boolean).join(' · ')} data-testid={`${prefix}-name-${row.account_id}`}>{row.account_name}</p>
-                    {supportsPayments ? <span className="mt-0.5 inline-flex text-[10px] font-semibold uppercase tracking-wider text-slate-400" data-testid={`${prefix}-invoice-label-${row.account_id}`}>Invoice value</span> : row.row_type === 'brand_group' && <p className="mt-0.5 truncate text-[10px] text-slate-500" title={(row.shared_child_sku_names || []).join(', ')} data-testid={`${prefix}-group-meta-${row.account_id}`}>{row.member_count} accounts · {(row.shared_child_sku_names || []).join(', ')}</p>}</td>
+                <tr className={`border-t-2 border-slate-200 transition-colors duration-150 ${odd ? 'bg-slate-50/75' : 'bg-white'} hover:bg-[#002FA7]/[0.035]`} data-testid={`${prefix}-row-${row.account_id}`} data-band={odd ? 'odd' : 'even'} data-row-type="invoice">
+                  {supportsPayments ? <><CustomerGroupCell row={row} rowSpan={showPayments ? 2 : 1} odd={odd} prefix={prefix} /><MetricLabelCell type="invoice" row={row} prefix={prefix} /></> : <td className={`${STICKY} z-20 px-4 py-3.5 ${odd ? 'bg-[#f8fafc]' : 'bg-white'}`}><p className="truncate text-sm font-medium text-primary transition-colors hover:text-primary/90 hover:underline" title={[row.account_name, row.city, row.distributor_name].filter(Boolean).join(' · ')} data-testid={`${prefix}-name-${row.account_id}`}>{row.account_name}</p>{row.row_type === 'brand_group' && <p className="mt-0.5 truncate text-[10px] text-slate-500" title={(row.shared_child_sku_names || []).join(', ')} data-testid={`${prefix}-group-meta-${row.account_id}`}>{row.member_count} accounts · {(row.shared_child_sku_names || []).join(', ')}</p>}</td>}
                   {row.months.map((value, monthIndex) => <ValueCell key={data.months[monthIndex].key} value={value} previous={monthIndex === 0 ? row.prev_month : row.months[monthIndex - 1]} testId={`${prefix}-cell-${row.account_id}-${data.months[monthIndex].key}`} format={format} />)}
                   <DeltaCell value={row.mom_change} testId={`${prefix}-delta-${row.account_id}`} format={format} />
                 </tr>
-                {supportsPayments && showPayments && <tr className="border-t border-emerald-100 bg-emerald-50/55 transition-colors hover:bg-emerald-50" data-testid={`${prefix}-payment-row-${row.account_id}`} data-row-type="payment">
-                  <td className={`${STICKY} z-20 bg-[#eefbf4] px-4 py-3`}><p className="truncate text-sm font-medium text-emerald-900" title={row.account_name} data-testid={`${prefix}-payment-name-${row.account_id}`}>{row.account_name}</p><span className="mt-0.5 inline-flex text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Payment received</span></td>
+                {supportsPayments && showPayments && <tr className="border-t border-emerald-100 bg-emerald-50/40 transition-colors hover:bg-emerald-50/70" data-testid={`${prefix}-payment-row-${row.account_id}`} data-row-type="payment">
+                  <MetricLabelCell type="payment" row={row} prefix={prefix} />
                   {(row.payment_months || data.months.map(() => 0)).map((value, monthIndex) => <ValueCell key={data.months[monthIndex].key} value={value} previous={monthIndex === 0 ? row.payment_prev_month : row.payment_months[monthIndex - 1]} testId={`${prefix}-payment-cell-${row.account_id}-${data.months[monthIndex].key}`} format={format} />)}
                   <DeltaCell value={row.payment_mom_change || 0} testId={`${prefix}-payment-delta-${row.account_id}`} format={format} />
                 </tr>}
               </React.Fragment>); })}
-              {!rows.length && <tr><td colSpan={(data?.months.length || 6) + 2} className="py-16 text-center text-sm text-slate-500" data-testid={`${prefix}-empty`}>{emptyLabel}</td></tr>}
+              {!rows.length && <tr><td colSpan={(data?.months.length || 6) + 2 + (supportsPayments ? 1 : 0)} className="py-16 text-center text-sm text-slate-500" data-testid={`${prefix}-empty`}>{emptyLabel}</td></tr>}
             </tbody>
             {rows.length > 0 && <tfoot>
-              <tr className="border-t-2 border-slate-200 bg-slate-100" data-testid={`${prefix}-footer`}><td className={`${STICKY} z-20 bg-slate-100 px-4 py-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500`}>{supportsPayments ? 'Invoice total' : 'Total'} · {rows.length} {rowNoun}</td>
+              <tr className="border-t-2 border-slate-200 bg-slate-100" data-testid={`${prefix}-footer`}><td rowSpan={supportsPayments && showPayments ? 2 : 1} className={`${STICKY} z-20 align-middle bg-slate-100 px-4 py-4 text-[11px] font-semibold uppercase tracking-wider text-slate-600`}>{supportsPayments ? 'Visible total' : 'Total'} · {rows.length} {rowNoun}</td>
+                {supportsPayments && <td className="border-r border-slate-200 bg-slate-100 px-3 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-600">Invoice total</td>}
                 {totals.map((value, index) => <ValueCell key={data.months[index].key} value={value} previous={index === 0 ? previousTotal : totals[index - 1]} bold testId={`${prefix}-month-total-${data.months[index].key}`} format={format} />)}<DeltaCell value={deltaTotal} testId={`${prefix}-delta-total`} format={format} /></tr>
-              {supportsPayments && showPayments && <tr className="border-t border-emerald-200 bg-emerald-100/70" data-testid={`${prefix}-payment-footer`}><td className={`${STICKY} z-20 bg-[#dcfce7] px-4 py-4 text-[11px] font-semibold uppercase tracking-wider text-emerald-800`}>Payment total · {rows.length} customers</td>
+              {supportsPayments && showPayments && <tr className="border-t border-emerald-200 bg-emerald-100/70" data-testid={`${prefix}-payment-footer`}><td className="border-r border-emerald-200 bg-emerald-100/70 px-3 py-3 text-[10px] font-bold uppercase tracking-wider text-emerald-800">Payment total</td>
                 {paymentTotals.map((value, index) => <ValueCell key={data.months[index].key} value={value} previous={index === 0 ? paymentPreviousTotal : paymentTotals[index - 1]} bold testId={`${prefix}-payment-month-total-${data.months[index].key}`} format={format} />)}<DeltaCell value={paymentDeltaTotal} testId={`${prefix}-payment-delta-total`} format={format} /></tr>}
             </tfoot>}
           </table>

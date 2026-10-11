@@ -1,0 +1,47 @@
+{
+  "summary": "Executed backend + frontend regression for Customer Invoice Overview redesign and Customer Order Overview safeguards on public URL. Verified grouped customer layout, metric rows, toggle rowSpan behavior, filters/sorting pairing, export include_payments contract, auth essentials, viewport overflow, and production build.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Unauthenticated app bootstrap",
+        "issue": "Console still shows expected pre-login 401 requests before authentication.",
+        "affected_selectors": [
+          "N/A (network/console)"
+        ]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_404_cio_redesign_regression.py",
+    "/app/test_reports/pytest/iteration_404_cio_redesign.xml"
+  ],
+  "action_items": [
+    "No functional fixes required for this redesign scope based on executed tests.",
+    "Optional: reduce/noise-handle pre-auth 401 console entries if strict clean-console policy is required.",
+    "Optional: if required by release checklist, add explicit test coverage for seed_admin password-update idempotency (not covered in this run)."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py is extremely large (>11k lines), increasing regression risk; split into focused modules.",
+    "CustomerMonthlyOverview is a shared critical component; keep strict data-testid namespace discipline to avoid selector collisions across pages."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_404_cio_redesign_regression.py",
+    "/app/test_reports/iteration_404.json"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "test_credentials": "Admin: surya.yadavalli@nylaairwater.earth / test123; tenant: nyla-air-water",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest passed 7/7 including login cookie HttpOnly, bcrypt $2b$ check, CORS credential preflight on /api/auth/login, brute-force lockout, CIO payment summary invariants (126 payments; payment_grand_total ≈ 816050.20), include_payments true/false export contract, and COO no payment fields. Frontend automation validated CIO grouped dual-row UX (single customer cell, metric pills, payment row no account name, rowSpan 2↔1 toggle, footer merge behavior), filter/sort grouping integrity, metric column + resize handles + legacy width-state safety, COO regression (no metric/toggle/payment rows), desktop 1920 and mobile 390 no body overflow with internal table scroll. Production yarn build passed with warnings only.",
+  "rca of the issue": "No blocking defect found in implemented redesign. One non-blocking observation persists: pre-auth bootstrap requests return 401 in console before login, likely expected due eager auth/me checks without session."
+}
