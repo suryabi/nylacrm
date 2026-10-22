@@ -6,7 +6,7 @@ GET /api/reports/customer-invoice-overview/export
 """
 import io
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -55,6 +55,77 @@ def _valid_applied_payment(txn: dict) -> bool:
         return False
     statuses = " ".join(str(txn.get(field) or "").lower() for field in ("status", "zoho_status", "payment_status"))
     return not any(word in statuses for word in ("cancelled", "canceled", "reversed", "refunded", "void", "deleted"))
+
+
+def _number(value) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _date_value(value) -> date | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value)[:10]).date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _calculate_overdue_by_account(accounts: list[dict], invoices: list[dict], today: date) -> dict[str, float]:
+    """Estimate invoice aging by assuming confirmed payments settle oldest invoices first."""
+    by_uuid = {str(account["id"]): account for account in accounts if account.get("id")}
+    by_code = {str(account["account_id"]): account for account in accounts if account.get("account_id")}
+    by_name = {(account.get("account_name") or "").strip().lower(): account for account in accounts if account.get("account_name")}
+    collectible = defaultdict(list)
+
+    for invoice in invoices:
+        status = str(invoice.get("status") or "").lower()
+        if invoice.get("is_deleted") or any(value in status for value in ("void", "cancelled", "canceled", "deleted")):
+            continue
+        account = None
+        for ref in (invoice.get("account_uuid"), invoice.get("account_id"), invoice.get("account_id_from_mq")):
+            if ref:
+                account = by_uuid.get(str(ref)) or by_code.get(str(ref))
+                if account:
+                    break
+        if not account:
+            name = (invoice.get("account_name") or invoice.get("customer_name") or "").strip().lower()
+            account = by_name.get(name) if name else None
+        invoice_date = _date_value(invoice.get("invoice_date"))
+        if not account or not invoice_date:
+            continue
+        due_date = _date_value(invoice.get("due_date"))
+        if not due_date:
+            try:
+                terms = max(0, int(account.get("payment_terms_days") or 0))
+            except (TypeError, ValueError):
+                terms = 0
+            due_date = invoice_date + timedelta(days=terms)
+        amount = max(0.0, _gross(invoice) - _number(invoice.get("credit_note_value")))
+        if amount > 0:
+            collectible[account["id"]].append((due_date, amount))
+
+    overdue = {}
+    for account in accounts:
+        account_id = account["id"]
+        outstanding = max(0.0, _number(account.get("outstanding_balance")))
+        invoices_for_account = collectible.get(account_id) or []
+        if not invoices_for_account:
+            overdue[account_id] = round(min(outstanding, max(0.0, _number(account.get("overdue_amount")))), 2)
+            continue
+        remaining = outstanding
+        overdue_amount = 0.0
+        for due_date, amount in sorted(invoices_for_account, key=lambda item: item[0], reverse=True):
+            if remaining <= 0:
+                break
+            unpaid = min(amount, remaining)
+            if due_date < today:
+                overdue_amount += unpaid
+            remaining -= unpaid
+        overdue[account_id] = round(min(outstanding, overdue_amount), 2)
+    return overdue
 
 
 async def _account_distributors(tdb, acct_ids: list) -> dict:
@@ -123,7 +194,9 @@ async def _build(current_user: dict | None = None) -> dict:
 
     accounts = await tdb.accounts.find(
         {"status": {"$in": ["active", None]}},
-        {"_id": 0, "id": 1, "account_id": 1, "account_name": 1, "city": 1, "created_at": 1, "onboarded_month": 1, "onboarded_year": 1},
+        {"_id": 0, "id": 1, "account_id": 1, "account_name": 1, "city": 1,
+         "created_at": 1, "onboarded_month": 1, "onboarded_year": 1,
+         "outstanding_balance": 1, "overdue_amount": 1, "payment_terms_days": 1},
     ).to_list(5000)
     by_code = {a.get("account_id"): a for a in accounts if a.get("account_id")}
     by_uuid = {a["id"]: a for a in accounts if a.get("id")}
@@ -146,6 +219,15 @@ async def _build(current_user: dict | None = None) -> dict:
             totals[acc["id"]][month] += _gross(inv)
             if month in keys:
                 counts[acc["id"]] += 1
+
+    aging_invoices = await tdb.invoices.find(
+        {},
+        {"_id": 0, "account_id": 1, "account_uuid": 1, "account_id_from_mq": 1,
+         "account_name": 1, "customer_name": 1, "invoice_date": 1, "due_date": 1,
+         "gross_invoice_value": 1, "gross_amount": 1, "grand_total": 1, "total_amount": 1,
+         "credit_note_value": 1, "status": 1, "is_deleted": 1},
+    ).to_list(100000)
+    overdue_by_account = _calculate_overdue_by_account(accounts, aging_invoices, today)
 
     payment_totals = defaultdict(lambda: defaultdict(float))
     payment_counts = defaultdict(int)
@@ -192,12 +274,16 @@ async def _build(current_user: dict | None = None) -> dict:
             "payment_total": round(sum(payments), 2),
             "payment_mom_change": round(payments[-1] - payments[-2], 2),
             "payment_count": payment_counts.get(a["id"], 0),
+            "outstanding_balance": round(_number(a.get("outstanding_balance")), 2),
+            "overdue_balance": overdue_by_account.get(a["id"], 0.0),
         })
     rows.sort(key=lambda r: (r["account_name"] or "").lower())
     month_totals = [round(sum(r["months"][i] for r in rows), 2) for i in range(MONTHS)]
     prev_total = round(sum(r["prev_month"] for r in rows), 2)
     payment_month_totals = [round(sum(r["payment_months"][i] for r in rows), 2) for i in range(MONTHS)]
     payment_prev_total = round(sum(r["payment_prev_month"] for r in rows), 2)
+    outstanding_total = round(sum(r["outstanding_balance"] for r in rows), 2)
+    overdue_total = round(sum(r["overdue_balance"] for r in rows), 2)
     distributors = sorted({(r["distributor_id"], r["distributor_name"]) for r in rows if r["distributor_id"]}, key=lambda x: x[1].lower())
     active_rows = [r for r in rows if r["total"] > 0 or r["payment_total"] > 0]
     return {
@@ -211,6 +297,8 @@ async def _build(current_user: dict | None = None) -> dict:
         "payment_prev_month_total": payment_prev_total,
         "payment_mom_change_total": round(payment_month_totals[-1] - payment_month_totals[-2], 2),
         "payment_grand_total": round(sum(payment_month_totals), 2),
+        "outstanding_total": outstanding_total,
+        "overdue_total": overdue_total,
         "default_distributor_id": _default_distributor(current_user, active_rows or rows, dist_cities) if current_user else None,
         "filters": {"distributors": [{"id": i, "name": n} for i, n in distributors] + ([{"id": "unassigned", "name": "Unassigned"}] if any(not r["distributor_id"] for r in rows) else [])},
         "summary": {"customers": len(rows), "invoiced_customers": sum(1 for r in rows if r["total"] > 0),
@@ -239,32 +327,32 @@ async def export_customer_invoice_overview(
     ws["A1"].font = Font(bold=True, size=14)
     ws.append([f"Generated: {datetime.now(timezone.utc).strftime('%d %b %Y %H:%M UTC')}"])
     ws.append([])
-    ws.append(["Customer", "Row type", "Code", "City", "Distributor"] + [m["label"] for m in data["months"]] + ["Change vs last month"])
+    ws.append(["Customer", "Row type", "Code", "City", "Distributor", "Current Outstanding", "Current Overdue"] + [m["label"] for m in data["months"]] + ["Change vs last month"])
     hdr = ws.max_row
     for c in ws[hdr]:
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = PatternFill(start_color="0F172A", end_color="0F172A", fill_type="solid")
         c.alignment = Alignment(horizontal="center", vertical="center")
     for r in data["rows"]:
-        ws.append([r["account_name"], "Invoice", r.get("account_code") or "", r.get("city") or "", r.get("distributor_name") or ""] + r["months"] + [r["mom_change"]])
+        ws.append([r["account_name"], "Invoice", r.get("account_code") or "", r.get("city") or "", r.get("distributor_name") or "", r["outstanding_balance"], r["overdue_balance"]] + r["months"] + [r["mom_change"]])
         if include_payments:
-            ws.append([r["account_name"], "Payment received", r.get("account_code") or "", r.get("city") or "", r.get("distributor_name") or ""] + r["payment_months"] + [r["payment_mom_change"]])
+            ws.append([r["account_name"], "Payment received", r.get("account_code") or "", r.get("city") or "", r.get("distributor_name") or "", "", ""] + r["payment_months"] + [r["payment_mom_change"]])
             for cell in ws[ws.max_row]:
                 cell.fill = PatternFill(start_color="ECFDF5", end_color="ECFDF5", fill_type="solid")
                 cell.font = Font(color="065F46")
-    ws.append(["Total", "Invoice", "", "", ""] + data["month_totals"] + [data["mom_change_total"]])
+    ws.append(["Total", "Invoice", "", "", "", data["outstanding_total"], data["overdue_total"]] + data["month_totals"] + [data["mom_change_total"]])
     for c in ws[ws.max_row]:
         c.font = Font(bold=True)
         c.fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
     if include_payments:
-        ws.append(["Total", "Payment received", "", "", ""] + data["payment_month_totals"] + [data["payment_mom_change_total"]])
+        ws.append(["Total", "Payment received", "", "", "", "", ""] + data["payment_month_totals"] + [data["payment_mom_change_total"]])
         for c in ws[ws.max_row]:
             c.font = Font(bold=True, color="065F46")
             c.fill = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
-    for row in ws.iter_rows(min_row=hdr + 1, min_col=6, max_col=6 + MONTHS):
+    for row in ws.iter_rows(min_row=hdr + 1, min_col=6, max_col=8 + MONTHS):
         for c in row:
             c.number_format = "#,##0.00"
-    for i, wd in enumerate([34, 20, 20, 16, 22] + [14] * MONTHS + [16], start=1):
+    for i, wd in enumerate([34, 20, 20, 16, 22, 18, 18] + [14] * MONTHS + [16], start=1):
         ws.column_dimensions[ws.cell(row=hdr, column=i).column_letter].width = wd
     ws.freeze_panes = ws.cell(row=hdr + 1, column=2)
     brand_workbook(wb)

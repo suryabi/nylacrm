@@ -19,5 +19,6 @@ export default function CustomerInvoiceOverview() {
     customerHeader: 'Customer',
     searchPlaceholder: 'Search customer, code, city',
     supportsPayments: true,
+    supportsAccountBalances: true,
   }} />;
 }
